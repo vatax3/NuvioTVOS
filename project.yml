@@ -1,0 +1,50 @@
+name: NuvioTVOS
+options:
+  bundleIdPrefix: com.nuvio
+  createIntermediateGroups: true
+  deploymentTarget:
+    tvOS: "17.0"
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_STRICT_CONCURRENCY: minimal
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+
+targets:
+  NuvioTVOS:
+    type: application
+    platform: tvOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: Sources
+      # Added as individual file references, not a blue folder: a directory literally
+      # named "Resources" at the root of a shallow tvOS bundle makes codesign misread
+      # the bundle layout and refuse to sign.
+      - path: Resources
+      - path: Assets.xcassets
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.nuvio.tvos
+        PRODUCT_NAME: Nuvio
+        INFOPLIST_KEY_CFBundleDisplayName: Nuvio
+        INFOPLIST_KEY_UIUserInterfaceStyle: Dark
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        TARGETED_DEVICE_FAMILY: "3"
+        ASSETCATALOG_COMPILER_APPICON_NAME: "App Icon & Top Shelf Image"
+        GENERATE_INFOPLIST_FILE: YES
+    info:
+      path: Sources/App/Info.plist
+      properties:
+        CFBundleDisplayName: Nuvio
+        UIUserInterfaceStyle: Dark
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        UIAppFonts:
+          - inter_variable.ttf
+          - dm_sans_variable.ttf
+          - opensans_variable.ttf
