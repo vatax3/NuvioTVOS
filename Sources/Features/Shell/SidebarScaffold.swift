@@ -20,6 +20,8 @@ struct SidebarScaffold<Content: View>: View {
     /// start tvOS parks focus on whatever is focusable first — here the pill — and without
     /// this gate the menu would be wide open on the first frame, which Android never does.
     @State private var hasUserNavigated = false
+    /// Held between "panel closed" and "focus released" so the focus observer cannot re-open it.
+    @State private var isDismissing = false
     @Namespace private var shellFocus
 
     private var tokens: NuvioSidebarComponentTokens { NuvioTheme.components.sidebar }
@@ -72,6 +74,12 @@ struct SidebarScaffold<Content: View>: View {
                 // nearest focusable item, which is the pill.
                 .frame(maxHeight: .infinity, alignment: .top)
                 .focusSection()
+                // RIGHT is the way back to the content. It cannot be left to the focus engine:
+                // the content is disabled while the panel is open, so there is nothing to the
+                // right to move to until the panel closes.
+                .onMoveCommand { direction in
+                    if direction == .right, isExpanded { collapse() }
+                }
                 .zIndex(1)
 
             content
@@ -116,13 +124,33 @@ struct SidebarScaffold<Content: View>: View {
     /// expects — the Home button already does it.
     private func toggleFromBackButton() {
         guard router.contentHasFocusableViews else { return }
-        // Keyed on the panel's own state, not on `focusedTab`: focus can still be parked on the
-        // pill after the panel has collapsed, and reading that as "open" makes Back a no-op.
-        if isExpanded {
+        if isExpanded { collapse() } else { expand() }
+    }
+
+    private func expand() {
+        guard isModernSidebar, !isExpanded else { return }
+        hasUserNavigated = true
+        isDismissing = false
+        withAnimation(NuvioMotion.sidebarPanelIn) { isExpanded = true }
+        focusedTab = router.selectedTab
+    }
+
+    /// Closing has to happen in this order, and it is the whole reason the panel is not simply
+    /// derived from `focusedTab`.
+    ///
+    /// The content is disabled while the panel is open, so clearing focus first leaves the engine
+    /// with nowhere to put it: focus snaps back to the pill, which re-opens the panel, and the
+    /// menu becomes impossible to dismiss on any screen whose content does not steal focus back
+    /// by itself. So the panel closes first — re-enabling the content — and focus is released
+    /// only on the next tick, with `isDismissing` holding the focus observer off in between.
+    private func collapse() {
+        guard isExpanded else { return }
+        isDismissing = true
+        withAnimation(NuvioMotion.sidebarPanelOut) { isExpanded = false }
+        Task { @MainActor in
             focusedTab = nil
-        } else {
-            hasUserNavigated = true
-            focusedTab = router.selectedTab
+            try? await Task.sleep(for: .milliseconds(250))
+            isDismissing = false
         }
     }
 
@@ -137,10 +165,11 @@ struct SidebarScaffold<Content: View>: View {
             if !isExpanded { isExpanded = true }
             return
         }
-        let shouldExpand = focusedTab != nil && hasUserNavigated
-        guard shouldExpand != isExpanded else { return }
-        withAnimation(shouldExpand ? NuvioMotion.sidebarPanelIn : NuvioMotion.sidebarPanelOut) {
-            isExpanded = shouldExpand
+        guard !isDismissing else { return }
+        // Focus arriving on the pill — via LEFT — is what opens the panel. Focus leaving is not
+        // what closes it; `collapse()` is, so that the order above is always respected.
+        if focusedTab != nil, hasUserNavigated, !isExpanded {
+            withAnimation(NuvioMotion.sidebarPanelIn) { isExpanded = true }
         }
     }
 
@@ -187,6 +216,12 @@ struct SidebarScaffold<Content: View>: View {
     /// `glass_sidepanel_enabled` chooses the gradient-over-material glass; with it off the
     /// panel is a plain surface fill. `modern_sidebar_blur_enabled` controls the blur pass
     /// underneath, which is the expensive half on Android.
+    ///
+    /// Liquid Glass note: tvOS 26 does not ship the `glassEffect(_:in:)` modifier that iOS and
+    /// macOS got — the only Liquid Glass surface in the tvOS SwiftUI SDK is `GlassButtonStyle`,
+    /// which the rows use. So the panel itself is built the way Liquid Glass is specified to
+    /// read: a thin material that refracts what is behind it, a soft top-down tint, and a
+    /// specular edge that is brightest along the top.
     @ViewBuilder
     private var panelBackground: some View {
         let shape = RoundedRectangle(cornerRadius: tokens.panelRadius, style: .continuous)
@@ -207,8 +242,23 @@ struct SidebarScaffold<Content: View>: View {
                     }
                 }
                 .overlay {
-                    shape.strokeBorder(.white.opacity(0.14), lineWidth: NuvioTheme.strokes.hairline)
+                    // A single flat hairline reads as a border; glass reads as a lit edge, so
+                    // the stroke falls off from the top where the light is.
+                    shape.strokeBorder(
+                        LinearGradient(
+                            colors: [
+                                .white.opacity(0.45),
+                                .white.opacity(0.12),
+                                .white.opacity(0.05)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: NuvioTheme.strokes.thin
+                    )
                 }
+                // Glass sits above the content rather than being painted into it.
+                .shadow(color: .black.opacity(0.45), radius: dp(24), y: dp(8))
         } else {
             shape
                 .fill(colors.surface)
@@ -230,7 +280,7 @@ struct SidebarScaffold<Content: View>: View {
         router.select(tab)
         // Collapsing on activation matches the Android flow, where choosing a destination
         // hands focus straight back to the content area.
-        focusedTab = nil
+        collapse()
     }
 }
 
@@ -252,25 +302,45 @@ private struct SidebarItemView: View {
     private var tokens: NuvioSidebarComponentTokens { NuvioTheme.components.sidebar }
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: showsLabel ? tokens.contentGap : 0) {
-                iconCircle
-                if showsLabel {
-                    Text(tab.title)
-                        .nuvioText(NuvioTextStyles.nav)
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .transition(.opacity)
-                }
-            }
-            .padding(.horizontal, showsLabel ? NuvioTheme.spacing.lg - NuvioTheme.spacing.xxs : dp(5))
-            .padding(.vertical, showsLabel ? NuvioTheme.spacing.sm + NuvioTheme.spacing.xxs : 0)
-            .frame(height: showsLabel ? nil : NuvioTheme.sizes.player.control)
-            .frame(maxWidth: showsLabel ? .infinity : nil, alignment: .leading)
+        styledButton
+            .frame(maxHeight: stretchesVertically ? .infinity : nil, alignment: .top)
             .contentShape(Rectangle())
+    }
+
+    /// Liquid Glass where the system has it. `GlassButtonStyle` is the one Liquid Glass surface
+    /// tvOS 26 exposes to SwiftUI — there is no `glassEffect` modifier on this platform — and it
+    /// brings the real material and focus response rather than an imitation of them. Below 26
+    /// the hand-rolled style stands in.
+    @ViewBuilder
+    private var styledButton: some View {
+        if #available(tvOS 26.0, *) {
+            Button(action: action) { label }
+                .buttonStyle(.glass)
+                .buttonBorderShape(showsLabel ? .roundedRectangle(radius: tokens.panelRadius / 2) : .capsule)
+                // Glass derives its label colour from the tint, and the app tint is the Nuvio
+                // red — which on an unfocused row reads as five red menu entries. Neutral here;
+                // the style still inverts to dark text when the row lifts on focus.
+                .tint(.white)
+        } else {
+            Button(action: action) { label }
+                .buttonStyle(SidebarItemButtonStyle(showsLabel: showsLabel, isSelected: isSelected))
         }
-        .buttonStyle(SidebarItemButtonStyle(showsLabel: showsLabel, isSelected: isSelected))
-        .frame(maxHeight: stretchesVertically ? .infinity : nil, alignment: .top)
+    }
+
+    private var label: some View {
+        HStack(spacing: showsLabel ? tokens.contentGap : 0) {
+            iconCircle
+            if showsLabel {
+                Text(tab.title)
+                    .nuvioText(NuvioTextStyles.nav)
+                    .lineLimit(1)
+                    .transition(.opacity)
+            }
+        }
+        .padding(.horizontal, showsLabel ? NuvioTheme.spacing.lg - NuvioTheme.spacing.xxs : dp(5))
+        .padding(.vertical, showsLabel ? NuvioTheme.spacing.sm + NuvioTheme.spacing.xxs : 0)
+        .frame(height: showsLabel ? nil : NuvioTheme.sizes.player.control)
+        .frame(maxWidth: showsLabel ? .infinity : nil, alignment: .leading)
         .contentShape(Rectangle())
     }
 

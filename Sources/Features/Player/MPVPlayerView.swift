@@ -55,6 +55,11 @@ struct MPVPlayerView: View {
                     .transition(.opacity)
             }
         }
+        // Focusable, and it must be. Unlike AVPlayerViewController this view owns no focusable
+        // chrome while the transport is hidden, and tvOS only delivers move, select and
+        // play/pause to a view that holds focus — so without this the remote does nothing at all
+        // and the transport can never be summoned back.
+        .focusable()
         // The remote's select button is the primary control, so the whole surface is the target.
         .onTapGesture { toggleControls() }
         .onMoveCommand { direction in

@@ -110,6 +110,9 @@ struct PlaybackRequest: Hashable, Identifiable {
     var title: String
     var subtitleLine: String?
     var streamName: String?
+    /// `behaviorHints.filename` when the addon supplies it. Debrid links routinely carry no
+    /// extension, so this is often the only place the container is visible before playback.
+    var filename: String?
     var headers: [String: String]
     var contentId: String
     var contentType: String

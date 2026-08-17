@@ -22,12 +22,20 @@ enum MPVEngineSupport {
         "mkv", "avi", "flv", "wmv", "ts", "m2ts", "mts", "vob", "ogm", "rmvb", "divx", "webm"
     ]
 
-    static func requiresMPV(url: String) -> Bool {
+    /// A debrid provider hands back links like `/download/<token>` with the container nowhere in
+    /// the path, so the addon-supplied filename is checked as well. Neither is authoritative —
+    /// `PlayerView` also falls back to MPV if AVFoundation refuses the source outright.
+    static func requiresMPV(url: String, filename: String? = nil) -> Bool {
+        if let filename, hasUnsupportedExtension(filename) { return true }
         guard let components = URLComponents(string: url) else { return false }
         // Query strings on debrid links carry their own dots; only the path decides.
-        let path = components.path.lowercased()
-        guard let dot = path.lastIndex(of: ".") else { return false }
-        let ext = String(path[path.index(after: dot)...])
+        return hasUnsupportedExtension(components.path)
+    }
+
+    private static func hasUnsupportedExtension(_ value: String) -> Bool {
+        let lowered = value.lowercased()
+        guard let dot = lowered.lastIndex(of: ".") else { return false }
+        let ext = String(lowered[lowered.index(after: dot)...])
         return unsupportedExtensions.contains(ext)
     }
 }

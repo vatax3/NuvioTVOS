@@ -100,7 +100,14 @@ final class StreamsViewModel {
                     ) else { return (addon, nil) }
                     // An empty answer is not necessarily a miss: some addons publish their links
                     // inline on the meta entry instead of implementing `/stream`.
-                    guard streams.isEmpty else { return (addon, streams) }
+                    //
+                    // Only worth a second request when the addon actually serves meta. Firing it
+                    // blindly means every addon that legitimately has nothing costs a second
+                    // round trip — and a full series meta is a large document — which is what
+                    // made the source list sit and spin.
+                    guard streams.isEmpty,
+                          addon.supports(resource: "meta", type: request.contentType)
+                    else { return (addon, streams) }
                     let inline = try? await client.fetchInlineStreams(
                         addon: addon, type: request.contentType, videoId: videoId
                     )
@@ -522,6 +529,7 @@ struct StreamsView: View {
             subtitleLine: [request.episodeLabel, request.episodeName]
                 .compactMap { $0 }.joined(separator: " · ").nilIfBlank,
             streamName: stream.displayName,
+            filename: stream.behaviorHints?.filename,
             headers: stream.behaviorHints?.proxyHeaders?.request ?? [:],
             contentId: request.contentId,
             contentType: request.contentType,

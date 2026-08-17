@@ -28,8 +28,18 @@ struct PlayerView: View {
     private var resolvedEngine: InternalPlayerEngine {
         guard MPVEngineSupport.isAvailable else { return .exoplayer }
         if settings.player.internalPlayerEngine == .mpv { return .mpv }
-        return MPVEngineSupport.requiresMPV(url: request.streamURL) ? .mpv : .exoplayer
+        // AVFoundation already refused this source once — see `avPlayer`'s `onFailed`.
+        if didFallBackToMPV { return .mpv }
+        return MPVEngineSupport.requiresMPV(
+            url: request.streamURL, filename: request.filename ?? request.streamName
+        ) ? .mpv : .exoplayer
     }
+
+    /// Set when AVFoundation reports it cannot open the source. Port of Android's
+    /// `auto_switch_internal_player_on_error`: a debrid link usually carries no extension, so
+    /// container sniffing alone cannot tell an MKV from an MP4 and the refusal is the only
+    /// reliable signal. Without this the viewer just gets AVPlayer's blank "no entry" screen.
+    @State private var didFallBackToMPV = false
 
     var body: some View {
         Group {
@@ -85,6 +95,13 @@ struct PlayerView: View {
                     scrobble(position: position, duration: duration)
                     simklCheckin()
                     advanceIfDue(position: position, duration: duration)
+                },
+                onFailed: {
+                    guard MPVEngineSupport.isAvailable,
+                          settings.player.autoSwitchInternalPlayerOnError,
+                          !didFallBackToMPV
+                    else { return }
+                    didFallBackToMPV = true
                 },
                 onFinished: {
                     persist(position: 0, duration: 0, completed: true)
@@ -259,10 +276,14 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
     let onSelectSubtitle: (Subtitle?) -> Void
     let onTick: (Double) -> Void
     let onProgress: (Double, Double, Bool) -> Void
+    /// Called when AVFoundation cannot open the source, so the caller can hand it to MPV.
+    let onFailed: () -> Void
     let onFinished: () -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onProgress: onProgress, onFinished: onFinished, onTick: onTick)
+        Coordinator(
+            onProgress: onProgress, onFinished: onFinished, onTick: onTick, onFailed: onFailed
+        )
     }
 
     func makeUIViewController(context: Context) -> AVPlayerViewController {
@@ -369,6 +390,8 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
         private let onProgress: (Double, Double, Bool) -> Void
         private let onFinished: () -> Void
         private let onTick: (Double) -> Void
+        private let onFailed: () -> Void
+        private var statusObserver: NSKeyValueObservation?
         private var timeObserver: Any?
         private var cueObserver: Any?
         private weak var player: AVPlayer?
@@ -377,15 +400,24 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
         init(
             onProgress: @escaping (Double, Double, Bool) -> Void,
             onFinished: @escaping () -> Void,
-            onTick: @escaping (Double) -> Void
+            onTick: @escaping (Double) -> Void,
+            onFailed: @escaping () -> Void
         ) {
             self.onProgress = onProgress
             self.onFinished = onFinished
             self.onTick = onTick
+            self.onFailed = onFailed
         }
 
         func attach(player: AVPlayer, item: AVPlayerItem, resumeAt: Double) {
             self.player = player
+
+            // A container AVFoundation has no demuxer for fails here rather than at
+            // construction, so this is the only place the refusal can be caught.
+            statusObserver = item.observe(\.status, options: [.new]) { [weak self] item, _ in
+                guard item.status == .failed else { return }
+                Task { @MainActor in self?.onFailed() }
+            }
 
             if resumeAt > 1 {
                 let target = CMTime(seconds: resumeAt, preferredTimescale: 600)
@@ -428,6 +460,8 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
             }
             timeObserver = nil
             cueObserver = nil
+            statusObserver?.invalidate()
+            statusObserver = nil
             if let endObserver {
                 NotificationCenter.default.removeObserver(endObserver)
             }
