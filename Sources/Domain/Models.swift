@@ -197,6 +197,8 @@ struct MetaCastMember: Codable, Hashable, Identifiable, Sendable {
 struct MetaCompany: Codable, Hashable, Identifiable, Sendable {
     var name: String
     var logo: String?
+    /// Present when the entry came from TMDB, which is what makes it browsable.
+    var tmdbId: Int?
     var id: String { name }
 }
 

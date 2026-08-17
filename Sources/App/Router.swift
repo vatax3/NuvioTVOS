@@ -50,6 +50,13 @@ struct DetailRequest: Hashable, Identifiable {
         self.addonBaseUrl = addonBaseUrl
         self.heroBackdropUrl = heroBackdropUrl
     }
+
+    /// TMDB-sourced rows use a `tmdb:<id>` id; the detail model swaps it for an IMDb id before
+    /// asking any addon.
+    var tmdbId: Int? {
+        guard itemId.hasPrefix("tmdb:") else { return nil }
+        return Int(itemId.dropFirst("tmdb:".count))
+    }
 }
 
 /// Everything the stream picker needs to resolve sources for one playable video.
@@ -117,10 +124,36 @@ struct CatalogRequest: Hashable, Identifiable {
 
 // MARK: - Pushed routes
 
+/// A TMDB person, opened from the cast rail.
+struct CastRequest: Hashable, Identifiable {
+    var tmdbId: Int
+    var name: String
+    var photo: String?
+    var id: String { "person-\(tmdbId)" }
+}
+
+/// A TMDB network / studio / genre listing.
+struct TMDBBrowseRequest: Hashable, Identifiable {
+    enum Entity: Hashable {
+        case network(Int)
+        case company(Int)
+        case genre(Int)
+    }
+
+    var entity: Entity
+    var title: String
+    var contentType: String
+    var logo: String?
+
+    var id: String { "\(entity)-\(contentType)" }
+}
+
 enum Route: Hashable {
     case detail(DetailRequest)
     case streams(StreamRequest)
     case catalogSeeAll(CatalogRequest)
+    case castMember(CastRequest)
+    case tmdbBrowse(TMDBBrowseRequest)
     case addonManager
     case catalogOrder
     case themeSettings

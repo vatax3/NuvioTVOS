@@ -77,6 +77,24 @@ final class MetaDetailsViewModel {
         error = nil
         defer { isLoading = false }
 
+        // Rows sourced from TMDB (recommendations, cast credits, network browse) carry a
+        // `tmdb:<id>` id, which no Stremio addon can answer. Trade it for the IMDb id first.
+        var request = request
+        if let tmdbId = request.tmdbId {
+            guard let imdbId = await TMDBClient.shared.imdbId(
+                tmdbId: tmdbId,
+                type: ContentType.from(request.itemType),
+                apiKey: settings.tmdb.apiKey
+            ) else {
+                error = settings.tmdb.apiKey.isEmpty
+                    ? "This title came from TMDB — add a TMDB API key in Metadata settings to open it."
+                    : "TMDB has no IMDb id for this title, so no addon can describe it."
+                return
+            }
+            request.itemId = imdbId
+            request.addonBaseUrl = nil
+        }
+
         // Prefer the addon the item came from, then any other addon advertising `meta`
         // for this id — this is what makes third-party catalogs resolve through Cinemeta.
         //

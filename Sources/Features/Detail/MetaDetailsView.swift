@@ -74,6 +74,24 @@ struct MetaDetailsView: View {
                     CastSection(members: meta.castMembers)
                 }
 
+                if !meta.networks.isEmpty {
+                    CompanySection(
+                        title: "Networks",
+                        companies: meta.networks,
+                        contentType: meta.apiType,
+                        isNetwork: true
+                    )
+                }
+
+                if !meta.productionCompanies.isEmpty {
+                    CompanySection(
+                        title: "Studios",
+                        companies: meta.productionCompanies,
+                        contentType: meta.apiType,
+                        isNetwork: false
+                    )
+                }
+
                 if !model.moreLikeThis.isEmpty {
                     CatalogRowView(
                         title: "More like this",
@@ -348,6 +366,7 @@ struct EpisodesSection: View {
 
 struct CastSection: View {
     @Environment(\.nuvioColors) private var colors
+    @Environment(Router.self) private var router
     let members: [MetaCastMember]
 
     var body: some View {
@@ -360,37 +379,142 @@ struct CastSection: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: NuvioTheme.spacing.lg) {
                     ForEach(members.prefix(24)) { member in
-                        VStack(spacing: NuvioTheme.spacing.sm) {
-                            RemoteImage(url: member.photo, contentMode: .fill) {
-                                ZStack {
-                                    colors.backgroundCard
-                                    Image(systemName: "person.fill")
-                                        .font(.system(size: NuvioTheme.sizes.icons.xl))
-                                        .foregroundStyle(colors.textTertiary)
-                                }
-                            }
-                            .frame(width: NuvioTheme.sizes.avatars.xl, height: NuvioTheme.sizes.avatars.xl)
-                            .clipShape(Circle())
-
-                            Text(member.name)
-                                .nuvioText(NuvioTextStyles.metadata)
-                                .foregroundStyle(colors.textPrimary)
-                                .lineLimit(1)
-
-                            if let character = member.character?.nilIfBlank {
-                                Text(character)
-                                    .nuvioText(NuvioTypography.labelSmall)
-                                    .foregroundStyle(colors.textTertiary)
-                                    .lineLimit(1)
-                            }
+                        CastMemberCard(member: member) {
+                            // Only TMDB-sourced members carry an id, and the detail screen is
+                            // entirely TMDB-backed — a plain addon credit has nowhere to go.
+                            guard let tmdbId = member.tmdbId else { return }
+                            router.push(.castMember(CastRequest(
+                                tmdbId: tmdbId, name: member.name, photo: member.photo
+                            )))
                         }
-                        .frame(width: dp(140))
                     }
                 }
                 .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)
+                .padding(.vertical, NuvioTheme.spacing.sm)
             }
             .scrollClipDisabled()
         }
         .focusSection()
+    }
+}
+
+private struct CastMemberCard: View {
+    @Environment(\.nuvioColors) private var colors
+    @Environment(\.cardDepth) private var depth
+
+    let member: MetaCastMember
+    let action: () -> Void
+
+    @State private var isFocused = false
+
+    private var isNavigable: Bool { member.tmdbId != nil }
+
+    var body: some View {
+        VStack(spacing: NuvioTheme.spacing.sm) {
+            Button(action: action) {
+                RemoteImage(url: member.photo, contentMode: .fill) {
+                    ZStack {
+                        colors.backgroundCard
+                        Image(systemName: "person.fill")
+                            .font(.system(size: NuvioTheme.sizes.icons.xl))
+                            .foregroundStyle(colors.textTertiary)
+                    }
+                }
+                .frame(width: NuvioTheme.sizes.avatars.xl, height: NuvioTheme.sizes.avatars.xl)
+                .background(colors.backgroundCard)
+                .cardDepth(.cast, cornerRadius: NuvioTheme.sizes.avatars.xl / 2)
+            }
+            .buttonStyle(NuvioCardButtonStyle(cornerRadius: NuvioTheme.sizes.avatars.xl / 2))
+            .onFocusChange { isFocused = $0 }
+            // A credit with no TMDB id has no destination; leave it unfocusable rather than
+            // offering a button that does nothing.
+            .disabled(!isNavigable)
+
+            Text(member.name)
+                .nuvioText(NuvioTextStyles.metadata)
+                .foregroundStyle(colors.textPrimary)
+                .lineLimit(1)
+
+            if let character = member.character?.nilIfBlank {
+                Text(character)
+                    .nuvioText(NuvioTypography.labelSmall)
+                    .foregroundStyle(colors.textTertiary)
+                    .lineLimit(1)
+            }
+        }
+        .frame(width: dp(140))
+    }
+}
+
+// MARK: - Networks & studios
+
+/// Logos from the TMDB enrichment, each opening that entity's catalogue.
+struct CompanySection: View {
+    @Environment(\.nuvioColors) private var colors
+    @Environment(Router.self) private var router
+
+    let title: String
+    let companies: [MetaCompany]
+    let contentType: String
+    /// Networks and production companies are different TMDB `discover` filters.
+    let isNetwork: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: NuvioTheme.spacing.lg) {
+            Text(title)
+                .nuvioText(NuvioTextStyles.sectionTitle)
+                .foregroundStyle(colors.textPrimary)
+                .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: NuvioTheme.spacing.lg) {
+                    ForEach(companies) { company in
+                        CompanyCard(company: company) {
+                            guard let tmdbId = company.tmdbId else { return }
+                            router.push(.tmdbBrowse(TMDBBrowseRequest(
+                                entity: isNetwork ? .network(tmdbId) : .company(tmdbId),
+                                title: company.name,
+                                contentType: contentType,
+                                logo: company.logo
+                            )))
+                        }
+                    }
+                }
+                .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)
+                .padding(.vertical, NuvioTheme.spacing.sm)
+            }
+            .scrollClipDisabled()
+        }
+        .focusSection()
+    }
+}
+
+private struct CompanyCard: View {
+    @Environment(\.nuvioColors) private var colors
+
+    let company: MetaCompany
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: NuvioTheme.spacing.sm) {
+                if let logo = company.logo?.nilIfBlank {
+                    RemoteImage(url: logo, contentMode: .fit) { Color.clear }
+                        .frame(height: dp(44))
+                        .padding(.horizontal, NuvioTheme.spacing.md)
+                } else {
+                    Text(company.name)
+                        .nuvioText(NuvioTextStyles.cardTitle)
+                        .foregroundStyle(colors.textPrimary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, NuvioTheme.spacing.md)
+                }
+            }
+            .frame(width: dp(180), height: dp(90))
+            .background(colors.backgroundCard)
+        }
+        .buttonStyle(NuvioCardButtonStyle(cornerRadius: NuvioTheme.radii.md))
+        .disabled(company.tmdbId == nil)
     }
 }

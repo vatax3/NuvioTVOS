@@ -53,6 +53,10 @@ struct RootView: View {
             StreamsView(request: request)
         case .catalogSeeAll(let request):
             CatalogSeeAllView(request: request)
+        case .castMember(let request):
+            CastDetailView(request: request)
+        case .tmdbBrowse(let request):
+            TMDBBrowseView(request: request)
         case .addonManager:
             AddonManagerView()
         case .catalogOrder:

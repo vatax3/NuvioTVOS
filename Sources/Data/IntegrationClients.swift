@@ -142,13 +142,21 @@ actor TMDBClient {
         if options.useNetworks {
             enrichment.networks = (details.networks ?? []).compactMap { network in
                 guard let name = network.name else { return nil }
-                return MetaCompany(name: name, logo: network.logo_path.map { "\(Self.imageBase)/w300\($0)" })
+                return MetaCompany(
+                    name: name,
+                    logo: network.logo_path.map { "\(Self.imageBase)/w300\($0)" },
+                    tmdbId: network.id
+                )
             }
         }
         if options.useProductions {
             enrichment.productionCompanies = (details.production_companies ?? []).compactMap { company in
                 guard let name = company.name else { return nil }
-                return MetaCompany(name: name, logo: company.logo_path.map { "\(Self.imageBase)/w300\($0)" })
+                return MetaCompany(
+                    name: name,
+                    logo: company.logo_path.map { "\(Self.imageBase)/w300\($0)" },
+                    tmdbId: company.id
+                )
             }
         }
         if options.useTrailers {
@@ -190,6 +198,95 @@ actor TMDBClient {
         var useReleaseDates = true
         var useMoreLikeThis = true
     }
+
+    // MARK: - People
+
+    struct PersonProfile: Sendable {
+        var tmdbId: Int
+        var name: String
+        var biography: String?
+        var photo: String?
+        var birthday: String?
+        var deathday: String?
+        var placeOfBirth: String?
+        var knownFor: String?
+        var credits: [MetaPreview] = []
+    }
+
+    /// Cast detail: the person plus everything they appeared in, newest first.
+    func person(id: Int, apiKey: String, language: String) async -> PersonProfile? {
+        guard !apiKey.isEmpty else { return nil }
+        guard let details = try? await HTTP.get(
+            "\(base)/person/\(id)?api_key=\(apiKey)&language=\(language)&append_to_response=combined_credits",
+            as: TMDBPerson.self
+        ), let name = details.name?.nilIfBlank else { return nil }
+
+        var profile = PersonProfile(
+            tmdbId: id,
+            name: name,
+            biography: details.biography?.nilIfBlank,
+            photo: details.profile_path.map { "\(Self.imageBase)/h632\($0)" },
+            birthday: details.birthday?.nilIfBlank,
+            deathday: details.deathday?.nilIfBlank,
+            placeOfBirth: details.place_of_birth?.nilIfBlank,
+            knownFor: details.known_for_department?.nilIfBlank
+        )
+
+        // Acting credits only, deduplicated, most recent first — the crew list is noise here.
+        var seen = Set<Int>()
+        profile.credits = (details.combined_credits?.cast ?? [])
+            .filter { ($0.media_type == "movie" || $0.media_type == "tv") }
+            .filter { $0.id.map { seen.insert($0).inserted } ?? false }
+            .sorted { ($0.sortDate ?? "") > ($1.sortDate ?? "") }
+            .compactMap { $0.preview }
+        return profile
+    }
+
+    // MARK: - Browse
+
+    enum BrowseFilter: Hashable, Sendable {
+        case network(Int)
+        case company(Int)
+        case genre(Int)
+
+        var queryItem: String {
+            switch self {
+            case .network(let id): return "with_networks=\(id)"
+            case .company(let id): return "with_companies=\(id)"
+            case .genre(let id): return "with_genres=\(id)"
+            }
+        }
+    }
+
+    /// TMDB `discover`, used for the "more from this network / studio / genre" screens.
+    func discover(
+        type: ContentType,
+        filter: BrowseFilter,
+        page: Int,
+        apiKey: String,
+        language: String
+    ) async -> [MetaPreview] {
+        guard !apiKey.isEmpty else { return [] }
+        let mediaType = type == .series ? "tv" : "movie"
+        guard let response = try? await HTTP.get(
+            "\(base)/discover/\(mediaType)?api_key=\(apiKey)&language=\(language)"
+                + "&sort_by=popularity.desc&page=\(max(1, page))&\(filter.queryItem)",
+            as: TMDBDiscoverResponse.self
+        ) else { return [] }
+        return (response.results ?? []).compactMap { $0.preview(type: type) }
+    }
+
+    /// Resolves a TMDB id to an IMDb id so an addon can serve the detail page. Nuvio's own
+    /// screens are keyed on IMDb ids; TMDB-sourced rows would otherwise be dead ends.
+    func imdbId(tmdbId: Int, type: ContentType, apiKey: String) async -> String? {
+        guard !apiKey.isEmpty else { return nil }
+        let mediaType = type == .series ? "tv" : "movie"
+        let response = try? await HTTP.get(
+            "\(base)/\(mediaType)/\(tmdbId)/external_ids?api_key=\(apiKey)",
+            as: TMDBExternalIds.self
+        )
+        return response?.imdb_id?.nilIfBlank
+    }
 }
 
 // MARK: TMDB wire types
@@ -200,7 +297,7 @@ private struct TMDBFindResponse: Decodable {
     let tv_results: [TMDBFindResult]?
 }
 
-private struct TMDBNamed: Decodable { let name: String?; let logo_path: String? }
+private struct TMDBNamed: Decodable { let id: Int?; let name: String?; let logo_path: String? }
 private struct TMDBGenre: Decodable { let name: String? }
 private struct TMDBImage: Decodable { let file_path: String? }
 private struct TMDBImages: Decodable { let logos: [TMDBImage]? }
@@ -223,6 +320,59 @@ private struct TMDBReleaseDateCountry: Decodable {
     let iso_3166_1: String?; let release_dates: [TMDBReleaseDateEntry]?
 }
 private struct TMDBReleaseDates: Decodable { let results: [TMDBReleaseDateCountry]? }
+
+private struct TMDBExternalIds: Decodable { let imdb_id: String? }
+
+/// One row of `combined_credits` or `discover`. `media_type` is absent on discover results,
+/// where the endpoint already fixed the type.
+private struct TMDBMediaItem: Decodable {
+    let id: Int?
+    let media_type: String?
+    let title: String?
+    let name: String?
+    let overview: String?
+    let poster_path: String?
+    let backdrop_path: String?
+    let release_date: String?
+    let first_air_date: String?
+    let vote_average: Double?
+    let character: String?
+
+    var sortDate: String? { release_date?.nilIfBlank ?? first_air_date?.nilIfBlank }
+
+    var preview: MetaPreview? {
+        preview(type: media_type == "tv" ? .series : .movie)
+    }
+
+    func preview(type: ContentType) -> MetaPreview? {
+        guard let id, let displayName = (title ?? name)?.nilIfBlank else { return nil }
+        return MetaPreview(
+            id: "tmdb:\(id)",
+            type: type,
+            rawType: type.apiString(),
+            name: displayName,
+            poster: poster_path.map { "\(TMDBClient.imageBase)/w500\($0)" },
+            background: backdrop_path.map { "\(TMDBClient.imageBase)/original\($0)" },
+            description: overview?.nilIfBlank,
+            releaseInfo: sortDate.map { String($0.prefix(4)) },
+            imdbRating: vote_average.flatMap { $0 > 0 ? Float($0) : nil }
+        )
+    }
+}
+
+private struct TMDBCombinedCredits: Decodable { let cast: [TMDBMediaItem]? }
+private struct TMDBDiscoverResponse: Decodable { let results: [TMDBMediaItem]? }
+
+private struct TMDBPerson: Decodable {
+    let name: String?
+    let biography: String?
+    let profile_path: String?
+    let birthday: String?
+    let deathday: String?
+    let place_of_birth: String?
+    let known_for_department: String?
+    let combined_credits: TMDBCombinedCredits?
+}
 
 private struct TMDBDetails: Decodable {
     let overview: String?
