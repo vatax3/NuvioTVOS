@@ -799,3 +799,169 @@ actor SkipIntroClient {
         return response?.myanimelist
     }
 }
+
+// MARK: - Simkl
+
+/// Second tracking service alongside Trakt. Simkl authenticates with a PIN the viewer types on
+/// simkl.com rather than a device code, and has no live scrobble endpoint — progress is reported
+/// as a check-in when playback starts and a history write when it finishes.
+actor SimklClient {
+    static let shared = SimklClient()
+    private let base = "https://api.simkl.com"
+    private let log = Logger(subsystem: "com.nuvio.tvos", category: "Simkl")
+
+    struct PinCode: Sendable {
+        let userCode: String
+        let verificationURL: String
+        let expiresIn: Int
+        let interval: Int
+    }
+
+    private func headers(clientId: String, token: String? = nil) -> [String: String] {
+        var headers = [
+            "Content-Type": "application/json",
+            "simkl-api-key": clientId
+        ]
+        if let token { headers["Authorization"] = "Bearer \(token)" }
+        return headers
+    }
+
+    // MARK: Auth
+
+    func startPinAuth(clientId: String) async throws -> PinCode {
+        struct Response: Decodable {
+            let user_code: String
+            let verification_url: String
+            let expires_in: Int?
+            let interval: Int?
+        }
+        let response = try await HTTP.get(
+            "\(base)/oauth/pin?client_id=\(clientId)",
+            headers: headers(clientId: clientId),
+            as: Response.self
+        )
+        return PinCode(
+            userCode: response.user_code,
+            verificationURL: response.verification_url,
+            expiresIn: response.expires_in ?? 900,
+            interval: response.interval ?? 5
+        )
+    }
+
+    /// Polls until the viewer enters the PIN on simkl.com. The endpoint answers `result: "KO"`
+    /// while it is still pending, so a successful decode is not by itself an approval.
+    func pollForToken(
+        userCode: String, clientId: String, interval: Int, expiresIn: Int
+    ) async -> String? {
+        struct Response: Decodable { let result: String?; let access_token: String? }
+
+        let deadline = Date().addingTimeInterval(TimeInterval(expiresIn))
+        while Date() < deadline {
+            try? await Task.sleep(for: .seconds(max(interval, 5)))
+            if Task.isCancelled { return nil }
+            if let response = try? await HTTP.get(
+                "\(base)/oauth/pin/\(userCode)?client_id=\(clientId)",
+                headers: headers(clientId: clientId),
+                as: Response.self
+            ), let token = response.access_token?.nilIfBlank {
+                return token
+            }
+        }
+        return nil
+    }
+
+    func username(clientId: String, token: String) async -> String? {
+        struct User: Decodable { let name: String? }
+        struct Account: Decodable { let user: User? }
+        let account = try? await HTTP.post(
+            "\(base)/users/settings",
+            headers: headers(clientId: clientId, token: token),
+            json: EmptyBody(),
+            as: Account.self
+        )
+        return account?.user?.name?.nilIfBlank
+    }
+
+    // MARK: Progress
+
+    /// Announces what is playing now. Simkl expires a check-in on its own, so there is no
+    /// matching "stop" call to make.
+    func checkin(
+        imdbId: String,
+        type: ContentType,
+        season: Int?,
+        episode: Int?,
+        clientId: String,
+        token: String
+    ) async {
+        await send(path: "sync/checkin", imdbId: imdbId, type: type, season: season, episode: episode,
+                   clientId: clientId, token: token)
+    }
+
+    /// Writes the title (or single episode) into the watched history, which is what actually
+    /// marks it watched on the account.
+    func markWatched(
+        imdbId: String,
+        type: ContentType,
+        season: Int?,
+        episode: Int?,
+        clientId: String,
+        token: String
+    ) async {
+        await send(path: "sync/history", imdbId: imdbId, type: type, season: season, episode: episode,
+                   clientId: clientId, token: token)
+    }
+
+    private func send(
+        path: String,
+        imdbId: String,
+        type: ContentType,
+        season: Int?,
+        episode: Int?,
+        clientId: String,
+        token: String
+    ) async {
+        guard !clientId.isEmpty, !token.isEmpty else { return }
+        do {
+            _ = try await HTTP.post(
+                "\(base)/\(path)",
+                headers: headers(clientId: clientId, token: token),
+                json: SyncBody(imdbId: imdbId, type: type, season: season, episode: episode),
+                as: EmptyResponse.self
+            )
+        } catch {
+            log.error("Simkl \(path, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private struct EmptyBody: Encodable {}
+
+    /// Simkl's sync payload: movies as a flat list, shows as a nested season/episode tree.
+    private struct SyncBody: Encodable {
+        struct Ids: Encodable { let imdb: String }
+        struct Episode: Encodable { let number: Int }
+        struct Season: Encodable { let number: Int; let episodes: [Episode]? }
+        struct Show: Encodable { let ids: Ids; let seasons: [Season]? }
+        struct Movie: Encodable { let ids: Ids }
+
+        let movies: [Movie]?
+        let shows: [Show]?
+
+        init(imdbId: String, type: ContentType, season: Int?, episode: Int?) {
+            let ids = Ids(imdb: imdbId)
+            if type == .series {
+                movies = nil
+                let seasons: [Season]? = season.map { seasonNumber in
+                    [Season(
+                        number: seasonNumber,
+                        episodes: episode.map { [Episode(number: $0)] }
+                    )]
+                }
+                shows = [Show(ids: ids, seasons: seasons)]
+            } else {
+                movies = [Movie(ids: ids)]
+                shows = nil
+            }
+        }
+    }
+}

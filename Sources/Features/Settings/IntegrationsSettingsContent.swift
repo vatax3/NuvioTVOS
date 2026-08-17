@@ -9,6 +9,9 @@ struct TrackingSettingsContent: View {
     @State private var deviceCode: TraktClient.DeviceCode?
     @State private var authTask: Task<Void, Never>?
     @State private var statusMessage: String?
+    @State private var simklPin: SimklClient.PinCode?
+    @State private var simklTask: Task<Void, Never>?
+    @State private var simklStatus: String?
 
     private var tracking: TrackingSettingsStore { settings.tracking }
 
@@ -83,19 +86,64 @@ struct TrackingSettingsContent: View {
             }
 
             SettingsCard(
-                title: "Comments",
-                footnote: "Comments are public Trakt data — a client id is enough, signing in is not required."
+                title: "Simkl",
+                footnote: """
+                Create an app at simkl.com/settings/developer and paste its client id. Simkl has \
+                no live scrobble endpoint, so Nuvio checks in when playback starts and writes to \
+                your history when a title finishes.
+                """
             ) {
-                SettingsToggle(
-                    title: "Show comments",
-                    subtitle: tracking.traktClientId.isEmpty
-                        ? "Needs a Trakt client id"
-                        : "Adds a Comments action to the detail screen, with spoilers hidden until revealed",
-                    systemImage: "bubble.left.and.bubble.right",
-                    isOn: $tracking.traktCommentsEnabled
-                )
-                .disabled(tracking.traktClientId.isEmpty)
-                .opacity(tracking.traktClientId.isEmpty ? NuvioTheme.effects.disabledAlpha : 1)
+                if tracking.isSimklAuthenticated {
+                    SettingsInfoRow(
+                        title: "Signed in as",
+                        value: tracking.simklUsername.nilIfBlank ?? "Simkl account",
+                        tint: colors.success
+                    )
+                    SettingsToggle(
+                        title: "Report watched",
+                        subtitle: "Check in on start, add to history when finished",
+                        systemImage: "dot.radiowaves.up.forward",
+                        isOn: $tracking.simklScrobbleEnabled
+                    )
+                    SettingsRow(
+                        title: "Sign out",
+                        subtitle: "Remove the token from this device",
+                        systemImage: "rectangle.portrait.and.arrow.right",
+                        action: {
+                            simklTask?.cancel()
+                            simklPin = nil
+                            simklStatus = nil
+                            tracking.clearSimklSession()
+                        }
+                    )
+                } else {
+                    SettingsTextFieldRow(
+                        title: "Client ID",
+                        placeholder: "Simkl application client id",
+                        text: $tracking.simklClientId
+                    )
+
+                    if let simklPin {
+                        SettingsInfoRow(title: "Go to", value: simklPin.verificationURL, tint: colors.secondary)
+                        SettingsInfoRow(title: "Enter code", value: simklPin.userCode, tint: colors.textPrimary)
+                        SettingsInfoRow(title: "Status", value: simklStatus ?? "Waiting for approval…")
+                    } else {
+                        SettingsRow(
+                            title: "Connect Simkl",
+                            subtitle: tracking.canStartSimklAuth
+                                ? "Get a PIN for simkl.com/pin"
+                                : "Enter a client id first",
+                            systemImage: "link.badge.plus",
+                            action: { startSimklAuth() }
+                        )
+                        .disabled(!tracking.canStartSimklAuth)
+                        .opacity(tracking.canStartSimklAuth ? 1 : NuvioTheme.effects.disabledAlpha)
+                    }
+
+                    if let simklStatus, simklPin == nil {
+                        SettingsInfoRow(title: "Status", value: simklStatus, tint: colors.error)
+                    }
+                }
             }
 
             SettingsCard(
@@ -137,16 +185,61 @@ struct TrackingSettingsContent: View {
                 )
             }
 
-            SettingsCard(title: "Detail page") {
+            SettingsCard(
+                title: "Detail page",
+                footnote: "Comments are public Trakt data — a client id is enough, signing in is not required."
+            ) {
                 SettingsToggle(
                     title: "Show Trakt comments",
-                    subtitle: "Community reviews under the title",
+                    subtitle: tracking.traktClientId.isEmpty
+                        ? "Needs a Trakt client id"
+                        : "Adds a Comments action to the detail screen, with spoilers hidden until revealed",
                     systemImage: "text.bubble",
                     isOn: $tracking.showMetaComments
                 )
+                .disabled(tracking.traktClientId.isEmpty)
+                .opacity(tracking.traktClientId.isEmpty ? NuvioTheme.effects.disabledAlpha : 1)
             }
         }
-        .onDisappear { authTask?.cancel() }
+        .onDisappear {
+            authTask?.cancel()
+            simklTask?.cancel()
+        }
+    }
+
+    private func startSimklAuth() {
+        let clientId = tracking.simklClientId.trimmingCharacters(in: .whitespaces)
+        simklStatus = nil
+
+        simklTask?.cancel()
+        simklTask = Task {
+            do {
+                let pin = try await SimklClient.shared.startPinAuth(clientId: clientId)
+                simklPin = pin
+                simklStatus = "Waiting for approval…"
+
+                let token = await SimklClient.shared.pollForToken(
+                    userCode: pin.userCode,
+                    clientId: clientId,
+                    interval: pin.interval,
+                    expiresIn: pin.expiresIn
+                )
+                guard let token else {
+                    simklPin = nil
+                    simklStatus = "The PIN expired. Try again."
+                    return
+                }
+                tracking.simklAccessToken = token
+                tracking.simklUsername = await SimklClient.shared.username(
+                    clientId: clientId, token: token
+                ) ?? ""
+                simklPin = nil
+                simklStatus = nil
+            } catch {
+                simklPin = nil
+                simklStatus = error.localizedDescription
+            }
+        }
     }
 
     private func startAuth() {

@@ -20,6 +20,7 @@ struct PlayerView: View {
 
     @State private var didScrobbleStart = false
     @State private var lastScrobbleProgress: Double = 0
+    @State private var didSimklCheckin = false
     @State private var subtitles = SubtitleTrackController()
 
     var body: some View {
@@ -35,6 +36,7 @@ struct PlayerView: View {
                 onProgress: { position, duration, completed in
                     persist(position: position, duration: duration, completed: completed)
                     scrobble(position: position, duration: duration)
+                    simklCheckin()
                     advanceIfDue(position: position, duration: duration)
                 },
                 onFinished: {
@@ -102,12 +104,47 @@ struct PlayerView: View {
     }
 
     private func scrobbleStop() {
-        guard let credentials = traktCredentials, let imdbId = request.imdbId else { return }
+        guard let imdbId = request.imdbId else { return }
+        if let credentials = traktCredentials {
+            Task {
+                await TraktClient.shared.scrobble(
+                    action: .stop, imdbId: imdbId, type: ContentType.from(request.contentType),
+                    season: request.season, episode: request.episode,
+                    progressPercent: 100,
+                    clientId: credentials.clientId, token: credentials.token
+                )
+            }
+        }
+        if let credentials = simklCredentials {
+            Task {
+                await SimklClient.shared.markWatched(
+                    imdbId: imdbId, type: ContentType.from(request.contentType),
+                    season: request.season, episode: request.episode,
+                    clientId: credentials.clientId, token: credentials.token
+                )
+            }
+        }
+    }
+
+    // MARK: Simkl
+
+    private var simklCredentials: (clientId: String, token: String)? {
+        let tracking = settings.tracking
+        guard tracking.simklScrobbleEnabled, tracking.isSimklAuthenticated,
+              !tracking.simklClientId.isEmpty else { return nil }
+        return (tracking.simklClientId, tracking.simklAccessToken)
+    }
+
+    /// Simkl has no progress endpoint — one check-in at the start is the whole story until the
+    /// history write on completion.
+    private func simklCheckin() {
+        guard didSimklCheckin == false, let credentials = simklCredentials,
+              let imdbId = request.imdbId else { return }
+        didSimklCheckin = true
         Task {
-            await TraktClient.shared.scrobble(
-                action: .stop, imdbId: imdbId, type: ContentType.from(request.contentType),
+            await SimklClient.shared.checkin(
+                imdbId: imdbId, type: ContentType.from(request.contentType),
                 season: request.season, episode: request.episode,
-                progressPercent: 100,
                 clientId: credentials.clientId, token: credentials.token
             )
         }

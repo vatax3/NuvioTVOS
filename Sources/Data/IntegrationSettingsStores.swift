@@ -210,12 +210,6 @@ final class TrackingSettingsStore: PreferenceStore {
         set { setBool("trakt_scrobble_enabled", newValue) }
     }
 
-    /// Comments are public Trakt data, so they only need the client id — not a signed-in user.
-    var traktCommentsEnabled: Bool {
-        get { bool("trakt_comments_enabled", default: true) }
-        set { setBool("trakt_comments_enabled", newValue) }
-    }
-
     var isTraktAuthenticated: Bool { !traktAccessToken.isEmpty }
     var canStartTraktAuth: Bool { !traktClientId.isEmpty && !traktClientSecret.isEmpty }
 
@@ -223,6 +217,36 @@ final class TrackingSettingsStore: PreferenceStore {
         traktAccessToken = ""
         traktRefreshToken = ""
         traktUsername = ""
+    }
+
+    // MARK: - Simkl
+
+    var simklClientId: String {
+        get { string("simkl_client_id", default: "") }
+        set { setString("simkl_client_id", newValue) }
+    }
+
+    var simklAccessToken: String {
+        get { string("simkl_access_token", default: "") }
+        set { setString("simkl_access_token", newValue) }
+    }
+
+    var simklUsername: String {
+        get { string("simkl_username", default: "") }
+        set { setString("simkl_username", newValue) }
+    }
+
+    var simklScrobbleEnabled: Bool {
+        get { bool("simkl_scrobble_enabled", default: true) }
+        set { setBool("simkl_scrobble_enabled", newValue) }
+    }
+
+    var isSimklAuthenticated: Bool { !simklAccessToken.isEmpty }
+    var canStartSimklAuth: Bool { !simklClientId.isEmpty }
+
+    func clearSimklSession() {
+        simklAccessToken = ""
+        simklUsername = ""
     }
 }
 

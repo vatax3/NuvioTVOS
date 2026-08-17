@@ -228,7 +228,7 @@ struct MetaDetailsView: View {
                 selected: collectionCount(meta) > 0
             ))
 
-            if settings.tracking.traktCommentsEnabled,
+            if settings.tracking.showMetaComments,
                !settings.tracking.traktClientId.isEmpty,
                let imdbId = meta.imdbId?.nilIfBlank ?? (meta.id.hasPrefix("tt") ? meta.id : nil) {
                 Button(action: {
