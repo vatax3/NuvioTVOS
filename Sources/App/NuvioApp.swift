@@ -29,7 +29,13 @@ private struct ProfileGate: View {
 
     var body: some View {
         Group {
-            if profiles.isLocked, let profile = profiles.activeProfile {
+            // "Who's watching?" comes before everything else, exactly as on Android: a
+            // household picks who they are, and only then does the app — and its per-profile
+            // store graph — come up.
+            if profiles.shouldPresentSelection {
+                ProfileSelectionView(profiles: profiles)
+                    .environment(\.nuvioColors, NuvioColorScheme(palette: ThemeColors.crimson))
+            } else if profiles.isLocked, let profile = profiles.activeProfile {
                 ProfileLockView(profile: profile, profiles: profiles)
             } else {
                 ProfileScopedRoot()

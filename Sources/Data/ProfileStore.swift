@@ -147,11 +147,64 @@ final class ProfileStore {
             ProfileScope.activate(activeProfileId)
         }
         isLocked = activeProfile?.isLocked ?? false
+
+        // The startup shortcut, matching Android's `LaunchedEffect(hasEverSelectedProfile, …)`:
+        // with remembering on, a returning viewer goes straight in. A locked profile never
+        // skips — a PIN that is only asked for once would not be protecting anything.
+        if Self.remembersLastProfile, hasEverSelectedProfile, !isLocked {
+            needsSelectionThisSession = false
+        }
     }
 
     /// The primary profile's `app` namespace is unprefixed, so the key is the bare name.
-    private static var remembersLastProfile: Bool {
+    static var remembersLastProfile: Bool {
         UserDefaults.standard.object(forKey: "app.remember_last_profile") as? Bool ?? true
+    }
+
+    private static let everSelectedKey = "nuvio.has_ever_selected_profile"
+
+    /// Whether a profile has ever been picked from the chooser. Android's
+    /// `hasEverSelectedProfile`: the very first launch always asks, even with remembering on.
+    private(set) var hasEverSelectedProfile =
+        UserDefaults.standard.bool(forKey: "nuvio.has_ever_selected_profile")
+
+    /// True while the chooser has not been answered in this run of the app. Android keeps this
+    /// as `hasSelectedProfileThisSession`, reset by "Switch profile".
+    private(set) var needsSelectionThisSession = true
+
+    /// Android's `shouldShowProfileSelection`: only when there is a choice to make — more than
+    /// one profile, or a PIN to enter.
+    ///
+    /// Deliberately says nothing about "remember last profile". That preference is a *startup*
+    /// shortcut, applied once in `init`; folding it in here would also swallow an explicit
+    /// "Switch profile", which is the one case the viewer definitely wants the chooser.
+    var shouldPresentSelection: Bool {
+        guard needsSelectionThisSession else { return false }
+        return profiles.count > 1 || (activeProfile?.isLocked ?? false)
+    }
+
+    func markSelectionHandled() {
+        needsSelectionThisSession = false
+        guard !hasEverSelectedProfile else { return }
+        hasEverSelectedProfile = true
+        UserDefaults.standard.set(true, forKey: Self.everSelectedKey)
+    }
+
+    /// Sends the viewer back to the chooser — the "Switch profile" action.
+    func requestSelection() { needsSelectionThisSession = true }
+
+    /// Set when the chooser was left via "Add Profile" or a long press, so the app opens on the
+    /// Profiles settings instead of Home. Consumed once by the root view.
+    private(set) var wantsProfileManagement = false
+
+    func requestProfileManagement() {
+        wantsProfileManagement = true
+        markSelectionHandled()
+    }
+
+    func consumeProfileManagementRequest() -> Bool {
+        defer { wantsProfileManagement = false }
+        return wantsProfileManagement
     }
 
     var activeProfile: Profile? {

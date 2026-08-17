@@ -89,7 +89,8 @@ struct ProfileLockView: View {
 }
 
 /// D-pad friendly keypad: 0–9 in a grid plus delete, all real focusable buttons.
-private struct PinKeypad: View {
+/// Shared by the lock screen, the switcher and the launch chooser.
+struct PinKeypad: View {
     @Environment(\.nuvioColors) private var colors
 
     let onDigit: (Int) -> Void
@@ -161,136 +162,5 @@ struct ProfileAvatar: View {
                         .background(Circle().fill(.black.opacity(0.65)))
                 }
             }
-    }
-}
-
-// MARK: - Switcher
-
-/// Profile picker, presented from the Profiles settings section.
-struct ProfileSwitcherView: View {
-    @Environment(\.nuvioColors) private var colors
-    @Environment(ProfileStore.self) private var profiles
-    @Environment(\.dismiss) private var dismiss
-
-    /// The profile awaiting a PIN, if the viewer picked a locked one.
-    @State private var challenging: Profile?
-    @State private var entry = ""
-    @State private var didFail = false
-    @FocusState private var keypadFocus: Int?
-
-    var body: some View {
-        NuvioScreenBackground {
-            VStack(alignment: .leading, spacing: NuvioTheme.spacing.xl) {
-                Text(challenging == nil ? "Switch profile" : "Enter PIN")
-                    .nuvioText(NuvioTextStyles.display)
-                    .foregroundStyle(colors.textPrimary)
-
-                if let challenging {
-                    challenge(for: challenging)
-                } else {
-                    grid
-                }
-            }
-        }
-        .onChange(of: challenging) { _, profile in
-            entry = ""
-            didFail = false
-            if profile != nil { keypadFocus = 1 }
-        }
-    }
-
-    private var grid: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(alignment: .top, spacing: NuvioTheme.spacing.xl) {
-                ForEach(profiles.profiles) { profile in
-                    Button(action: { select(profile) }) {
-                        VStack(spacing: NuvioTheme.spacing.md) {
-                            ProfileAvatar(profile: profile, diameter: dp(110))
-                            Text(profile.name)
-                                .nuvioText(NuvioTextStyles.cardTitle)
-                                .foregroundStyle(colors.textPrimary)
-                                .lineLimit(1)
-                            if profile.id == profiles.activeProfileId {
-                                Text("Current")
-                                    .nuvioText(NuvioTypography.labelSmall)
-                                    .foregroundStyle(colors.secondary)
-                            } else if profile.isRestricted {
-                                Text("Restricted")
-                                    .nuvioText(NuvioTypography.labelSmall)
-                                    .foregroundStyle(colors.textTertiary)
-                            }
-                        }
-                        .frame(width: dp(170))
-                        .padding(.vertical, NuvioTheme.spacing.md)
-                    }
-                    .buttonStyle(NuvioRowButtonStyle(cornerRadius: NuvioTheme.radii.lg))
-                }
-            }
-            .padding(.vertical, NuvioTheme.spacing.md)
-        }
-        .scrollClipDisabled()
-    }
-
-    private func challenge(for profile: Profile) -> some View {
-        VStack(alignment: .leading, spacing: NuvioTheme.spacing.lg) {
-            HStack(spacing: NuvioTheme.spacing.lg) {
-                ProfileAvatar(profile: profile, diameter: dp(80))
-                VStack(alignment: .leading, spacing: NuvioTheme.spacing.xxs) {
-                    Text(profile.name)
-                        .nuvioText(NuvioTextStyles.headline)
-                        .foregroundStyle(colors.textPrimary)
-                    Text(didFail ? "Wrong PIN — try again" : "This profile is locked.")
-                        .nuvioText(NuvioTextStyles.bodyCompact)
-                        .foregroundStyle(didFail ? colors.error : colors.textSecondary)
-                }
-            }
-
-            HStack(spacing: NuvioTheme.spacing.sm) {
-                ForEach(0..<4, id: \.self) { index in
-                    Circle()
-                        .fill(index < entry.count ? colors.secondary : colors.surfaceVariant)
-                        .frame(width: dp(16), height: dp(16))
-                }
-            }
-
-            PinKeypad(
-                onDigit: { digit in
-                    guard entry.count < 4 else { return }
-                    didFail = false
-                    entry += String(digit)
-                    guard entry.count == 4 else { return }
-                    Task {
-                        if await profiles.unlockRemotely(profile, pin: entry) {
-                            dismiss()
-                        } else {
-                            didFail = true
-                            entry = ""
-                        }
-                    }
-                },
-                onDelete: { entry = String(entry.dropLast()) },
-                focus: $keypadFocus
-            )
-
-            Button(action: { challenging = nil }) {
-                Text("Back")
-                    .nuvioText(NuvioTextStyles.button)
-                    .padding(.horizontal, NuvioTheme.spacing.xl)
-                    .frame(height: NuvioTheme.components.buttonHeight)
-            }
-            .buttonStyle(NuvioPillButtonStyle(emphasis: .ghost))
-        }
-    }
-
-    private func select(_ profile: Profile) {
-        guard profile.id != profiles.activeProfileId else {
-            dismiss()
-            return
-        }
-        if profiles.activate(profile) {
-            dismiss()
-        } else {
-            challenging = profile
-        }
     }
 }

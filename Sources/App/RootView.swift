@@ -31,6 +31,11 @@ struct RootView: View {
             PlayerView(request: request)
         }
         .task {
+            // "Add Profile" and the long-press gesture leave the chooser asking for the
+            // Profiles settings rather than Home.
+            if profiles.consumeProfileManagementRequest() {
+                router.select(.settings)
+            }
             await addons.refreshAll()
             // Startup sync, the equivalent of Android's StartupSyncService. Runs after the addon
             // refresh so a pulled addon list lands on top of resolved manifests.

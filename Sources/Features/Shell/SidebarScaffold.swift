@@ -11,6 +11,7 @@ struct SidebarScaffold<Content: View>: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(Router.self) private var router
     @Environment(AppSettings.self) private var settings
+    @Environment(ProfileStore.self) private var profiles
 
     @ViewBuilder var content: Content
 
@@ -195,6 +196,11 @@ struct SidebarScaffold<Content: View>: View {
                     .focused($focusedTab, equals: tab)
                     .disabled(!router.contentHasFocusableViews)
                 }
+
+                if isExpanded, profiles.hasMultipleProfiles,
+                   let active = profiles.activeProfile {
+                    profileRow(active)
+                }
             }
         }
         .padding(.horizontal, isExpanded ? NuvioTheme.spacing.md : 0)
@@ -206,6 +212,33 @@ struct SidebarScaffold<Content: View>: View {
             }
         }
         .animation(NuvioMotion.sidebarPanelIn, value: isExpanded)
+    }
+
+    /// The active profile, sitting under the destinations, opening the chooser.
+    ///
+    /// Android puts the same entry here, and it is not decoration: Account and Profiles are
+    /// primary-profile-only settings sections in both apps, so on any other profile this is the
+    /// only route back to the picker.
+    private func profileRow(_ profile: Profile) -> some View {
+        Button(action: { profiles.requestSelection() }) {
+            HStack(spacing: tokens.contentGap) {
+                ProfileAvatar(profile: profile, diameter: tokens.leadingVisual)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(profile.name)
+                        .nuvioText(NuvioTextStyles.nav)
+                        .lineLimit(1)
+                    Text("Switch profile")
+                        .nuvioText(NuvioTypography.labelSmall)
+                        .foregroundStyle(colors.textTertiary)
+                }
+            }
+            .padding(.horizontal, NuvioTheme.spacing.lg - NuvioTheme.spacing.xxs)
+            .padding(.vertical, NuvioTheme.spacing.sm)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(NuvioRowButtonStyle(cornerRadius: tokens.panelRadius / 2))
+        .padding(.top, NuvioTheme.spacing.sm)
     }
 
     /// Collapsed, the panel shows only the current destination — that is the floating pill.

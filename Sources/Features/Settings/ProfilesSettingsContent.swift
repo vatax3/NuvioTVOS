@@ -6,7 +6,6 @@ struct ProfilesSettingsContent: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(ProfileStore.self) private var profiles
 
-    @State private var isSwitching = false
     @State private var editing: Profile?
     @State private var isCreating = false
 
@@ -36,7 +35,9 @@ struct ProfilesSettingsContent: View {
                     title: "Switch profile",
                     subtitle: "\(profiles.profiles.count) profile\(profiles.profiles.count == 1 ? "" : "s")",
                     systemImage: "arrow.left.arrow.right",
-                    action: { isSwitching = true }
+                    // Back to the launch chooser rather than a sheet, which is what Android's
+                    // `onSwitchProfile` does — same screen, same PIN prompt, one way in.
+                    action: { profiles.requestSelection() }
                 )
                 SettingsRow(
                     title: "Add profile",
@@ -46,7 +47,6 @@ struct ProfilesSettingsContent: View {
                 )
             }
         }
-        .sheet(isPresented: $isSwitching) { ProfileSwitcherView() }
         .sheet(isPresented: $isCreating) { ProfileEditorView(profile: nil) }
         .sheet(item: $editing) { profile in ProfileEditorView(profile: profile) }
     }
