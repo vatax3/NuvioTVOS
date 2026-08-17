@@ -67,19 +67,47 @@ card is 252 pt here and occupies the identical fraction of the screen.
 
 | Screen | Notes |
 | --- | --- |
-| Shell | Modern floating pill that blooms into the glass sidebar panel on D-pad Left |
+| Shell | Modern floating pill that blooms into the glass sidebar panel on D-pad Left; classic always-open rail as an option |
 | Home | All three layouts — Modern (full-bleed hero), Classic, Grid |
-| Detail | Hero + actions, seasons/episodes, cast, More like this |
-| Streams | Grouped per addon, quality/HDR/codec/size/seeder chips |
-| Player | Resume, progress persistence, per-stream proxy headers, Now Playing metadata |
+| Detail | Hero + actions, seasons/episodes, cast, networks/studios, collections, comments, More like this |
+| Cast | Person photo, biography and filmography (TMDB) |
+| Browse | Paged TMDB listings for a network or studio |
+| Streams | Grouped per addon and per scraper, quality/HDR/codec/size/seeder chips, debrid cache state |
+| Player | Resume, progress persistence, per-stream proxy headers, Now Playing metadata, external subtitles, auto-play chaining |
+| Comments | Trakt comments and reviews, spoilers hidden until revealed |
 | Search | Debounced fan-out across every search-capable catalog |
-| Discover | Browse any catalog by type and genre |
-| Library | Saved titles + Continue Watching |
-| Settings | Addon Manager, Catalog Order, Appearance, Layout, Playback, About |
+| Discover | Browse any catalog by type and genre, standalone or folded into Search |
+| Library | Saved titles, Continue Watching and collections |
+| Settings | 12 sections: Addons, Appearance, Layout, Playback, Debrid, Plugins, Tracking, Metadata, Extras, Profiles, Experience, About |
 
 Signature behaviours are preserved, including the **focus-hold poster expansion** (a card held in
-focus for 3s widens to `height × 16/9` and reveals its backdrop, logo and metadata) and the
-marquee-on-focus card titles.
+focus for the configured delay widens to `height × 16/9` and reveals its backdrop, logo and
+metadata) and the marquee-on-focus card titles.
+
+**Feature surface**
+
+- **~280 settings**, keyed to the same preference names as the Android DataStores. Playback alone
+  covers engine and decoder, scaling and frame-rate matching, Dolby Vision profile 7 handling,
+  audio selection/downmix, subtitle languages and styling, auto-play thresholds, buffer load
+  control, network transport, VOD cache, external player and diagnostics. Every stored setting is
+  consumed by the app — poster metrics, card depth, blur options and catalog naming all drive
+  rendering.
+- **Debrid** — Real-Debrid, Premiumize and TorBox: key validation, batch instant-availability, and
+  magnet → HTTP resolution with file selection. The stream filter engine parses resolution,
+  quality, HDR/DV, audio format and channels, encode, language, release group, size and seeders,
+  then applies the required/excluded/preferred matrix, per-bucket caps and ranked sorting.
+- **Tracking** — Trakt (device-code OAuth, scrobbling, progress and collection sources, comments)
+  and Simkl (PIN auth, check-in and history).
+- **Metadata** — TMDB enrichment (artwork, logos, cast, certifications, recommendations, networks,
+  studios), MDBList aggregated ratings, AniSkip intro/outro segments.
+- **Subtitles** — external SubRip/WebVTT tracks from every `subtitles` addon, language-ordered and
+  auto-selected, drawn with the configured size, weight, colours, outline and offset.
+- **Plugins** — local JS scrapers in JavaScriptCore, matching the Android runtime's `getStreams`
+  contract and injected globals, with a Swift HTML parser and CSS selector engine standing in for
+  jsoup's `cheerio` shim.
+- **Profiles** — separate library, progress, addons, collections and settings per profile, with
+  optional PIN locking and restricted profiles.
+- **Collections** — user-made folders, editable from the Library and the detail screen.
 
 ## Deliberate deviations
 
@@ -103,11 +131,30 @@ app worse:
 
 ## Not implemented
 
-The Android app carries a large surface beyond the core browse-and-play loop. Not ported here:
-Trakt/Simkl tracking and scrobbling, debrid integrations (Real-Debrid, Premiumize, TorBox),
-torrent streaming, cloud sync and multi-profile accounts, collections/folders, MDBList and
-parental-guide enrichment, the plugin runtime, and the in-app addon web configurator. The data
-layer is structured so these slot in as additional repositories.
+Four things from the Android surface are missing, and each for a concrete reason:
+
+1. **Torrent streaming without a debrid service.** Android streams a torrent directly through a
+   bundled client. There is no comparable torrent engine available here, so torrents are only
+   playable via Real-Debrid, Premiumize or TorBox.
+2. **Cloud sync and Nuvio accounts.** These talk to Nuvio's own Supabase backend; a third-party
+   client has no credentials for it and no documented API to target.
+3. **Inline trailer playback.** Trailers in the Stremio and TMDB data are YouTube ids. tvOS has no
+   WKWebView and AVPlayer cannot resolve a YouTube watch page, so the detail-screen button hands
+   off to the YouTube app instead, and the trailer-on-focus setting says it is unavailable rather
+   than sitting inert.
+4. **crypto-js inside the plugin runtime.** Not bundled, so a scraper that depends on it throws a
+   descriptive error. The rest of the documented plugin surface is present.
+
+The **in-app addon configurator** is present but adapted: with no browser on tvOS, the addon's
+configure URL is rendered as a QR code to finish on a phone, and the resulting manifest URL is
+pasted back to install.
+
+## Verification status
+
+The UI, layout, subtitle, plugin and catalog paths are exercised on an Apple TV 4K simulator, and
+the HTML/selector, subtitle and plugin-runtime code is checked against fixture inputs. The debrid,
+Trakt, Simkl, TMDB and MDBList clients are written against the published APIs but have **not** been
+run against live accounts — no credentials were available. Treat those paths as untested.
 
 ## Build & run
 
