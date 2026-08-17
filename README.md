@@ -108,6 +108,12 @@ metadata) and the marquee-on-focus card titles.
 - **Profiles** — separate library, progress, addons, collections and settings per profile, with
   optional PIN locking and restricted profiles.
 - **Collections** — user-made folders, editable from the Library and the detail screen.
+- **Account sync** — sign in by scanning a QR code with a phone (the same
+  `start_tv_login_session` / `poll_tv_login_session` / `tv-logins-exchange` flow the Android app
+  uses), then two-way sync of library, watch progress, collections, addons, plugin repositories
+  and settings, per profile, at launch and when the player closes. Watch progress resolves per
+  item by which device watched it most recently; library removals are tombstoned and pushed
+  before the pull so a deletion cannot be undone by the next sync.
 
 ## Deliberate deviations
 
@@ -136,8 +142,10 @@ Four things from the Android surface are missing, and each for a concrete reason
 1. **Torrent streaming without a debrid service.** Android streams a torrent directly through a
    bundled client. There is no comparable torrent engine available here, so torrents are only
    playable via Real-Debrid, Premiumize or TorBox.
-2. **Cloud sync and Nuvio accounts.** These talk to Nuvio's own Supabase backend; a third-party
-   client has no credentials for it and no documented API to target.
+2. **Nuvio's own backend credentials.** Account sync itself is implemented (see below), but the
+   official app's Supabase URL and publishable key are build-time secrets absent from its public
+   source, so they cannot ship here. The Account screen asks for them — the official app exposes
+   the same custom-server option, and a publishable/anon key is designed to live in the client.
 3. **Inline trailer playback.** Trailers in the Stremio and TMDB data are YouTube ids. tvOS has no
    WKWebView and AVPlayer cannot resolve a YouTube watch page, so the detail-screen button hands
    off to the YouTube app instead, and the trailer-on-focus setting says it is unavailable rather
@@ -153,8 +161,10 @@ pasted back to install.
 
 The UI, layout, subtitle, plugin and catalog paths are exercised on an Apple TV 4K simulator, and
 the HTML/selector, subtitle and plugin-runtime code is checked against fixture inputs. The debrid,
-Trakt, Simkl, TMDB and MDBList clients are written against the published APIs but have **not** been
-run against live accounts — no credentials were available. Treat those paths as untested.
+Trakt, Simkl, TMDB, MDBList and Nuvio-account clients are written against the real APIs — the sync
+layer against the Android source itself, so endpoints, RPC names and row shapes match — but have
+**not** been run against live accounts or a live backend, because no credentials were available.
+Treat those paths as untested.
 
 ## Build & run
 
