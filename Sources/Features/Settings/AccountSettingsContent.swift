@@ -26,6 +26,7 @@ struct AccountSettingsContent: View {
             if account.isSignedIn {
                 signedInCard
                 syncCard
+                DeviceLinkingCard()
             } else {
                 serverCard
                 if account.isConfigured { signInCard }
@@ -309,5 +310,220 @@ struct AccountSettingsContent: View {
             profiles: profiles,
             settings: settings
         )
+    }
+}
+
+// MARK: - Device linking
+
+/// Port of `SyncCodeGenerateScreen` and `SyncCodeClaimScreen`, presented as one card since both
+/// halves are short and only one is ever relevant to a given device.
+struct DeviceLinkingCard: View {
+    @Environment(\.nuvioColors) private var colors
+    @Environment(NuvioAccountStore.self) private var account
+    @Environment(NuvioSyncService.self) private var sync
+    @Environment(LibraryStore.self) private var library
+    @Environment(CollectionStore.self) private var collections
+    @Environment(AddonStore.self) private var addons
+    @Environment(PluginStore.self) private var plugins
+    @Environment(ProfileStore.self) private var profiles
+    @Environment(AppSettings.self) private var settings
+
+    @State private var linking = DeviceLinkingStore()
+    @State private var mode: Mode = .none
+    @State private var pin = ""
+    @State private var code = ""
+    @State private var confirmingUnlink: LinkedDevice?
+
+    private enum Mode { case none, share, join }
+
+    private var deviceName: String {
+        UIDevice.current.name.nilIfBlank ?? "Apple TV"
+    }
+
+    var body: some View {
+        Group {
+            SettingsCard(
+                title: "Link another device",
+                footnote: """
+                Sharing gives another device a code so it reads and writes this account's library, \
+                watch progress and settings. Joining points this device at somebody else's account \
+                instead — its own local library is replaced by theirs.
+                """
+            ) {
+                switch mode {
+                case .none:
+                    SettingsRow(
+                        title: "Share this account",
+                        subtitle: "Generate a code for another device",
+                        systemImage: "square.and.arrow.up",
+                        action: { start(.share) }
+                    )
+                    SettingsRow(
+                        title: "Join another account",
+                        subtitle: "Enter a code generated on another device",
+                        systemImage: "square.and.arrow.down",
+                        action: { start(.join) }
+                    )
+                case .share:
+                    shareRows
+                case .join:
+                    joinRows
+                }
+
+                if case .working(let stage) = linking.phase {
+                    SettingsInfoRow(title: "Status", value: stage)
+                }
+                if case .failed(let message) = linking.phase {
+                    SettingsInfoRow(title: "Error", value: message, tint: colors.error)
+                }
+            }
+
+            if !linking.linkedDevices.isEmpty {
+                SettingsCard(
+                    title: "Linked devices",
+                    footnote: "Unlinking stops a device writing to this account. Its local copy stays on that device."
+                ) {
+                    ForEach(linking.linkedDevices) { device in
+                        SettingsRow(
+                            title: device.displayName,
+                            subtitle: device.linkedDate.map {
+                                "Linked \(DateFormatter.nuvioMediumDate.string(from: $0))"
+                            } ?? "Linked",
+                            systemImage: "tv.and.mediabox",
+                            trailing: { SettingsValueLabel(value: "Unlink") },
+                            action: { confirmingUnlink = device }
+                        )
+                    }
+                }
+            }
+        }
+        .task { await linking.loadLinkedDevices(account: account) }
+        .alert(
+            "Unlink \(confirmingUnlink?.displayName ?? "this device")?",
+            isPresented: Binding(
+                get: { confirmingUnlink != nil },
+                set: { if !$0 { confirmingUnlink = nil } }
+            )
+        ) {
+            Button("Unlink", role: .destructive) {
+                if let device = confirmingUnlink {
+                    Task { await linking.unlink(device, account: account) }
+                }
+                confirmingUnlink = nil
+            }
+            Button("Keep", role: .cancel) { confirmingUnlink = nil }
+        } message: {
+            Text("It stops syncing with this account. Nothing is deleted.")
+        }
+    }
+
+    // MARK: Share
+
+    @ViewBuilder
+    private var shareRows: some View {
+        if case .generated(let generated) = linking.phase {
+            VStack(alignment: .leading, spacing: NuvioTheme.spacing.sm) {
+                Text("Enter this code on the other device")
+                    .nuvioText(NuvioTextStyles.metadata)
+                    .foregroundStyle(colors.textTertiary)
+                Text(generated)
+                    .nuvioText(NuvioTextStyles.display)
+                    .foregroundStyle(colors.secondary)
+                Text("It also needs the PIN you just chose.")
+                    .nuvioText(NuvioTextStyles.metadata)
+                    .foregroundStyle(colors.textSecondary)
+            }
+            .padding(.horizontal, NuvioTheme.spacing.lg)
+            .padding(.vertical, NuvioTheme.spacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            SettingsRow(title: "Done", systemImage: "checkmark", action: { finish() })
+        } else {
+            SettingsTextFieldRow(
+                title: "Choose a PIN",
+                subtitle: "At least four digits. The other device has to type it with the code.",
+                placeholder: "····",
+                masked: true,
+                text: $pin
+            )
+            SettingsRow(
+                title: "Generate code",
+                subtitle: "Uploads this device's data first, so the other one receives a complete account",
+                systemImage: "number",
+                action: {
+                    Task {
+                        await linking.generateCode(
+                            pin: pin, account: account, sync: sync, library: library,
+                            collections: collections, addons: addons, plugins: plugins,
+                            profiles: profiles, settings: settings
+                        )
+                    }
+                }
+            )
+            SettingsRow(
+                title: "Show my existing code",
+                subtitle: "If you already made one, this shows it again instead of replacing it",
+                systemImage: "arrow.clockwise",
+                action: { Task { await linking.fetchExistingCode(pin: pin) } }
+            )
+            SettingsRow(title: "Cancel", systemImage: "xmark", action: { finish() })
+        }
+    }
+
+    // MARK: Join
+
+    @ViewBuilder
+    private var joinRows: some View {
+        if case .claimed = linking.phase {
+            SettingsInfoRow(
+                title: "Linked",
+                value: "This device now shares that account.",
+                tint: colors.success
+            )
+            SettingsRow(title: "Done", systemImage: "checkmark", action: { finish() })
+        } else {
+            SettingsTextFieldRow(
+                title: "Code",
+                placeholder: "From the other device",
+                text: $code
+            )
+            SettingsTextFieldRow(
+                title: "PIN",
+                placeholder: "····",
+                masked: true,
+                text: $pin
+            )
+            SettingsRow(
+                title: "Link this device",
+                subtitle: "Replaces this device's library with the account's",
+                systemImage: "link",
+                action: {
+                    Task {
+                        await linking.claim(
+                            code: code, pin: pin, deviceName: deviceName,
+                            account: account, sync: sync, library: library,
+                            collections: collections, addons: addons, plugins: plugins,
+                            profiles: profiles, settings: settings
+                        )
+                    }
+                }
+            )
+            SettingsRow(title: "Cancel", systemImage: "xmark", action: { finish() })
+        }
+    }
+
+    private func start(_ target: Mode) {
+        pin = ""
+        code = ""
+        linking.reset()
+        mode = target
+    }
+
+    private func finish() {
+        pin = ""
+        code = ""
+        linking.reset()
+        mode = .none
+        Task { await linking.loadLinkedDevices(account: account) }
     }
 }
