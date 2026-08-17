@@ -69,9 +69,12 @@ struct ProfileLockView: View {
         didFail = false
         entry += String(digit)
         guard entry.count == 4 else { return }
-        if !profiles.unlock(profile, pin: entry) {
-            didFail = true
-            entry = ""
+        Task {
+            // A PIN set on another device is only checkable server-side, so this has to await.
+            if await !profiles.unlockRemotely(profile, pin: entry) {
+                didFail = true
+                entry = ""
+            }
         }
     }
 
@@ -256,11 +259,13 @@ struct ProfileSwitcherView: View {
                     didFail = false
                     entry += String(digit)
                     guard entry.count == 4 else { return }
-                    if profiles.unlock(profile, pin: entry) {
-                        dismiss()
-                    } else {
-                        didFail = true
-                        entry = ""
+                    Task {
+                        if await profiles.unlockRemotely(profile, pin: entry) {
+                            dismiss()
+                        } else {
+                            didFail = true
+                            entry = ""
+                        }
                     }
                 },
                 onDelete: { entry = String(entry.dropLast()) },

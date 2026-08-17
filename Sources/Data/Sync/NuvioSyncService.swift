@@ -56,9 +56,14 @@ final class NuvioSyncService {
             }
             if account.syncOwnerId == nil { await account.resolveSyncOwner() }
 
-            let profileId = Self.remoteProfileId(for: profiles)
-
             do {
+                // First: it decides the index every other table is keyed on, and a profile the
+                // server added has to exist locally before its rows are pulled.
+                status = .syncing("Profiles")
+                try await syncProfiles(profiles: profiles)
+
+                let profileId = Self.remoteProfileId(for: profiles)
+
                 status = .syncing("Library")
                 try await syncLibrary(library: library, profileId: profileId)
 
@@ -85,13 +90,11 @@ final class NuvioSyncService {
         }
     }
 
-    /// The server addresses profiles by a 1-based index; the primary is always 1.
+    /// The server addresses profiles by a 1-based index; the primary is always 1. The index is
+    /// stored on the profile rather than derived from its position, which would silently
+    /// re-point a profile's rows the moment the list is reordered.
     static func remoteProfileId(for profiles: ProfileStore) -> Int {
-        guard let index = profiles.profiles.firstIndex(where: { $0.id == profiles.activeProfileId })
-        else { return 1 }
-        // Keep the primary at 1 regardless of where it sits in the list.
-        if profiles.profiles[index].id == ProfileScope.primaryProfileId { return 1 }
-        return index + 1
+        profiles.activeProfile?.remoteIndex ?? 1
     }
 
     private var originParameters: [String: AnyJSONValue] {
@@ -283,6 +286,72 @@ final class NuvioSyncService {
         try await NuvioBackend.shared.rpcVoid("sync_push_collections", parameters: parameters)
     }
 
+    // MARK: Profiles
+
+    /// Port of `ProfileSyncService`. The profile list is account-wide rather than per-profile,
+    /// so it syncs once regardless of who is active — and it has to run before everything else,
+    /// since every other table is addressed by profile index.
+    private func syncProfiles(profiles: ProfileStore) async throws {
+        let remote = try await NuvioBackend.shared.rpc(
+            "sync_pull_profiles", as: [Failable<RemoteProfileRow>].self
+        ).compactMap(\.value)
+
+        profiles.merge(remote: remote.map {
+            ProfileStore.RemoteProfile(
+                index: $0.profile_index,
+                name: $0.name ?? "",
+                colorHex: $0.avatar_color_hex ?? "#1E88E5",
+                usesPrimaryAddons: $0.uses_primary_addons ?? false,
+                usesPrimaryPlugins: $0.uses_primary_plugins ?? false,
+                avatarId: $0.avatar_id,
+                avatarUrl: $0.avatar_url
+            )
+        })
+
+        let payload = profiles.remoteSnapshot().map { profile -> AnyJSONValue in
+            AnyJSONValue.object([
+                "profile_index": .int(profile.index),
+                "name": .string(profile.name),
+                "avatar_color_hex": .string(profile.colorHex),
+                "uses_primary_addons": .bool(profile.usesPrimaryAddons),
+                "uses_primary_plugins": .bool(profile.usesPrimaryPlugins),
+                // The server treats these as mutually exclusive; a custom image wins.
+                "avatar_id": profile.avatarUrl?.nilIfBlank == nil
+                    ? .optionalString(profile.avatarId) : .null,
+                "avatar_url": .optionalString(profile.avatarUrl?.nilIfBlank)
+            ])
+        }
+        var parameters = originParameters
+        parameters["p_client_max_profiles"] = .int(Self.maxProfiles)
+        parameters["p_profiles"] = .array(payload)
+        try await NuvioBackend.shared.rpcVoid("sync_push_profiles", parameters: parameters)
+
+        // Which profiles are PIN-locked is separate from the list itself, because the PIN never
+        // leaves the server — only the fact that one exists.
+        let locks = try await NuvioBackend.shared.rpc(
+            "sync_pull_profile_locks", as: [Failable<RemoteProfileLock>].self
+        ).compactMap(\.value)
+        profiles.applyRemoteLocks(
+            Dictionary(
+                locks.map { ($0.profile_index, $0.pin_enabled ?? false) },
+                uniquingKeysWith: { _, latest in latest }
+            )
+        )
+    }
+
+    /// `ProfileManager.MAX_PROFILES`.
+    static let maxProfiles = 5
+
+    /// Server-side PIN check, for a lock that was set on another device.
+    static func verifyProfilePin(profileId: Int, pin: String) async -> Bool {
+        let result = try? await NuvioBackend.shared.rpc(
+            "verify_profile_pin",
+            parameters: ["p_profile_id": .int(profileId), "p_pin": .string(pin)],
+            as: [Failable<RemotePinVerification>].self
+        )
+        return result?.compactMap(\.value).first?.unlocked ?? false
+    }
+
     // MARK: Addons
 
     private func syncAddons(addons: AddonStore, profileId: Int, ownerId: String?) async throws {
@@ -454,6 +523,25 @@ private struct RemoteCollectionsBlob: Decodable {
 private struct RemoteSettingsBlob: Decodable {
     let settings_json: [String: AnyJSON]?
     let updated_at: String?
+}
+
+private struct RemoteProfileRow: Decodable {
+    let profile_index: Int
+    let name: String?
+    let avatar_color_hex: String?
+    let uses_primary_addons: Bool?
+    let uses_primary_plugins: Bool?
+    let avatar_id: String?
+    let avatar_url: String?
+}
+
+private struct RemoteProfileLock: Decodable {
+    let profile_index: Int
+    let pin_enabled: Bool?
+}
+
+private struct RemotePinVerification: Decodable {
+    let unlocked: Bool?
 }
 
 private struct RemoteAddon: Decodable {

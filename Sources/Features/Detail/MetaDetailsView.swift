@@ -311,7 +311,8 @@ struct MetaDetailsView: View {
                 poster: meta.poster,
                 backdrop: meta.backdropUrl,
                 logo: meta.logo,
-                year: meta.releaseInfo
+                year: meta.releaseInfo,
+                imdbId: meta.imdbId
             ))
         }
     }

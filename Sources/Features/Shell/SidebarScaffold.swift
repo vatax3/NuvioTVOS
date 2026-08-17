@@ -39,28 +39,61 @@ struct SidebarScaffold<Content: View>: View {
         return heroIsFullBleed ? 0 : NuvioTheme.layout.sidebarContentOffset
     }
 
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            content
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                // `NuvioLayout.sidebarContentOffset` on Android: screens that start with a
-                // top-left title are nudged clear of the floating pill. The Modern and Classic
-                // home layouts opt out — their hero is deliberately full-bleed behind it.
-                .padding(.leading, contentLeadingOffset)
-                .focusSection()
-                // Without this the engine hands first focus to the sidebar, which would open
-                // the panel on launch. Android starts with the pill collapsed and content live.
-                .prefersDefaultFocus(in: shellFocus)
+    /// Width reserved for the sidebar column: the collapsed pill and its own padding, nothing
+    /// more. The expanded panel deliberately overflows this rather than widening it.
+    private var railColumnWidth: CGFloat {
+        guard isModernSidebar else { return NuvioTheme.components.sidebar.expandedWidth }
+        let leading = NuvioTheme.spacing.lg - NuvioTheme.spacing.xxs
+        // The pill is the leading visual plus the dp(5) it is padded by on each side.
+        return leading + NuvioTheme.components.sidebar.leadingVisual + dp(10)
+            + NuvioTheme.spacing.sm
+    }
 
+    var body: some View {
+        // An HStack, not the ZStack the visual design suggests. As overlapping layers the pill
+        // and the content are not neighbours in any direction, so LEFT — the whole interaction
+        // on Android — had nothing to travel to. As columns they are, and the pill's own focus
+        // frame (see `stretchesVertically`) covers the height that makes the move resolve.
+        //
+        // The column stays at the collapsed width. The expanded panel is wider and simply
+        // overflows it, so blooming open never reflows the content behind it.
+        HStack(spacing: 0) {
             sidebar
                 .padding(.leading, NuvioTheme.spacing.lg - NuvioTheme.spacing.xxs)
                 .padding(.top, NuvioTheme.spacing.lg)
                 .padding(.bottom, NuvioTheme.spacing.md)
                 .padding(.trailing, NuvioTheme.spacing.sm)
+                .frame(width: railColumnWidth, alignment: .topLeading)
+                // Full height *before* the focus section, which is the whole trick. A
+                // directional move only considers candidates whose frame overlaps the band it
+                // projects, and the pill sits at the very top — from a row further down the
+                // screen there is simply nothing to the left of it. A focus section spanning the
+                // full height is always in that band, and the engine redirects into it to the
+                // nearest focusable item, which is the pill.
+                .frame(maxHeight: .infinity, alignment: .top)
+                .focusSection()
+                .zIndex(1)
+
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .focusSection()
+                // Without this the engine hands first focus to the sidebar, which would open
+                // the panel on launch. Android starts with the pill collapsed and content live.
+                .prefersDefaultFocus(in: shellFocus)
+                // `NuvioLayout.sidebarContentOffset` on Android: screens that start with a
+                // top-left title are nudged clear of the floating pill. The column already
+                // supplies part of that gap, so only the remainder is padded here. The Modern
+                // and Classic home layouts opt out — their hero is deliberately full-bleed, so
+                // it is pulled back under the pill.
+                .padding(.leading, contentLeadingOffset - railColumnWidth)
         }
         .background(colors.background)
         .focusScope(shellFocus)
         .onMoveCommand { _ in hasUserNavigated = true }
+        // Android's `BackHandler` on the root routes: back opens the drawer and puts focus on
+        // the current destination rather than leaving the screen. Without it the panel is only
+        // reachable by a directional move, which the Home hero can swallow.
+        .onExitCommand { toggleFromBackButton() }
         .onChange(of: focusedTab) { _, newValue in
             updateExpansion(focusedTab: newValue)
         }
@@ -69,6 +102,21 @@ struct SidebarScaffold<Content: View>: View {
         }
         .onChange(of: isModernSidebar, initial: true) { _, _ in
             updateExpansion(focusedTab: focusedTab)
+        }
+    }
+
+    /// Back opens the panel on the current destination; pressing it again hands focus back to
+    /// the content. Android exits the app on that second press, which tvOS neither allows nor
+    /// expects — the Home button already does it.
+    private func toggleFromBackButton() {
+        guard router.contentHasFocusableViews else { return }
+        // Keyed on the panel's own state, not on `focusedTab`: focus can still be parked on the
+        // pill after the panel has collapsed, and reading that as "open" makes Back a no-op.
+        if isExpanded {
+            focusedTab = nil
+        } else {
+            hasUserNavigated = true
+            focusedTab = router.selectedTab
         }
     }
 
@@ -106,6 +154,7 @@ struct SidebarScaffold<Content: View>: View {
                         tab: tab,
                         isSelected: router.selectedTab == tab,
                         showsLabel: isExpanded,
+                        stretchesVertically: !isExpanded,
                         action: { select(tab) }
                     )
                     .focused($focusedTab, equals: tab)
@@ -122,7 +171,6 @@ struct SidebarScaffold<Content: View>: View {
             }
         }
         .animation(NuvioMotion.sidebarPanelIn, value: isExpanded)
-        .focusSection()
     }
 
     /// Collapsed, the panel shows only the current destination — that is the floating pill.
@@ -189,6 +237,10 @@ private struct SidebarItemView: View {
     let tab: RootTab
     let isSelected: Bool
     let showsLabel: Bool
+    /// Collapsed, the pill's focus frame spans the whole column even though it draws at the
+    /// top. A leftward move only considers candidates level with the focused row, so a pill
+    /// pinned to the top corner is unreachable from anywhere below it.
+    var stretchesVertically: Bool = false
     let action: () -> Void
 
     private var tokens: NuvioSidebarComponentTokens { NuvioTheme.components.sidebar }
@@ -212,6 +264,8 @@ private struct SidebarItemView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(SidebarItemButtonStyle(showsLabel: showsLabel, isSelected: isSelected))
+        .frame(maxHeight: stretchesVertically ? .infinity : nil, alignment: .top)
+        .contentShape(Rectangle())
     }
 
     private var iconCircle: some View {

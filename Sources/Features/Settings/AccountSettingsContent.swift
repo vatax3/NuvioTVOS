@@ -4,6 +4,7 @@ import SwiftUI
 struct AccountSettingsContent: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(NuvioAccountStore.self) private var account
+    @Environment(Router.self) private var router
     @Environment(NuvioSyncService.self) private var sync
     @Environment(LibraryStore.self) private var library
     @Environment(CollectionStore.self) private var collections
@@ -101,28 +102,15 @@ struct AccountSettingsContent: View {
             title: "Sign in",
             footnote: "Scan the code with a phone, sign in there, and this device is signed in too."
         ) {
-            switch account.loginState {
-            case .idle, .failed:
-                SettingsRow(
-                    title: "Sign in with a phone",
-                    subtitle: "Shows a QR code and a short code",
-                    systemImage: "qrcode",
-                    action: { account.startTvLogin(deviceName: deviceName) }
-                )
-            case .starting:
-                SettingsInfoRow(title: "Status", value: "Asking the server for a code…")
-            case .pending(let code, let url, let expiresAt):
-                pendingRow(code: code, url: url, expiresAt: expiresAt)
-                SettingsRow(
-                    title: "Cancel",
-                    systemImage: "xmark",
-                    action: { account.cancelLogin() }
-                )
-            case .exchanging:
-                SettingsInfoRow(title: "Status", value: "Approved — finishing sign-in…")
-            case .signedIn:
-                EmptyView()
-            }
+            // The code itself lives on its own screen. It has to be large enough to scan from a
+            // sofa, and a settings column that also holds a section rail has neither the width
+            // nor — with no focusable row to scroll to — a way to bring it fully on screen.
+            SettingsRow(
+                title: "Sign in with a phone",
+                subtitle: "Shows a QR code and a short code",
+                systemImage: "qrcode",
+                action: { router.push(.qrSignIn) }
+            )
 
             if case .failed(let message) = account.loginState {
                 SettingsInfoRow(title: "Error", value: message, tint: colors.error)
@@ -147,46 +135,6 @@ struct AccountSettingsContent: View {
                 .opacity(email.isEmpty || password.isEmpty ? NuvioTheme.effects.disabledAlpha : 1)
             }
         }
-    }
-
-    private func pendingRow(code: String, url: String, expiresAt: Date) -> some View {
-        HStack(alignment: .top, spacing: NuvioTheme.spacing.xl) {
-            if let image = QRCodeRenderer.image(for: url) {
-                Image(uiImage: image)
-                    .interpolation(.none)
-                    .resizable()
-                    .frame(width: dp(200), height: dp(200))
-                    .padding(NuvioTheme.spacing.md)
-                    .background {
-                        RoundedRectangle(cornerRadius: NuvioTheme.radii.md, style: .continuous)
-                            .fill(.white)
-                    }
-            }
-
-            VStack(alignment: .leading, spacing: NuvioTheme.spacing.md) {
-                Text("Go to")
-                    .nuvioText(NuvioTextStyles.metadata)
-                    .foregroundStyle(colors.textTertiary)
-                Text(url)
-                    .nuvioText(NuvioTextStyles.bodyCompact)
-                    .foregroundStyle(colors.secondary)
-                    .frame(maxWidth: dp(520), alignment: .leading)
-
-                Text("Code")
-                    .nuvioText(NuvioTextStyles.metadata)
-                    .foregroundStyle(colors.textTertiary)
-                Text(code)
-                    .nuvioText(NuvioTextStyles.display)
-                    .foregroundStyle(colors.textPrimary)
-
-                Text("Expires \(expiresAt.formatted(date: .omitted, time: .shortened))")
-                    .nuvioText(NuvioTypography.labelSmall)
-                    .foregroundStyle(colors.textTertiary)
-            }
-        }
-        .padding(.horizontal, NuvioTheme.spacing.lg)
-        .padding(.vertical, NuvioTheme.spacing.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: Signed in

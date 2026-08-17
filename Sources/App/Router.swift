@@ -84,6 +84,24 @@ struct StreamRequest: Hashable, Identifiable {
         guard let season, let episode else { return nil }
         return String(format: "S%02dE%02d", season, episode)
     }
+
+    /// The ids this video can be asked for, most specific first.
+    ///
+    /// Catalogs disagree about identity: Cinemeta hands out `tt…`, the TMDB addons hand out
+    /// `tmdb:…`. Stream addons almost all declare `idPrefixes: ["tt"]`, so a title opened from a
+    /// TMDB catalog would reach none of them. Offering the IMDb form as an alternative is what
+    /// makes the same addon set work from either catalog.
+    var streamIdCandidates: [String] {
+        var candidates = [videoId]
+        if let imdbId, !imdbId.isEmpty, !videoId.hasPrefix(imdbId) {
+            if let season, let episode {
+                candidates.append("\(imdbId):\(season):\(episode)")
+            } else {
+                candidates.append(imdbId)
+            }
+        }
+        return candidates
+    }
 }
 
 /// A resolved source handed to the player.
@@ -163,6 +181,7 @@ enum Route: Hashable {
     case castMember(CastRequest)
     case tmdbBrowse(TMDBBrowseRequest)
     case comments(CommentsRequest)
+    case qrSignIn
     case addonManager
     case pluginManager
     case catalogOrder

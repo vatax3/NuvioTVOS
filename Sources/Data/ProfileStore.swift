@@ -76,7 +76,22 @@ struct Profile: Codable, Hashable, Identifiable {
     var isRestricted: Bool
     var createdAt: Date
 
-    var isLocked: Bool { pinHash != nil }
+    /// The server addresses profiles by a 1-based index rather than an id, and the primary is
+    /// always 1. Held so a pull can match a remote row to the local profile it already created,
+    /// instead of duplicating it — the local id has to stay put because it names the storage.
+    var remoteIndex: Int? = nil
+    /// `pin_enabled` from `sync_pull_profile_locks`. A PIN set on another device has no local
+    /// hash to check against, so it is verified server-side instead.
+    var hasRemoteLock: Bool = false
+    /// Android's avatar catalogue has no SF Symbol equivalent, so its choice is carried through
+    /// untouched rather than being lossily mapped and pushed back wrong.
+    var avatarId: String? = nil
+    var avatarUrl: String? = nil
+    /// Whether this profile shares the primary's addon and plugin lists instead of its own.
+    var usesPrimaryAddons: Bool = false
+    var usesPrimaryPlugins: Bool = false
+
+    var isLocked: Bool { pinHash != nil || hasRemoteLock }
 
     static let availableSymbols = [
         "person.fill", "person.2.fill", "figure.child", "star.fill",
@@ -113,7 +128,8 @@ final class ProfileStore {
                     tintHex: "#E50914",
                     pinHash: nil,
                     isRestricted: false,
-                    createdAt: Date()
+                    createdAt: Date(),
+                    remoteIndex: 1
                 )
             ]
             persist()
@@ -207,6 +223,145 @@ final class ProfileStore {
             ProfileScope.activate(activeProfileId)
         }
         persist()
+    }
+
+    // MARK: Sync
+
+    /// One profile as the server stores it.
+    struct RemoteProfile: Sendable {
+        var index: Int
+        var name: String
+        var colorHex: String
+        var usesPrimaryAddons: Bool
+        var usesPrimaryPlugins: Bool
+        var avatarId: String?
+        var avatarUrl: String?
+    }
+
+    /// Merges a pull into the local list. Port of `ProfileSyncService.pullFromRemote` feeding
+    /// `ProfileDataStore.replaceAllProfiles`.
+    ///
+    /// Rows are matched on the remote index, never on position or name: the local id is what
+    /// names a profile's settings directory, so re-keying a profile here would silently orphan
+    /// everything that belongs to it.
+    func merge(remote: [RemoteProfile]) {
+        guard !remote.isEmpty else { return }
+
+        var merged: [Profile] = []
+        for entry in remote.sorted(by: { $0.index < $1.index }) {
+            if var existing = profiles.first(where: { $0.remoteIndex == entry.index })
+                // A first sync has no indices stored yet, so index 1 adopts the primary.
+                ?? (entry.index == 1 ? profiles.first(where: { $0.id == ProfileScope.primaryProfileId }) : nil) {
+                existing.remoteIndex = entry.index
+                existing.name = entry.name
+                existing.tintHex = entry.colorHex
+                existing.avatarId = entry.avatarId
+                existing.avatarUrl = entry.avatarUrl
+                existing.usesPrimaryAddons = entry.usesPrimaryAddons
+                existing.usesPrimaryPlugins = entry.usesPrimaryPlugins
+                merged.append(existing)
+            } else {
+                merged.append(Profile(
+                    id: entry.index == 1 ? ProfileScope.primaryProfileId : UUID().uuidString,
+                    name: entry.name,
+                    symbol: Profile.availableSymbols[
+                        (entry.index - 1) % Profile.availableSymbols.count
+                    ],
+                    tintHex: entry.colorHex,
+                    pinHash: nil,
+                    isRestricted: false,
+                    createdAt: Date(),
+                    remoteIndex: entry.index,
+                    avatarId: entry.avatarId,
+                    avatarUrl: entry.avatarUrl,
+                    usesPrimaryAddons: entry.usesPrimaryAddons,
+                    usesPrimaryPlugins: entry.usesPrimaryPlugins
+                ))
+            }
+        }
+
+        // Locally created profiles the server has never seen keep their place rather than being
+        // dropped — the next push is what introduces them.
+        let keptIndices = Set(merged.compactMap(\.remoteIndex))
+        for profile in profiles where profile.remoteIndex == nil
+            && !merged.contains(where: { $0.id == profile.id }) {
+            merged.append(profile)
+        }
+        // A profile the server dropped is deleted here too, with its storage.
+        for profile in profiles where profile.remoteIndex != nil
+            && !keptIndices.contains(profile.remoteIndex ?? -1) {
+            ProfileScope.eraseStorage(forProfileId: profile.id)
+        }
+
+        profiles = merged
+        if !profiles.contains(where: { $0.id == activeProfileId }) {
+            activeProfileId = ProfileScope.primaryProfileId
+            ProfileScope.activate(activeProfileId)
+        }
+        persist()
+    }
+
+    /// The list as it should be pushed, with an index assigned to anything new.
+    func remoteSnapshot() -> [RemoteProfile] {
+        assignMissingRemoteIndices()
+        return profiles.compactMap { profile in
+            guard let index = profile.remoteIndex else { return nil }
+            return RemoteProfile(
+                index: index,
+                name: profile.name,
+                colorHex: profile.tintHex,
+                usesPrimaryAddons: profile.usesPrimaryAddons,
+                usesPrimaryPlugins: profile.usesPrimaryPlugins,
+                avatarId: profile.avatarId,
+                avatarUrl: profile.avatarUrl
+            )
+        }
+    }
+
+    /// The primary is always 1; everything else takes the lowest index not already in use.
+    private func assignMissingRemoteIndices() {
+        var used = Set(profiles.compactMap(\.remoteIndex))
+        var changed = false
+        for index in profiles.indices where profiles[index].remoteIndex == nil {
+            let assigned: Int
+            if profiles[index].id == ProfileScope.primaryProfileId {
+                assigned = 1
+            } else {
+                var candidate = 2
+                while used.contains(candidate) { candidate += 1 }
+                assigned = candidate
+            }
+            used.insert(assigned)
+            profiles[index].remoteIndex = assigned
+            changed = true
+        }
+        if changed { persist() }
+    }
+
+    /// `sync_pull_profile_locks`: which profiles carry a PIN, wherever it was set.
+    func applyRemoteLocks(_ locks: [Int: Bool]) {
+        var changed = false
+        for index in profiles.indices {
+            guard let remoteIndex = profiles[index].remoteIndex,
+                  let enabled = locks[remoteIndex],
+                  profiles[index].hasRemoteLock != enabled else { continue }
+            profiles[index].hasRemoteLock = enabled
+            changed = true
+        }
+        if changed {
+            persist()
+            isLocked = activeProfile?.isLocked ?? false
+        }
+    }
+
+    /// Unlock for a PIN that was set on another device: there is no local hash to compare, so
+    /// the server decides. Falls back to the local check when the profile has one.
+    func unlockRemotely(_ profile: Profile, pin: String) async -> Bool {
+        if profile.pinHash != nil { return unlock(profile, pin: pin) }
+        guard let index = profile.remoteIndex else { return false }
+        let verified = await NuvioSyncService.verifyProfilePin(profileId: index, pin: pin)
+        guard verified else { return false }
+        return activate(profile, unlocked: true)
     }
 
     private func persist() { file.save(profiles) }

@@ -60,6 +60,25 @@ enum StremioURL {
         return "\(path)/manifest.json\(query)"
     }
 
+    /// Strips the season/episode suffix off a video id to get the content id its meta lives under.
+    ///
+    ///     tt1234567:1:5  → tt1234567
+    ///     mal:63375:1:5  → mal:63375
+    ///     kitsu:12345:2  → kitsu:12345
+    ///
+    /// Prefixed ids keep two segments, IMDb-style and bare numeric ids keep one — otherwise
+    /// `kitsu:12345` would be shortened to `kitsu`.
+    static func metaId(forVideoId videoId: String) -> String {
+        let parts = videoId.split(separator: ":", omittingEmptySubsequences: false).map(String.init)
+        guard parts.count > 1 else { return videoId }
+        let trailingNumeric = parts.reversed().prefix { Int($0) != nil }.count
+        let first = parts[0]
+        let minimum = (first.hasPrefix("tt") || Int(first) != nil) ? 1 : 2
+        let drop = min(trailingNumeric, max(0, parts.count - minimum))
+        guard drop > 0 else { return videoId }
+        return parts.dropLast(drop).joined(separator: ":")
+    }
+
     /// Port of `CatalogRepositoryImpl.buildCatalogUrl`.
     static func catalog(
         baseUrl: String,
@@ -256,6 +275,10 @@ struct VideoDTO: Decodable {
     var description: String?
     var runtime: String?
     var available: FlexibleBool?
+    /// Some addons never implement `/stream` and instead attach the playable links straight to
+    /// the video entry in their meta response. `fetchInlineStreams` is the fallback that reads
+    /// them, matching `StreamRepositoryImpl.fetchInlineStreamsFromMeta`.
+    var streams: [Failable<StreamDTO>]?
 }
 
 struct AppExtrasCastMemberDTO: Decodable {
@@ -474,6 +497,31 @@ actor StremioClient {
         let dto = try await get(url, as: StreamResponseDTO.self)
         var seen: [String: Int] = [:]
         return (dto.streams ?? []).compacted().compactMap { item -> Stream? in
+            var stream = StremioMapper.stream(
+                from: item,
+                addonName: addon.displayName,
+                addonLogo: addon.logo
+            )
+            let key = stream.stableKey
+            let count = seen[key, default: 0]
+            seen[key] = count + 1
+            stream.occurrence = count
+            return stream
+        }
+    }
+
+    /// Fallback for addons whose `/stream` endpoint answers empty: their playable links live on
+    /// the matching video inside `/meta`. Port of `fetchInlineStreamsFromMeta`.
+    func fetchInlineStreams(addon: Addon, type: String, videoId: String) async throws -> [Stream] {
+        let url = StremioURL.meta(
+            baseUrl: addon.baseUrl, type: type, id: StremioURL.metaId(forVideoId: videoId)
+        )
+        let dto = try await get(url, as: MetaResponseDTO.self)
+        guard let videos = dto.meta?.videos else { return [] }
+        // Only the requested video's streams — a series meta carries every episode's.
+        guard let match = videos.first(where: { $0.id == videoId }) else { return [] }
+        var seen: [String: Int] = [:]
+        return (match.streams ?? []).compacted().compactMap { item -> Stream? in
             var stream = StremioMapper.stream(
                 from: item,
                 addonName: addon.displayName,

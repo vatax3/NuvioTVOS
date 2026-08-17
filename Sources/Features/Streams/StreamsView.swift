@@ -15,6 +15,12 @@ final class StreamsViewModel {
     private(set) var resolvingKey: String?
     private(set) var resolveError: String?
     private(set) var filteredOutCount = 0
+    /// How many enabled addons were actually asked. Zero means the id or the type matched
+    /// nothing installed, which is a very different failure from "asked, got nothing back".
+    private(set) var queriedAddonCount = 0
+    /// Enabled addons that advertise `stream` but were skipped because their `idPrefixes` do
+    /// not cover this id — the usual cause when a catalog hands out `tmdb:` ids.
+    private(set) var skippedForIdPrefix: [String] = []
     /// External subtitle tracks, fetched alongside the streams and handed to the player.
     private(set) var subtitles: [Subtitle] = []
 
@@ -58,25 +64,47 @@ final class StreamsViewModel {
         cacheStates = [:]
         attributes = [:]
         filteredOutCount = 0
+        queriedAddonCount = 0
+        skippedForIdPrefix = []
         defer { isLoading = false }
 
         // Subtitles come from a different resource and different addons, so they load in
         // parallel with the streams rather than delaying the list.
         Task { await loadSubtitles(request: request, addonStore: addonStore) }
 
-        let providers = addonStore.addonsProviding(
-            resource: "stream", type: request.contentType, id: request.videoId
-        )
+        // Addons are asked with the id form they declare support for. A catalog that hands out
+        // `tmdb:` ids would otherwise reach no torrent addon at all, since those all declare
+        // `tt` prefixes — so the IMDb id resolved from the meta is offered as an alternative.
+        let candidates = request.streamIdCandidates
+        var providers: [(addon: Addon, videoId: String)] = []
+        for addon in addonStore.enabledAddons where addon.supports(
+            resource: "stream", type: request.contentType
+        ) {
+            if let id = candidates.first(where: {
+                addon.handles(id: $0, resource: "stream", type: request.contentType)
+            }) {
+                providers.append((addon, id))
+            } else {
+                skippedForIdPrefix.append(addon.displayName)
+            }
+        }
+        queriedAddonCount = providers.count
         guard !providers.isEmpty || !pluginScrapers.isEmpty else { return }
 
         var collected: [(Addon, [Stream])] = []
         await withTaskGroup(of: (Addon, [Stream]?).self) { group in
-            for addon in providers {
+            for (addon, videoId) in providers {
                 group.addTask { [client] in
-                    let streams = try? await client.fetchStreams(
-                        addon: addon, type: request.contentType, videoId: request.videoId
+                    guard let streams = try? await client.fetchStreams(
+                        addon: addon, type: request.contentType, videoId: videoId
+                    ) else { return (addon, nil) }
+                    // An empty answer is not necessarily a miss: some addons publish their links
+                    // inline on the meta entry instead of implementing `/stream`.
+                    guard streams.isEmpty else { return (addon, streams) }
+                    let inline = try? await client.fetchInlineStreams(
+                        addon: addon, type: request.contentType, videoId: videoId
                     )
-                    return (addon, streams)
+                    return (addon, inline ?? [])
                 }
             }
             for await (addon, streams) in group {
@@ -350,8 +378,23 @@ struct StreamsView: View {
         if model.filteredOutCount > 0 {
             return "\(model.filteredOutCount) source\(model.filteredOutCount == 1 ? "" : "s") were hidden by your debrid filters. Loosen them in Settings → Debrid."
         }
+        // Nothing was even asked: say which of the two reasons it was, because the fix differs.
+        if model.queriedAddonCount == 0 {
+            if model.skippedForIdPrefix.isEmpty {
+                return """
+                None of your addons provide streams. Cinemeta and OpenSubtitles only supply \
+                metadata — add a source addon in Settings → Addons, or a scraper in \
+                Settings → Plugins.
+                """
+            }
+            return """
+            These addons provide streams but not for this title's id: \
+            \(model.skippedForIdPrefix.joined(separator: ", ")). It has no IMDb id, which is \
+            what they expect.
+            """
+        }
         if model.failedAddons.isEmpty {
-            return "None of your installed addons returned a stream for this title."
+            return "None of your \(model.queriedAddonCount) source addons returned a stream for this title."
         }
         return "No sources returned. These addons failed: \(model.failedAddons.joined(separator: ", "))."
     }

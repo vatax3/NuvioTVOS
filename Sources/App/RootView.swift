@@ -89,6 +89,8 @@ struct RootView: View {
                 contentType: request.contentType,
                 title: request.title
             )
+        case .qrSignIn:
+            AuthQrSignInView()
         case .addonManager:
             AddonManagerView()
         case .pluginManager:
