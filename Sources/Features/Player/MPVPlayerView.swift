@@ -15,6 +15,7 @@ struct MPVPlayerView: View {
     let request: PlaybackRequest
     let resumeAt: Double
     let verboseLogging: Bool
+    let hardwareDecoding: MpvHardwareDecodeMode
     let subtitleStyle: SubtitleStyle
     let onProgress: (Double, Double, Bool) -> Void
     let onFinished: () -> Void
@@ -57,6 +58,13 @@ struct MPVPlayerView: View {
         // The remote's select button is the primary control, so the whole surface is the target.
         .onTapGesture { toggleControls() }
         .onMoveCommand { direction in
+            // Only scrub when the transport is hidden. `onMoveCommand` fires even when the move
+            // also shifts focus, so while the bar is up every step between Pause, Back 10s and
+            // the track pickers was seeking as well as moving.
+            guard !showsControls else {
+                wakeControls()
+                return
+            }
             wakeControls()
             switch direction {
             case .left: engine.seek(by: -10)
@@ -97,7 +105,8 @@ struct MPVPlayerView: View {
             url: request.streamURL,
             headers: request.headers,
             startAt: resumeAt,
-            verboseLogging: verboseLogging
+            verboseLogging: verboseLogging,
+            hardwareDecoding: hardwareDecoding
         )
         // Addon subtitles are files, so mpv can load them directly rather than being drawn over.
         for subtitle in request.subtitles.prefix(8) {

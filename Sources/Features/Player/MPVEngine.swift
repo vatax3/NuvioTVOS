@@ -49,15 +49,26 @@ final class MPVEngine {
 
     // MARK: Lifecycle
 
-    func start(url: String, headers: [String: String], startAt: Double, verboseLogging: Bool) {
+    func start(
+        url: String,
+        headers: [String: String],
+        startAt: Double,
+        verboseLogging: Bool,
+        hardwareDecoding: MpvHardwareDecodeMode = .hardwareCopy
+    ) {
         guard handle == nil, let mpv = mpv_create() else { return }
         handle = mpv
 
         // Rendering goes through the render API rather than a window mpv owns.
         setOption("vo", "libmpv")
         setOption("gpu-api", "opengl")
-        // VideoToolbox handles H.264/HEVC in hardware; software decode covers the rest.
-        setOption("hwdec", "videotoolbox")
+        // `videotoolbox-copy`, not plain `videotoolbox`. MPVKit builds libmpv with
+        // `-Dvideotoolbox-gl=disabled`: the zero-copy path only exists for libplacebo/Vulkan, so
+        // against this OpenGL render context a hardware frame has no way to reach the renderer
+        // and playback comes out as a black picture with working audio. The `-copy` variant
+        // still decodes on the VideoToolbox block and reads the frames back into system memory,
+        // which any renderer can upload.
+        setOption("hwdec", hardwareDecoding.mpvValue)
         setOption("hwdec-codecs", "all")
         // Keep the file open at EOF so the end is a state change, not a teardown.
         setOption("keep-open", "yes")

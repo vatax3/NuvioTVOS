@@ -82,15 +82,48 @@ enum FrameRateMatchingMode: String, SettingsOption {
     }
 }
 
+/// Port of `MpvHardwareDecodeMode`, with Android's `mediacodec` values swapped for their
+/// VideoToolbox equivalents.
+///
+/// `hardwareCopy` is the default rather than `hardwareDirect`, which is where Android lands.
+/// MPVKit builds libmpv with `-Dvideotoolbox-gl=disabled`, so a directly-mapped hardware frame
+/// has no route into an OpenGL render context and plays as a black picture with audio. The copy
+/// variant still decodes on the VideoToolbox block and reads frames back for the renderer.
 enum MpvHardwareDecodeMode: String, SettingsOption {
-    case auto = "AUTO"
-    case autoCopy = "AUTO_COPY"
-    case none = "NO"
+    case legacyDirectCopy = "LEGACY_DIRECT_COPY"
+    case autoSafe = "AUTO_SAFE"
+    case hardwareCopy = "HARDWARE_COPY"
+    case hardwareDirect = "HARDWARE_DIRECT"
+    case disabled = "DISABLED"
+
     var displayName: String {
         switch self {
-        case .auto: return "Auto"
-        case .autoCopy: return "Auto (copy)"
-        case .none: return "Disabled"
+        case .legacyDirectCopy: return "Legacy (direct, then copy)"
+        case .autoSafe: return "Auto (safe)"
+        case .hardwareCopy: return "Hardware (copy)"
+        case .hardwareDirect: return "Hardware (direct)"
+        case .disabled: return "Disabled (software)"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .legacyDirectCopy: return "Tries direct mapping first, falls back to a copy"
+        case .autoSafe: return "Lets mpv pick whatever it considers safe"
+        case .hardwareCopy: return "VideoToolbox decode, frames copied back. The one that renders here."
+        case .hardwareDirect: return "Zero-copy. Needs a Vulkan renderer — black picture on this build."
+        case .disabled: return "Software decode. Slowest, but always draws."
+        }
+    }
+
+    /// The value handed to mpv's `hwdec` option.
+    var mpvValue: String {
+        switch self {
+        case .legacyDirectCopy: return "videotoolbox,videotoolbox-copy"
+        case .autoSafe: return "auto-safe"
+        case .hardwareCopy: return "videotoolbox-copy"
+        case .hardwareDirect: return "videotoolbox"
+        case .disabled: return "no"
         }
     }
 }

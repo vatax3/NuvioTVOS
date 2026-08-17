@@ -86,6 +86,12 @@ struct SidebarScaffold<Content: View>: View {
                 // and Classic home layouts opt out — their hero is deliberately full-bleed, so
                 // it is pulled back under the pill.
                 .padding(.leading, contentLeadingOffset - railColumnWidth)
+                // Android's `sidebarBlocksContentKeys`: while the panel is open the content
+                // stops taking input entirely. Without it the panel — which overlays the
+                // content rather than displacing it — competes with whatever sits underneath,
+                // so moving between destinations drops focus into the content and the panel
+                // collapses out from under the viewer.
+                .disabled(isExpanded)
         }
         .background(colors.background)
         .focusScope(shellFocus)

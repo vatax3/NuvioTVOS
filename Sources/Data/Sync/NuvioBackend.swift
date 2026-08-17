@@ -15,6 +15,8 @@ struct NuvioServerConfiguration: Codable, Hashable, Sendable {
     /// `false` disables the QR flow; a self-hosted instance may not have the edge function.
     var supportsTvLogin: Bool = true
     var supportsEmailPassword: Bool = true
+    /// Overrides where the phone finishes a TV login. Left empty, `tvLoginWebBaseUrl` guesses.
+    var tvLoginWebBaseUrlOverride: String = ""
 
     var isConfigured: Bool {
         !normalizedBackendUrl.isEmpty && !publishableKey.trimmingCharacters(in: .whitespaces).isEmpty
@@ -28,9 +30,37 @@ struct NuvioServerConfiguration: Codable, Hashable, Sendable {
         return trimmed
     }
 
-    /// Where the phone finishes a TV login. The official deployment serves this from the site
-    /// root; a self-hosted Supabase serves it from the project domain.
-    var tvLoginWebBaseUrl: String { "\(normalizedBackendUrl)/tv-login" }
+    /// Where the phone finishes a TV login — the URL the QR code encodes.
+    ///
+    /// This is *not* the backend. On Android it is a separate field: `BuildConfig
+    /// .TV_LOGIN_WEB_BASE_URL` for the official deployment, and only `"$backendUrl/tv-login"` as
+    /// the self-hosted default, where the API and the site share a host. Nuvio's own API lives
+    /// on `api.nuvio.tv` while the page is served from `nuvio.tv`, so deriving it from the
+    /// backend produces a 404 — hence the `api.` strip, and the override for anything else.
+    var tvLoginWebBaseUrl: String {
+        let override = tvLoginWebBaseUrlOverride.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !override.isEmpty {
+            var value = override
+            while value.hasSuffix("/") { value.removeLast() }
+            if !value.lowercased().hasPrefix("http") { value = "https://" + value }
+            return value
+        }
+        return "\(tvLoginWebOrigin)/tv-login"
+    }
+
+    /// The site origin the login page is expected on: the backend's, with an `api.` label
+    /// dropped when there is a registrable domain left underneath it.
+    private var tvLoginWebOrigin: String {
+        let base = normalizedBackendUrl
+        guard let components = URLComponents(string: base), let host = components.host,
+              host.lowercased().hasPrefix("api.") else { return base }
+        let parent = String(host.dropFirst(4))
+        // `api.example.com` → `example.com`, but never strip down to a bare TLD.
+        guard parent.contains(".") else { return base }
+        var rewritten = components
+        rewritten.host = parent
+        return rewritten.url?.absoluteString ?? base
+    }
 
     var avatarPublicBaseUrl: String {
         "\(normalizedBackendUrl)/storage/v1/object/public/avatars"

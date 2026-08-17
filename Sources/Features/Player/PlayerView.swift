@@ -50,6 +50,7 @@ struct PlayerView: View {
             request: request,
             resumeAt: resumePosition,
             verboseLogging: settings.player.verboseLoggingEnabled,
+            hardwareDecoding: settings.player.mpvHardwareDecodeMode,
             subtitleStyle: settings.subtitleStyle,
             onProgress: { position, duration, completed in
                 persist(position: position, duration: duration, completed: completed)

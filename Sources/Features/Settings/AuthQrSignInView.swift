@@ -140,6 +140,17 @@ struct AuthQrSignInView: View {
 
                 Spacer().frame(height: dp(18))
 
+                // The address is spelled out, not just encoded. When the QR leads nowhere the
+                // cause is almost always this URL, and there is no other way to see it on a TV.
+                Text(url)
+                    .nuvioText(NuvioTypography.labelSmall)
+                    .foregroundStyle(colors.textTertiary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+
+                Spacer().frame(height: dp(6))
+
                 Text("Code: \(code)")
                     .nuvioText(NuvioTextStyles.bodyCompact)
                     .foregroundStyle(colors.textPrimary)

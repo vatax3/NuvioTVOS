@@ -16,6 +16,7 @@ struct AccountSettingsContent: View {
     @State private var serverAddress = ""
     @State private var backendUrl = ""
     @State private var publishableKey = ""
+    @State private var tvLoginWebUrl = ""
     @State private var email = ""
     @State private var password = ""
     @State private var didLoadConfiguration = false
@@ -84,6 +85,12 @@ struct AccountSettingsContent: View {
                 subtitle: "The anon / publishable key — safe to store on the device, it is what every Nuvio client ships",
                 masked: true,
                 text: $publishableKey
+            )
+            SettingsTextFieldRow(
+                title: "Sign-in page URL",
+                subtitle: "Only if the QR code 404s — the page the phone opens, e.g. https://nuvio.tv/tv-login. Left blank Nuvio derives it from the backend.",
+                placeholder: "https://…/tv-login",
+                text: $tvLoginWebUrl
             )
             SettingsRow(
                 title: "Save backend",
@@ -220,12 +227,14 @@ struct AccountSettingsContent: View {
         didLoadConfiguration = true
         backendUrl = account.configuration.backendUrl
         publishableKey = account.configuration.publishableKey
+        tvLoginWebUrl = account.configuration.tvLoginWebBaseUrlOverride
     }
 
     private func saveConfiguration() {
         account.save(configuration: NuvioServerConfiguration(
             backendUrl: backendUrl,
-            publishableKey: publishableKey
+            publishableKey: publishableKey,
+            tvLoginWebBaseUrlOverride: tvLoginWebUrl
         ))
     }
 
