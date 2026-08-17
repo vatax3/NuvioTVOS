@@ -20,24 +20,56 @@ struct PlayerView: View {
 
     @State private var didScrobbleStart = false
     @State private var lastScrobbleProgress: Double = 0
+    @State private var subtitles = SubtitleTrackController()
 
     var body: some View {
-        AVPlayerContainer(
-            request: request,
-            resumeAt: resumePosition,
-            onProgress: { position, duration, completed in
-                persist(position: position, duration: duration, completed: completed)
-                scrobble(position: position, duration: duration)
-                advanceIfDue(position: position, duration: duration)
-            },
-            onFinished: {
-                persist(position: 0, duration: 0, completed: true)
-                scrobbleStop()
-                advanceToNextEpisode()
-                dismiss()
-            }
-        )
+        ZStack {
+            AVPlayerContainer(
+                request: request,
+                resumeAt: resumePosition,
+                subtitleStyleRules: settings.subtitleStyle.textStyleRules,
+                subtitleTracks: subtitles.available,
+                selectedSubtitle: subtitles.selected,
+                onSelectSubtitle: { subtitles.select($0) },
+                onTick: { subtitles.currentTime = $0 },
+                onProgress: { position, duration, completed in
+                    persist(position: position, duration: duration, completed: completed)
+                    scrobble(position: position, duration: duration)
+                    advanceIfDue(position: position, duration: duration)
+                },
+                onFinished: {
+                    persist(position: 0, duration: 0, completed: true)
+                    scrobbleStop()
+                    advanceToNextEpisode()
+                    dismiss()
+                }
+            )
+
+            SubtitleOverlay(cue: subtitles.activeCue, style: settings.subtitleStyle)
+        }
         .ignoresSafeArea()
+        .task { await loadSubtitles() }
+    }
+
+    // MARK: External subtitles
+
+    /// Addon-supplied tracks. The picker lives in the transport bar; a preferred language is
+    /// switched on straight away so the viewer does not have to open it every episode.
+    private func loadSubtitles() async {
+        let ordered = SubtitleSelector.order(
+            request.subtitles,
+            preferred: settings.player.subtitlePreferredLanguage,
+            secondary: settings.player.subtitleSecondaryLanguage,
+            onlyPreferred: settings.player.subtitleShowOnlyPreferredLanguages
+        )
+        subtitles.available = ordered
+
+        if subtitles.selected == nil,
+           let automatic = SubtitleSelector.autoSelection(
+               ordered, preferred: settings.player.subtitlePreferredLanguage
+           ) {
+            subtitles.select(automatic)
+        }
     }
 
     // MARK: Trakt
@@ -138,11 +170,17 @@ struct PlayerView: View {
 private struct AVPlayerContainer: UIViewControllerRepresentable {
     let request: PlaybackRequest
     let resumeAt: Double
+    /// Applied to tracks the container itself carries; addon tracks are drawn by the overlay.
+    let subtitleStyleRules: [AVTextStyleRule]
+    let subtitleTracks: [Subtitle]
+    let selectedSubtitle: Subtitle?
+    let onSelectSubtitle: (Subtitle?) -> Void
+    let onTick: (Double) -> Void
     let onProgress: (Double, Double, Bool) -> Void
     let onFinished: () -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onProgress: onProgress, onFinished: onFinished)
+        Coordinator(onProgress: onProgress, onFinished: onFinished, onTick: onTick)
     }
 
     func makeUIViewController(context: Context) -> AVPlayerViewController {
@@ -160,6 +198,7 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
         let asset = AVURLAsset(url: url, options: options)
         let item = AVPlayerItem(asset: asset)
         item.externalMetadata = metadata()
+        item.textStyleRules = subtitleStyleRules
 
         let player = AVPlayer(playerItem: item)
         player.automaticallyWaitsToMinimizeStalling = true
@@ -171,7 +210,37 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
         return controller
     }
 
-    func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {}
+    func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {
+        controller.player?.currentItem?.textStyleRules = subtitleStyleRules
+        controller.transportBarCustomMenuItems = subtitleTracks.isEmpty ? [] : [subtitleMenu()]
+    }
+
+    /// tvOS has no API to add a track to the system subtitle picker, so addon tracks get their
+    /// own transport-bar menu next to it.
+    private func subtitleMenu() -> UIMenu {
+        let off = UIAction(title: "Off", state: selectedSubtitle == nil ? .on : .off) { _ in
+            onSelectSubtitle(nil)
+        }
+
+        let groups = SubtitleSelector.group(subtitleTracks, mode: .byLanguage)
+        let children: [UIMenuElement] = groups.map { group in
+            let actions = group.items.map { subtitle in
+                UIAction(
+                    title: subtitle.addonName ?? subtitle.displayLanguage,
+                    state: subtitle.id == selectedSubtitle?.id ? .on : .off
+                ) { _ in
+                    onSelectSubtitle(subtitle)
+                }
+            }
+            return UIMenu(title: group.title, options: .displayInline, children: actions)
+        }
+
+        return UIMenu(
+            title: "Addon Subtitles",
+            image: UIImage(systemName: "captions.bubble"),
+            children: [off] + children
+        )
+    }
 
     static func dismantleUIViewController(_ controller: AVPlayerViewController, coordinator: Coordinator) {
         coordinator.detach()
@@ -217,13 +286,20 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
     final class Coordinator {
         private let onProgress: (Double, Double, Bool) -> Void
         private let onFinished: () -> Void
+        private let onTick: (Double) -> Void
         private var timeObserver: Any?
+        private var cueObserver: Any?
         private weak var player: AVPlayer?
         private var endObserver: NSObjectProtocol?
 
-        init(onProgress: @escaping (Double, Double, Bool) -> Void, onFinished: @escaping () -> Void) {
+        init(
+            onProgress: @escaping (Double, Double, Bool) -> Void,
+            onFinished: @escaping () -> Void,
+            onTick: @escaping (Double) -> Void
+        ) {
             self.onProgress = onProgress
             self.onFinished = onFinished
+            self.onTick = onTick
         }
 
         func attach(player: AVPlayer, item: AVPlayerItem, resumeAt: Double) {
@@ -245,6 +321,15 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
                 self.onProgress(time.seconds, duration, false)
             }
 
+            // Cue changes need a much finer clock than the persistence tick — a quarter second
+            // keeps subtitles in sync without the cost of a per-frame observer.
+            cueObserver = player.addPeriodicTimeObserver(
+                forInterval: CMTime(seconds: 0.25, preferredTimescale: 600),
+                queue: .main
+            ) { [weak self] time in
+                self?.onTick(time.seconds)
+            }
+
             endObserver = NotificationCenter.default.addObserver(
                 forName: .AVPlayerItemDidPlayToEndTime,
                 object: item,
@@ -255,10 +340,12 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
         }
 
         func detach() {
-            if let timeObserver, let player {
-                player.removeTimeObserver(timeObserver)
+            if let player {
+                if let timeObserver { player.removeTimeObserver(timeObserver) }
+                if let cueObserver { player.removeTimeObserver(cueObserver) }
             }
             timeObserver = nil
+            cueObserver = nil
             if let endObserver {
                 NotificationCenter.default.removeObserver(endObserver)
             }

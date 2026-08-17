@@ -100,6 +100,8 @@ struct PlaybackRequest: Hashable, Identifiable {
     var nextUp: StreamRequest?
     /// IMDb id, used for Trakt scrobbling.
     var imdbId: String?
+    /// External tracks gathered from every addon advertising `subtitles` for this video.
+    var subtitles: [Subtitle] = []
 
     var id: String { "\(videoId)|\(streamURL)" }
 }

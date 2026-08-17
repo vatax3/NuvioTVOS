@@ -131,6 +131,21 @@ final class AppSettings {
         )
     }
 
+    /// Subtitle appearance, shared by the overlay that draws addon tracks and the style rules
+    /// applied to tracks embedded in the stream.
+    var subtitleStyle: SubtitleStyle {
+        SubtitleStyle(
+            sizeScale: player.subtitleSize,
+            bold: player.subtitleBold,
+            textColor: Color(argbHex: player.subtitleTextColor),
+            backgroundColor: Color(argbHex: player.subtitleBackgroundColor),
+            outlineEnabled: player.subtitleOutlineEnabled,
+            outlineColor: Color(argbHex: player.subtitleOutlineColor),
+            outlineWidth: player.subtitleOutlineWidth,
+            verticalOffset: player.subtitleVerticalOffset
+        )
+    }
+
     var navigationFeel: NavigationFeel {
         NavigationFeel(
             fastHorizontal: layout.fastHorizontalNavigationEnabled,

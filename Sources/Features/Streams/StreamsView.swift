@@ -15,6 +15,8 @@ final class StreamsViewModel {
     private(set) var resolvingKey: String?
     private(set) var resolveError: String?
     private(set) var filteredOutCount = 0
+    /// External subtitle tracks, fetched alongside the streams and handed to the player.
+    private(set) var subtitles: [Subtitle] = []
 
     private let client: StremioClient
 
@@ -23,6 +25,28 @@ final class StreamsViewModel {
     }
 
     var totalCount: Int { groups.reduce(0) { $0 + $1.streams.count } }
+
+    private func loadSubtitles(request: StreamRequest, addonStore: AddonStore) async {
+        let providers = addonStore.addonsProviding(
+            resource: "subtitles", type: request.contentType, id: request.videoId
+        )
+        guard !providers.isEmpty else { return }
+
+        var collected: [Subtitle] = []
+        await withTaskGroup(of: [Subtitle].self) { group in
+            for addon in providers {
+                group.addTask { [client] in
+                    (try? await client.fetchSubtitles(
+                        addon: addon, type: request.contentType, videoId: request.videoId
+                    )) ?? []
+                }
+            }
+            for await tracks in group { collected.append(contentsOf: tracks) }
+        }
+        // The same file often shows up through several addons; the URL is the real identity.
+        var seen = Set<String>()
+        subtitles = collected.filter { seen.insert($0.url).inserted }
+    }
 
     /// Flat list in display order — used for auto-play selection.
     var orderedStreams: [Stream] { groups.flatMap(\.streams) }
@@ -35,6 +59,10 @@ final class StreamsViewModel {
         attributes = [:]
         filteredOutCount = 0
         defer { isLoading = false }
+
+        // Subtitles come from a different resource and different addons, so they load in
+        // parallel with the streams rather than delaying the list.
+        Task { await loadSubtitles(request: request, addonStore: addonStore) }
 
         let providers = addonStore.addonsProviding(
             resource: "stream", type: request.contentType, id: request.videoId
@@ -314,7 +342,8 @@ struct StreamsView: View {
             startFromBeginning: false,
             preview: preview,
             nextUp: nextUpRequest,
-            imdbId: request.imdbId
+            imdbId: request.imdbId,
+            subtitles: model.subtitles
         ))
     }
 }
