@@ -15,28 +15,92 @@ settings:
     ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
 
 # libmpv for Apple platforms — the same engine the Android build uses, and the only practical way
-# to open MKV and the other containers AVFoundation has no demuxer for. The player code is already
-# in Sources/Features/Player, guarded by `#if canImport(Libmpv)`, so uncommenting this block and
-# the matching dependency below is all it takes to switch the internal MPV engine on.
+# to open MKV and the other containers AVFoundation has no demuxer for.
 #
-# Left out of the default build because resolving it pulls ~25 xcframeworks from 15 separate
-# repositories, and that resolution did not complete in the environment this was written in — so
-# the MPV path has never been compiled. Turn it on in a normal Xcode session and expect to fix
-# compile errors in MPVEngine.swift before it runs.
-#
-# packages:
-#   MPVKit:
-#     url: https://github.com/mpvkit/MPVKit.git
-#     exactVersion: 1.0.0
+# Vendored under Vendor/ rather than pulled through SPM: MPVKit resolves ~28 xcframeworks across
+# 15 repositories, and Xcode's resolver sat on a GitHub credential prompt instead of downloading.
+# These are the same release artifacts, trimmed to their tvOS slices.
 
 targets:
   NuvioTVOS:
     type: application
     platform: tvOS
     deploymentTarget: "17.0"
-    # dependencies:
-    #   - package: MPVKit
-    #     product: MPVKit
+    dependencies:
+      # System frameworks the mpv/FFmpeg stack calls into: VideoToolbox for hardware decode,
+      # Metal and IOSurface for MoltenVK, the audio units for output.
+      - sdk: VideoToolbox.framework
+      - sdk: CoreMedia.framework
+      - sdk: CoreVideo.framework
+      - sdk: CoreImage.framework
+      - sdk: CoreAudio.framework
+      - sdk: AudioToolbox.framework
+      - sdk: AVFoundation.framework
+      - sdk: Metal.framework
+      - sdk: MetalKit.framework
+      - sdk: IOSurface.framework
+      - sdk: QuartzCore.framework
+      - sdk: CoreGraphics.framework
+      - sdk: CoreText.framework
+      - sdk: OpenGLES.framework
+      - sdk: GLKit.framework
+      # Static xcframeworks, so they are linked but not embedded.
+      - framework: Vendor/Libass.xcframework
+        embed: false
+      - framework: Vendor/Libavcodec.xcframework
+        embed: false
+      - framework: Vendor/Libavdevice.xcframework
+        embed: false
+      - framework: Vendor/Libavfilter.xcframework
+        embed: false
+      - framework: Vendor/Libavformat.xcframework
+        embed: false
+      - framework: Vendor/Libavutil.xcframework
+        embed: false
+      - framework: Vendor/Libbluray.xcframework
+        embed: false
+      - framework: Vendor/Libcrypto.xcframework
+        embed: false
+      - framework: Vendor/Libdav1d.xcframework
+        embed: false
+      - framework: Vendor/Libdovi.xcframework
+        embed: false
+      - framework: Vendor/Libfreetype.xcframework
+        embed: false
+      - framework: Vendor/Libfribidi.xcframework
+        embed: false
+      - framework: Vendor/Libharfbuzz.xcframework
+        embed: false
+      - framework: Vendor/Libmpv.xcframework
+        embed: false
+      - framework: Vendor/Libplacebo.xcframework
+        embed: false
+      - framework: Vendor/Libshaderc_combined.xcframework
+        embed: false
+      - framework: Vendor/Libssl.xcframework
+        embed: false
+      - framework: Vendor/Libswresample.xcframework
+        embed: false
+      - framework: Vendor/Libswscale.xcframework
+        embed: false
+      - framework: Vendor/Libuavs3d.xcframework
+        embed: false
+      - framework: Vendor/Libuchardet.xcframework
+        embed: false
+      - framework: Vendor/Libunibreak.xcframework
+        embed: false
+      - framework: Vendor/MoltenVK.xcframework
+        embed: false
+      - framework: Vendor/gmp.xcframework
+        embed: false
+      - framework: Vendor/gnutls.xcframework
+        embed: false
+      - framework: Vendor/hogweed.xcframework
+        embed: false
+      - framework: Vendor/lcms2.xcframework
+        embed: false
+      - framework: Vendor/nettle.xcframework
+        embed: false
     sources:
       - path: Sources
       # Added as individual file references, not a blue folder: a directory literally
@@ -53,6 +117,10 @@ targets:
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "1"
         TARGETED_DEVICE_FAMILY: "3"
+        # MoltenVK and shaderc inside the mpv stack are C++, so the C++ runtime and the system
+        # libraries they call into have to be linked explicitly.
+        OTHER_LDFLAGS: "$(inherited) -lc++ -lz -lbz2 -liconv -lxml2 -lresolv"
+        CLANG_CXX_LIBRARY: "libc++"
         ASSETCATALOG_COMPILER_APPICON_NAME: "App Icon & Top Shelf Image"
         GENERATE_INFOPLIST_FILE: YES
     info:

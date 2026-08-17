@@ -224,10 +224,11 @@ final class MPVEngine {
     private func command(_ arguments: [String]) {
         guard let handle else { return }
         // mpv wants a NULL-terminated argv; the C strings must outlive the call.
-        var pointers: [UnsafeMutablePointer<CChar>?] = arguments.map { strdup($0) }
-        pointers.append(nil)
-        defer { for pointer in pointers where pointer != nil { free(pointer) } }
-        pointers.withUnsafeMutableBufferPointer { buffer in
+        let owned = arguments.map { strdup($0) }
+        defer { owned.forEach { free($0) } }
+        var argv: [UnsafePointer<CChar>?] = owned.map { UnsafePointer($0) }
+        argv.append(nil)
+        argv.withUnsafeMutableBufferPointer { buffer in
             _ = mpv_command(handle, buffer.baseAddress)
         }
     }
@@ -239,11 +240,11 @@ final class MPVEngine {
         while true {
             guard let event = mpv_wait_event(handle, 0) else { return }
             if event.pointee.event_id == MPV_EVENT_NONE { return }
-            handle(event: event)
+            process(event: event)
         }
     }
 
-    private func handle(event: UnsafeMutablePointer<mpv_event>) {
+    private func process(event: UnsafeMutablePointer<mpv_event>) {
         switch event.pointee.event_id {
         case MPV_EVENT_PROPERTY_CHANGE:
             guard let data = event.pointee.data else { return }
