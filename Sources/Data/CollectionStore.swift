@@ -130,6 +130,13 @@ final class CollectionStore {
         persist()
     }
 
+    /// Replaces every collection with the account's copy — collections sync as one blob, so a
+    /// newer remote snapshot supersedes the local list wholesale.
+    func replaceAll(with incoming: [MediaCollection]) {
+        collections = incoming
+        persist()
+    }
+
     private func index(of collectionId: String) -> Int? {
         collections.firstIndex { $0.id == collectionId }
     }

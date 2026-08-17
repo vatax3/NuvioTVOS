@@ -143,11 +143,12 @@ struct SettingsView: View {
     @Environment(Router.self) private var router
 
     enum Section: String, CaseIterable, Identifiable {
-        case addons, appearance, layout, playback, debrid, plugins, tracking, metadata, extras, profiles, experience, about
+        case account, addons, appearance, layout, playback, debrid, plugins, tracking, metadata, extras, profiles, experience, about
         var id: String { rawValue }
 
         var title: String {
             switch self {
+            case .account: return "Account"
             case .addons: return "Addons"
             case .appearance: return "Appearance"
             case .layout: return "Layout"
@@ -165,6 +166,7 @@ struct SettingsView: View {
 
         var systemImage: String {
             switch self {
+            case .account: return "person.crop.circle"
             case .addons: return "puzzlepiece.extension.fill"
             case .appearance: return "paintpalette.fill"
             case .layout: return "rectangle.3.group.fill"
@@ -192,7 +194,7 @@ struct SettingsView: View {
         /// its own restriction, or reconfigure sources for the whole household.
         var isBlockedWhenRestricted: Bool {
             switch self {
-            case .addons, .playback, .debrid, .plugins, .profiles: return true
+            case .addons, .playback, .debrid, .plugins, .profiles, .account: return true
             default: return false
             }
         }
@@ -267,6 +269,7 @@ struct SettingsView: View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
                 switch section {
+                case .account: AccountSettingsContent()
                 case .addons: addonsSection
                 case .appearance: ThemeSettingsContent()
                 case .layout: LayoutSettingsContent()

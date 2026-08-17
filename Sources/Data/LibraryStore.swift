@@ -56,17 +56,22 @@ final class LibraryStore {
     /// Artwork cache so Continue Watching can render without refetching every meta.
     private(set) var previewCache: [String: MetaPreview] = [:]
     private(set) var episodeThumbnails: [String: String] = [:]
+    /// Library rows removed on this device but not yet deleted on the account. Without these a
+    /// removal would simply be re-adopted from the remote snapshot on the next sync.
+    private(set) var pendingLibraryDeletions: [String] = []
 
     private let progressFile = JSONFileStore<[String: WatchProgress]>(filename: "watch-progress.json")
     private let libraryFile = JSONFileStore<[SavedLibraryItem]>(filename: "library.json")
     private let previewFile = JSONFileStore<[String: MetaPreview]>(filename: "preview-cache.json")
     private let thumbnailFile = JSONFileStore<[String: String]>(filename: "episode-thumbnails.json")
+    private let deletionFile = JSONFileStore<[String]>(filename: "library-deletions.json")
 
     init() {
         progress = progressFile.load() ?? [:]
         library = libraryFile.load() ?? []
         previewCache = previewFile.load() ?? [:]
         episodeThumbnails = thumbnailFile.load() ?? [:]
+        pendingLibraryDeletions = deletionFile.load() ?? []
     }
 
     // MARK: Progress
@@ -197,8 +202,10 @@ final class LibraryStore {
     func toggleLibrary(_ preview: MetaPreview) {
         if let index = library.firstIndex(where: { $0.id == preview.rowKey }) {
             library.remove(at: index)
+            recordDeletion(preview.rowKey)
         } else {
             library.insert(SavedLibraryItem(preview: preview, addedAt: Date()), at: 0)
+            cancelDeletion(preview.rowKey)
             cache(preview)
         }
         persistLibrary()
@@ -206,6 +213,7 @@ final class LibraryStore {
 
     func removeFromLibrary(_ preview: MetaPreview) {
         library.removeAll { $0.id == preview.rowKey }
+        recordDeletion(preview.rowKey)
         persistLibrary()
     }
 
@@ -216,6 +224,48 @@ final class LibraryStore {
 
     func cachedPreview(contentType: String, contentId: String) -> MetaPreview? {
         previewCache["\(contentType)|\(contentId)"]
+    }
+
+    // MARK: Sync adoption
+
+    /// Applies a row that arrived from the account. Distinct from `record`/`toggleLibrary` so a
+    /// pulled row cannot be mistaken for a local action and pushed straight back.
+    func adoptProgress(_ incoming: WatchProgress) {
+        progress[incoming.videoId] = incoming
+        persistProgress()
+    }
+
+    func adoptSavedItem(_ item: SavedLibraryItem) {
+        // A row this device deleted must not come back before the deletion has been pushed.
+        guard !pendingLibraryDeletions.contains(item.id) else { return }
+        if let index = library.firstIndex(where: { $0.id == item.id }) {
+            library[index] = item
+        } else {
+            library.append(item)
+        }
+        library.sort { $0.addedAt > $1.addedAt }
+        previewCache[item.preview.rowKey] = item.preview
+        persistLibrary()
+        persistPreviews()
+    }
+
+    private func recordDeletion(_ rowKey: String) {
+        guard !pendingLibraryDeletions.contains(rowKey) else { return }
+        pendingLibraryDeletions.append(rowKey)
+        deletionFile.save(pendingLibraryDeletions)
+    }
+
+    /// Called once the account has accepted the deletes.
+    func clearPendingLibraryDeletions(_ keys: [String]) {
+        pendingLibraryDeletions.removeAll { keys.contains($0) }
+        deletionFile.save(pendingLibraryDeletions)
+    }
+
+    /// A row re-added locally is no longer a pending deletion.
+    private func cancelDeletion(_ rowKey: String) {
+        guard pendingLibraryDeletions.contains(rowKey) else { return }
+        pendingLibraryDeletions.removeAll { $0 == rowKey }
+        deletionFile.save(pendingLibraryDeletions)
     }
 
     // MARK: Persistence

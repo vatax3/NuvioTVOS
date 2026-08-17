@@ -35,6 +35,75 @@ class PreferenceStore {
         } else {
             defaults.removeObject(forKey: "\(namespace).\(key)")
         }
+        if !isApplyingSyncedValues {
+            // Stamps the local settings revision so account sync can tell which side is newer.
+            // Suppressed while applying a pulled blob, which would otherwise look like a change.
+            defaults.set(Date().timeIntervalSince1970, forKey: PreferenceStore.syncStampKey)
+        }
+    }
+
+    static let syncStampKey = "nuvio.settings_updated_at"
+    @ObservationIgnored private var isApplyingSyncedValues = false
+
+    // MARK: Sync
+
+    /// Every set value, for the account settings blob. Only scalars and string arrays are
+    /// exported — those are the only shapes the typed accessors ever write.
+    func exportForSync() -> [String: AnyJSONValue] {
+        var out: [String: AnyJSONValue] = [:]
+        for (key, value) in storage {
+            switch value {
+            case let bool as Bool: out[key] = .bool(bool)
+            case let int as Int: out[key] = .int(int)
+            case let double as Double: out[key] = .double(double)
+            case let string as String: out[key] = .string(string)
+            case let list as [String]: out[key] = .array(list.map { .string($0) })
+            case let data as Data:
+                // Composite slots (`setCodable`) hold JSON bytes. Carry them as their decoded
+                // JSON so the other platform reads a real object, not an opaque blob.
+                if let json = try? JSONDecoder().decode(AnyJSONValue.self, from: data) {
+                    out[key] = json
+                }
+            default: continue
+            }
+        }
+        return out
+    }
+
+    /// Applies a synced blob. Values go through `persist` so both the observed dictionary and
+    /// UserDefaults stay in step and the UI updates immediately.
+    func importFromSync(_ values: [String: AnyJSON]) {
+        isApplyingSyncedValues = true
+        defer { isApplyingSyncedValues = false }
+        for (key, value) in values {
+            switch value {
+            case .bool(let bool):
+                persist(key, bool)
+            case .number(let number):
+                // JSON has one number type; keep integral values as Int so `int(_:)` reads them.
+                if number == number.rounded(), abs(number) < 9e15 {
+                    persist(key, Int(number))
+                } else {
+                    persist(key, number)
+                }
+            case .string(let string):
+                persist(key, string)
+            case .array(let items):
+                // The only arrays written locally are string lists.
+                let strings = items.compactMap { item -> String? in
+                    if case .string(let value) = item { return value }
+                    return nil
+                }
+                guard strings.count == items.count else { continue }
+                persist(key, strings)
+            case .object:
+                // Round-trips a composite slot back into the Data form `codable(_:)` reads.
+                guard let data = try? JSONEncoder().encode(value) else { continue }
+                persist(key, data)
+            case .null:
+                continue
+            }
+        }
     }
 
     // MARK: Typed accessors

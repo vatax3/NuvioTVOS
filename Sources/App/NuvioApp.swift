@@ -3,6 +3,10 @@ import SwiftUI
 @main
 struct NuvioApp: App {
     @State private var profiles = ProfileStore()
+    /// Account and sync are device-wide, not per-profile: one signed-in account owns every
+    /// profile's rows, and switching profiles must not drop the session.
+    @State private var account = NuvioAccountStore()
+    @State private var sync = NuvioSyncService()
 
     init() {
         NuvioFontRegistrar.registerIfNeeded()
@@ -10,7 +14,7 @@ struct NuvioApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ProfileGate(profiles: profiles)
+            ProfileGate(profiles: profiles, account: account, sync: sync)
         }
     }
 }
@@ -20,6 +24,8 @@ struct NuvioApp: App {
 /// guarantees no view keeps a reference to the previous profile's data.
 private struct ProfileGate: View {
     let profiles: ProfileStore
+    let account: NuvioAccountStore
+    let sync: NuvioSyncService
 
     var body: some View {
         Group {
@@ -31,6 +37,8 @@ private struct ProfileGate: View {
             }
         }
         .environment(profiles)
+        .environment(account)
+        .environment(sync)
         .preferredColorScheme(.dark)
     }
 }

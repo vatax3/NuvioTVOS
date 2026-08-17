@@ -177,6 +177,40 @@ final class AppSettings {
         )
     }
 
+    // MARK: - Account sync
+
+    /// Namespaced stores, in the order the settings blob carries them.
+    private var syncedStores: [(String, PreferenceStore)] {
+        [
+            ("app", app), ("player", player), ("layout", layout), ("debrid", debrid),
+            ("tracking", tracking), ("tmdb", tmdb), ("mdblist", mdblist),
+            ("skipIntro", skipIntro), ("streamBadges", streamBadges), ("trailers", trailers)
+        ]
+    }
+
+    /// When this device last changed a setting, used to decide which side of the sync wins.
+    /// `PreferenceStore` stamps it on every write.
+    var settingsUpdatedAt: Date? {
+        let value = UserDefaults.standard.double(forKey: PreferenceStore.syncStampKey)
+        return value > 0 ? Date(timeIntervalSince1970: value) : nil
+    }
+
+    /// One object per namespace, so a key cannot collide across stores.
+    func exportSyncedSettings() -> [String: AnyJSONValue] {
+        var out: [String: AnyJSONValue] = [:]
+        for (name, store) in syncedStores {
+            out[name] = .object(store.exportForSync())
+        }
+        return out
+    }
+
+    func importSyncedSettings(_ payload: [String: AnyJSON]) {
+        for (name, store) in syncedStores {
+            guard case .object(let values)? = payload[name] else { continue }
+            store.importFromSync(values)
+        }
+    }
+
     var tmdbOptions: TMDBClient.TMDBOptions {
         TMDBClient.TMDBOptions(
             useArtwork: tmdb.useArtwork,

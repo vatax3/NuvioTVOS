@@ -5,6 +5,12 @@ struct RootView: View {
     @Environment(Router.self) private var router
     @Environment(AddonStore.self) private var addons
     @Environment(AppSettings.self) private var settings
+    @Environment(LibraryStore.self) private var library
+    @Environment(CollectionStore.self) private var collections
+    @Environment(PluginStore.self) private var plugins
+    @Environment(ProfileStore.self) private var profiles
+    @Environment(NuvioAccountStore.self) private var account
+    @Environment(NuvioSyncService.self) private var sync
 
     var body: some View {
         @Bindable var router = router
@@ -26,11 +32,31 @@ struct RootView: View {
         }
         .task {
             await addons.refreshAll()
+            // Startup sync, the equivalent of Android's StartupSyncService. Runs after the addon
+            // refresh so a pulled addon list lands on top of resolved manifests.
+            syncAccount()
+        }
+        // Playback closing is the moment watch progress is worth pushing.
+        .onChange(of: router.playback == nil) { _, closed in
+            if closed { syncAccount() }
         }
         // The addon store owns catalog ordering but the preference lives in Layout settings.
         .onChange(of: settings.layout.followAddonsOrder, initial: true) { _, follows in
             addons.followsAddonOrder = follows
         }
+    }
+
+    private func syncAccount() {
+        guard account.isSignedIn else { return }
+        sync.sync(
+            account: account,
+            library: library,
+            collections: collections,
+            addons: addons,
+            plugins: plugins,
+            profiles: profiles,
+            settings: settings
+        )
     }
 
     @ViewBuilder
