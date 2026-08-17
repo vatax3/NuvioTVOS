@@ -8,6 +8,11 @@ import Observation
 final class DiscoverViewModel {
     var selectedType: ContentType = .movie
     var selectedGenre: String?
+    /// Applied to the grid so "hide unreleased" reaches Discover too, not only Home.
+    var presentation: CatalogPresentation = .default {
+        didSet { items = presentation.filter(rawItems) }
+    }
+    private(set) var rawItems: [MetaPreview] = []
     private(set) var items: [MetaPreview] = []
     private(set) var isLoading = false
     private(set) var error: String?
@@ -68,10 +73,12 @@ final class DiscoverViewModel {
                     extraArgs: extras
                 )
                 guard !Task.isCancelled else { return }
-                items = result
+                rawItems = result
+                items = presentation.filter(result)
                 error = result.isEmpty ? "This catalog returned no items." : nil
             } catch {
                 guard !Task.isCancelled else { return }
+                rawItems = []
                 items = []
                 self.error = error.localizedDescription
             }
@@ -79,17 +86,9 @@ final class DiscoverViewModel {
     }
 }
 
+/// The standalone Discover destination — the browser plus its own screen title.
 struct DiscoverView: View {
     @Environment(\.nuvioColors) private var colors
-    @Environment(AddonStore.self) private var addons
-    @Environment(Router.self) private var router
-
-    @State private var model = DiscoverViewModel()
-
-    private let columns = Array(
-        repeating: GridItem(.fixed(NuvioTheme.components.posterCard.width), spacing: NuvioTheme.components.row.itemSpacing),
-        count: 7
-    )
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -99,18 +98,41 @@ struct DiscoverView: View {
                     .foregroundStyle(colors.textPrimary)
                     .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)
 
-                typeChips
-                catalogChips
-                genreChips
-                grid
+                DiscoverBrowser()
             }
             .padding(.top, NuvioTheme.layout.tvSafeVertical)
             .padding(.bottom, NuvioTheme.spacing.rail.tailPadding)
         }
         .scrollClipDisabled()
         .background(colors.background)
+    }
+}
+
+/// Chips plus grid, without the screen chrome — Search embeds this when the viewer moved
+/// Discover into the Search tab.
+struct DiscoverBrowser: View {
+    @Environment(\.nuvioColors) private var colors
+    @Environment(\.posterMetrics) private var metrics
+    @Environment(AddonStore.self) private var addons
+    @Environment(AppSettings.self) private var settings
+    @Environment(Router.self) private var router
+
+    @State private var model = DiscoverViewModel()
+
+    private var columns: [GridItem] { metrics.gridColumns() }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: NuvioTheme.spacing.xl) {
+            typeChips
+            catalogChips
+            genreChips
+            grid
+        }
         .onAppear { model.ensureSelection(addons) }
         .onChange(of: model.selectedType) { _, _ in model.ensureSelection(addons) }
+        .onChange(of: settings.catalogPresentation, initial: true) { _, presentation in
+            model.presentation = presentation
+        }
     }
 
     private var typeChips: some View {
@@ -181,7 +203,7 @@ struct DiscoverView: View {
                 ForEach(model.items, id: \.rowKey) { item in
                     ContentCard(
                         item: item,
-                        backdropExpandEnabled: false,
+                        allowsBackdropExpand: false,
                         action: { router.openDetail(item) }
                     )
                 }

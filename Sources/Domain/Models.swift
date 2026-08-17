@@ -341,8 +341,13 @@ struct Meta: Codable, Hashable, Identifiable, Sendable {
     var backdropUrl: String? { background ?? landscapePoster ?? poster }
 
     /// Port of `Meta.watchableEpisodes()` — drops specials and not-yet-released seasons.
-    func watchableEpisodes() -> [Video] {
+    /// `includeUnaired` is the `show_unaired_next_up` preference: with it on, episodes that
+    /// have not aired stay in the list so Next Up can point at one.
+    func watchableEpisodes(includeUnaired: Bool = false) -> [Video] {
         let candidates = videos.filter { ($0.season ?? 0) > 0 && $0.episode != nil }
+        guard !includeUnaired else {
+            return candidates.filter { $0.available != false }
+        }
         let grouped = Dictionary(grouping: candidates) { $0.season ?? 0 }
         let unavailableSeasons: Set<Int> = Set(grouped.compactMap { season, eps -> Int? in
             guard let first = eps.min(by: { ($0.episode ?? .max) < ($1.episode ?? .max) }) else { return nil }

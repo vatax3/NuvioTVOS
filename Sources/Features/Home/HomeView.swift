@@ -33,7 +33,13 @@ struct HomeView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(colors.background)
         .task(id: addons.catalogSignature) {
-            await model.load(addonStore: addons)
+            await model.load(addonStore: addons, presentation: settings.catalogPresentation)
+        }
+        .onChange(of: settings.catalogPresentation) { _, presentation in
+            model.apply(presentation: presentation)
+        }
+        .onChange(of: settings.layout.heroCatalogKeys, initial: true) { _, keys in
+            model.heroCatalogKeys = Set(keys)
         }
         .onChange(of: isShowingSpinner, initial: true) { _, spinning in
             router.contentHasFocusableViews = !spinning
@@ -60,13 +66,16 @@ struct HomeRailList: View {
     @Environment(Router.self) private var router
 
     let model: HomeViewModel
-    var backdropExpandEnabled: Bool = true
+    var allowsBackdropExpand: Bool = true
 
     @FocusState private var focusedCardKey: String?
     @State private var didClaimInitialFocus = false
 
     private var continueWatching: [ContinueWatchingEntry] {
-        library.continueWatching(threshold: settings.watchedThreshold)
+        library.continueWatching(
+            threshold: settings.watchedThreshold,
+            sort: settings.layout.continueWatchingSortMode
+        )
     }
 
     /// The card that should own focus when Home first has something to show — Continue
@@ -97,7 +106,7 @@ struct HomeRailList: View {
                         subtitle: row.subtitle,
                         items: row.items,
                         isLoading: row.isLoading || row.isLoadingMore,
-                        backdropExpandEnabled: backdropExpandEnabled,
+                        backdropExpandEnabled: allowsBackdropExpand,
                         onFocusItem: { model.focusedItem = $0 },
                         onSelect: { router.openDetail($0) },
                         onSeeAll: { router.push(.catalogSeeAll(row.request)) },
@@ -134,24 +143,34 @@ struct HomeRailList: View {
 
 struct ModernHomeContent: View {
     @Environment(\.nuvioColors) private var colors
+    @Environment(AppSettings.self) private var settings
     let model: HomeViewModel
+
+    private var showsHero: Bool { settings.layout.heroSectionEnabled }
+    /// `modern_hero_full_screen_backdrop`: the artwork covers the whole frame and the
+    /// gradient reaches further right, instead of being confined to the hero band.
+    private var fullScreenBackdrop: Bool { settings.layout.modernHeroFullScreenBackdrop }
 
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .topLeading) {
-                heroBackdrop(size: proxy.size)
+                if showsHero {
+                    heroBackdrop(size: proxy.size)
+                }
 
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 0) {
-                        ModernHeroInfo(item: model.heroItem)
-                            .frame(
-                                height: proxy.size.height * NuvioTheme.layout.detailsHeroHeightFraction,
-                                alignment: .bottomLeading
-                            )
-                            .padding(.horizontal, NuvioTheme.layout.tvSafeHorizontal)
+                        if showsHero {
+                            ModernHeroInfo(item: model.heroItem)
+                                .frame(
+                                    height: proxy.size.height * NuvioTheme.layout.detailsHeroHeightFraction,
+                                    alignment: .bottomLeading
+                                )
+                                .padding(.horizontal, NuvioTheme.layout.tvSafeHorizontal)
+                        }
 
                         HomeRailList(model: model)
-                            .padding(.top, NuvioTheme.spacing.xl)
+                            .padding(.top, showsHero ? NuvioTheme.spacing.xl : NuvioTheme.layout.tvSafeVertical)
                             .padding(.bottom, NuvioTheme.spacing.rail.tailPadding)
                     }
                 }
@@ -166,13 +185,18 @@ struct ModernHomeContent: View {
             RemoteImage(url: model.heroItem?.backdropUrl, contentMode: .fill) {
                 colors.background
             }
-            .frame(width: size.width, height: size.height)
+            .frame(
+                width: size.width,
+                height: fullScreenBackdrop ? size.height : size.height * 0.82,
+                alignment: .top
+            )
             .clipped()
             .animation(NuvioMotion.slowTween, value: model.heroItem?.rowKey)
 
-            ModernHeroGradient(background: colors.background)
+            ModernHeroGradient(background: colors.background, fullScreen: fullScreenBackdrop)
+                .frame(width: size.width, height: fullScreenBackdrop ? size.height : size.height * 0.82)
         }
-        .frame(width: size.width, height: size.height)
+        .frame(width: size.width, height: size.height, alignment: .top)
     }
 }
 
@@ -313,38 +337,49 @@ struct ModernHeroInfo: View {
 
 struct ClassicHomeContent: View {
     @Environment(\.nuvioColors) private var colors
+    @Environment(AppSettings.self) private var settings
     let model: HomeViewModel
+
+    private var showsHero: Bool { settings.layout.heroSectionEnabled }
+    /// `classic_focus_gradient_enabled`: without it Classic drops the backdrop wash entirely
+    /// and sits the rails on the flat background.
+    private var showsFocusGradient: Bool { settings.layout.classicFocusGradientEnabled }
 
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .topLeading) {
-                // Classic keeps the backdrop as a soft, heavily scrimmed wash behind the rails.
-                RemoteImage(url: model.heroItem?.backdropUrl, contentMode: .fill) {
-                    colors.background
+                if showsFocusGradient {
+                    // Classic keeps the backdrop as a soft, heavily scrimmed wash behind the rails.
+                    RemoteImage(url: model.heroItem?.backdropUrl, contentMode: .fill) {
+                        colors.background
+                    }
+                    .frame(width: proxy.size.width, height: proxy.size.height * 0.75)
+                    .clipped()
+                    .overlay {
+                        LinearGradient(
+                            stops: [
+                                .init(color: colors.background.opacity(0.55), location: 0),
+                                .init(color: colors.background.opacity(0.88), location: 0.55),
+                                .init(color: colors.background, location: 1)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    }
+                    .animation(NuvioMotion.slowTween, value: model.heroItem?.rowKey)
                 }
-                .frame(width: proxy.size.width, height: proxy.size.height * 0.75)
-                .clipped()
-                .overlay {
-                    LinearGradient(
-                        stops: [
-                            .init(color: colors.background.opacity(0.55), location: 0),
-                            .init(color: colors.background.opacity(0.88), location: 0.55),
-                            .init(color: colors.background, location: 1)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                }
-                .animation(NuvioMotion.slowTween, value: model.heroItem?.rowKey)
 
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: NuvioTheme.spacing.xl) {
-                        ModernHeroInfo(item: model.heroItem)
-                            .frame(height: proxy.size.height * 0.42, alignment: .bottomLeading)
-                            .padding(.horizontal, NuvioTheme.layout.tvSafeHorizontal)
-                            .padding(.top, NuvioTheme.layout.tvSafeVertical)
+                        if showsHero {
+                            ModernHeroInfo(item: model.heroItem)
+                                .frame(height: proxy.size.height * 0.42, alignment: .bottomLeading)
+                                .padding(.horizontal, NuvioTheme.layout.tvSafeHorizontal)
+                                .padding(.top, NuvioTheme.layout.tvSafeVertical)
+                        }
 
                         HomeRailList(model: model)
+                            .padding(.top, showsHero ? 0 : NuvioTheme.layout.tvSafeVertical)
                             .padding(.bottom, NuvioTheme.spacing.rail.tailPadding)
                     }
                 }
@@ -372,7 +407,7 @@ struct GridHomeContent: View {
 
                 // Grid view drops the hero entirely and disables the focus-expand animation
                 // so the denser rail stack stays visually stable.
-                HomeRailList(model: model, backdropExpandEnabled: false)
+                HomeRailList(model: model, allowsBackdropExpand: false)
                     .padding(.bottom, NuvioTheme.spacing.rail.tailPadding)
             }
         }

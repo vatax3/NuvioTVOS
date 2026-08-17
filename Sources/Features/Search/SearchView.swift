@@ -83,9 +83,16 @@ final class SearchViewModel {
 struct SearchView: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(AddonStore.self) private var addons
+    @Environment(AppSettings.self) private var settings
     @Environment(Router.self) private var router
 
     @State private var model = SearchViewModel()
+
+    /// `discover_location == .searchTab` folds the Discover browser in below the search box,
+    /// which is where it lives on Android when it has no sidebar entry of its own.
+    private var showsDiscover: Bool {
+        settings.layout.discoverLocation == .searchTab && settings.layout.searchDiscoverEnabled
+    }
 
     var body: some View {
         @Bindable var model = model
@@ -137,12 +144,16 @@ struct SearchView: View {
             )
             .frame(height: dp(320))
         } else if !model.hasSearched {
-            EmptyStateView(
-                systemImage: "magnifyingglass",
-                title: "Search your addons",
-                message: "Type at least two characters to query every catalog that supports search."
-            )
-            .frame(height: dp(320))
+            if showsDiscover {
+                DiscoverBrowser()
+            } else {
+                EmptyStateView(
+                    systemImage: "magnifyingglass",
+                    title: "Search your addons",
+                    message: "Type at least two characters to query every catalog that supports search."
+                )
+                .frame(height: dp(320))
+            }
         } else {
             LazyVStack(alignment: .leading, spacing: NuvioTheme.spacing.rail.rowGap) {
                 ForEach(model.results) { section in

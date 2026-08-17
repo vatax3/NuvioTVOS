@@ -18,11 +18,18 @@ struct RootView: View {
             }
         }
         .background(colors.background)
+        .environment(\.posterMetrics, settings.posterMetrics)
+        .environment(\.cardDepth, settings.cardDepthStyle)
+        .environment(\.navigationFeel, settings.navigationFeel)
         .fullScreenCover(item: $router.playback) { request in
             PlayerView(request: request)
         }
         .task {
             await addons.refreshAll()
+        }
+        // The addon store owns catalog ordering but the preference lives in Layout settings.
+        .onChange(of: settings.layout.followAddonsOrder, initial: true) { _, follows in
+            addons.followsAddonOrder = follows
         }
     }
 

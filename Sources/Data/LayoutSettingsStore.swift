@@ -182,15 +182,9 @@ final class LayoutSettingsStore: PreferenceStore {
         set { setBool("follow_addons_order", newValue) }
     }
 
-    var homeCatalogOrderKeys: [String] {
-        get { stringList("home_catalog_order_keys") }
-        set { setStringList("home_catalog_order_keys", newValue) }
-    }
-
-    var disabledHomeCatalogKeys: [String] {
-        get { stringList("disabled_home_catalog_keys") }
-        set { setStringList("disabled_home_catalog_keys", newValue) }
-    }
+    // Ordering and per-catalog enablement live in `AddonStore.catalogOrder`, which is
+    // file-backed and already drives `orderedHomeCatalogs`. Mirroring them here as preference
+    // keys would give two sources of truth for the same list.
 
     var customCatalogTitles: [String: String] {
         get { codable("custom_catalog_titles", default: [:]) }
@@ -280,8 +274,7 @@ final class LayoutSettingsStore: PreferenceStore {
         set { setBool("smooth_bring_into_view_enabled", newValue) }
     }
 
-    var memoryOnlyVerticalScroll: Bool {
-        get { bool("memory_only_vertical_scroll", default: false) }
-        set { setBool("memory_only_vertical_scroll", newValue) }
-    }
+    // `memory_only_vertical_scroll` is not carried over: it exists on Android because Compose
+    // persists LazyColumn offsets across navigation. SwiftUI rebuilds the stack instead, so the
+    // behaviour the preference opts into is already the only behaviour here.
 }

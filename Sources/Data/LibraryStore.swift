@@ -38,6 +38,11 @@ struct ContinueWatchingEntry: Identifiable, Hashable {
     var progress: WatchProgress
     var preview: MetaPreview
     var episodeTitle: String?
+    /// Episode still, when one was cached and the viewer wants thumbnails in the rail.
+    var episodeThumbnail: String?
+    /// True when the row points at an episode the viewer has not started — the case the
+    /// "blur next up" preference is about.
+    var isNextUp: Bool = false
     var id: String { progress.videoId }
 }
 
@@ -50,15 +55,18 @@ final class LibraryStore {
     private(set) var library: [SavedLibraryItem] = []
     /// Artwork cache so Continue Watching can render without refetching every meta.
     private(set) var previewCache: [String: MetaPreview] = [:]
+    private(set) var episodeThumbnails: [String: String] = [:]
 
     private let progressFile = JSONFileStore<[String: WatchProgress]>(filename: "watch-progress.json")
     private let libraryFile = JSONFileStore<[SavedLibraryItem]>(filename: "library.json")
     private let previewFile = JSONFileStore<[String: MetaPreview]>(filename: "preview-cache.json")
+    private let thumbnailFile = JSONFileStore<[String: String]>(filename: "episode-thumbnails.json")
 
     init() {
         progress = progressFile.load() ?? [:]
         library = libraryFile.load() ?? []
         previewCache = previewFile.load() ?? [:]
+        episodeThumbnails = thumbnailFile.load() ?? [:]
     }
 
     // MARK: Progress
@@ -114,8 +122,12 @@ final class LibraryStore {
         progress[videoId]?.isFinished(threshold: threshold) ?? false
     }
 
-    /// Continue Watching rail contents: in-flight items, newest first, finished ones dropped.
-    func continueWatching(threshold: Double) -> [ContinueWatchingEntry] {
+    /// Continue Watching rail contents: in-flight items, finished ones dropped, ordered by the
+    /// viewer's `continue_watching_sort_mode`.
+    func continueWatching(
+        threshold: Double,
+        sort: ContinueWatchingSortMode = .recentlyWatched
+    ) -> [ContinueWatchingEntry] {
         let unfinished = progress.values
             .filter { $0.fraction > 0.01 && !$0.isFinished(threshold: threshold) }
             .sorted { $0.updatedAt > $1.updatedAt }
@@ -133,10 +145,47 @@ final class LibraryStore {
                 return String(format: "S%02dE%02d", season, episode)
             }()
             entries.append(ContinueWatchingEntry(
-                progress: item, preview: preview, episodeTitle: episodeTitle
+                progress: item,
+                preview: preview,
+                episodeTitle: episodeTitle,
+                episodeThumbnail: episodeThumbnails[item.videoId],
+                // Below 2% the viewer effectively never saw the episode, so the still is a
+                // spoiler for what the blur preference calls "next up".
+                isNextUp: item.fraction < 0.02
             ))
         }
-        return entries
+        return sorted(entries, by: sort)
+    }
+
+    private func sorted(
+        _ entries: [ContinueWatchingEntry],
+        by mode: ContinueWatchingSortMode
+    ) -> [ContinueWatchingEntry] {
+        switch mode {
+        case .recentlyWatched:
+            return entries  // already newest-first
+        case .recentlyAdded:
+            let addedAt = Dictionary(
+                library.map { ($0.id, $0.addedAt) },
+                uniquingKeysWith: { first, _ in first }
+            )
+            return entries.sorted {
+                (addedAt[$0.preview.rowKey] ?? .distantPast)
+                    > (addedAt[$1.preview.rowKey] ?? .distantPast)
+            }
+        case .alphabetical:
+            return entries.sorted {
+                $0.preview.name.localizedCaseInsensitiveCompare($1.preview.name) == .orderedAscending
+            }
+        }
+    }
+
+    /// Episode stills keyed by video id, so the rail can show the actual episode rather than
+    /// the series backdrop when `use_episode_thumbnails_in_cw` is on.
+    func cacheEpisodeThumbnail(_ url: String?, forVideoId videoId: String) {
+        guard let url = url?.nilIfBlank, episodeThumbnails[videoId] != url else { return }
+        episodeThumbnails[videoId] = url
+        persistThumbnails()
     }
 
     // MARK: Library
@@ -173,6 +222,14 @@ final class LibraryStore {
 
     private func persistProgress() { progressFile.save(progress) }
     private func persistLibrary() { libraryFile.save(library) }
+
+    private func persistThumbnails() {
+        if episodeThumbnails.count > 600 {
+            let keep = Set(progress.keys)
+            episodeThumbnails = episodeThumbnails.filter { keep.contains($0.key) }
+        }
+        thumbnailFile.save(episodeThumbnails)
+    }
 
     private func persistPreviews() {
         // Bound the cache so it cannot grow without limit across long-running installs.

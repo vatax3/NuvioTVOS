@@ -4,13 +4,13 @@ import SwiftUI
 
 struct ContentCard: View {
     @Environment(\.nuvioColors) private var colors
+    @Environment(\.posterMetrics) private var metrics
 
     let item: MetaPreview
     var isWatched: Bool = false
-    var showLabels: Bool = true
-    /// Nuvio's signature behaviour: a card held in focus widens into its backdrop.
-    var backdropExpandEnabled: Bool = true
-    var backdropExpandDelay: Int = 3
+    /// Rails may suppress the expansion locally (the Grid layout does); the viewer's Layout
+    /// preference still has the final say.
+    var allowsBackdropExpand: Bool = true
     var onFocus: ((MetaPreview) -> Void)?
     /// `.focused()` only has an effect on the focusable view itself, so callers hand the
     /// binding down to the card rather than wrapping it from outside.
@@ -22,34 +22,29 @@ struct ContentCard: View {
     @State private var logoFailed = false
     @State private var expandTask: Task<Void, Never>?
 
-    private var baseWidth: CGFloat {
-        switch item.posterShape {
-        case .poster: return NuvioTheme.components.posterCard.width
-        case .landscape: return dp(260)
-        case .square: return dp(170)
-        }
-    }
-
-    private var baseHeight: CGFloat {
-        switch item.posterShape {
-        case .poster: return NuvioTheme.components.posterCard.height
-        case .landscape: return dp(148)
-        case .square: return dp(170)
-        }
-    }
+    private var showLabels: Bool { metrics.showsLabels }
+    private var backdropExpandEnabled: Bool { allowsBackdropExpand && metrics.backdropExpandEnabled }
+    private var cornerRadius: CGFloat { metrics.cornerRadius }
+    private var shape: PosterShape { metrics.resolvedShape(for: item.posterShape) }
+    private var baseSize: CGSize { metrics.size(for: shape) }
+    private var baseHeight: CGFloat { baseSize.height }
 
     private var expandedWidth: CGFloat { baseHeight * NuvioTheme.media.backdropAspectRatio }
-    private var cardWidth: CGFloat { isExpanded ? expandedWidth : baseWidth }
-    private var imageURL: String? { isExpanded ? (item.backdropUrl ?? item.poster) : item.poster }
+    private var cardWidth: CGFloat { isExpanded ? expandedWidth : baseSize.width }
+    /// A landscape rail already shows the backdrop, so it never falls back to the poster.
+    private var imageURL: String? {
+        if isExpanded || shape == .landscape {
+            return item.backdropUrl ?? item.poster
+        }
+        return item.poster
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button(action: action) {
                 artwork
             }
-            .buttonStyle(NuvioCardButtonStyle(
-                cornerRadius: NuvioTheme.components.posterCard.cornerRadius
-            ))
+            .buttonStyle(NuvioCardButtonStyle(cornerRadius: cornerRadius))
             .focusedIfAvailable(focusBinding, equals: item.rowKey)
             .onFocusChange { focused in
                 guard focused != isFocused else { return }
@@ -93,6 +88,7 @@ struct ContentCard: View {
         }
         .frame(width: cardWidth, height: baseHeight)
         .background(colors.backgroundCard)
+        .cardDepth(.poster, cornerRadius: cornerRadius)
     }
 
     private var expandedOverlay: some View {
@@ -166,7 +162,7 @@ struct ContentCard: View {
                     color: colors.textPrimary,
                     isFocused: isFocused
                 )
-                if let info = item.releaseInfo?.nilIfBlank {
+                if let info = item.releaseLabel(fullDate: metrics.showsFullReleaseDate) {
                     FocusMarqueeText(
                         text: info,
                         style: NuvioTextStyles.metadata,
@@ -183,7 +179,7 @@ struct ContentCard: View {
 
     private var metaTokens: [String] {
         var tokens: [String] = []
-        if let info = item.releaseInfo?.nilIfBlank { tokens.append(info) }
+        if let info = item.releaseLabel(fullDate: metrics.showsFullReleaseDate) { tokens.append(info) }
         if let rating = item.imdbRating { tokens.append(String(format: "★ %.1f", rating)) }
         if let runtime = item.runtime?.nilIfBlank { tokens.append(runtime) }
         if let genre = item.genres.first { tokens.append(genre) }
@@ -196,7 +192,7 @@ struct ContentCard: View {
         guard backdropExpandEnabled, item.backdropUrl != nil else { return }
         cancelExpand()
         expandTask = Task {
-            try? await Task.sleep(for: .seconds(max(0, backdropExpandDelay)))
+            try? await Task.sleep(for: .seconds(max(0, metrics.backdropExpandDelay)))
             guard !Task.isCancelled, isFocused else { return }
             isExpanded = true
         }
@@ -213,9 +209,14 @@ struct ContentCard: View {
 
 struct ContinueWatchingCard: View {
     @Environment(\.nuvioColors) private var colors
+    @Environment(\.posterMetrics) private var metrics
 
     let entry: ContinueWatchingEntry
     var style: ContinueWatchingCardStyle = .landscape
+    /// `use_episode_thumbnails_in_cw`: prefer the episode still over the series artwork.
+    var usesEpisodeThumbnail: Bool = true
+    /// `blur_continue_watching_next_up`: hide the still for an episode not yet started.
+    var blursNextUp: Bool = false
     var onFocus: ((MetaPreview) -> Void)?
     var focusBinding: FocusState<String?>.Binding?
     var action: () -> Void
@@ -225,18 +226,24 @@ struct ContinueWatchingCard: View {
     private var tokens: NuvioCardComponentTokens { NuvioTheme.components.continueWatchingCard }
 
     private var cardWidth: CGFloat {
-        style == .landscape ? tokens.width : NuvioTheme.components.posterCard.width
+        style == .landscape ? tokens.width : metrics.width
     }
 
     private var cardHeight: CGFloat {
-        style == .landscape ? tokens.height : NuvioTheme.components.posterCard.height
+        style == .landscape ? tokens.height : metrics.height
     }
 
     private var artworkURL: String? {
-        style == .landscape
+        if usesEpisodeThumbnail, let thumbnail = entry.episodeThumbnail?.nilIfBlank {
+            return thumbnail
+        }
+        return style == .landscape
             ? (entry.preview.backdropUrl ?? entry.preview.poster)
             : (entry.preview.poster ?? entry.preview.backdropUrl)
     }
+
+    /// Only blur what the viewer has not begun — a resumed episode is not a spoiler.
+    private var shouldBlur: Bool { blursNextUp && entry.isNextUp }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -247,6 +254,7 @@ struct ContinueWatchingCard: View {
                     }
                     .frame(width: cardWidth, height: cardHeight)
                     .clipped()
+                    .spoilerBlur(active: shouldBlur, revealed: isFocused)
 
                     LinearGradient(
                         colors: [.clear, .black.opacity(0.85)],
@@ -276,6 +284,7 @@ struct ContinueWatchingCard: View {
                 }
                 .frame(width: cardWidth, height: cardHeight)
                 .background(colors.backgroundCard)
+                .cardDepth(.continueWatching, cornerRadius: tokens.cornerRadius)
             }
             .buttonStyle(NuvioCardButtonStyle(cornerRadius: tokens.cornerRadius))
             .focusedIfAvailable(focusBinding, equals: entry.preview.rowKey)
@@ -313,11 +322,15 @@ struct EpisodeCard: View {
     var fallbackImage: String?
     var isWatched: Bool = false
     var progress: Double = 0
+    /// `blur_unwatched_episodes`: the still stays hidden until the card is focused.
+    var blursUnwatched: Bool = false
     var action: () -> Void
 
     @State private var isFocused = false
 
     private var tokens: NuvioCardComponentTokens { NuvioTheme.components.episodeCard }
+
+    private var shouldBlur: Bool { blursUnwatched && !isWatched && progress <= 0.01 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: NuvioTheme.spacing.sm) {
@@ -328,6 +341,7 @@ struct EpisodeCard: View {
                     }
                     .frame(width: tokens.width, height: tokens.width / NuvioTheme.media.thumbnailAspectRatio)
                     .clipped()
+                    .spoilerBlur(active: shouldBlur, revealed: isFocused)
 
                     if progress > 0.01 {
                         WatchProgressBar(fraction: progress)
@@ -347,6 +361,7 @@ struct EpisodeCard: View {
                 }
                 .frame(width: tokens.width, height: tokens.width / NuvioTheme.media.thumbnailAspectRatio)
                 .background(colors.backgroundCard)
+                .cardDepth(.episode, cornerRadius: tokens.cornerRadius)
             }
             .buttonStyle(NuvioCardButtonStyle(cornerRadius: tokens.cornerRadius))
             .onFocusChange { isFocused = $0 }
@@ -382,6 +397,7 @@ struct EpisodeCard: View {
 // MARK: - Skeleton
 
 struct PosterSkeletonRow: View {
+    @Environment(\.posterMetrics) private var metrics
     var count: Int = 8
     var showsTitle: Bool = true
 
@@ -396,11 +412,8 @@ struct PosterSkeletonRow: View {
             HStack(spacing: NuvioTheme.components.row.itemSpacing) {
                 ForEach(0..<count, id: \.self) { _ in
                     ShimmerView()
-                        .frame(
-                            width: NuvioTheme.components.posterCard.width,
-                            height: NuvioTheme.components.posterCard.height
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: NuvioTheme.components.posterCard.cornerRadius))
+                        .frame(width: metrics.width, height: metrics.height)
+                        .clipShape(RoundedRectangle(cornerRadius: metrics.cornerRadius))
                 }
             }
             .padding(.leading, NuvioTheme.components.row.horizontalPadding)

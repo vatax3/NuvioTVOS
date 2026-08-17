@@ -24,11 +24,17 @@ struct SidebarScaffold<Content: View>: View {
 
     private var tokens: NuvioSidebarComponentTokens { NuvioTheme.components.sidebar }
 
+    /// Discover only earns a nav entry when the viewer put it there; the other two placements
+    /// either fold it into Search or drop it entirely.
     private var tabs: [RootTab] {
-        RootTab.allCases.filter { $0 != .discover || (settings.layout.discoverLocation != .off) }
+        RootTab.allCases.filter { $0 != .discover || settings.layout.discoverLocation == .sidebar }
     }
 
+    /// `modern_sidebar_enabled` off means the classic always-open rail: no pill, no bloom.
+    private var isModernSidebar: Bool { settings.layout.modernSidebarEnabled }
+
     private var contentLeadingOffset: CGFloat {
+        guard isModernSidebar else { return NuvioTheme.components.sidebar.expandedWidth }
         let heroIsFullBleed = router.selectedTab == .home && settings.layout.selectedLayout != .grid
         return heroIsFullBleed ? 0 : NuvioTheme.layout.sidebarContentOffset
     }
@@ -61,9 +67,22 @@ struct SidebarScaffold<Content: View>: View {
         .onChange(of: hasUserNavigated) { _, _ in
             updateExpansion(focusedTab: focusedTab)
         }
+        .onChange(of: isModernSidebar, initial: true) { _, _ in
+            updateExpansion(focusedTab: focusedTab)
+        }
     }
 
     private func updateExpansion(focusedTab: RootTab?) {
+        // The classic rail is always open; only the modern pill collapses.
+        guard isModernSidebar else {
+            if !isExpanded { isExpanded = true }
+            return
+        }
+        // `sidebar_collapsed_by_default` off means the panel starts — and stays — open.
+        guard settings.layout.sidebarCollapsedByDefault else {
+            if !isExpanded { isExpanded = true }
+            return
+        }
         let shouldExpand = focusedTab != nil && hasUserNavigated
         guard shouldExpand != isExpanded else { return }
         withAnimation(shouldExpand ? NuvioMotion.sidebarPanelIn : NuvioMotion.sidebarPanelOut) {
@@ -111,20 +130,38 @@ struct SidebarScaffold<Content: View>: View {
         isExpanded ? tabs : [router.selectedTab]
     }
 
+    /// `glass_sidepanel_enabled` chooses the gradient-over-material glass; with it off the
+    /// panel is a plain surface fill. `modern_sidebar_blur_enabled` controls the blur pass
+    /// underneath, which is the expensive half on Android.
+    @ViewBuilder
     private var panelBackground: some View {
-        RoundedRectangle(cornerRadius: tokens.panelRadius, style: .continuous)
-            .fill(
-                LinearGradient(
-                    colors: [colors.glassPanelTop, colors.glassPanelBottom],
-                    startPoint: .top,
-                    endPoint: .bottom
+        let shape = RoundedRectangle(cornerRadius: tokens.panelRadius, style: .continuous)
+        if settings.layout.glassSidePanelEnabled {
+            shape
+                .fill(
+                    LinearGradient(
+                        colors: [colors.glassPanelTop, colors.glassPanelBottom],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
                 )
-            )
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: tokens.panelRadius, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: tokens.panelRadius, style: .continuous)
-                    .strokeBorder(.white.opacity(0.14), lineWidth: NuvioTheme.strokes.hairline)
-            }
+                .background {
+                    if settings.layout.modernSidebarBlurEnabled {
+                        shape.fill(.ultraThinMaterial)
+                    } else {
+                        shape.fill(colors.surface)
+                    }
+                }
+                .overlay {
+                    shape.strokeBorder(.white.opacity(0.14), lineWidth: NuvioTheme.strokes.hairline)
+                }
+        } else {
+            shape
+                .fill(colors.surface)
+                .overlay {
+                    shape.strokeBorder(colors.border.opacity(0.6), lineWidth: NuvioTheme.strokes.hairline)
+                }
+        }
     }
 
     private var brandMark: some View {
@@ -195,6 +232,7 @@ private struct SidebarItemView: View {
 private struct SidebarItemButtonStyle: ButtonStyle {
     @Environment(\.isFocused) private var isFocused
     @Environment(\.nuvioColors) private var colors
+    @Environment(AppSettings.self) private var settings
 
     let showsLabel: Bool
     let isSelected: Bool
@@ -236,7 +274,11 @@ private struct SidebarItemButtonStyle: ButtonStyle {
                 isFocused ? Color.white.opacity(NuvioTheme.effects.glowSoftAlpha) : Color.clear
             )
         }
-        // Collapsed pill keeps the glass gradient from `CollapsedSidebarPill`.
+        // Collapsed pill keeps the glass gradient from `CollapsedSidebarPill`, unless the
+        // viewer turned the glass treatment off.
+        guard settings.layout.glassSidePanelEnabled else {
+            return AnyShapeStyle(colors.surface)
+        }
         return AnyShapeStyle(
             LinearGradient(
                 colors: [colors.glassPanelTop, colors.glassPanelBottom],

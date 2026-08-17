@@ -5,6 +5,8 @@ import SwiftUI
 /// instead of jumping to whatever happens to be geometrically closest.
 struct CatalogRowView: View {
     @Environment(\.nuvioColors) private var colors
+    @Environment(\.posterMetrics) private var metrics
+    @Environment(\.navigationFeel) private var feel
 
     let title: String
     var subtitle: String?
@@ -12,6 +14,7 @@ struct CatalogRowView: View {
     var watchedIds: Set<String> = []
     var isLoading: Bool = false
     var showsSeeAll: Bool = true
+    /// Rail-local opt-out; the viewer's Layout preference still gates the behaviour.
     var backdropExpandEnabled: Bool = true
     var onFocusItem: ((MetaPreview) -> Void)?
     var onSelect: (MetaPreview) -> Void
@@ -55,53 +58,61 @@ struct CatalogRowView: View {
     }
 
     private var run: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(spacing: NuvioTheme.components.row.itemSpacing) {
-                ForEach(Array(items.enumerated()), id: \.element.rowKey) { index, item in
-                    ContentCard(
-                        item: item,
-                        isWatched: watchedIds.contains(item.rowKey),
-                        backdropExpandEnabled: backdropExpandEnabled,
-                        onFocus: { focused in
-                            onFocusItem?(focused)
-                            if index >= items.count - 4 { onReachEnd?() }
-                        },
-                        focusBinding: cardFocus,
-                        action: { onSelect(item) }
-                    )
-                    .id(item.rowKey)
-                }
-
-                if showsSeeAll, let onSeeAll {
-                    SeeAllCard(action: onSeeAll)
-                }
-
-                if isLoading && !items.isEmpty {
-                    ShimmerView()
-                        .frame(
-                            width: NuvioTheme.components.posterCard.width,
-                            height: NuvioTheme.components.posterCard.height
+        ScrollViewReader { scroller in
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: NuvioTheme.components.row.itemSpacing) {
+                    ForEach(Array(items.enumerated()), id: \.element.rowKey) { index, item in
+                        ContentCard(
+                            item: item,
+                            isWatched: watchedIds.contains(item.rowKey),
+                            allowsBackdropExpand: backdropExpandEnabled,
+                            onFocus: { focused in
+                                onFocusItem?(focused)
+                                bringIntoView(focused.rowKey, using: scroller)
+                                if index >= items.count - 4 { onReachEnd?() }
+                            },
+                            focusBinding: cardFocus,
+                            action: { onSelect(item) }
                         )
-                        .clipShape(RoundedRectangle(cornerRadius: NuvioTheme.components.posterCard.cornerRadius))
+                        .id(item.rowKey)
+                    }
+
+                    if showsSeeAll, let onSeeAll {
+                        SeeAllCard(action: onSeeAll)
+                    }
+
+                    if isLoading && !items.isEmpty {
+                        ShimmerView()
+                            .frame(width: metrics.width, height: metrics.height)
+                            .clipShape(RoundedRectangle(cornerRadius: metrics.cornerRadius))
+                    }
                 }
+                .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)
+                // The focused card scales to 1.02 and can expand to a backdrop; the extra
+                // vertical room stops either from being clipped by the scroll view.
+                .padding(.vertical, NuvioTheme.spacing.sm)
             }
-            .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)
-            // The focused card scales to 1.02 and can expand to a backdrop; the extra
-            // vertical room stops either from being clipped by the scroll view.
-            .padding(.vertical, NuvioTheme.spacing.sm)
+            .scrollClipDisabled()
         }
-        .scrollClipDisabled()
+    }
+
+    /// Anchors the focused card at `NuvioLayout.rowAnchor` instead of leaving it wherever the
+    /// focus engine parked it — the Compose rails keep the focused item at a fixed offset.
+    private func bringIntoView(_ key: String, using scroller: ScrollViewProxy) {
+        let anchor = UnitPoint(x: NuvioTheme.layout.rowAnchor, y: 0.5)
+        if let animation = feel.scrollAnimation {
+            withAnimation(animation) { scroller.scrollTo(key, anchor: anchor) }
+        } else {
+            scroller.scrollTo(key, anchor: anchor)
+        }
     }
 
     private var loadingRun: some View {
         HStack(spacing: NuvioTheme.components.row.itemSpacing) {
             ForEach(0..<8, id: \.self) { _ in
                 ShimmerView()
-                    .frame(
-                        width: NuvioTheme.components.posterCard.width,
-                        height: NuvioTheme.components.posterCard.height
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: NuvioTheme.components.posterCard.cornerRadius))
+                    .frame(width: metrics.width, height: metrics.height)
+                    .clipShape(RoundedRectangle(cornerRadius: metrics.cornerRadius))
             }
         }
         .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)
@@ -111,6 +122,7 @@ struct CatalogRowView: View {
 /// Trailing affordance that opens the full catalog grid.
 struct SeeAllCard: View {
     @Environment(\.nuvioColors) private var colors
+    @Environment(\.posterMetrics) private var metrics
     var action: () -> Void
 
     var body: some View {
@@ -122,19 +134,17 @@ struct SeeAllCard: View {
                     .nuvioText(NuvioTextStyles.button)
             }
             .foregroundStyle(colors.textSecondary)
-            .frame(
-                width: NuvioTheme.components.posterCard.width,
-                height: NuvioTheme.components.posterCard.height
-            )
+            .frame(width: metrics.width, height: metrics.height)
             .background(colors.backgroundCard)
         }
-        .buttonStyle(NuvioCardButtonStyle(cornerRadius: NuvioTheme.components.posterCard.cornerRadius))
+        .buttonStyle(NuvioCardButtonStyle(cornerRadius: metrics.cornerRadius))
     }
 }
 
 /// Continue Watching rail — separate because its cards carry progress and a different shape.
 struct ContinueWatchingRow: View {
     @Environment(\.nuvioColors) private var colors
+    @Environment(AppSettings.self) private var settings
 
     let entries: [ContinueWatchingEntry]
     var style: ContinueWatchingCardStyle = .landscape
@@ -155,6 +165,8 @@ struct ContinueWatchingRow: View {
                         ContinueWatchingCard(
                             entry: entry,
                             style: style,
+                            usesEpisodeThumbnail: settings.layout.useEpisodeThumbnailsInContinueWatching,
+                            blursNextUp: settings.layout.blurContinueWatchingNextUp,
                             onFocus: onFocusItem,
                             focusBinding: cardFocus,
                             action: { onSelect(entry) }

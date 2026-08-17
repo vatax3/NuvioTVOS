@@ -7,21 +7,28 @@ import Observation
 final class CatalogRowState: Identifiable {
     let addon: Addon
     let descriptor: CatalogDescriptor
+    /// Everything the addon returned. `items` is what survives the presentation filter, so
+    /// toggling "hide unreleased" does not require refetching the catalog.
+    var rawItems: [MetaPreview] = []
     var items: [MetaPreview] = []
     var isLoading = false
     var isLoadingMore = false
     var reachedEnd = false
     var error: String?
 
+    /// Catalog naming preferences, so a renamed rail keeps its name across reloads.
+    var presentation: CatalogPresentation = .default
+
     var id: String { "\(addon.baseUrl)#\(descriptor.descriptorKey)" }
 
     /// Catalog names already read like "Popular"; the addon name disambiguates duplicates.
-    var title: String { descriptor.name }
-    var subtitle: String? { addon.displayName }
+    var title: String { presentation.title(addon: addon, descriptor: descriptor) }
+    var subtitle: String? { presentation.subtitle(addon: addon) }
 
-    init(addon: Addon, descriptor: CatalogDescriptor) {
+    init(addon: Addon, descriptor: CatalogDescriptor, presentation: CatalogPresentation = .default) {
         self.addon = addon
         self.descriptor = descriptor
+        self.presentation = presentation
     }
 
     var request: CatalogRequest {
@@ -29,8 +36,19 @@ final class CatalogRowState: Identifiable {
             addonBaseUrl: addon.baseUrl,
             catalogId: descriptor.id,
             type: descriptor.apiType,
-            title: descriptor.name
+            title: title
         )
+    }
+
+    /// Single place the filter is applied, so `rawItems` and `items` cannot drift apart.
+    func setItems(_ newItems: [MetaPreview]) {
+        rawItems = newItems
+        items = presentation.filter(newItems)
+    }
+
+    func appendItems(_ additions: [MetaPreview]) {
+        rawItems.append(contentsOf: additions)
+        items = presentation.filter(rawItems)
     }
 }
 
@@ -46,21 +64,49 @@ final class HomeViewModel {
     private let client: StremioClient
     private var loadedSignature: String?
     private var pageSize = 50
+    private var presentation: CatalogPresentation = .default
 
     init(client: StremioClient = .shared) {
         self.client = client
     }
 
+    /// Applied without refetching — renaming a rail or hiding unreleased titles is a display
+    /// change, not a reload.
+    func apply(presentation: CatalogPresentation) {
+        guard presentation != self.presentation else { return }
+        let hiddenChanged = presentation.hidesUnreleased != self.presentation.hidesUnreleased
+        self.presentation = presentation
+        for row in rows {
+            row.presentation = presentation
+            if hiddenChanged { row.setItems(row.rawItems) }
+        }
+    }
+
+    /// `hero_catalog_keys`: when the viewer nominated specific catalogs, only those seed the
+    /// hero. Empty means the first rail with content, which is the Android default.
+    var heroCatalogKeys: Set<String> = []
+
+    private var heroRows: [CatalogRowState] {
+        guard !heroCatalogKeys.isEmpty else { return rows }
+        let preferred = rows.filter { heroCatalogKeys.contains($0.id) }
+        return preferred.isEmpty ? rows : preferred
+    }
+
     var heroItem: MetaPreview? {
-        focusedItem ?? rows.first(where: { !$0.items.isEmpty })?.items.first
+        focusedItem ?? heroRows.first(where: { !$0.items.isEmpty })?.items.first
     }
 
     /// Catalogs backing the Modern hero carousel when nothing is focused yet.
     var heroCandidates: [MetaPreview] {
-        Array((rows.first(where: { !$0.items.isEmpty })?.items ?? []).prefix(10))
+        Array((heroRows.first(where: { !$0.items.isEmpty })?.items ?? []).prefix(10))
     }
 
-    func load(addonStore: AddonStore, force: Bool = false) async {
+    func load(
+        addonStore: AddonStore,
+        presentation: CatalogPresentation = .default,
+        force: Bool = false
+    ) async {
+        self.presentation = presentation
         let catalogs = addonStore.orderedHomeCatalogs
         let signature = catalogs.map { "\($0.addon.baseUrl)#\($0.catalog.descriptorKey)" }.joined(separator: ",")
 
@@ -79,7 +125,9 @@ final class HomeViewModel {
         }
 
         loadError = nil
-        rows = catalogs.map { CatalogRowState(addon: $0.addon, descriptor: $0.catalog) }
+        rows = catalogs.map {
+            CatalogRowState(addon: $0.addon, descriptor: $0.catalog, presentation: presentation)
+        }
         isInitialLoading = true
 
         // Load the first screenful eagerly, then the rest — the top rails must appear fast.
@@ -99,7 +147,7 @@ final class HomeViewModel {
     }
 
     private func loadFirstPage(_ row: CatalogRowState) async {
-        guard row.items.isEmpty, !row.isLoading else { return }
+        guard row.rawItems.isEmpty, !row.isLoading else { return }
         row.isLoading = true
         defer { row.isLoading = false }
 
@@ -117,7 +165,7 @@ final class HomeViewModel {
                 skip: 0,
                 extraArgs: extras
             )
-            row.items = dedupe(items)
+            row.setItems(dedupe(items))
             row.reachedEnd = items.count < (row.descriptor.pageSize ?? pageSize)
             row.error = nil
         } catch {
@@ -136,15 +184,16 @@ final class HomeViewModel {
                 addon: row.addon,
                 type: row.descriptor.apiType,
                 catalogId: row.descriptor.id,
-                skip: row.items.count
+                // Paging is against what the addon returned, not what survived the filter.
+                skip: row.rawItems.count
             )
             guard !items.isEmpty else {
                 row.reachedEnd = true
                 return
             }
-            let existing = Set(row.items.map(\.rowKey))
+            let existing = Set(row.rawItems.map(\.rowKey))
             let additions = items.filter { !existing.contains($0.rowKey) }
-            row.items.append(contentsOf: additions)
+            row.appendItems(additions)
             row.reachedEnd = additions.isEmpty
         } catch {
             row.reachedEnd = true

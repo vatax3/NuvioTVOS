@@ -492,11 +492,15 @@ struct LayoutSettingsContent: View {
                 SettingsToggle(title: "Expand to backdrop", systemImage: "rectangle.expand.vertical", isOn: $layout.focusedPosterBackdropExpandEnabled)
                 if layout.focusedPosterBackdropExpandEnabled {
                     SettingsStepperRow(title: "Expand after", value: $layout.focusedPosterBackdropExpandDelaySeconds, range: 0...10, format: { "\($0)s" })
-                    SettingsToggle(title: "Play a trailer when expanded", isOn: $layout.focusedPosterBackdropTrailerEnabled)
-                    if layout.focusedPosterBackdropTrailerEnabled {
-                        SettingsToggle(title: "Start muted", isOn: $layout.focusedPosterBackdropTrailerMuted)
-                        SettingsOptionRow(title: "Play trailers on", selection: $layout.focusedPosterTrailerTarget)
-                    }
+                    // Android plays the TMDB trailer inline, which is a YouTube stream. tvOS has
+                    // no WKWebView and AVPlayer cannot resolve a YouTube watch URL, so there is
+                    // no way to honour this here — saying so beats an inert switch.
+                    SettingsToggle(
+                        title: "Play a trailer when expanded",
+                        subtitle: "Unavailable on Apple TV — trailers are YouTube-only and tvOS cannot play them in-app",
+                        isOn: $layout.focusedPosterBackdropTrailerEnabled
+                    )
+                    .disabled(true)
                 }
             }
 
@@ -535,7 +539,6 @@ struct LayoutSettingsContent: View {
                 SettingsToggle(title: "Discover inside Search", isOn: $layout.searchDiscoverEnabled)
                 SettingsToggle(title: "Fast horizontal navigation", subtitle: "Skip the settle animation when holding a direction", isOn: $layout.fastHorizontalNavigationEnabled)
                 SettingsToggle(title: "Smooth bring-into-view", isOn: $layout.smoothBringIntoViewEnabled)
-                SettingsToggle(title: "Memory-only vertical scroll", subtitle: "Do not persist scroll position between visits", isOn: $layout.memoryOnlyVerticalScroll)
             }
 
             SettingsCard(title: "Content") {

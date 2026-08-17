@@ -48,3 +48,6 @@ targets:
           - inter_variable.ttf
           - dm_sans_variable.ttf
           - opensans_variable.ttf
+        # Trailer hand-off: canOpenURL only answers for schemes declared here.
+        LSApplicationQueriesSchemes:
+          - youtube

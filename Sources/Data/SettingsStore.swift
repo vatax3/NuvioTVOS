@@ -116,6 +116,52 @@ final class AppSettings {
     /// Fraction of a video that counts as watched — used by Continue Watching and episode ticks.
     var watchedThreshold: Double { player.watchedThresholdFraction }
 
+    /// Resolved poster geometry, injected into the environment so every rail and grid picks up
+    /// the viewer's Layout settings instead of the static tokens.
+    var posterMetrics: PosterMetrics {
+        PosterMetrics(
+            width: dp(CGFloat(layout.posterCardWidthDp)),
+            height: dp(CGFloat(layout.posterCardHeightDp)),
+            cornerRadius: dp(CGFloat(layout.posterCardCornerRadiusDp)),
+            showsLabels: layout.posterLabelsEnabled,
+            preferLandscape: layout.modernLandscapePostersEnabled,
+            backdropExpandEnabled: layout.focusedPosterBackdropExpandEnabled,
+            backdropExpandDelay: layout.focusedPosterBackdropExpandDelaySeconds,
+            showsFullReleaseDate: layout.showFullReleaseDate
+        )
+    }
+
+    var navigationFeel: NavigationFeel {
+        NavigationFeel(
+            fastHorizontal: layout.fastHorizontalNavigationEnabled,
+            smoothBringIntoView: layout.smoothBringIntoViewEnabled
+        )
+    }
+
+    var catalogPresentation: CatalogPresentation {
+        CatalogPresentation(
+            showsAddonName: layout.catalogAddonNameEnabled,
+            showsTypeSuffix: layout.catalogTypeSuffixEnabled,
+            customTitles: layout.customCatalogTitles,
+            hidesUnreleased: layout.hideUnreleasedContent,
+            showsFullReleaseDate: layout.showFullReleaseDate
+        )
+    }
+
+    var cardDepthStyle: CardDepthStyle {
+        guard layout.cardDepthEnabled else { return .disabled }
+        return CardDepthStyle(
+            posters: layout.cardDepthPostersEnabled,
+            continueWatching: layout.cardDepthContinueWatchingEnabled,
+            episodes: layout.cardDepthEpisodeCardsEnabled,
+            cast: layout.cardDepthCastEnabled,
+            trailers: layout.cardDepthTrailersEnabled,
+            edgeStrength: layout.cardDepthEdgeStrength,
+            edgeCoverage: layout.cardDepthEdgeCoverage,
+            sheenStrength: layout.cardDepthSheenStrength
+        )
+    }
+
     var tmdbOptions: TMDBClient.TMDBOptions {
         TMDBClient.TMDBOptions(
             useArtwork: tmdb.useArtwork,

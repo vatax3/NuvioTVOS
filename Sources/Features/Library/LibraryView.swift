@@ -3,6 +3,7 @@ import SwiftUI
 /// Port of `LibraryScreen` — saved titles plus everything currently in progress.
 struct LibraryView: View {
     @Environment(\.nuvioColors) private var colors
+    @Environment(\.posterMetrics) private var metrics
     @Environment(LibraryStore.self) private var library
     @Environment(AppSettings.self) private var settings
     @Environment(Router.self) private var router
@@ -22,13 +23,13 @@ struct LibraryView: View {
 
     @State private var filter: Filter = .all
 
-    private let columns = Array(
-        repeating: GridItem(.fixed(NuvioTheme.components.posterCard.width), spacing: NuvioTheme.components.row.itemSpacing),
-        count: 7
-    )
+    private var columns: [GridItem] { metrics.gridColumns() }
 
     private var continueWatching: [ContinueWatchingEntry] {
-        library.continueWatching(threshold: settings.watchedThreshold)
+        library.continueWatching(
+            threshold: settings.watchedThreshold,
+            sort: settings.layout.continueWatchingSortMode
+        )
     }
 
     private var savedItems: [MetaPreview] {
@@ -94,7 +95,7 @@ struct LibraryView: View {
                 ForEach(savedItems, id: \.rowKey) { item in
                     ContentCard(
                         item: item,
-                        backdropExpandEnabled: false,
+                        allowsBackdropExpand: false,
                         action: { router.openDetail(item) }
                     )
                 }
@@ -114,7 +115,9 @@ struct LibraryView: View {
 /// Port of `CatalogSeeAllScreen` — a paged grid for one catalog.
 struct CatalogSeeAllView: View {
     @Environment(\.nuvioColors) private var colors
+    @Environment(\.posterMetrics) private var metrics
     @Environment(AddonStore.self) private var addons
+    @Environment(AppSettings.self) private var settings
     @Environment(Router.self) private var router
 
     let request: CatalogRequest
@@ -124,10 +127,13 @@ struct CatalogSeeAllView: View {
     @State private var reachedEnd = false
     @State private var error: String?
 
-    private let columns = Array(
-        repeating: GridItem(.fixed(NuvioTheme.components.posterCard.width), spacing: NuvioTheme.components.row.itemSpacing),
-        count: 7
-    )
+    private var columns: [GridItem] { metrics.gridColumns() }
+
+    /// `hide_unreleased_content` applies here as well as on Home; paging still runs against
+    /// the unfiltered list so a hidden item does not stall the next page.
+    private var visibleItems: [MetaPreview] {
+        settings.catalogPresentation.filter(items)
+    }
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -137,9 +143,9 @@ struct CatalogSeeAllView: View {
                     .foregroundStyle(colors.textPrimary)
                     .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)
 
-                if items.isEmpty && isLoading {
+                if visibleItems.isEmpty && isLoading {
                     PosterSkeletonRow(showsTitle: false)
-                } else if items.isEmpty {
+                } else if visibleItems.isEmpty {
                     EmptyStateView(
                         systemImage: "rectangle.on.rectangle",
                         title: "Empty catalog",
@@ -148,12 +154,12 @@ struct CatalogSeeAllView: View {
                     .frame(height: dp(340))
                 } else {
                     LazyVGrid(columns: columns, alignment: .leading, spacing: NuvioTheme.spacing.xl) {
-                        ForEach(Array(items.enumerated()), id: \.element.rowKey) { index, item in
+                        ForEach(Array(visibleItems.enumerated()), id: \.element.rowKey) { index, item in
                             ContentCard(
                                 item: item,
-                                backdropExpandEnabled: false,
+                                allowsBackdropExpand: false,
                                 onFocus: { _ in
-                                    if index >= items.count - 14 { Task { await loadMore() } }
+                                    if index >= visibleItems.count - 14 { Task { await loadMore() } }
                                 },
                                 action: { router.openDetail(item) }
                             )

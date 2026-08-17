@@ -69,6 +69,11 @@ final class AddonStore {
         return addons.first { $0.baseUrl.caseInsensitiveCompare(canonical) == .orderedSame }
     }
 
+    /// `follow_addons_order`: when on, rails simply follow the addon list and the manual
+    /// catalog ordering is ignored (disabled catalogs are still honoured). Set by `AppSettings`
+    /// so the store does not have to reach into the settings graph.
+    var followsAddonOrder = false
+
     /// All home-eligible catalogs across enabled addons, honouring the saved ordering.
     var orderedHomeCatalogs: [(addon: Addon, catalog: CatalogDescriptor)] {
         let available = enabledAddons.flatMap { addon in
@@ -76,6 +81,15 @@ final class AddonStore {
         }
         guard !catalogOrder.isEmpty else {
             return available.filter { $0.catalog.showInHome }
+        }
+        if followsAddonOrder {
+            let disabled = Set(catalogOrder.filter { !$0.enabled }.map {
+                "\(StremioURL.canonicalize($0.addonBaseUrl))#\($0.catalogKey)"
+            })
+            return available.filter { entry in
+                entry.catalog.showInHome
+                    && !disabled.contains("\(entry.addon.baseUrl)#\(entry.catalog.descriptorKey)")
+            }
         }
 
         var byKey: [String: (addon: Addon, catalog: CatalogDescriptor)] = [:]

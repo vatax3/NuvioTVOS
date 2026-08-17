@@ -152,7 +152,9 @@ struct MetaDetailsView: View {
 
     private func metaTokens(_ meta: Meta) -> [String] {
         var tokens: [String] = []
-        if let info = meta.releaseInfo?.nilIfBlank { tokens.append(info) }
+        if let info = meta.preview().releaseLabel(fullDate: settings.layout.showFullReleaseDate) {
+            tokens.append(info)
+        }
         if let runtime = meta.runtime?.nilIfBlank { tokens.append(runtime) }
         if let status = meta.status?.nilIfBlank, meta.type == .series { tokens.append(status) }
         if meta.type == .series, !meta.seasons.isEmpty {
@@ -184,12 +186,37 @@ struct MetaDetailsView: View {
                 .frame(height: NuvioTheme.components.buttonHeight)
             }
             .buttonStyle(NuvioPillButtonStyle(emphasis: .secondary, selected: library.isInLibrary(meta.preview())))
+
+            if settings.layout.detailPageTrailerButtonEnabled, let trailer = trailerYouTubeId(meta) {
+                Button(action: { TrailerLauncher.open(youTubeId: trailer) }) {
+                    HStack(spacing: NuvioTheme.spacing.sm) {
+                        Image(systemName: "film")
+                        Text("Trailer")
+                    }
+                    .nuvioText(NuvioTextStyles.button)
+                    .padding(.horizontal, NuvioTheme.spacing.xl)
+                    .frame(height: NuvioTheme.components.buttonHeight)
+                }
+                .buttonStyle(NuvioPillButtonStyle(emphasis: .secondary))
+                .disabled(!TrailerLauncher.isAvailable)
+            }
         }
+    }
+
+    /// Stremio and TMDB both hand back YouTube ids; either source is fine.
+    private func trailerYouTubeId(_ meta: Meta) -> String? {
+        meta.trailerYtIds.first?.nilIfBlank
+            ?? meta.trailers.compactMap { $0.ytId?.nilIfBlank ?? $0.source?.nilIfBlank }.first
     }
 
     private func playLabel(_ meta: Meta) -> String {
         if meta.type == .series {
-            if let next = model.nextUpEpisode(library: library, threshold: settings.watchedThreshold),
+            if let next = model.nextUpEpisode(
+                library: library,
+                threshold: settings.watchedThreshold,
+                fromFurthest: settings.layout.nextUpFromFurthestEpisode,
+                includeUnaired: settings.layout.showUnairedNextUp
+            ),
                let season = next.season, let episode = next.episode {
                 return String(format: "Play S%02dE%02d", season, episode)
             }
@@ -206,7 +233,12 @@ struct MetaDetailsView: View {
     private func play(meta: Meta) {
         library.cache(meta.preview())
         if meta.type == .series {
-            guard let next = model.nextUpEpisode(library: library, threshold: settings.watchedThreshold)
+            guard let next = model.nextUpEpisode(
+                library: library,
+                threshold: settings.watchedThreshold,
+                fromFurthest: settings.layout.nextUpFromFurthestEpisode,
+                includeUnaired: settings.layout.showUnairedNextUp
+            )
             else { return }
             playEpisode(next)
         } else {
@@ -291,6 +323,7 @@ struct EpisodesSection: View {
                                 threshold: settings.watchedThreshold
                             ),
                             progress: library.progress(forVideoId: episode.id)?.fraction ?? 0,
+                            blursUnwatched: settings.layout.blurUnwatchedEpisodes,
                             action: { onPlay(episode) }
                         )
                     }
@@ -301,6 +334,13 @@ struct EpisodesSection: View {
             .scrollClipDisabled()
         }
         .focusSection()
+        // Cache the stills so the Continue Watching rail can show the episode the viewer
+        // stopped on rather than the series backdrop.
+        .onChange(of: model.episodes, initial: true) { _, episodes in
+            for episode in episodes {
+                library.cacheEpisodeThumbnail(episode.thumbnail, forVideoId: episode.id)
+            }
+        }
     }
 }
 

@@ -40,11 +40,36 @@ final class MetaDetailsViewModel {
 
     /// The episode a Play button should resume, mirroring `nextUp` on Android: first
     /// unwatched aired episode, else the first episode.
-    func nextUpEpisode(library: LibraryStore, threshold: Double) -> Video? {
+    /// Which episode the Play button resumes on.
+    ///
+    /// `fromFurthest` is the `next_up_from_furthest_episode` preference: on, Next Up follows
+    /// the deepest episode the viewer has touched (so a rewatch of an early episode does not
+    /// drag the series backwards); off, it is simply the first unwatched one in order.
+    func nextUpEpisode(
+        library: LibraryStore,
+        threshold: Double,
+        fromFurthest: Bool = true,
+        includeUnaired: Bool = false
+    ) -> Video? {
         guard let meta, meta.type == .series else { return nil }
-        let watchable = meta.watchableEpisodes()
-        let firstUnwatched = watchable.first { !library.isWatched(videoId: $0.id, threshold: threshold) }
-        return firstUnwatched ?? watchable.first
+        let watchable = meta.watchableEpisodes(includeUnaired: includeUnaired)
+            .sorted { ($0.season ?? 0, $0.episode ?? 0) < ($1.season ?? 0, $1.episode ?? 0) }
+        guard !watchable.isEmpty else { return nil }
+
+        func isWatched(_ video: Video) -> Bool {
+            library.isWatched(videoId: video.id, threshold: threshold)
+        }
+
+        if fromFurthest {
+            // Anchor on the last episode with any recorded progress, then take what follows.
+            let touched = watchable.lastIndex { library.progress(forVideoId: $0.id) != nil }
+            if let touched {
+                if !isWatched(watchable[touched]) { return watchable[touched] }
+                let next = watchable.index(after: touched)
+                return next < watchable.count ? watchable[next] : watchable[touched]
+            }
+        }
+        return watchable.first { !isWatched($0) } ?? watchable.first
     }
 
     func load(request: DetailRequest, addonStore: AddonStore, settings: AppSettings) async {
@@ -54,13 +79,23 @@ final class MetaDetailsViewModel {
 
         // Prefer the addon the item came from, then any other addon advertising `meta`
         // for this id — this is what makes third-party catalogs resolve through Cinemeta.
-        var candidates: [Addon] = []
-        if let source = request.addonBaseUrl, let addon = addonStore.addon(withBaseUrl: source) {
-            candidates.append(addon)
-        }
-        candidates.append(contentsOf: addonStore.addonsProviding(
+        //
+        // `prefer_external_meta_addon_detail` inverts that: a dedicated metadata addon is
+        // asked first, and the catalog's own addon becomes the fallback. Viewers use this when
+        // their catalog addon returns thinner metadata than Cinemeta does.
+        let sourceAddon = request.addonBaseUrl.flatMap { addonStore.addon(withBaseUrl: $0) }
+        let others = addonStore.addonsProviding(
             resource: "meta", type: request.itemType, id: request.itemId
-        ).filter { candidate in !candidates.contains { $0.baseUrl == candidate.baseUrl } })
+        ).filter { $0.baseUrl != sourceAddon?.baseUrl }
+
+        var candidates: [Addon] = []
+        if settings.layout.preferExternalMetaAddonDetail {
+            candidates = others
+            if let sourceAddon { candidates.append(sourceAddon) }
+        } else {
+            if let sourceAddon { candidates.append(sourceAddon) }
+            candidates.append(contentsOf: others)
+        }
 
         guard !candidates.isEmpty else {
             error = "No installed addon can describe this title."

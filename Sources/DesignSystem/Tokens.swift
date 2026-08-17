@@ -364,6 +364,9 @@ enum NuvioFocus {
 // MARK: - Layout & media (port of NuvioLayout / NuvioMedia)
 
 struct NuvioLayoutTokens {
+    /// Android composes Home in a 960dp-wide space; through the density bridge that is the
+    /// 1920pt tvOS canvas. Grids size their column count against it.
+    let screenWidth = dp(960)
     let tvSafeHorizontal = dp(48)
     let tvSafeVertical = dp(24)
     let compactSafeHorizontal = dp(32)

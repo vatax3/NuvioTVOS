@@ -294,19 +294,40 @@ struct CatalogOrderView: View {
 private struct CatalogOrderRow: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(AddonStore.self) private var addons
+    @Environment(AppSettings.self) private var settings
 
     let entry: CatalogOrderEntry
     let label: (title: String, subtitle: String)
     let isFirst: Bool
     let isLast: Bool
 
+    @State private var isRenaming = false
+    @State private var draftTitle = ""
+
+    /// Key shared with `CatalogPresentation` and `CatalogRowState.id`, so a rename or a hero
+    /// nomination made here lands on the right rail.
+    private var presentationKey: String {
+        CatalogPresentation.titleKey(
+            addonBaseUrl: StremioURL.canonicalize(entry.addonBaseUrl),
+            descriptorKey: entry.catalogKey
+        )
+    }
+
+    private var customTitle: String? {
+        settings.layout.customCatalogTitles[presentationKey]?.nilIfBlank
+    }
+
+    private var isHeroSource: Bool {
+        settings.layout.heroCatalogKeys.contains(presentationKey)
+    }
+
     var body: some View {
         HStack(spacing: NuvioTheme.spacing.lg) {
             VStack(alignment: .leading, spacing: NuvioTheme.spacing.xxs) {
-                Text(label.title)
+                Text(customTitle ?? label.title)
                     .nuvioText(NuvioTextStyles.cardTitle)
                     .foregroundStyle(colors.textPrimary)
-                Text(label.subtitle)
+                Text(customTitle == nil ? label.subtitle : "\(label.subtitle) · renamed from “\(label.title)”")
                     .nuvioText(NuvioTextStyles.metadata)
                     .foregroundStyle(colors.textSecondary)
             }
@@ -314,6 +335,19 @@ private struct CatalogOrderRow: View {
             Spacer(minLength: NuvioTheme.spacing.lg)
 
             HStack(spacing: NuvioTheme.spacing.sm) {
+                IconAction(
+                    systemImage: isHeroSource ? "star.fill" : "star",
+                    tint: isHeroSource ? colors.rating : colors.textTertiary,
+                    action: toggleHero
+                )
+                IconAction(
+                    systemImage: "pencil",
+                    tint: colors.textSecondary,
+                    action: {
+                        draftTitle = customTitle ?? label.title
+                        isRenaming = true
+                    }
+                )
                 IconAction(
                     systemImage: entry.enabled ? "eye.fill" : "eye.slash",
                     tint: entry.enabled ? colors.success : colors.textTertiary,
@@ -341,5 +375,96 @@ private struct CatalogOrderRow: View {
                 .fill(colors.surface.opacity(0.6))
         }
         .opacity(entry.enabled ? 1 : 0.6)
+        .sheet(isPresented: $isRenaming) {
+            CatalogRenameSheet(
+                originalTitle: label.title,
+                draft: $draftTitle,
+                onSave: saveTitle,
+                onReset: resetTitle
+            )
+        }
+    }
+
+    private func toggleHero() {
+        var keys = settings.layout.heroCatalogKeys
+        if let index = keys.firstIndex(of: presentationKey) {
+            keys.remove(at: index)
+        } else {
+            keys.append(presentationKey)
+        }
+        settings.layout.heroCatalogKeys = keys
+    }
+
+    private func saveTitle() {
+        var titles = settings.layout.customCatalogTitles
+        let trimmed = draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        // An empty field, or the original name typed back, means "no override".
+        if trimmed.isEmpty || trimmed == label.title {
+            titles.removeValue(forKey: presentationKey)
+        } else {
+            titles[presentationKey] = trimmed
+        }
+        settings.layout.customCatalogTitles = titles
+        isRenaming = false
+    }
+
+    private func resetTitle() {
+        var titles = settings.layout.customCatalogTitles
+        titles.removeValue(forKey: presentationKey)
+        settings.layout.customCatalogTitles = titles
+        isRenaming = false
+    }
+}
+
+/// Rename dialog for one rail. tvOS presents the system keyboard for the field, so the sheet
+/// only has to hold the field plus the two actions.
+private struct CatalogRenameSheet: View {
+    @Environment(\.nuvioColors) private var colors
+
+    let originalTitle: String
+    @Binding var draft: String
+    let onSave: () -> Void
+    let onReset: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: NuvioTheme.spacing.lg) {
+            Text("Rename rail")
+                .nuvioText(NuvioTextStyles.headline)
+                .foregroundStyle(colors.textPrimary)
+
+            Text("Shown instead of “\(originalTitle)” on Home.")
+                .nuvioText(NuvioTextStyles.bodyCompact)
+                .foregroundStyle(colors.textSecondary)
+
+            TextField("Rail title", text: $draft)
+                .textFieldStyle(.plain)
+                .nuvioText(NuvioTextStyles.body)
+                .padding(.horizontal, NuvioTheme.spacing.lg)
+                .padding(.vertical, NuvioTheme.spacing.md)
+                .background {
+                    RoundedRectangle(cornerRadius: NuvioTheme.shapes.field, style: .continuous)
+                        .fill(colors.field)
+                }
+
+            HStack(spacing: NuvioTheme.spacing.md) {
+                Button(action: onSave) {
+                    Text("Save")
+                        .nuvioText(NuvioTextStyles.button)
+                        .padding(.horizontal, NuvioTheme.spacing.xl)
+                        .frame(height: NuvioTheme.components.buttonHeight)
+                }
+                .buttonStyle(NuvioPillButtonStyle(emphasis: .primary))
+
+                Button(action: onReset) {
+                    Text("Use original")
+                        .nuvioText(NuvioTextStyles.button)
+                        .padding(.horizontal, NuvioTheme.spacing.xl)
+                        .frame(height: NuvioTheme.components.buttonHeight)
+                }
+                .buttonStyle(NuvioPillButtonStyle(emphasis: .secondary))
+            }
+        }
+        .padding(NuvioTheme.components.dialog.contentPadding)
+        .frame(maxWidth: NuvioTheme.components.dialog.maxWidth)
     }
 }

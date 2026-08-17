@@ -9,6 +9,7 @@ import SwiftUI
 struct NuvioCardButtonStyle: ButtonStyle {
     @Environment(\.isFocused) private var isFocused
     @Environment(\.nuvioColors) private var colors
+    @Environment(\.navigationFeel) private var feel
 
     var cornerRadius: CGFloat = NuvioTheme.components.posterCard.cornerRadius
     var focusedScale: CGFloat = NuvioTheme.components.posterCard.focusedScale
@@ -31,7 +32,7 @@ struct NuvioCardButtonStyle: ButtonStyle {
                 radius: isFocused ? NuvioTheme.elevations.focused : 0,
                 y: isFocused ? NuvioTheme.elevations.card : 0
             )
-            .animation(NuvioMotion.focusTween, value: isFocused)
+            .animation(feel.focusAnimation, value: isFocused)
             .animation(NuvioMotion.quickTween, value: configuration.isPressed)
     }
 
