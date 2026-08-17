@@ -87,6 +87,8 @@ struct PlaybackSettingsContent: View {
                 )
             }
 
+            StreamBadgeSettingsCard()
+
             SettingsCard(title: "On-screen") {
                 SettingsToggle(
                     title: "Pause overlay",

@@ -249,6 +249,16 @@ final class LibraryStore {
         persistPreviews()
     }
 
+    /// `advanced_clear_cw_cache`: drops cached artwork and episode stills. Watch progress and
+    /// the saved library are left alone — this clears derived data, not the viewer's history.
+    func clearContinueWatchingCache() {
+        let keep = Set(library.map(\.preview.rowKey))
+        previewCache = previewCache.filter { keep.contains($0.key) }
+        episodeThumbnails.removeAll()
+        persistPreviews()
+        persistThumbnails()
+    }
+
     private func recordDeletion(_ rowKey: String) {
         guard !pendingLibraryDeletions.contains(rowKey) else { return }
         pendingLibraryDeletions.append(rowKey)

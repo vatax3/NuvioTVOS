@@ -123,7 +123,19 @@ final class ProfileStore {
             activeProfileId = ProfileScope.primaryProfileId
             ProfileScope.activate(activeProfileId)
         }
+        // `advanced_remember_last_profile`: with it off, every launch starts on the primary.
+        // Read straight from defaults — the settings graph is built per profile, so it does not
+        // exist yet at this point.
+        if !Self.remembersLastProfile, activeProfileId != ProfileScope.primaryProfileId {
+            activeProfileId = ProfileScope.primaryProfileId
+            ProfileScope.activate(activeProfileId)
+        }
         isLocked = activeProfile?.isLocked ?? false
+    }
+
+    /// The primary profile's `app` namespace is unprefixed, so the key is the bare name.
+    private static var remembersLastProfile: Bool {
+        UserDefaults.standard.object(forKey: "app.remember_last_profile") as? Bool ?? true
     }
 
     var activeProfile: Profile? {

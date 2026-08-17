@@ -91,6 +91,8 @@ struct RootView: View {
             )
         case .addonManager:
             AddonManagerView()
+        case .pluginManager:
+            PluginManagerView()
         case .catalogOrder:
             CatalogOrderView()
         case .themeSettings:

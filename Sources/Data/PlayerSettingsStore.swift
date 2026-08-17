@@ -480,6 +480,11 @@ final class PlayerSettingsStore: PreferenceStore {
         set { setBool("playback_issue_reports_enabled", newValue) }
     }
 
+    var verboseLoggingEnabled: Bool {
+        get { bool("verbose_logging_enabled", default: false) }
+        set { setBool("verbose_logging_enabled", newValue) }
+    }
+
     // MARK: - Derived
 
     /// Fraction of a video that counts as "finished" for watched state and Continue Watching.

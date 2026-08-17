@@ -150,3 +150,19 @@ private struct RepositoryCard: View {
         return parts.joined(separator: " · ")
     }
 }
+
+/// Pushed screen wrapper — Content & Discovery opens plugins as its own page, matching the
+/// Android navigation rather than nesting a manager inside the settings workspace.
+struct PluginManagerView: View {
+    var body: some View {
+        NuvioScreenBackground {
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
+                    PluginsSettingsContent()
+                }
+                .padding(.bottom, NuvioTheme.spacing.xxxl)
+            }
+            .scrollClipDisabled()
+        }
+    }
+}

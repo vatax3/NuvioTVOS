@@ -37,6 +37,129 @@ struct NuvioServerConfiguration: Codable, Hashable, Sendable {
     }
 }
 
+// MARK: - Discovery
+
+/// Port of `ServerDiscoveryService`: a server publishes `/.well-known/nuvio` and the viewer only
+/// has to type its domain. Same document version, service check and self-hosted requirement as
+/// the Android client — the official backend is deliberately not discoverable (its own code
+/// throws `OFFICIAL_SERVER` for it), so this path is for self-hosted instances.
+enum NuvioServerDiscovery {
+    struct Document: Decodable {
+        let version: Int
+        let service: String
+        let self_hosted: Bool
+        let backend_url: String
+        let publishable_key: String
+        let capabilities: Capabilities
+
+        struct Capabilities: Decodable {
+            let email_password_auth: Bool?
+            let tv_login: Bool?
+        }
+    }
+
+    enum Failure: LocalizedError {
+        case invalidURL
+        case connectionFailed
+        case http(Int)
+        case invalidDocument
+        case unsupportedVersion
+        case wrongService
+        case notSelfHosted
+        case missingConfiguration
+        case noSupportedAuth
+
+        var errorDescription: String? {
+            switch self {
+            case .invalidURL: return "That is not a valid address."
+            case .connectionFailed: return "Could not reach that server."
+            case .http(let status): return "The server answered \(status)."
+            case .invalidDocument: return "That server did not return a Nuvio discovery document."
+            case .unsupportedVersion: return "That server uses a discovery format this app does not know."
+            case .wrongService: return "That address is not a Nuvio server."
+            case .notSelfHosted:
+                return "Only self-hosted servers can be discovered. Nuvio's own backend is not configurable this way."
+            case .missingConfiguration: return "The discovery document is missing a backend URL or key."
+            case .noSupportedAuth: return "That server offers no sign-in method this app supports."
+            }
+        }
+    }
+
+    /// `example.com` → `https://example.com/.well-known/nuvio`, preserving any base path.
+    static func discoveryURL(for input: String) throws -> URL {
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw Failure.invalidURL }
+        let withScheme = trimmed.contains("://") ? trimmed : "https://\(trimmed)"
+        guard var components = URLComponents(string: withScheme),
+              let scheme = components.scheme?.lowercased(),
+              scheme == "http" || scheme == "https",
+              components.host?.isEmpty == false,
+              components.user == nil, components.password == nil else {
+            throw Failure.invalidURL
+        }
+        let suffix = "/.well-known/nuvio"
+        var basePath = components.path
+        if basePath.hasSuffix(suffix) { basePath.removeLast(suffix.count) }
+        while basePath.hasSuffix("/") { basePath.removeLast() }
+        components.path = basePath.isEmpty ? suffix : basePath + suffix
+        components.query = nil
+        components.fragment = nil
+        guard let url = components.url else { throw Failure.invalidURL }
+        return url
+    }
+
+    static func discover(_ input: String) async throws -> NuvioServerConfiguration {
+        let url = try discoveryURL(for: input)
+        var request = URLRequest(url: url)
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("NuvioTVOS/1.0", forHTTPHeaderField: "User-Agent")
+        request.timeoutInterval = 15
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch {
+            throw Failure.connectionFailed
+        }
+
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(status) else { throw Failure.http(status) }
+        // A document larger than this is not a discovery document.
+        guard data.count <= 64 * 1024 else { throw Failure.invalidDocument }
+        // An https request that ended up on http was downgraded somewhere.
+        if url.scheme?.lowercased() == "https", response.url?.scheme?.lowercased() != "https" {
+            throw Failure.connectionFailed
+        }
+
+        guard let document = try? JSONDecoder().decode(Document.self, from: data) else {
+            throw Failure.invalidDocument
+        }
+        guard document.version == 1 else { throw Failure.unsupportedVersion }
+        guard document.service.lowercased() == "nuvio" else { throw Failure.wrongService }
+        guard document.self_hosted else { throw Failure.notSelfHosted }
+
+        let key = document.publishable_key.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty,
+              let backend = URL(string: document.backend_url.trimmingCharacters(in: .whitespaces)),
+              let backendScheme = backend.scheme?.lowercased(),
+              backendScheme == "http" || backendScheme == "https" else {
+            throw Failure.missingConfiguration
+        }
+
+        let emailPassword = document.capabilities.email_password_auth ?? false
+        let tvLogin = document.capabilities.tv_login ?? false
+        guard emailPassword || tvLogin else { throw Failure.noSupportedAuth }
+
+        return NuvioServerConfiguration(
+            backendUrl: backend.absoluteString,
+            publishableKey: key,
+            supportsTvLogin: tvLogin,
+            supportsEmailPassword: emailPassword
+        )
+    }
+}
+
 // MARK: - Session
 
 struct NuvioSession: Codable, Hashable, Sendable {

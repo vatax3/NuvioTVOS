@@ -12,11 +12,14 @@ struct AccountSettingsContent: View {
     @Environment(ProfileStore.self) private var profiles
     @Environment(AppSettings.self) private var settings
 
+    @State private var serverAddress = ""
     @State private var backendUrl = ""
     @State private var publishableKey = ""
     @State private var email = ""
     @State private var password = ""
     @State private var didLoadConfiguration = false
+    @State private var discoveryMessage: String?
+    @State private var isDiscovering = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
@@ -33,9 +36,34 @@ struct AccountSettingsContent: View {
 
     // MARK: Server
 
+    @ViewBuilder
     private var serverCard: some View {
         SettingsCard(
-            title: "Nuvio backend",
+            title: "Find a server",
+            footnote: """
+            Type a server's address and Nuvio reads its /.well-known/nuvio document for the rest. \
+            This is the same discovery the official app uses, and like the official app it only \
+            works for self-hosted servers — Nuvio's own backend is deliberately not configurable \
+            this way.
+            """
+        ) {
+            SettingsTextFieldRow(
+                title: "Server address",
+                placeholder: "example.com",
+                text: $serverAddress,
+                trailingAction: (label: isDiscovering ? "Looking…" : "Connect", action: discover)
+            )
+            if let discoveryMessage {
+                SettingsInfoRow(
+                    title: "Status",
+                    value: discoveryMessage,
+                    tint: discoveryMessage.hasPrefix("Found") ? colors.success : colors.error
+                )
+            }
+        }
+
+        SettingsCard(
+            title: "Or enter it by hand",
             footnote: """
             Nuvio's own backend URL and publishable key are build-time secrets in the official \
             app and are not in its public source, so they cannot be shipped here — paste them in, \
@@ -250,6 +278,25 @@ struct AccountSettingsContent: View {
             backendUrl: backendUrl,
             publishableKey: publishableKey
         ))
+    }
+
+    private func discover() {
+        let address = serverAddress
+        guard !address.trimmingCharacters(in: .whitespaces).isEmpty, !isDiscovering else { return }
+        isDiscovering = true
+        discoveryMessage = nil
+        Task {
+            defer { isDiscovering = false }
+            do {
+                let discovered = try await NuvioServerDiscovery.discover(address)
+                account.save(configuration: discovered)
+                backendUrl = discovered.backendUrl
+                publishableKey = discovered.publishableKey
+                discoveryMessage = "Found it — sign in below."
+            } catch {
+                discoveryMessage = error.localizedDescription
+            }
+        }
     }
 
     private func runSync() {

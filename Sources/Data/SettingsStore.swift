@@ -68,6 +68,12 @@ final class SettingsStore: PreferenceStore {
         set { setBool("amoled_surfaces_mode", newValue) }
     }
 
+    /// `advanced_remember_last_profile`: reopen the profile that was active at shutdown.
+    var remembersLastProfile: Bool {
+        get { bool("remember_last_profile", default: true) }
+        set { setBool("remember_last_profile", newValue) }
+    }
+
     var settingsUIStyle: SettingsUIStyle {
         get { option("settings_ui_style", default: .rail) }
         set { setOption("settings_ui_style", newValue) }

@@ -164,6 +164,7 @@ enum Route: Hashable {
     case tmdbBrowse(TMDBBrowseRequest)
     case comments(CommentsRequest)
     case addonManager
+    case pluginManager
     case catalogOrder
     case themeSettings
     case layoutSettings

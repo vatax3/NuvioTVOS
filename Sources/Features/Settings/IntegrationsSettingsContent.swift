@@ -283,13 +283,13 @@ struct TrackingSettingsContent: View {
 
 // MARK: - Metadata (port of TmdbSettingsScreen + MDBListSettingsScreen)
 
-struct MetadataSettingsContent: View {
+/// TMDB and MDBList, each opened from the Integrations hub the way Android splits them.
+struct TmdbSettingsCard: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(AppSettings.self) private var settings
 
     var body: some View {
         @Bindable var tmdb = settings.tmdb
-        @Bindable var mdblist = settings.mdblist
 
         VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
             SettingsCard(
@@ -335,6 +335,18 @@ struct MetadataSettingsContent: View {
                 }
             }
 
+        }
+    }
+}
+
+struct MDBListSettingsCard: View {
+    @Environment(\.nuvioColors) private var colors
+    @Environment(AppSettings.self) private var settings
+
+    var body: some View {
+        @Bindable var mdblist = settings.mdblist
+
+        VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
             SettingsCard(
                 title: "MDBList",
                 footnote: "Aggregated ratings from IMDb, TMDB, Rotten Tomatoes and others."
@@ -365,16 +377,14 @@ struct MetadataSettingsContent: View {
     }
 }
 
-// MARK: - Skip intro & trailers (port of AnimeSkipSettingsScreen + TrailerSettings)
+// MARK: - Anime-Skip (port of AnimeSkipSettingsScreen)
 
-struct ExtrasSettingsContent: View {
+struct AnimeSkipSettingsCard: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(AppSettings.self) private var settings
 
     var body: some View {
         @Bindable var skip = settings.skipIntro
-        @Bindable var trailers = settings.trailers
-        @Bindable var badges = settings.streamBadges
 
         VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
             SettingsCard(
@@ -413,6 +423,18 @@ struct ExtrasSettingsContent: View {
                 )
             }
 
+        }
+    }
+}
+
+/// Hero trailers — grouped with the rest of the hero options in Layout.
+struct TrailerSettingsCard: View {
+    @Environment(AppSettings.self) private var settings
+
+    var body: some View {
+        @Bindable var trailers = settings.trailers
+
+        Group {
             SettingsCard(
                 title: "Trailers",
                 footnote: "Plays a trailer behind the hero after the card stays focused."
@@ -432,6 +454,18 @@ struct ExtrasSettingsContent: View {
                 }
             }
 
+        }
+    }
+}
+
+/// Stream-list badges — presentation of the source list, so it sits with Playback.
+struct StreamBadgeSettingsCard: View {
+    @Environment(AppSettings.self) private var settings
+
+    var body: some View {
+        @Bindable var badges = settings.streamBadges
+
+        Group {
             SettingsCard(title: "Source list") {
                 SettingsOptionRow(
                     title: "Badge placement",

@@ -143,23 +143,24 @@ struct SettingsView: View {
     @Environment(Router.self) private var router
 
     enum Section: String, CaseIterable, Identifiable {
-        case account, addons, appearance, layout, playback, debrid, plugins, tracking, metadata, extras, profiles, experience, about
+        // Order and grouping mirror the Android rail: Account, Profiles, Appearance, Layout,
+        // Content & Discovery, Integrations, Playback, Advanced, Tracking, About. Experience mode
+        // is not a rail entry there either — it lives inside Advanced.
+        case account, profiles, appearance, layout, contentDiscovery, integrations,
+             playback, advanced, tracking, about
         var id: String { rawValue }
 
         var title: String {
             switch self {
             case .account: return "Account"
-            case .addons: return "Addons"
+            case .profiles: return "Profiles"
             case .appearance: return "Appearance"
             case .layout: return "Layout"
+            case .contentDiscovery: return "Content & Discovery"
+            case .integrations: return "Integrations"
             case .playback: return "Playback"
-            case .debrid: return "Debrid"
-            case .plugins: return "Plugins"
+            case .advanced: return "Advanced"
             case .tracking: return "Tracking"
-            case .metadata: return "Metadata"
-            case .extras: return "Extras"
-            case .profiles: return "Profiles"
-            case .experience: return "Experience"
             case .about: return "About"
             }
         }
@@ -167,17 +168,14 @@ struct SettingsView: View {
         var systemImage: String {
             switch self {
             case .account: return "person.crop.circle"
-            case .addons: return "puzzlepiece.extension.fill"
+            case .profiles: return "person.2.fill"
             case .appearance: return "paintpalette.fill"
             case .layout: return "rectangle.3.group.fill"
+            case .contentDiscovery: return "square.grid.2x2.fill"
+            case .integrations: return "link"
             case .playback: return "play.rectangle.fill"
-            case .debrid: return "link"
-            case .plugins: return "puzzlepiece.fill"
+            case .advanced: return "slider.horizontal.3"
             case .tracking: return "chart.line.uptrend.xyaxis"
-            case .metadata: return "photo.stack.fill"
-            case .extras: return "sparkles"
-            case .profiles: return "person.2.fill"
-            case .experience: return "slider.horizontal.3"
             case .about: return "info.circle.fill"
             }
         }
@@ -185,29 +183,42 @@ struct SettingsView: View {
         /// Essential mode hides the deep surfaces, matching the Android experience gate.
         var isAdvancedOnly: Bool {
             switch self {
-            case .playback, .debrid, .plugins, .tracking, .metadata, .extras: return true
+            case .playback, .integrations, .tracking: return true
             default: return false
             }
+        }
+
+        /// Account and Profiles are owner-level surfaces: Android shows them only while the
+        /// primary profile is active.
+        var isPrimaryProfileOnly: Bool {
+            self == .account || self == .profiles
         }
 
         /// A restricted profile must not be able to reach the settings that would let it lift
         /// its own restriction, or reconfigure sources for the whole household.
         var isBlockedWhenRestricted: Bool {
             switch self {
-            case .addons, .playback, .debrid, .plugins, .profiles, .account: return true
-            default: return false
+            case .contentDiscovery, .playback, .integrations, .advanced, .profiles, .account:
+                return true
+            default:
+                return false
             }
         }
     }
 
     @State private var section: Section =
-        LaunchArguments.settingsSection.flatMap(Section.init(rawValue:)) ?? .addons
+        LaunchArguments.settingsSection.flatMap(Section.init(rawValue:)) ?? .account
 
     private var isRestricted: Bool { profiles.activeProfile?.isRestricted ?? false }
+
+    private var isPrimaryProfileActive: Bool {
+        profiles.activeProfileId == ProfileScope.primaryProfileId
+    }
 
     private var sections: [Section] {
         Section.allCases.filter { section in
             guard settings.app.showsAdvancedSettings || !section.isAdvancedOnly else { return false }
+            guard isPrimaryProfileActive || !section.isPrimaryProfileOnly else { return false }
             return !(isRestricted && section.isBlockedWhenRestricted)
         }
     }
@@ -270,17 +281,14 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
                 switch section {
                 case .account: AccountSettingsContent()
-                case .addons: addonsSection
+                case .profiles: ProfilesSettingsContent()
                 case .appearance: ThemeSettingsContent()
                 case .layout: LayoutSettingsContent()
+                case .contentDiscovery: ContentDiscoverySettingsContent()
+                case .integrations: IntegrationsHubContent()
                 case .playback: PlaybackSettingsContent()
-                case .debrid: DebridSettingsContent()
-                case .plugins: PluginsSettingsContent()
+                case .advanced: AdvancedSettingsContent()
                 case .tracking: TrackingSettingsContent()
-                case .metadata: MetadataSettingsContent()
-                case .extras: ExtrasSettingsContent()
-                case .profiles: ProfilesSettingsContent()
-                case .experience: ExperienceSettingsContent()
                 case .about: AboutContent()
                 }
             }
@@ -291,24 +299,6 @@ struct SettingsView: View {
         .focusSection()
     }
 
-    private var addonsSection: some View {
-        SettingsCard(title: "Stremio addons") {
-            SettingsRow(
-                title: "Addon Manager",
-                subtitle: "\(addons.installed.count) installed · \(addons.enabledAddons.count) enabled",
-                systemImage: "puzzlepiece.extension.fill",
-                trailing: { SettingsValueLabel(value: "") },
-                action: { router.push(.addonManager) }
-            )
-            SettingsRow(
-                title: "Catalog Order",
-                subtitle: "Choose which catalogs appear on Home and in what order",
-                systemImage: "list.number",
-                trailing: { SettingsValueLabel(value: "") },
-                action: { router.push(.catalogOrder) }
-            )
-        }
-    }
 }
 
 // MARK: - Standalone wrappers for pushed routes
@@ -510,6 +500,8 @@ struct LayoutSettingsContent: View {
                 SettingsToggle(title: "Show labels", subtitle: "Title and year under each poster", isOn: $layout.posterLabelsEnabled)
                 SettingsToggle(title: "Landscape posters in Modern view", isOn: $layout.modernLandscapePostersEnabled)
             }
+
+            TrailerSettingsCard()
 
             SettingsCard(
                 title: "Focused poster",
