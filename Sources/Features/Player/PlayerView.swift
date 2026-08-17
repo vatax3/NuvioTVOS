@@ -23,7 +23,53 @@ struct PlayerView: View {
     @State private var didSimklCheckin = false
     @State private var subtitles = SubtitleTrackController()
 
+    /// MKV and friends have no AVFoundation demuxer, so those files are routed to MPV even when
+    /// the viewer left the engine on Default — an unplayable file is worse than a slower decode.
+    private var resolvedEngine: InternalPlayerEngine {
+        guard MPVEngineSupport.isAvailable else { return .exoplayer }
+        if settings.player.internalPlayerEngine == .mpv { return .mpv }
+        return MPVEngineSupport.requiresMPV(url: request.streamURL) ? .mpv : .exoplayer
+    }
+
     var body: some View {
+        Group {
+            if resolvedEngine == .mpv {
+                mpvPlayer
+            } else {
+                avPlayer
+            }
+        }
+        .ignoresSafeArea()
+        .task { await loadSubtitles() }
+    }
+
+    @ViewBuilder
+    private var mpvPlayer: some View {
+        #if canImport(Libmpv)
+        MPVPlayerView(
+            request: request,
+            resumeAt: resumePosition,
+            verboseLogging: settings.player.verboseLoggingEnabled,
+            subtitleStyle: settings.subtitleStyle,
+            onProgress: { position, duration, completed in
+                persist(position: position, duration: duration, completed: completed)
+                scrobble(position: position, duration: duration)
+                simklCheckin()
+                advanceIfDue(position: position, duration: duration)
+            },
+            onFinished: {
+                persist(position: 0, duration: 0, completed: true)
+                scrobbleStop()
+                advanceToNextEpisode()
+                dismiss()
+            }
+        )
+        #else
+        avPlayer
+        #endif
+    }
+
+    private var avPlayer: some View {
         ZStack {
             AVPlayerContainer(
                 request: request,
@@ -49,8 +95,6 @@ struct PlayerView: View {
 
             SubtitleOverlay(cue: subtitles.activeCue, style: settings.subtitleStyle)
         }
-        .ignoresSafeArea()
-        .task { await loadSubtitles() }
     }
 
     // MARK: External subtitles

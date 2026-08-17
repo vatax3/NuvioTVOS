@@ -14,11 +14,29 @@ settings:
     ENABLE_USER_SCRIPT_SANDBOXING: NO
     ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
 
+# libmpv for Apple platforms — the same engine the Android build uses, and the only practical way
+# to open MKV and the other containers AVFoundation has no demuxer for. The player code is already
+# in Sources/Features/Player, guarded by `#if canImport(Libmpv)`, so uncommenting this block and
+# the matching dependency below is all it takes to switch the internal MPV engine on.
+#
+# Left out of the default build because resolving it pulls ~25 xcframeworks from 15 separate
+# repositories, and that resolution did not complete in the environment this was written in — so
+# the MPV path has never been compiled. Turn it on in a normal Xcode session and expect to fix
+# compile errors in MPVEngine.swift before it runs.
+#
+# packages:
+#   MPVKit:
+#     url: https://github.com/mpvkit/MPVKit.git
+#     exactVersion: 1.0.0
+
 targets:
   NuvioTVOS:
     type: application
     platform: tvOS
     deploymentTarget: "17.0"
+    # dependencies:
+    #   - package: MPVKit
+    #     product: MPVKit
     sources:
       - path: Sources
       # Added as individual file references, not a blue folder: a directory literally
