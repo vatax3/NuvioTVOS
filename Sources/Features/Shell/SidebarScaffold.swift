@@ -10,7 +10,7 @@ import SwiftUI
 struct SidebarScaffold<Content: View>: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(Router.self) private var router
-    @Environment(SettingsStore.self) private var settings
+    @Environment(AppSettings.self) private var settings
 
     @ViewBuilder var content: Content
 
@@ -25,11 +25,11 @@ struct SidebarScaffold<Content: View>: View {
     private var tokens: NuvioSidebarComponentTokens { NuvioTheme.components.sidebar }
 
     private var tabs: [RootTab] {
-        RootTab.allCases.filter { $0 != .discover || settings.showDiscoverTab }
+        RootTab.allCases.filter { $0 != .discover || (settings.layout.discoverLocation != .off) }
     }
 
     private var contentLeadingOffset: CGFloat {
-        let heroIsFullBleed = router.selectedTab == .home && settings.homeLayout != .grid
+        let heroIsFullBleed = router.selectedTab == .home && settings.layout.selectedLayout != .grid
         return heroIsFullBleed ? 0 : NuvioTheme.layout.sidebarContentOffset
     }
 

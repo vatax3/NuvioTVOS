@@ -1,0 +1,578 @@
+import Foundation
+import os
+
+// MARK: - Shared HTTP helper
+
+private enum HTTP {
+    static let session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 20
+        config.timeoutIntervalForResource = 40
+        return URLSession(configuration: config)
+    }()
+
+    static func get<T: Decodable>(
+        _ url: String, headers: [String: String] = [:], as type: T.Type
+    ) async throws -> T {
+        guard let url = URL(string: url) else { throw StremioError.invalidURL(url) }
+        var request = URLRequest(url: url)
+        for (key, value) in headers { request.setValue(value, forHTTPHeaderField: key) }
+        let (data, response) = try await session.data(for: request)
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw StremioError.http(http.statusCode, url.absoluteString)
+        }
+        return try JSONDecoder().decode(T.self, from: data)
+    }
+
+    @discardableResult
+    static func post<T: Decodable>(
+        _ url: String, headers: [String: String] = [:], json: Encodable, as type: T.Type
+    ) async throws -> T {
+        guard let url = URL(string: url) else { throw StremioError.invalidURL(url) }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        for (key, value) in headers { request.setValue(value, forHTTPHeaderField: key) }
+        request.httpBody = try JSONEncoder().encode(AnyEncodable(json))
+        let (data, response) = try await session.data(for: request)
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw StremioError.http(http.statusCode, url.absoluteString)
+        }
+        if T.self == EmptyResponse.self { return EmptyResponse() as! T }
+        return try JSONDecoder().decode(T.self, from: data)
+    }
+}
+
+struct EmptyResponse: Decodable {}
+
+private struct AnyEncodable: Encodable {
+    private let encodeClosure: (Encoder) throws -> Void
+    init(_ wrapped: Encodable) { encodeClosure = wrapped.encode(to:) }
+    func encode(to encoder: Encoder) throws { try encodeClosure(encoder) }
+}
+
+// MARK: - TMDB (port of TmdbApi usage)
+
+/// Metadata enrichment: better artwork, logos, cast photos, episode stills and recommendations
+/// than most Stremio catalogs carry.
+actor TMDBClient {
+    static let shared = TMDBClient()
+    private let base = "https://api.themoviedb.org/3"
+    static let imageBase = "https://image.tmdb.org/t/p"
+
+    struct Enrichment: Sendable {
+        var tmdbId: Int?
+        var backdrop: String?
+        var poster: String?
+        var logo: String?
+        var overview: String?
+        var rating: Float?
+        var runtimeMinutes: Int?
+        var genres: [String] = []
+        var cast: [MetaCastMember] = []
+        var networks: [MetaCompany] = []
+        var productionCompanies: [MetaCompany] = []
+        var certification: String?
+        var trailerYouTubeIds: [String] = []
+        var recommendations: [MetaPreview] = []
+    }
+
+    /// Resolves an IMDb id to a TMDB record, then pulls everything the settings allow.
+    func enrich(
+        imdbId: String,
+        type: ContentType,
+        apiKey: String,
+        language: String,
+        options: TMDBOptions
+    ) async -> Enrichment? {
+        guard !apiKey.isEmpty else { return nil }
+        let mediaType = type == .series ? "tv" : "movie"
+
+        guard let found = try? await HTTP.get(
+            "\(base)/find/\(imdbId)?api_key=\(apiKey)&external_source=imdb_id&language=\(language)",
+            as: TMDBFindResponse.self
+        ) else { return nil }
+
+        let match = type == .series ? found.tv_results?.first : found.movie_results?.first
+        guard let tmdbId = match?.id else { return nil }
+
+        var enrichment = Enrichment(tmdbId: tmdbId)
+
+        var appends: [String] = []
+        if options.useCredits { appends.append("credits") }
+        if options.useArtwork { appends.append("images") }
+        if options.useTrailers { appends.append("videos") }
+        if options.useMoreLikeThis { appends.append("recommendations") }
+        if options.useReleaseDates { appends.append(type == .series ? "content_ratings" : "release_dates") }
+
+        let appendQuery = appends.isEmpty ? "" : "&append_to_response=\(appends.joined(separator: ","))"
+        // `include_image_language` keeps language-less logos, which are the clean ones.
+        let imageQuery = options.useArtwork ? "&include_image_language=\(language.prefix(2)),en,null" : ""
+
+        guard let details = try? await HTTP.get(
+            "\(base)/\(mediaType)/\(tmdbId)?api_key=\(apiKey)&language=\(language)\(appendQuery)\(imageQuery)",
+            as: TMDBDetails.self
+        ) else { return enrichment }
+
+        if options.useBasicInfo {
+            enrichment.overview = details.overview?.nilIfBlank
+            enrichment.rating = details.vote_average.map { Float($0) }
+            enrichment.genres = details.genres?.compactMap(\.name) ?? []
+        }
+        if options.useDetails {
+            enrichment.runtimeMinutes = details.runtime ?? details.episode_run_time?.first
+        }
+        if options.useArtwork {
+            enrichment.backdrop = details.backdrop_path.map { "\(Self.imageBase)/original\($0)" }
+            enrichment.poster = details.poster_path.map { "\(Self.imageBase)/w500\($0)" }
+            enrichment.logo = details.images?.logos?.first?.file_path
+                .map { "\(Self.imageBase)/w500\($0)" }
+        }
+        if options.useCredits {
+            enrichment.cast = (details.credits?.cast ?? []).prefix(30).compactMap { member in
+                guard let name = member.name else { return nil }
+                return MetaCastMember(
+                    name: name,
+                    character: member.character,
+                    photo: member.profile_path.map { "\(Self.imageBase)/w300\($0)" },
+                    tmdbId: member.id
+                )
+            }
+        }
+        if options.useNetworks {
+            enrichment.networks = (details.networks ?? []).compactMap { network in
+                guard let name = network.name else { return nil }
+                return MetaCompany(name: name, logo: network.logo_path.map { "\(Self.imageBase)/w300\($0)" })
+            }
+        }
+        if options.useProductions {
+            enrichment.productionCompanies = (details.production_companies ?? []).compactMap { company in
+                guard let name = company.name else { return nil }
+                return MetaCompany(name: name, logo: company.logo_path.map { "\(Self.imageBase)/w300\($0)" })
+            }
+        }
+        if options.useTrailers {
+            enrichment.trailerYouTubeIds = (details.videos?.results ?? [])
+                .filter { $0.site?.lowercased() == "youtube" && $0.type?.lowercased() == "trailer" }
+                .compactMap(\.key)
+        }
+        if options.useMoreLikeThis {
+            enrichment.recommendations = (details.recommendations?.results ?? []).compactMap { item in
+                guard let name = item.title ?? item.name else { return nil }
+                return MetaPreview(
+                    id: "tmdb:\(item.id ?? 0)",
+                    type: type,
+                    rawType: type.apiString(),
+                    name: name,
+                    poster: item.poster_path.map { "\(Self.imageBase)/w500\($0)" },
+                    background: item.backdrop_path.map { "\(Self.imageBase)/original\($0)" },
+                    description: item.overview,
+                    releaseInfo: (item.release_date ?? item.first_air_date).map { String($0.prefix(4)) },
+                    imdbRating: item.vote_average.map { Float($0) }
+                )
+            }
+        }
+        if options.useReleaseDates {
+            enrichment.certification = details.certification(for: "US")
+        }
+
+        return enrichment
+    }
+
+    struct TMDBOptions: Sendable {
+        var useArtwork = true
+        var useBasicInfo = true
+        var useCredits = true
+        var useDetails = true
+        var useTrailers = true
+        var useNetworks = true
+        var useProductions = true
+        var useReleaseDates = true
+        var useMoreLikeThis = true
+    }
+}
+
+// MARK: TMDB wire types
+
+private struct TMDBFindResult: Decodable { let id: Int? }
+private struct TMDBFindResponse: Decodable {
+    let movie_results: [TMDBFindResult]?
+    let tv_results: [TMDBFindResult]?
+}
+
+private struct TMDBNamed: Decodable { let name: String?; let logo_path: String? }
+private struct TMDBGenre: Decodable { let name: String? }
+private struct TMDBImage: Decodable { let file_path: String? }
+private struct TMDBImages: Decodable { let logos: [TMDBImage]? }
+private struct TMDBCastMember: Decodable {
+    let id: Int?; let name: String?; let character: String?; let profile_path: String?
+}
+private struct TMDBCredits: Decodable { let cast: [TMDBCastMember]? }
+private struct TMDBVideo: Decodable { let key: String?; let site: String?; let type: String? }
+private struct TMDBVideos: Decodable { let results: [TMDBVideo]? }
+private struct TMDBRecommendation: Decodable {
+    let id: Int?; let title: String?; let name: String?; let overview: String?
+    let poster_path: String?; let backdrop_path: String?
+    let release_date: String?; let first_air_date: String?; let vote_average: Double?
+}
+private struct TMDBRecommendations: Decodable { let results: [TMDBRecommendation]? }
+private struct TMDBContentRating: Decodable { let iso_3166_1: String?; let rating: String? }
+private struct TMDBContentRatings: Decodable { let results: [TMDBContentRating]? }
+private struct TMDBReleaseDateEntry: Decodable { let certification: String? }
+private struct TMDBReleaseDateCountry: Decodable {
+    let iso_3166_1: String?; let release_dates: [TMDBReleaseDateEntry]?
+}
+private struct TMDBReleaseDates: Decodable { let results: [TMDBReleaseDateCountry]? }
+
+private struct TMDBDetails: Decodable {
+    let overview: String?
+    let vote_average: Double?
+    let runtime: Int?
+    let episode_run_time: [Int]?
+    let backdrop_path: String?
+    let poster_path: String?
+    let genres: [TMDBGenre]?
+    let networks: [TMDBNamed]?
+    let production_companies: [TMDBNamed]?
+    let images: TMDBImages?
+    let credits: TMDBCredits?
+    let videos: TMDBVideos?
+    let recommendations: TMDBRecommendations?
+    let content_ratings: TMDBContentRatings?
+    let release_dates: TMDBReleaseDates?
+
+    func certification(for country: String) -> String? {
+        if let rating = content_ratings?.results?
+            .first(where: { $0.iso_3166_1 == country })?.rating?.nilIfBlank {
+            return rating
+        }
+        return release_dates?.results?
+            .first(where: { $0.iso_3166_1 == country })?
+            .release_dates?.compactMap { $0.certification?.nilIfBlank }.first
+    }
+}
+
+// MARK: - MDBList (port of MDBListApi)
+
+/// Aggregated ratings shown on the detail hero.
+struct MDBListRatings: Hashable, Sendable {
+    var imdb: Double?
+    var tmdb: Double?
+    var tomatoes: Double?
+    var audience: Double?
+    var metacritic: Double?
+    var trakt: Double?
+    var letterboxd: Double?
+    var mal: Double?
+
+    var isEmpty: Bool {
+        [imdb, tmdb, tomatoes, audience, metacritic, trakt, letterboxd, mal].allSatisfy { $0 == nil }
+    }
+}
+
+actor MDBListClient {
+    static let shared = MDBListClient()
+    private var cache: [String: MDBListRatings] = [:]
+
+    func ratings(imdbId: String, apiKey: String) async -> MDBListRatings? {
+        guard !apiKey.isEmpty, !imdbId.isEmpty else { return nil }
+        if let hit = cache[imdbId] { return hit }
+
+        guard let response = try? await HTTP.get(
+            "https://api.mdblist.com/?apikey=\(apiKey)&i=\(imdbId)",
+            as: MDBListResponse.self
+        ) else { return nil }
+
+        var ratings = MDBListRatings()
+        for entry in response.ratings ?? [] {
+            guard let source = entry.source?.lowercased(), let value = entry.value else { continue }
+            switch source {
+            case "imdb": ratings.imdb = value
+            case "tmdb": ratings.tmdb = value
+            case "tomatoes": ratings.tomatoes = value
+            case "audience": ratings.audience = value
+            case "metacritic": ratings.metacritic = value
+            case "trakt": ratings.trakt = value
+            case "letterboxd": ratings.letterboxd = value
+            case "myanimelist", "mal": ratings.mal = value
+            default: break
+            }
+        }
+        cache[imdbId] = ratings
+        return ratings
+    }
+}
+
+private struct MDBListRatingEntry: Decodable { let source: String?; let value: Double? }
+private struct MDBListResponse: Decodable { let ratings: [MDBListRatingEntry]? }
+
+// MARK: - Trakt (port of TraktAuthService / TraktScrobbleService)
+
+/// Device-code OAuth plus scrobbling and watched sync.
+///
+/// The Android build bakes Nuvio's own Trakt client into BuildConfig. A third-party client
+/// cannot ship those credentials, so the viewer registers their own Trakt application and
+/// pastes the id/secret in Settings — the flow is otherwise identical.
+actor TraktClient {
+    static let shared = TraktClient()
+    private let base = "https://api.trakt.tv"
+    private let log = Logger(subsystem: "com.nuvio.tvos", category: "Trakt")
+
+    struct DeviceCode: Sendable {
+        let deviceCode: String
+        let userCode: String
+        let verificationURL: String
+        let expiresIn: Int
+        let interval: Int
+    }
+
+    struct Tokens: Sendable {
+        let accessToken: String
+        let refreshToken: String
+    }
+
+    private func headers(clientId: String, token: String? = nil) -> [String: String] {
+        var headers = [
+            "Content-Type": "application/json",
+            "trakt-api-version": "2",
+            "trakt-api-key": clientId
+        ]
+        if let token { headers["Authorization"] = "Bearer \(token)" }
+        return headers
+    }
+
+    // MARK: Auth
+
+    func startDeviceAuth(clientId: String) async throws -> DeviceCode {
+        struct Request: Encodable { let client_id: String }
+        struct Response: Decodable {
+            let device_code: String; let user_code: String; let verification_url: String
+            let expires_in: Int; let interval: Int
+        }
+        let response = try await HTTP.post(
+            "\(base)/oauth/device/code",
+            headers: headers(clientId: clientId),
+            json: Request(client_id: clientId),
+            as: Response.self
+        )
+        return DeviceCode(
+            deviceCode: response.device_code,
+            userCode: response.user_code,
+            verificationURL: response.verification_url,
+            expiresIn: response.expires_in,
+            interval: response.interval
+        )
+    }
+
+    /// Polls until the viewer approves the code on trakt.tv, or the code expires.
+    func pollForToken(
+        deviceCode: String, clientId: String, clientSecret: String, interval: Int, expiresIn: Int
+    ) async -> Tokens? {
+        struct Request: Encodable {
+            let code: String; let client_id: String; let client_secret: String
+        }
+        struct Response: Decodable { let access_token: String; let refresh_token: String }
+
+        let deadline = Date().addingTimeInterval(TimeInterval(expiresIn))
+        while Date() < deadline {
+            try? await Task.sleep(for: .seconds(max(interval, 5)))
+            if Task.isCancelled { return nil }
+            if let response = try? await HTTP.post(
+                "\(base)/oauth/device/token",
+                headers: headers(clientId: clientId),
+                json: Request(code: deviceCode, client_id: clientId, client_secret: clientSecret),
+                as: Response.self
+            ) {
+                return Tokens(accessToken: response.access_token, refreshToken: response.refresh_token)
+            }
+        }
+        return nil
+    }
+
+    func username(clientId: String, token: String) async -> String? {
+        struct User: Decodable { let username: String? }
+        struct Settings: Decodable { let user: User? }
+        let settings = try? await HTTP.get(
+            "\(base)/users/settings",
+            headers: headers(clientId: clientId, token: token),
+            as: Settings.self
+        )
+        return settings?.user?.username
+    }
+
+    // MARK: Scrobble
+
+    enum ScrobbleAction: String { case start, pause, stop }
+
+    /// Trakt treats a `stop` above 80% as a completed watch, which is what marks episodes
+    /// watched on the account.
+    func scrobble(
+        action: ScrobbleAction,
+        imdbId: String,
+        type: ContentType,
+        season: Int?,
+        episode: Int?,
+        progressPercent: Double,
+        clientId: String,
+        token: String
+    ) async {
+        struct Ids: Encodable { let imdb: String }
+        struct Show: Encodable { let ids: Ids }
+        struct EpisodeRef: Encodable { let season: Int; let number: Int }
+        struct MovieRef: Encodable { let ids: Ids }
+        struct Payload: Encodable {
+            var movie: MovieRef?
+            var show: Show?
+            var episode: EpisodeRef?
+            let progress: Double
+        }
+
+        var payload = Payload(progress: min(max(progressPercent, 0), 100))
+        if type == .series, let season, let episode {
+            payload.show = Show(ids: Ids(imdb: imdbId))
+            payload.episode = EpisodeRef(season: season, number: episode)
+        } else {
+            payload.movie = MovieRef(ids: Ids(imdb: imdbId))
+        }
+
+        _ = try? await HTTP.post(
+            "\(base)/scrobble/\(action.rawValue)",
+            headers: headers(clientId: clientId, token: token),
+            json: payload,
+            as: EmptyResponse.self
+        )
+    }
+
+    // MARK: Sync
+
+    struct PlaybackItem: Sendable {
+        let imdbId: String
+        let type: ContentType
+        let season: Int?
+        let episode: Int?
+        let progress: Double
+        let pausedAt: Date?
+    }
+
+    /// Trakt's resume points, used when watch progress is sourced from Trakt.
+    func playbackProgress(clientId: String, token: String) async -> [PlaybackItem] {
+        struct Ids: Decodable { let imdb: String? }
+        struct Movie: Decodable { let ids: Ids? }
+        struct Show: Decodable { let ids: Ids? }
+        struct Episode: Decodable { let season: Int?; let number: Int? }
+        struct Item: Decodable {
+            let progress: Double?
+            let paused_at: String?
+            let type: String?
+            let movie: Movie?
+            let show: Show?
+            let episode: Episode?
+        }
+
+        guard let items = try? await HTTP.get(
+            "\(base)/sync/playback?limit=100",
+            headers: headers(clientId: clientId, token: token),
+            as: [Item].self
+        ) else { return [] }
+
+        return items.compactMap { item in
+            let isEpisode = item.type == "episode"
+            guard let imdb = (isEpisode ? item.show?.ids?.imdb : item.movie?.ids?.imdb) else { return nil }
+            return PlaybackItem(
+                imdbId: imdb,
+                type: isEpisode ? .series : .movie,
+                season: item.episode?.season,
+                episode: item.episode?.number,
+                progress: item.progress ?? 0,
+                pausedAt: item.paused_at.flatMap { VideoDateParser.parse($0) }
+            )
+        }
+    }
+
+    /// The user's Trakt collection, used when the library is sourced from Trakt.
+    func collection(type: ContentType, clientId: String, token: String) async -> [MetaPreview] {
+        struct Ids: Decodable { let imdb: String?; let trakt: Int? }
+        struct Entry: Decodable { let title: String?; let year: Int?; let ids: Ids? }
+        struct Item: Decodable { let movie: Entry?; let show: Entry? }
+
+        let path = type == .series ? "shows" : "movies"
+        guard let items = try? await HTTP.get(
+            "\(base)/sync/collection/\(path)",
+            headers: headers(clientId: clientId, token: token),
+            as: [Item].self
+        ) else { return [] }
+
+        return items.compactMap { item in
+            let entry = type == .series ? item.show : item.movie
+            guard let entry, let title = entry.title, let imdb = entry.ids?.imdb else { return nil }
+            return MetaPreview(
+                id: imdb,
+                type: type,
+                rawType: type.apiString(),
+                name: title,
+                releaseInfo: entry.year.map(String.init),
+                imdbId: imdb
+            )
+        }
+    }
+}
+
+// MARK: - Skip intro (AniSkip / Anime-Skip)
+
+struct SkipSegment: Hashable, Sendable {
+    enum Kind: String, Sendable { case intro, outro, recap, mixed }
+    var kind: Kind
+    var start: Double
+    var end: Double
+}
+
+actor SkipIntroClient {
+    static let shared = SkipIntroClient()
+    private var cache: [String: [SkipSegment]] = [:]
+
+    /// AniSkip is keyed by MyAnimeList id; the ARM service maps IMDb/TVDB ids across to MAL.
+    func segments(malId: Int, episode: Int, episodeLength: Double) async -> [SkipSegment] {
+        let key = "\(malId)-\(episode)"
+        if let hit = cache[key] { return hit }
+
+        struct Interval: Decodable { let start_time: Double?; let end_time: Double? }
+        struct Result: Decodable { let interval: Interval?; let skip_type: String? }
+        struct Response: Decodable { let found: Bool?; let results: [Result]? }
+
+        let url = "https://api.aniskip.com/v2/skip-times/\(malId)/\(episode)"
+            + "?types=op&types=ed&types=recap&types=mixed-op&types=mixed-ed"
+            + "&episodeLength=\(Int(episodeLength))"
+
+        guard let response = try? await HTTP.get(url, as: Response.self),
+              response.found == true, let results = response.results else { return [] }
+
+        let segments = results.compactMap { result -> SkipSegment? in
+            guard let start = result.interval?.start_time,
+                  let end = result.interval?.end_time else { return nil }
+            let kind: SkipSegment.Kind
+            switch result.skip_type {
+            case "op", "mixed-op": kind = .intro
+            case "ed", "mixed-ed": kind = .outro
+            case "recap": kind = .recap
+            default: kind = .mixed
+            }
+            return SkipSegment(kind: kind, start: start, end: end)
+        }
+        cache[key] = segments
+        return segments
+    }
+
+    /// Maps an IMDb/TVDB id to a MAL id so AniSkip can be queried at all.
+    func malId(imdbId: String?, tvdbId: Int?) async -> Int? {
+        struct Response: Decodable { let myanimelist: Int? }
+        var query: String?
+        if let tvdbId { query = "thetvdb=\(tvdbId)" }
+        else if let imdbId { query = "imdb=\(imdbId)" }
+        guard let query else { return nil }
+        let response = try? await HTTP.get(
+            "https://arm.haglund.dev/api/v2/ids?source=\(query.split(separator: "=")[0])&id=\(query.split(separator: "=")[1])",
+            as: Response.self
+        )
+        return response?.myanimelist
+    }
+}

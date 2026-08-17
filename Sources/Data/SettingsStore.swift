@@ -1,11 +1,10 @@
 import SwiftUI
 import Observation
 
-// MARK: - Layout modes (port of HomeLayout / ExperienceMode / PosterShape settings)
+// MARK: - Layout modes (port of HomeLayout / ExperienceMode / ContinueWatchingCardStyle)
 
-enum HomeLayout: String, CaseIterable, Codable, Identifiable {
-    case classic, grid, modern
-    var id: String { rawValue }
+enum HomeLayout: String, SettingsOption {
+    case classic = "CLASSIC", grid = "GRID", modern = "MODERN"
 
     var displayName: String {
         switch self {
@@ -24,119 +23,122 @@ enum HomeLayout: String, CaseIterable, Codable, Identifiable {
     }
 }
 
-enum ExperienceMode: String, CaseIterable, Codable, Identifiable {
-    case essential, advanced
-    var id: String { rawValue }
+enum ExperienceMode: String, SettingsOption {
+    case essential = "ESSENTIAL", advanced = "ADVANCED"
 
-    var displayName: String {
+    var displayName: String { self == .essential ? "Essential" : "Advanced" }
+
+    var summary: String {
         switch self {
-        case .essential: return "Essential"
-        case .advanced: return "Advanced"
+        case .essential: return "A trimmed set of options for a simple, get-out-of-the-way setup."
+        case .advanced: return "Every playback, addon and integration control Nuvio exposes."
         }
     }
 }
 
-enum ContinueWatchingCardStyle: String, CaseIterable, Codable, Identifiable {
-    case poster, landscape
-    var id: String { rawValue }
+enum ContinueWatchingCardStyle: String, SettingsOption {
+    case poster = "POSTER", landscape = "LANDSCAPE"
     var displayName: String { self == .poster ? "Poster" : "Landscape" }
 }
 
-// MARK: - Store
+// MARK: - Theme & shell settings (port of ThemeDataStore + ExperienceModeDataStore)
 
 @Observable
-final class SettingsStore {
-    // Appearance
-    var theme: AppTheme { didSet { defaults.set(theme.rawValue, forKey: Keys.theme) } }
-    var font: AppFont { didSet { defaults.set(font.rawValue, forKey: Keys.font) } }
-    var amoledMode: Bool { didSet { defaults.set(amoledMode, forKey: Keys.amoled) } }
-    var amoledSurfaces: Bool { didSet { defaults.set(amoledSurfaces, forKey: Keys.amoledSurfaces) } }
+@MainActor
+final class SettingsStore: PreferenceStore {
+    init() { super.init(namespace: "app") }
 
-    // Layout
-    var homeLayout: HomeLayout { didSet { defaults.set(homeLayout.rawValue, forKey: Keys.homeLayout) } }
-    var layoutChosen: Bool { didSet { defaults.set(layoutChosen, forKey: Keys.layoutChosen) } }
-    var experienceMode: ExperienceMode { didSet { defaults.set(experienceMode.rawValue, forKey: Keys.experienceMode) } }
-    var experienceModeChosen: Bool { didSet { defaults.set(experienceModeChosen, forKey: Keys.experienceModeChosen) } }
-    var sidebarCollapsed: Bool { didSet { defaults.set(sidebarCollapsed, forKey: Keys.sidebarCollapsed) } }
-    var showDiscoverTab: Bool { didSet { defaults.set(showDiscoverTab, forKey: Keys.showDiscover) } }
-    var continueWatchingStyle: ContinueWatchingCardStyle {
-        didSet { defaults.set(continueWatchingStyle.rawValue, forKey: Keys.cwStyle) }
+    var theme: AppTheme {
+        get { option("selected_theme", default: .crimson) }
+        set { setOption("selected_theme", newValue) }
     }
 
-    // Playback
-    var autoPlayNextEpisode: Bool { didSet { defaults.set(autoPlayNextEpisode, forKey: Keys.autoPlayNext) } }
-    var preferredQuality: String { didSet { defaults.set(preferredQuality, forKey: Keys.preferredQuality) } }
-    var skipIntroEnabled: Bool { didSet { defaults.set(skipIntroEnabled, forKey: Keys.skipIntro) } }
-    var resumeThresholdPercent: Double { didSet { defaults.set(resumeThresholdPercent, forKey: Keys.resumeThreshold) } }
-    var subtitleSize: Double { didSet { defaults.set(subtitleSize, forKey: Keys.subtitleSize) } }
-
-    private let defaults: UserDefaults
-
-    private enum Keys {
-        static let theme = "nuvio.theme"
-        static let font = "nuvio.font"
-        static let amoled = "nuvio.amoled"
-        static let amoledSurfaces = "nuvio.amoledSurfaces"
-        static let homeLayout = "nuvio.homeLayout"
-        static let layoutChosen = "nuvio.layoutChosen"
-        static let experienceMode = "nuvio.experienceMode"
-        static let experienceModeChosen = "nuvio.experienceModeChosen"
-        static let sidebarCollapsed = "nuvio.sidebarCollapsed"
-        static let showDiscover = "nuvio.showDiscover"
-        static let cwStyle = "nuvio.continueWatchingStyle"
-        static let autoPlayNext = "nuvio.autoPlayNext"
-        static let preferredQuality = "nuvio.preferredQuality"
-        static let skipIntro = "nuvio.skipIntro"
-        static let resumeThreshold = "nuvio.resumeThreshold"
-        static let subtitleSize = "nuvio.subtitleSize"
+    var font: AppFont {
+        get { option("selected_font", default: .inter) }
+        set { setOption("selected_font", newValue) }
     }
 
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
-        defaults.register(defaults: [
-            Keys.theme: AppTheme.crimson.rawValue,
-            Keys.font: AppFont.inter.rawValue,
-            Keys.amoled: false,
-            Keys.amoledSurfaces: false,
-            Keys.homeLayout: HomeLayout.modern.rawValue,
-            Keys.layoutChosen: false,
-            Keys.experienceMode: ExperienceMode.advanced.rawValue,
-            Keys.experienceModeChosen: false,
-            Keys.sidebarCollapsed: true,
-            Keys.showDiscover: true,
-            Keys.cwStyle: ContinueWatchingCardStyle.landscape.rawValue,
-            Keys.autoPlayNext: true,
-            Keys.preferredQuality: "1080p",
-            Keys.skipIntro: true,
-            Keys.resumeThreshold: 0.9,
-            Keys.subtitleSize: 1.0
-        ])
-
-        theme = AppTheme(rawValue: defaults.string(forKey: Keys.theme) ?? "") ?? .crimson
-        font = AppFont(rawValue: defaults.string(forKey: Keys.font) ?? "") ?? .inter
-        amoledMode = defaults.bool(forKey: Keys.amoled)
-        amoledSurfaces = defaults.bool(forKey: Keys.amoledSurfaces)
-        homeLayout = HomeLayout(rawValue: defaults.string(forKey: Keys.homeLayout) ?? "") ?? .modern
-        layoutChosen = defaults.bool(forKey: Keys.layoutChosen)
-        experienceMode = ExperienceMode(rawValue: defaults.string(forKey: Keys.experienceMode) ?? "") ?? .advanced
-        experienceModeChosen = defaults.bool(forKey: Keys.experienceModeChosen)
-        sidebarCollapsed = defaults.bool(forKey: Keys.sidebarCollapsed)
-        showDiscoverTab = defaults.bool(forKey: Keys.showDiscover)
-        continueWatchingStyle = ContinueWatchingCardStyle(
-            rawValue: defaults.string(forKey: Keys.cwStyle) ?? ""
-        ) ?? .landscape
-        autoPlayNextEpisode = defaults.bool(forKey: Keys.autoPlayNext)
-        preferredQuality = defaults.string(forKey: Keys.preferredQuality) ?? "1080p"
-        skipIntroEnabled = defaults.bool(forKey: Keys.skipIntro)
-        resumeThresholdPercent = defaults.double(forKey: Keys.resumeThreshold)
-        subtitleSize = defaults.double(forKey: Keys.subtitleSize)
+    var amoledMode: Bool {
+        get { bool("amoled_mode", default: false) }
+        set { setBool("amoled_mode", newValue) }
     }
+
+    var amoledSurfaces: Bool {
+        get { bool("amoled_surfaces_mode", default: false) }
+        set { setBool("amoled_surfaces_mode", newValue) }
+    }
+
+    var settingsUIStyle: SettingsUIStyle {
+        get { option("settings_ui_style", default: .rail) }
+        set { setOption("settings_ui_style", newValue) }
+    }
+
+    var experienceMode: ExperienceMode {
+        get { option("experience_mode", default: .advanced) }
+        set { setOption("experience_mode", newValue) }
+    }
+
+    var experienceModeChosen: Bool {
+        get { bool("experience_mode_chosen", default: false) }
+        set { setBool("experience_mode_chosen", newValue) }
+    }
+
+    /// Essential mode hides the deep playback/integration surfaces, matching Android.
+    var showsAdvancedSettings: Bool { experienceMode == .advanced }
 
     var colors: NuvioColorScheme {
         NuvioColorScheme(
             palette: ThemeColors.palette(for: theme),
             amoledMode: amoledMode,
             amoledSurfaces: amoledSurfaces
+        )
+    }
+}
+
+// MARK: - Aggregate
+
+/// One handle on every settings store, so views take a single environment object instead of
+/// nine, and so cross-cutting reads (e.g. the watched threshold) have one obvious home.
+@Observable
+@MainActor
+final class AppSettings {
+    let app = SettingsStore()
+    let player = PlayerSettingsStore()
+    let layout = LayoutSettingsStore()
+    let debrid = DebridSettingsStore()
+    let tracking = TrackingSettingsStore()
+    let tmdb = TmdbSettingsStore()
+    let mdblist = MDBListSettingsStore()
+    let skipIntro = SkipIntroSettingsStore()
+    let streamBadges = StreamBadgeSettingsStore()
+    let trailers = TrailerSettingsStore()
+
+    /// Fraction of a video that counts as watched — used by Continue Watching and episode ticks.
+    var watchedThreshold: Double { player.watchedThresholdFraction }
+
+    var tmdbOptions: TMDBClient.TMDBOptions {
+        TMDBClient.TMDBOptions(
+            useArtwork: tmdb.useArtwork,
+            useBasicInfo: tmdb.useBasicInfo,
+            useCredits: tmdb.useCredits,
+            useDetails: tmdb.useDetails,
+            useTrailers: tmdb.useTrailers,
+            useNetworks: tmdb.useNetworks,
+            useProductions: tmdb.useProductions,
+            useReleaseDates: tmdb.useReleaseDates,
+            useMoreLikeThis: tmdb.useMoreLikeThis
+        )
+    }
+
+    var streamFilterInput: StreamFilterEngine.Input {
+        StreamFilterEngine.Input(
+            minimumQuality: debrid.streamMinimumQuality,
+            dolbyVisionFilter: debrid.streamDolbyVisionFilter,
+            hdrFilter: debrid.streamHdrFilter,
+            codecFilter: debrid.streamCodecFilter,
+            sortMode: debrid.streamSortMode,
+            maxResults: debrid.streamMaxResults,
+            preferences: debrid.streamPreferences
         )
     }
 }

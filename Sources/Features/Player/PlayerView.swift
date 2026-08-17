@@ -13,27 +13,95 @@ import Combine
 struct PlayerView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(LibraryStore.self) private var library
-    @Environment(SettingsStore.self) private var settings
+    @Environment(AppSettings.self) private var settings
+    @Environment(Router.self) private var router
 
     let request: PlaybackRequest
+
+    @State private var didScrobbleStart = false
+    @State private var lastScrobbleProgress: Double = 0
 
     var body: some View {
         AVPlayerContainer(
             request: request,
             resumeAt: resumePosition,
-            onProgress: persist,
+            onProgress: { position, duration, completed in
+                persist(position: position, duration: duration, completed: completed)
+                scrobble(position: position, duration: duration)
+                advanceIfDue(position: position, duration: duration)
+            },
             onFinished: {
                 persist(position: 0, duration: 0, completed: true)
+                scrobbleStop()
+                advanceToNextEpisode()
                 dismiss()
             }
         )
         .ignoresSafeArea()
     }
 
+    // MARK: Trakt
+
+    private var traktCredentials: (clientId: String, token: String)? {
+        let tracking = settings.tracking
+        guard tracking.traktScrobbleEnabled, tracking.isTraktAuthenticated,
+              !tracking.traktClientId.isEmpty else { return nil }
+        return (tracking.traktClientId, tracking.traktAccessToken)
+    }
+
+    private func scrobble(position: Double, duration: Double) {
+        guard let credentials = traktCredentials, let imdbId = request.imdbId,
+              duration > 0 else { return }
+        let percent = min(max(position / duration * 100, 0), 100)
+        // One `start`, then periodic updates only when the needle has actually moved.
+        let action: TraktClient.ScrobbleAction = didScrobbleStart ? .pause : .start
+        guard !didScrobbleStart || percent - lastScrobbleProgress >= 5 else { return }
+        didScrobbleStart = true
+        lastScrobbleProgress = percent
+
+        Task {
+            await TraktClient.shared.scrobble(
+                action: action, imdbId: imdbId, type: ContentType.from(request.contentType),
+                season: request.season, episode: request.episode,
+                progressPercent: percent,
+                clientId: credentials.clientId, token: credentials.token
+            )
+        }
+    }
+
+    private func scrobbleStop() {
+        guard let credentials = traktCredentials, let imdbId = request.imdbId else { return }
+        Task {
+            await TraktClient.shared.scrobble(
+                action: .stop, imdbId: imdbId, type: ContentType.from(request.contentType),
+                season: request.season, episode: request.episode,
+                progressPercent: 100,
+                clientId: credentials.clientId, token: credentials.token
+            )
+        }
+    }
+
+    // MARK: Next episode
+
+    /// Honours the percent / minutes-before-end threshold from Playback settings.
+    private func advanceIfDue(position: Double, duration: Double) {
+        guard settings.player.autoPlayNextEpisodeEnabled, request.nextUp != nil,
+              settings.player.shouldAdvanceToNextEpisode(position: position, duration: duration)
+        else { return }
+        scrobbleStop()
+        advanceToNextEpisode()
+        dismiss()
+    }
+
+    private func advanceToNextEpisode() {
+        guard settings.player.autoPlayNextEpisodeEnabled, let next = request.nextUp else { return }
+        router.openStreams(next)
+    }
+
     private var resumePosition: Double {
         guard !request.startFromBeginning,
               let progress = library.progress(forVideoId: request.videoId),
-              !progress.isFinished(threshold: settings.resumeThresholdPercent)
+              !progress.isFinished(threshold: settings.watchedThreshold)
         else { return 0 }
         return progress.positionSeconds
     }

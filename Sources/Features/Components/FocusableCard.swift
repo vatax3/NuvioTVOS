@@ -295,3 +295,46 @@ struct WatchProgressBar: View {
         .frame(height: NuvioTheme.strokes.progress)
     }
 }
+
+// MARK: - Aggregated ratings (port of the MDBList strip on the detail hero)
+
+struct RatingsStrip: View {
+    @Environment(\.nuvioColors) private var colors
+    @Environment(AppSettings.self) private var settings
+
+    let ratings: MDBListRatings
+
+    private var entries: [(label: String, value: Double, tint: Color)] {
+        var rows: [(String, Double, Color)] = []
+        let mdblist = settings.mdblist
+        if mdblist.showImdb, let value = ratings.imdb { rows.append(("IMDb", value, colors.sourceImdb)) }
+        if mdblist.showTmdb, let value = ratings.tmdb { rows.append(("TMDB", value, colors.sourceTmdb)) }
+        if mdblist.showTomatoes, let value = ratings.tomatoes { rows.append(("RT", value, colors.error)) }
+        if mdblist.showAudience, let value = ratings.audience { rows.append(("Audience", value, colors.warning)) }
+        if mdblist.showMetacritic, let value = ratings.metacritic { rows.append(("Metacritic", value, colors.info)) }
+        if mdblist.showTrakt, let value = ratings.trakt { rows.append(("Trakt", value, colors.sourceTrakt)) }
+        if mdblist.showLetterboxd, let value = ratings.letterboxd { rows.append(("Letterboxd", value, colors.success)) }
+        if mdblist.showMal, let value = ratings.mal { rows.append(("MAL", value, colors.sourceMdblist)) }
+        return rows
+    }
+
+    var body: some View {
+        HStack(spacing: NuvioTheme.spacing.lg) {
+            ForEach(entries, id: \.label) { entry in
+                HStack(spacing: NuvioTheme.spacing.xs) {
+                    Text(entry.label)
+                        .nuvioText(NuvioTypography.labelSmall)
+                        .foregroundStyle(entry.tint)
+                    Text(formatted(entry.value))
+                        .nuvioText(NuvioTextStyles.metadata)
+                        .foregroundStyle(colors.textPrimary)
+                }
+            }
+        }
+    }
+
+    /// MDBList mixes 0–10 and 0–100 scales depending on the source.
+    private func formatted(_ value: Double) -> String {
+        value > 10 ? String(format: "%.0f", value) : String(format: "%.1f", value)
+    }
+}

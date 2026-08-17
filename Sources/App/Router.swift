@@ -67,6 +67,9 @@ struct StreamRequest: Hashable, Identifiable {
     var episodeName: String?
     var year: String?
     var runtime: Int?
+    var imdbId: String?
+    /// Video id of the following episode, so the player can chain without re-resolving meta.
+    var nextUpVideoId: String?
 
     var id: String { videoId }
 
@@ -93,6 +96,10 @@ struct PlaybackRequest: Hashable, Identifiable {
     var logo: String?
     var startFromBeginning: Bool
     var preview: MetaPreview?
+    /// Populated for series so auto-play can chain straight into the next episode.
+    var nextUp: StreamRequest?
+    /// IMDb id, used for Trakt scrobbling.
+    var imdbId: String?
 
     var id: String { "\(videoId)|\(streamURL)" }
 }
@@ -125,7 +132,7 @@ enum Route: Hashable {
 @Observable
 @MainActor
 final class Router {
-    var selectedTab: RootTab = .home
+    var selectedTab: RootTab = LaunchArguments.startTab ?? .home
     var path: [Route] = []
     /// False while the content region has no focusable view of its own (Home's initial
     /// spinner). The sidebar opts out of focus during that window, otherwise it is the only
@@ -164,5 +171,35 @@ final class Router {
             selectedTab = tab
             path.removeAll()
         }
+    }
+}
+
+
+// MARK: - Launch arguments
+
+/// Debug-only entry points so a screenshot pass can land on a given screen without having to
+/// drive the focus engine from a script. Stripped from release builds.
+enum LaunchArguments {
+    static var startTab: RootTab? {
+        #if DEBUG
+        value(for: "-startTab").flatMap { RootTab(rawValue: $0) }
+        #else
+        nil
+        #endif
+    }
+
+    static var settingsSection: String? {
+        #if DEBUG
+        value(for: "-settingsSection")
+        #else
+        nil
+        #endif
+    }
+
+    private static func value(for flag: String) -> String? {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let index = arguments.firstIndex(of: flag),
+              arguments.indices.contains(index + 1) else { return nil }
+        return arguments[index + 1]
     }
 }

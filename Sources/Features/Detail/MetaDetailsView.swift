@@ -6,7 +6,7 @@ struct MetaDetailsView: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(AddonStore.self) private var addons
     @Environment(LibraryStore.self) private var library
-    @Environment(SettingsStore.self) private var settings
+    @Environment(AppSettings.self) private var settings
     @Environment(Router.self) private var router
 
     let request: DetailRequest
@@ -25,14 +25,14 @@ struct MetaDetailsView: View {
                     content(meta: meta, size: proxy.size)
                 } else {
                     ErrorStateView(message: model.error ?? "Unknown error") {
-                        Task { await model.load(request: request, addonStore: addons) }
+                        Task { await model.load(request: request, addonStore: addons, settings: settings) }
                     }
                 }
             }
         }
         .ignoresSafeArea()
         .background(colors.background)
-        .task { await model.load(request: request, addonStore: addons) }
+        .task { await model.load(request: request, addonStore: addons, settings: settings) }
     }
 
     // MARK: Backdrop
@@ -110,6 +110,10 @@ struct MetaDetailsView: View {
 
             metaRow(meta)
 
+            if let ratings = model.ratings, !ratings.isEmpty {
+                RatingsStrip(ratings: ratings)
+            }
+
             if let description = meta.description?.nilIfBlank {
                 Text(description)
                     .nuvioText(NuvioTextStyles.bodyCompact)
@@ -185,7 +189,7 @@ struct MetaDetailsView: View {
 
     private func playLabel(_ meta: Meta) -> String {
         if meta.type == .series {
-            if let next = model.nextUpEpisode(library: library, threshold: settings.resumeThresholdPercent),
+            if let next = model.nextUpEpisode(library: library, threshold: settings.watchedThreshold),
                let season = next.season, let episode = next.episode {
                 return String(format: "Play S%02dE%02d", season, episode)
             }
@@ -202,7 +206,7 @@ struct MetaDetailsView: View {
     private func play(meta: Meta) {
         library.cache(meta.preview())
         if meta.type == .series {
-            guard let next = model.nextUpEpisode(library: library, threshold: settings.resumeThresholdPercent)
+            guard let next = model.nextUpEpisode(library: library, threshold: settings.watchedThreshold)
             else { return }
             playEpisode(next)
         } else {
@@ -223,7 +227,11 @@ struct MetaDetailsView: View {
     private func playEpisode(_ video: Video) {
         guard let meta = model.meta else { return }
         library.cache(meta.preview())
-        router.openStreams(StreamRequest(
+        router.openStreams(streamRequest(for: video, meta: meta))
+    }
+
+    private func streamRequest(for video: Video, meta: Meta) -> StreamRequest {
+        StreamRequest(
             videoId: video.id,
             contentType: meta.apiType,
             title: meta.name,
@@ -235,8 +243,10 @@ struct MetaDetailsView: View {
             season: video.season,
             episode: video.episode,
             episodeName: video.displayTitle,
-            year: meta.releaseInfo
-        ))
+            year: meta.releaseInfo,
+            imdbId: meta.imdbId,
+            nextUpVideoId: model.episodeAfter(video)?.id
+        )
     }
 }
 
@@ -245,7 +255,7 @@ struct MetaDetailsView: View {
 struct EpisodesSection: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(LibraryStore.self) private var library
-    @Environment(SettingsStore.self) private var settings
+    @Environment(AppSettings.self) private var settings
 
     let model: MetaDetailsViewModel
     let meta: Meta
@@ -278,7 +288,7 @@ struct EpisodesSection: View {
                             fallbackImage: meta.backdropUrl,
                             isWatched: library.isWatched(
                                 videoId: episode.id,
-                                threshold: settings.resumeThresholdPercent
+                                threshold: settings.watchedThreshold
                             ),
                             progress: library.progress(forVideoId: episode.id)?.fraction ?? 0,
                             action: { onPlay(episode) }

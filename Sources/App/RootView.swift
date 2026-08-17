@@ -4,7 +4,7 @@ struct RootView: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(Router.self) private var router
     @Environment(AddonStore.self) private var addons
-    @Environment(SettingsStore.self) private var settings
+    @Environment(AppSettings.self) private var settings
 
     var body: some View {
         @Bindable var router = router

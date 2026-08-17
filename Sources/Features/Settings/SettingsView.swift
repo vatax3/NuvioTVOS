@@ -29,6 +29,7 @@ struct SettingsCard<Content: View>: View {
                 Text(footnote)
                     .nuvioText(NuvioTextStyles.metadata)
                     .foregroundStyle(colors.textTertiary)
+                    .frame(maxWidth: dp(820), alignment: .leading)
             }
         }
     }
@@ -136,12 +137,12 @@ struct SettingsToggle: View {
 
 struct SettingsView: View {
     @Environment(\.nuvioColors) private var colors
-    @Environment(SettingsStore.self) private var settings
+    @Environment(AppSettings.self) private var settings
     @Environment(AddonStore.self) private var addons
     @Environment(Router.self) private var router
 
-    private enum Section: String, CaseIterable, Identifiable {
-        case addons, appearance, layout, playback, about
+    enum Section: String, CaseIterable, Identifiable {
+        case addons, appearance, layout, playback, debrid, tracking, metadata, extras, experience, about
         var id: String { rawValue }
 
         var title: String {
@@ -150,6 +151,11 @@ struct SettingsView: View {
             case .appearance: return "Appearance"
             case .layout: return "Layout"
             case .playback: return "Playback"
+            case .debrid: return "Debrid"
+            case .tracking: return "Tracking"
+            case .metadata: return "Metadata"
+            case .extras: return "Extras"
+            case .experience: return "Experience"
             case .about: return "About"
             }
         }
@@ -160,12 +166,30 @@ struct SettingsView: View {
             case .appearance: return "paintpalette.fill"
             case .layout: return "rectangle.3.group.fill"
             case .playback: return "play.rectangle.fill"
+            case .debrid: return "link"
+            case .tracking: return "chart.line.uptrend.xyaxis"
+            case .metadata: return "photo.stack.fill"
+            case .extras: return "sparkles"
+            case .experience: return "slider.horizontal.3"
             case .about: return "info.circle.fill"
+            }
+        }
+
+        /// Essential mode hides the deep surfaces, matching the Android experience gate.
+        var isAdvancedOnly: Bool {
+            switch self {
+            case .playback, .debrid, .tracking, .metadata, .extras: return true
+            default: return false
             }
         }
     }
 
-    @State private var section: Section = .addons
+    @State private var section: Section =
+        LaunchArguments.settingsSection.flatMap(Section.init(rawValue:)) ?? .addons
+
+    private var sections: [Section] {
+        Section.allCases.filter { settings.app.showsAdvancedSettings || !$0.isAdvancedOnly }
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: NuvioTheme.spacing.xxl) {
@@ -176,38 +200,44 @@ struct SettingsView: View {
         .padding(.vertical, NuvioTheme.layout.tvSafeVertical)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(colors.background)
+        .onChange(of: sections.map(\.id)) { _, available in
+            if !available.contains(section.id) { section = .addons }
+        }
     }
 
     private var rail: some View {
-        VStack(alignment: .leading, spacing: NuvioTheme.spacing.sm) {
-            Text("Settings")
-                .nuvioText(NuvioTextStyles.headline)
-                .foregroundStyle(colors.textPrimary)
-                .padding(.bottom, NuvioTheme.spacing.md)
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: NuvioTheme.spacing.sm) {
+                Text("Settings")
+                    .nuvioText(NuvioTextStyles.headline)
+                    .foregroundStyle(colors.textPrimary)
+                    .padding(.bottom, NuvioTheme.spacing.md)
 
-            ForEach(Section.allCases) { item in
-                Button(action: { section = item }) {
-                    HStack(spacing: NuvioTheme.spacing.md) {
-                        Image(systemName: item.systemImage)
-                            .font(.system(size: NuvioTheme.sizes.icons.sm))
-                            .frame(width: NuvioTheme.sizes.icons.lg)
-                        Text(item.title)
-                            .nuvioText(NuvioTextStyles.nav)
-                        Spacer(minLength: 0)
+                ForEach(sections) { item in
+                    Button(action: { section = item }) {
+                        HStack(spacing: NuvioTheme.spacing.md) {
+                            Image(systemName: item.systemImage)
+                                .font(.system(size: NuvioTheme.sizes.icons.sm))
+                                .frame(width: NuvioTheme.sizes.icons.lg)
+                            Text(item.title)
+                                .nuvioText(NuvioTextStyles.nav)
+                            Spacer(minLength: 0)
+                        }
+                        .foregroundStyle(section == item ? colors.textPrimary : colors.textSecondary)
+                        .padding(.horizontal, NuvioTheme.spacing.lg)
+                        .frame(height: NuvioTheme.sizes.settings.railItemHeight)
+                        .contentShape(Rectangle())
                     }
-                    .foregroundStyle(section == item ? colors.textPrimary : colors.textSecondary)
-                    .padding(.horizontal, NuvioTheme.spacing.lg)
-                    .frame(height: NuvioTheme.sizes.settings.railItemHeight)
-                    .contentShape(Rectangle())
+                    .buttonStyle(NuvioRowButtonStyle(
+                        cornerRadius: NuvioTheme.radii.full,
+                        selected: section == item,
+                        scaleOnFocus: false
+                    ))
                 }
-                .buttonStyle(NuvioRowButtonStyle(
-                    cornerRadius: NuvioTheme.radii.full,
-                    selected: section == item,
-                    scaleOnFocus: false
-                ))
             }
-            Spacer(minLength: 0)
+            .padding(.bottom, NuvioTheme.spacing.xxxl)
         }
+        .scrollClipDisabled()
         .frame(width: NuvioTheme.sizes.settings.railWidth, alignment: .leading)
         .focusSection()
     }
@@ -220,10 +250,15 @@ struct SettingsView: View {
                 case .appearance: ThemeSettingsContent()
                 case .layout: LayoutSettingsContent()
                 case .playback: PlaybackSettingsContent()
+                case .debrid: DebridSettingsContent()
+                case .tracking: TrackingSettingsContent()
+                case .metadata: MetadataSettingsContent()
+                case .extras: ExtrasSettingsContent()
+                case .experience: ExperienceSettingsContent()
                 case .about: AboutContent()
                 }
             }
-            .padding(.bottom, NuvioTheme.spacing.xxxl)
+            .padding(.bottom, NuvioTheme.spacing.rail.tailPadding)
         }
         .scrollClipDisabled()
         .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -255,8 +290,7 @@ struct SettingsView: View {
 struct ThemeSettingsView: View {
     var body: some View {
         NuvioScreenBackground {
-            ScrollView { ThemeSettingsContent() }
-                .scrollClipDisabled()
+            ScrollView { ThemeSettingsContent() }.scrollClipDisabled()
         }
     }
 }
@@ -264,8 +298,7 @@ struct ThemeSettingsView: View {
 struct LayoutSettingsView: View {
     var body: some View {
         NuvioScreenBackground {
-            ScrollView { LayoutSettingsContent() }
-                .scrollClipDisabled()
+            ScrollView { LayoutSettingsContent() }.scrollClipDisabled()
         }
     }
 }
@@ -273,8 +306,7 @@ struct LayoutSettingsView: View {
 struct PlaybackSettingsView: View {
     var body: some View {
         NuvioScreenBackground {
-            ScrollView { PlaybackSettingsContent() }
-                .scrollClipDisabled()
+            ScrollView { PlaybackSettingsContent() }.scrollClipDisabled()
         }
     }
 }
@@ -282,8 +314,7 @@ struct PlaybackSettingsView: View {
 struct AboutView: View {
     var body: some View {
         NuvioScreenBackground {
-            ScrollView { AboutContent() }
-                .scrollClipDisabled()
+            ScrollView { AboutContent() }.scrollClipDisabled()
         }
     }
 }
@@ -292,10 +323,10 @@ struct AboutView: View {
 
 struct ThemeSettingsContent: View {
     @Environment(\.nuvioColors) private var colors
-    @Environment(SettingsStore.self) private var settings
+    @Environment(AppSettings.self) private var settings
 
     var body: some View {
-        @Bindable var settings = settings
+        @Bindable var app = settings.app
 
         VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
             SettingsCard(title: "Accent theme") {
@@ -304,8 +335,8 @@ struct ThemeSettingsContent: View {
                         ForEach(AppTheme.allCases) { theme in
                             ThemeSwatch(
                                 theme: theme,
-                                isSelected: settings.theme == theme,
-                                action: { settings.theme = theme }
+                                isSelected: app.theme == theme,
+                                action: { app.theme = theme }
                             )
                         }
                     }
@@ -318,13 +349,13 @@ struct ThemeSettingsContent: View {
                 ForEach(AppFont.allCases) { font in
                     SettingsRow(
                         title: font.displayName,
-                        subtitle: font == settings.font ? "Currently in use" : nil,
+                        subtitle: font == app.font ? "Currently in use" : nil,
                         trailing: {
-                            Image(systemName: settings.font == font ? "checkmark.circle.fill" : "circle")
+                            Image(systemName: app.font == font ? "checkmark.circle.fill" : "circle")
                                 .font(.system(size: NuvioTheme.sizes.icons.md))
-                                .foregroundStyle(settings.font == font ? colors.secondary : colors.textTertiary)
+                                .foregroundStyle(app.font == font ? colors.secondary : colors.textTertiary)
                         },
-                        action: { settings.font = font }
+                        action: { app.font = font }
                     )
                 }
             }
@@ -334,13 +365,21 @@ struct ThemeSettingsContent: View {
                     title: "AMOLED background",
                     subtitle: "Use pure black for the app background",
                     systemImage: "circle.lefthalf.filled",
-                    isOn: $settings.amoledMode
+                    isOn: $app.amoledMode
                 )
                 SettingsToggle(
                     title: "AMOLED surfaces",
                     subtitle: "Also flatten cards and panels to pure black",
                     systemImage: "square.stack.3d.up",
-                    isOn: $settings.amoledSurfaces
+                    isOn: $app.amoledSurfaces
+                )
+            }
+
+            SettingsCard(title: "Settings layout") {
+                SettingsOptionRow(
+                    title: "Presentation",
+                    subtitle: "How this screen itself is laid out",
+                    selection: $app.settingsUIStyle
                 )
             }
         }
@@ -389,53 +428,121 @@ private struct ThemeSwatch: View {
 
 struct LayoutSettingsContent: View {
     @Environment(\.nuvioColors) private var colors
-    @Environment(SettingsStore.self) private var settings
+    @Environment(AppSettings.self) private var settings
 
     var body: some View {
-        @Bindable var settings = settings
+        @Bindable var layout = settings.layout
 
         VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
             SettingsCard(title: "Home layout") {
-                ForEach(HomeLayout.allCases) { layout in
+                ForEach(HomeLayout.allCases) { option in
                     SettingsRow(
-                        title: layout.displayName,
-                        subtitle: layout.summary,
-                        systemImage: icon(for: layout),
+                        title: option.displayName,
+                        subtitle: option.summary,
+                        systemImage: icon(for: option),
                         trailing: {
-                            Image(systemName: settings.homeLayout == layout ? "checkmark.circle.fill" : "circle")
+                            Image(systemName: layout.selectedLayout == option ? "checkmark.circle.fill" : "circle")
                                 .font(.system(size: NuvioTheme.sizes.icons.md))
-                                .foregroundStyle(settings.homeLayout == layout ? colors.secondary : colors.textTertiary)
+                                .foregroundStyle(layout.selectedLayout == option ? colors.secondary : colors.textTertiary)
                         },
                         action: {
-                            settings.homeLayout = layout
-                            settings.layoutChosen = true
+                            layout.selectedLayout = option
+                            layout.hasChosenLayout = true
                         }
                     )
                 }
             }
 
-            SettingsCard(title: "Navigation") {
+            SettingsCard(title: "Hero") {
+                SettingsToggle(title: "Hero section", systemImage: "rectangle.inset.filled", isOn: $layout.heroSectionEnabled)
                 SettingsToggle(
-                    title: "Show Discover tab",
-                    subtitle: "Browse every catalog your addons expose",
-                    systemImage: "square.grid.2x2.fill",
-                    isOn: $settings.showDiscoverTab
+                    title: "Full-screen backdrop",
+                    subtitle: "Let the hero image fill the whole screen in Modern view",
+                    isOn: $layout.modernHeroFullScreenBackdrop
+                )
+                SettingsToggle(
+                    title: "Classic focus gradient",
+                    subtitle: "Tint the backdrop toward the focused poster",
+                    isOn: $layout.classicFocusGradientEnabled
                 )
             }
 
-            SettingsCard(title: "Continue Watching") {
-                ForEach(ContinueWatchingCardStyle.allCases) { style in
-                    SettingsRow(
-                        title: style.displayName,
-                        subtitle: style == .landscape ? "Wide cards with progress" : "Poster cards with progress",
-                        trailing: {
-                            Image(systemName: settings.continueWatchingStyle == style ? "checkmark.circle.fill" : "circle")
-                                .font(.system(size: NuvioTheme.sizes.icons.md))
-                                .foregroundStyle(settings.continueWatchingStyle == style ? colors.secondary : colors.textTertiary)
-                        },
-                        action: { settings.continueWatchingStyle = style }
-                    )
+            SettingsCard(title: "Sidebar") {
+                SettingsToggle(title: "Modern sidebar", systemImage: "sidebar.leading", isOn: $layout.modernSidebarEnabled)
+                SettingsToggle(title: "Glass blur", isOn: $layout.modernSidebarBlurEnabled)
+                SettingsToggle(title: "Collapsed by default", isOn: $layout.sidebarCollapsedByDefault)
+                SettingsToggle(title: "Glass side panels", isOn: $layout.glassSidePanelEnabled)
+            }
+
+            SettingsCard(
+                title: "Poster cards",
+                footnote: "Sizes are in Android dp and scale automatically to the tvOS point grid."
+            ) {
+                SettingsStepperRow(title: "Width", value: $layout.posterCardWidthDp, range: 90...220, step: 2, format: { "\($0) dp" })
+                SettingsStepperRow(title: "Height", value: $layout.posterCardHeightDp, range: 120...330, step: 3, format: { "\($0) dp" })
+                SettingsStepperRow(title: "Corner radius", value: $layout.posterCardCornerRadiusDp, range: 0...28, format: { "\($0) dp" })
+                SettingsToggle(title: "Show labels", subtitle: "Title and year under each poster", isOn: $layout.posterLabelsEnabled)
+                SettingsToggle(title: "Landscape posters in Modern view", isOn: $layout.modernLandscapePostersEnabled)
+            }
+
+            SettingsCard(
+                title: "Focused poster",
+                footnote: "Holding focus on a card widens it into its backdrop — a Nuvio signature."
+            ) {
+                SettingsToggle(title: "Expand to backdrop", systemImage: "rectangle.expand.vertical", isOn: $layout.focusedPosterBackdropExpandEnabled)
+                if layout.focusedPosterBackdropExpandEnabled {
+                    SettingsStepperRow(title: "Expand after", value: $layout.focusedPosterBackdropExpandDelaySeconds, range: 0...10, format: { "\($0)s" })
+                    SettingsToggle(title: "Play a trailer when expanded", isOn: $layout.focusedPosterBackdropTrailerEnabled)
+                    if layout.focusedPosterBackdropTrailerEnabled {
+                        SettingsToggle(title: "Start muted", isOn: $layout.focusedPosterBackdropTrailerMuted)
+                        SettingsOptionRow(title: "Play trailers on", selection: $layout.focusedPosterTrailerTarget)
+                    }
                 }
+            }
+
+            SettingsCard(title: "Card depth") {
+                SettingsToggle(title: "Depth effect", systemImage: "cube.transparent", isOn: $layout.cardDepthEnabled)
+                if layout.cardDepthEnabled {
+                    SettingsToggle(title: "Posters", isOn: $layout.cardDepthPostersEnabled)
+                    SettingsToggle(title: "Continue Watching", isOn: $layout.cardDepthContinueWatchingEnabled)
+                    SettingsToggle(title: "Episode cards", isOn: $layout.cardDepthEpisodeCardsEnabled)
+                    SettingsToggle(title: "Cast", isOn: $layout.cardDepthCastEnabled)
+                    SettingsToggle(title: "Trailers", isOn: $layout.cardDepthTrailersEnabled)
+                    SettingsDecimalStepperRow(title: "Edge strength", value: $layout.cardDepthEdgeStrength, range: 0...1, step: 0.05, format: { String(format: "%.0f%%", $0 * 100) })
+                    SettingsDecimalStepperRow(title: "Edge coverage", value: $layout.cardDepthEdgeCoverage, range: 0...1, step: 0.05, format: { String(format: "%.0f%%", $0 * 100) })
+                    SettingsDecimalStepperRow(title: "Sheen", value: $layout.cardDepthSheenStrength, range: 0...1, step: 0.05, format: { String(format: "%.0f%%", $0 * 100) })
+                }
+            }
+
+            SettingsCard(title: "Continue Watching") {
+                SettingsOptionRow(title: "Card style", selection: $layout.continueWatchingCardStyle)
+                SettingsOptionRow(title: "Sort", selection: $layout.continueWatchingSortMode)
+                SettingsToggle(title: "Use episode thumbnails", isOn: $layout.useEpisodeThumbnailsInContinueWatching)
+                SettingsToggle(title: "Blur next-up artwork", subtitle: "Avoid spoilers in the rail", isOn: $layout.blurContinueWatchingNextUp)
+                SettingsToggle(title: "Blur unwatched episode stills", isOn: $layout.blurUnwatchedEpisodes)
+                SettingsToggle(title: "Next up from furthest episode", isOn: $layout.nextUpFromFurthestEpisode)
+                SettingsToggle(title: "Show unaired next up", isOn: $layout.showUnairedNextUp)
+            }
+
+            SettingsCard(title: "Catalogs") {
+                SettingsToggle(title: "Show addon name", subtitle: "Next to each rail title", isOn: $layout.catalogAddonNameEnabled)
+                SettingsToggle(title: "Show type suffix", subtitle: "Append Movies / Series to rail titles", isOn: $layout.catalogTypeSuffixEnabled)
+                SettingsToggle(title: "Follow addon order", subtitle: "Order rails by the addon list rather than manually", isOn: $layout.followAddonsOrder)
+            }
+
+            SettingsCard(title: "Navigation") {
+                SettingsOptionRow(title: "Discover placement", systemImage: "square.grid.2x2", selection: $layout.discoverLocation)
+                SettingsToggle(title: "Discover inside Search", isOn: $layout.searchDiscoverEnabled)
+                SettingsToggle(title: "Fast horizontal navigation", subtitle: "Skip the settle animation when holding a direction", isOn: $layout.fastHorizontalNavigationEnabled)
+                SettingsToggle(title: "Smooth bring-into-view", isOn: $layout.smoothBringIntoViewEnabled)
+                SettingsToggle(title: "Memory-only vertical scroll", subtitle: "Do not persist scroll position between visits", isOn: $layout.memoryOnlyVerticalScroll)
+            }
+
+            SettingsCard(title: "Content") {
+                SettingsToggle(title: "Hide unreleased content", isOn: $layout.hideUnreleasedContent)
+                SettingsToggle(title: "Show full release date", subtitle: "Rather than only the year", isOn: $layout.showFullReleaseDate)
+                SettingsToggle(title: "Trailer button on detail pages", isOn: $layout.detailPageTrailerButtonEnabled)
+                SettingsToggle(title: "Prefer external meta addon", subtitle: "Use a non-Cinemeta addon for details when available", isOn: $layout.preferExternalMetaAddonDetail)
             }
         }
     }
@@ -449,66 +556,36 @@ struct LayoutSettingsContent: View {
     }
 }
 
-// MARK: - Playback (port of PlaybackSettingsScreen)
+// MARK: - Experience mode (port of ExperienceModeSelectionScreen)
 
-struct PlaybackSettingsContent: View {
+struct ExperienceSettingsContent: View {
     @Environment(\.nuvioColors) private var colors
-    @Environment(SettingsStore.self) private var settings
-
-    private let qualities = ["2160p", "1080p", "720p", "480p", "Any"]
+    @Environment(AppSettings.self) private var settings
 
     var body: some View {
-        @Bindable var settings = settings
+        @Bindable var app = settings.app
 
         VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
-            SettingsCard(title: "Playback") {
-                SettingsToggle(
-                    title: "Auto-play next episode",
-                    subtitle: "Continue to the next episode when one finishes",
-                    systemImage: "forward.end.fill",
-                    isOn: $settings.autoPlayNextEpisode
-                )
-                SettingsToggle(
-                    title: "Skip intro button",
-                    subtitle: "Offer a skip control when an intro is detected",
-                    systemImage: "forward.fill",
-                    isOn: $settings.skipIntroEnabled
-                )
-            }
-
             SettingsCard(
-                title: "Preferred quality",
-                footnote: "Sources are sorted so the closest match to this appears first."
+                title: "Experience mode",
+                footnote: "Essential hides the deep playback, debrid and integration surfaces."
             ) {
-                ForEach(qualities, id: \.self) { quality in
+                ForEach(ExperienceMode.allCases) { mode in
                     SettingsRow(
-                        title: quality,
+                        title: mode.displayName,
+                        subtitle: mode.summary,
+                        systemImage: mode == .essential ? "leaf" : "slider.horizontal.3",
                         trailing: {
-                            Image(systemName: settings.preferredQuality == quality ? "checkmark.circle.fill" : "circle")
+                            Image(systemName: app.experienceMode == mode ? "checkmark.circle.fill" : "circle")
                                 .font(.system(size: NuvioTheme.sizes.icons.md))
-                                .foregroundStyle(settings.preferredQuality == quality ? colors.secondary : colors.textTertiary)
+                                .foregroundStyle(app.experienceMode == mode ? colors.secondary : colors.textTertiary)
                         },
-                        action: { settings.preferredQuality = quality }
+                        action: {
+                            app.experienceMode = mode
+                            app.experienceModeChosen = true
+                        }
                     )
                 }
-            }
-
-            SettingsCard(
-                title: "Watched threshold",
-                footnote: "How far through a video counts as finished: \(Int(settings.resumeThresholdPercent * 100))%."
-            ) {
-                HStack(spacing: NuvioTheme.spacing.md) {
-                    ForEach([0.8, 0.85, 0.9, 0.95], id: \.self) { value in
-                        NuvioChip(
-                            label: "\(Int(value * 100))%",
-                            isSelected: abs(settings.resumeThresholdPercent - value) < 0.001,
-                            action: { settings.resumeThresholdPercent = value }
-                        )
-                    }
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, NuvioTheme.spacing.lg)
-                .padding(.vertical, NuvioTheme.spacing.sm)
             }
         }
     }

@@ -4,7 +4,7 @@ import SwiftUI
 struct LibraryView: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(LibraryStore.self) private var library
-    @Environment(SettingsStore.self) private var settings
+    @Environment(AppSettings.self) private var settings
     @Environment(Router.self) private var router
 
     private enum Filter: String, CaseIterable, Identifiable {
@@ -28,7 +28,7 @@ struct LibraryView: View {
     )
 
     private var continueWatching: [ContinueWatchingEntry] {
-        library.continueWatching(threshold: settings.resumeThresholdPercent)
+        library.continueWatching(threshold: settings.watchedThreshold)
     }
 
     private var savedItems: [MetaPreview] {
@@ -79,7 +79,7 @@ struct LibraryView: View {
             } else {
                 ContinueWatchingRow(
                     entries: continueWatching,
-                    style: settings.continueWatchingStyle,
+                    style: settings.layout.continueWatchingCardStyle,
                     onSelect: { router.openDetail($0.preview) }
                 )
             }

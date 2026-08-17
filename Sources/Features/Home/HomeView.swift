@@ -4,7 +4,7 @@ struct HomeView: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(AddonStore.self) private var addons
     @Environment(LibraryStore.self) private var library
-    @Environment(SettingsStore.self) private var settings
+    @Environment(AppSettings.self) private var settings
     @Environment(Router.self) private var router
 
     @State private var model = HomeViewModel()
@@ -43,7 +43,7 @@ struct HomeView: View {
 
     @ViewBuilder
     private var layout: some View {
-        switch settings.homeLayout {
+        switch settings.layout.selectedLayout {
         case .modern: ModernHomeContent(model: model)
         case .classic: ClassicHomeContent(model: model)
         case .grid: GridHomeContent(model: model)
@@ -56,7 +56,7 @@ struct HomeView: View {
 /// The rail stack shared by all three home layouts.
 struct HomeRailList: View {
     @Environment(LibraryStore.self) private var library
-    @Environment(SettingsStore.self) private var settings
+    @Environment(AppSettings.self) private var settings
     @Environment(Router.self) private var router
 
     let model: HomeViewModel
@@ -66,7 +66,7 @@ struct HomeRailList: View {
     @State private var didClaimInitialFocus = false
 
     private var continueWatching: [ContinueWatchingEntry] {
-        library.continueWatching(threshold: settings.resumeThresholdPercent)
+        library.continueWatching(threshold: settings.watchedThreshold)
     }
 
     /// The card that should own focus when Home first has something to show — Continue
@@ -81,7 +81,7 @@ struct HomeRailList: View {
             if !continueWatching.isEmpty {
                 ContinueWatchingRow(
                     entries: continueWatching,
-                    style: settings.continueWatchingStyle,
+                    style: settings.layout.continueWatchingCardStyle,
                     onFocusItem: { model.focusedItem = $0 },
                     onSelect: { entry in
                         router.openDetail(entry.preview)

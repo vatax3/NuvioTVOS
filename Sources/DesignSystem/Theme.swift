@@ -2,9 +2,8 @@ import SwiftUI
 
 // MARK: - Theme identity (port of AppTheme / AppFont)
 
-enum AppTheme: String, CaseIterable, Codable, Identifiable {
+enum AppTheme: String, SettingsOption {
     case crimson, ocean, violet, emerald, amber, rose, white
-    var id: String { rawValue }
 
     var displayName: String {
         switch self {
@@ -19,9 +18,8 @@ enum AppTheme: String, CaseIterable, Codable, Identifiable {
     }
 }
 
-enum AppFont: String, CaseIterable, Codable, Identifiable {
+enum AppFont: String, SettingsOption {
     case inter, dmSans, openSans
-    var id: String { rawValue }
 
     var displayName: String {
         switch self {
