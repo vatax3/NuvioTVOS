@@ -12,3 +12,6 @@ xcuserdata/
 # Vendored mpv xcframeworks (~300 MB). Fetched by Scripts/fetch-mpv.sh rather than committed —
 # GitHub rejects files over 100 MB and these are build inputs, not source.
 Vendor/
+build/
+*.ipa
+*.xcarchive
