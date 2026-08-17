@@ -83,6 +83,22 @@ struct TrackingSettingsContent: View {
             }
 
             SettingsCard(
+                title: "Comments",
+                footnote: "Comments are public Trakt data — a client id is enough, signing in is not required."
+            ) {
+                SettingsToggle(
+                    title: "Show comments",
+                    subtitle: tracking.traktClientId.isEmpty
+                        ? "Needs a Trakt client id"
+                        : "Adds a Comments action to the detail screen, with spoilers hidden until revealed",
+                    systemImage: "bubble.left.and.bubble.right",
+                    isOn: $tracking.traktCommentsEnabled
+                )
+                .disabled(tracking.traktClientId.isEmpty)
+                .opacity(tracking.traktClientId.isEmpty ? NuvioTheme.effects.disabledAlpha : 1)
+            }
+
+            SettingsCard(
                 title: "Sources",
                 footnote: "Where Nuvio reads watch state and your library from."
             ) {

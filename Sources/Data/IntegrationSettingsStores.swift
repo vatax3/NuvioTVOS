@@ -210,6 +210,12 @@ final class TrackingSettingsStore: PreferenceStore {
         set { setBool("trakt_scrobble_enabled", newValue) }
     }
 
+    /// Comments are public Trakt data, so they only need the client id — not a signed-in user.
+    var traktCommentsEnabled: Bool {
+        get { bool("trakt_comments_enabled", default: true) }
+        set { setBool("trakt_comments_enabled", newValue) }
+    }
+
     var isTraktAuthenticated: Bool { !traktAccessToken.isEmpty }
     var canStartTraktAuth: Bool { !traktClientId.isEmpty && !traktClientSecret.isEmpty }
 

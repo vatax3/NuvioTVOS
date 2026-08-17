@@ -57,6 +57,12 @@ struct RootView: View {
             CastDetailView(request: request)
         case .tmdbBrowse(let request):
             TMDBBrowseView(request: request)
+        case .comments(let request):
+            CommentsView(
+                imdbId: request.imdbId,
+                contentType: request.contentType,
+                title: request.title
+            )
         case .addonManager:
             AddonManagerView()
         case .catalogOrder:

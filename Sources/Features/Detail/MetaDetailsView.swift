@@ -228,6 +228,25 @@ struct MetaDetailsView: View {
                 selected: collectionCount(meta) > 0
             ))
 
+            if settings.tracking.traktCommentsEnabled,
+               !settings.tracking.traktClientId.isEmpty,
+               let imdbId = meta.imdbId?.nilIfBlank ?? (meta.id.hasPrefix("tt") ? meta.id : nil) {
+                Button(action: {
+                    router.push(.comments(CommentsRequest(
+                        imdbId: imdbId, contentType: meta.apiType, title: meta.name
+                    )))
+                }) {
+                    HStack(spacing: NuvioTheme.spacing.sm) {
+                        Image(systemName: "bubble.left.and.bubble.right")
+                        Text("Comments")
+                    }
+                    .nuvioText(NuvioTextStyles.button)
+                    .padding(.horizontal, NuvioTheme.spacing.xl)
+                    .frame(height: NuvioTheme.components.buttonHeight)
+                }
+                .buttonStyle(NuvioPillButtonStyle(emphasis: .secondary))
+            }
+
             if settings.layout.detailPageTrailerButtonEnabled, let trailer = trailerYouTubeId(meta) {
                 Button(action: { TrailerLauncher.open(youTubeId: trailer) }) {
                     HStack(spacing: NuvioTheme.spacing.sm) {

@@ -665,6 +665,79 @@ actor TraktClient {
             )
         }
     }
+
+    // MARK: Comments
+
+    struct Comment: Hashable, Sendable, Identifiable {
+        var id: Int
+        var author: String
+        var avatar: String?
+        var body: String
+        var likes: Int
+        var replies: Int
+        var isSpoiler: Bool
+        var isReview: Bool
+        var userRating: Int?
+        var createdAt: Date?
+    }
+
+    /// Comments and reviews for one title. Public data, so it needs the client id but no token.
+    /// Trakt keys comments on its own slugs, and an IMDb id is a valid lookup id for those.
+    func comments(
+        imdbId: String,
+        type: ContentType,
+        clientId: String,
+        page: Int = 1,
+        sort: String = "likes"
+    ) async -> [Comment] {
+        struct User: Decodable {
+            struct Images: Decodable {
+                struct Avatar: Decodable { let full: String? }
+                let avatar: Avatar?
+            }
+            let username: String?
+            let name: String?
+            let images: Images?
+        }
+        struct Entry: Decodable {
+            let id: Int?
+            let comment: String?
+            let spoiler: Bool?
+            let review: Bool?
+            let replies: Int?
+            let likes: Int?
+            let user_rating: Int?
+            let created_at: String?
+            let user: User?
+        }
+
+        guard !clientId.isEmpty else { return [] }
+        let path = type == .series ? "shows" : "movies"
+        guard let entries = try? await HTTP.get(
+            "\(base)/\(path)/\(imdbId)/comments/\(sort)?page=\(max(1, page))&limit=25&extended=images",
+            headers: headers(clientId: clientId),
+            as: [Entry].self
+        ) else { return [] }
+
+        return entries.compactMap { entry in
+            guard let id = entry.id, let body = entry.comment?.nilIfBlank else { return nil }
+            let author = entry.user?.username?.nilIfBlank
+                ?? entry.user?.name?.nilIfBlank
+                ?? "Someone"
+            return Comment(
+                id: id,
+                author: author,
+                avatar: entry.user?.images?.avatar?.full?.nilIfBlank,
+                body: body,
+                likes: entry.likes ?? 0,
+                replies: entry.replies ?? 0,
+                isSpoiler: entry.spoiler ?? false,
+                isReview: entry.review ?? false,
+                userRating: entry.user_rating,
+                createdAt: entry.created_at.flatMap { VideoDateParser.parse($0) }
+            )
+        }
+    }
 }
 
 // MARK: - Skip intro (AniSkip / Anime-Skip)

@@ -148,12 +148,21 @@ struct TMDBBrowseRequest: Hashable, Identifiable {
     var id: String { "\(entity)-\(contentType)" }
 }
 
+/// Trakt comments for one title.
+struct CommentsRequest: Hashable, Identifiable {
+    var imdbId: String
+    var contentType: String
+    var title: String
+    var id: String { "comments-\(imdbId)" }
+}
+
 enum Route: Hashable {
     case detail(DetailRequest)
     case streams(StreamRequest)
     case catalogSeeAll(CatalogRequest)
     case castMember(CastRequest)
     case tmdbBrowse(TMDBBrowseRequest)
+    case comments(CommentsRequest)
     case addonManager
     case catalogOrder
     case themeSettings

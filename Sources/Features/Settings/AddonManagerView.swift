@@ -9,6 +9,7 @@ struct AddonManagerView: View {
     @State private var isInstalling = false
     @State private var message: String?
     @State private var messageIsError = false
+    @State private var configuring: Addon?
 
     /// Well-known community addons, offered as one-press installs because typing a URL on a
     /// remote is painful. Same list the Android onboarding suggests.
@@ -42,6 +43,9 @@ struct AddonManagerView: View {
             .scrollClipDisabled()
         }
         .task { await addons.refreshAll() }
+        .sheet(item: $configuring) { addon in
+            AddonConfiguratorView(addon: addon)
+        }
     }
 
     // MARK: Install
@@ -94,7 +98,8 @@ struct AddonManagerView: View {
                         onToggle: { addons.setEnabled(!record.enabled, baseUrl: record.baseUrl) },
                         onMoveUp: { addons.moveAddon(baseUrl: record.baseUrl, by: -1) },
                         onMoveDown: { addons.moveAddon(baseUrl: record.baseUrl, by: 1) },
-                        onRemove: { addons.uninstall(baseUrl: record.baseUrl) }
+                        onRemove: { addons.uninstall(baseUrl: record.baseUrl) },
+                        onConfigure: { configuring = record.manifest }
                     )
                 }
             }
@@ -157,8 +162,14 @@ private struct AddonRow: View {
     let onMoveUp: () -> Void
     let onMoveDown: () -> Void
     let onRemove: () -> Void
+    let onConfigure: () -> Void
 
     private var manifest: Addon? { record.manifest }
+
+    /// Only addons that advertise a configure page get the affordance.
+    private var isConfigurable: Bool {
+        manifest?.behaviorHints?.configurable == true
+    }
 
     var body: some View {
         HStack(spacing: NuvioTheme.spacing.lg) {
@@ -179,6 +190,9 @@ private struct AddonRow: View {
             Spacer(minLength: NuvioTheme.spacing.lg)
 
             HStack(spacing: NuvioTheme.spacing.sm) {
+                if isConfigurable {
+                    IconAction(systemImage: "slider.horizontal.3", tint: colors.secondary, action: onConfigure)
+                }
                 IconAction(systemImage: record.enabled ? "checkmark.circle.fill" : "circle",
                            tint: record.enabled ? colors.success : colors.textTertiary,
                            action: onToggle)
