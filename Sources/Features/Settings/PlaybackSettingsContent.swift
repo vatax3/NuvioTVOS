@@ -692,3 +692,58 @@ struct PlaybackSettingsContent: View {
         }
     }
 }
+
+// MARK: - Essential mode
+
+/// Port of `EssentialPlaybackSettingsContent`. The official app keeps Playback on the rail in
+/// Essential mode and trims it to a handful of decisions, rather than hiding the section — so
+/// this is what Playback renders when Advanced is off.
+struct EssentialPlaybackSettingsContent: View {
+    @Environment(AppSettings.self) private var settings
+
+    private var player: PlayerSettingsStore { settings.player }
+
+    var body: some View {
+        @Bindable var player = player
+
+        VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
+            SettingsCard(
+                title: "Basics",
+                footnote: "The few playback decisions most people ever change. Switch to Advanced in Settings → Advanced for the full set."
+            ) {
+                SettingsOptionRow(
+                    title: "Stream selection",
+                    subtitle: "Whether Nuvio picks a source for you",
+                    systemImage: "play.circle",
+                    selection: $player.streamAutoPlayMode
+                )
+                SettingsToggle(
+                    title: "Auto-play next episode",
+                    subtitle: "Continue into the following episode when one finishes",
+                    systemImage: "forward.end.fill",
+                    isOn: $player.autoPlayNextEpisodeEnabled
+                )
+            }
+
+            SettingsCard(title: "Subtitles & audio") {
+                SettingsTextFieldRow(
+                    title: "Subtitle language",
+                    subtitle: "Two-letter code, e.g. fr. Leave empty for none.",
+                    placeholder: "fr",
+                    text: $player.subtitlePreferredLanguage
+                )
+                SettingsToggle(
+                    title: "Use forced subtitles",
+                    subtitle: "Show subtitles for foreign dialogue in an otherwise understood track",
+                    isOn: $player.subtitleUseForcedSubtitles
+                )
+                SettingsTextFieldRow(
+                    title: "Audio language",
+                    subtitle: "Preferred track language when a source carries several",
+                    placeholder: "fr",
+                    text: $player.preferredAudioLanguage
+                )
+            }
+        }
+    }
+}

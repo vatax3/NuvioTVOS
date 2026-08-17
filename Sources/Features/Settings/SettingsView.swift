@@ -181,12 +181,9 @@ struct SettingsView: View {
         }
 
         /// Essential mode hides the deep surfaces, matching the Android experience gate.
-        var isAdvancedOnly: Bool {
-            switch self {
-            case .playback, .integrations, .tracking: return true
-            default: return false
-            }
-        }
+        /// The official rail hides nothing for Essential mode — it trims section *content*
+        /// instead. Kept as a hook, but no section opts in.
+        var isAdvancedOnly: Bool { false }
 
         /// Account and Profiles are owner-level surfaces: Android shows them only while the
         /// primary profile is active.
@@ -286,7 +283,12 @@ struct SettingsView: View {
                 case .layout: LayoutSettingsContent()
                 case .contentDiscovery: ContentDiscoverySettingsContent()
                 case .integrations: IntegrationsHubContent()
-                case .playback: PlaybackSettingsContent()
+                case .playback:
+                    if settings.app.showsAdvancedSettings {
+                        PlaybackSettingsContent()
+                    } else {
+                        EssentialPlaybackSettingsContent()
+                    }
                 case .advanced: AdvancedSettingsContent()
                 case .tracking: TrackingSettingsContent()
                 case .about: AboutContent()
