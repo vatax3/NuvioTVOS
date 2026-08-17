@@ -218,6 +218,18 @@ final class PlayerSettingsStore: PreferenceStore {
         set { setDouble("subtitle_vertical_offset", newValue) }
     }
 
+    // MARK: - Plugins
+
+    var pluginsEnabled: Bool {
+        get { bool("plugins_enabled", default: false) }
+        set { setBool("plugins_enabled", newValue) }
+    }
+
+    var groupPluginStreamsByRepository: Bool {
+        get { bool("group_streams_by_repository", default: false) }
+        set { setBool("group_streams_by_repository", newValue) }
+    }
+
     var subtitleOrganizationMode: SubtitleOrganizationMode {
         get { option("subtitle_organization_mode", default: .byLanguage) }
         set { setOption("subtitle_organization_mode", newValue) }

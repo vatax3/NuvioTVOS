@@ -40,6 +40,7 @@ private struct ProfileScopedRoot: View {
     @State private var addons = AddonStore()
     @State private var library = LibraryStore()
     @State private var collections = CollectionStore()
+    @State private var plugins = PluginStore()
     @State private var router = Router()
 
     var body: some View {
@@ -48,6 +49,7 @@ private struct ProfileScopedRoot: View {
             .environment(addons)
             .environment(library)
             .environment(collections)
+            .environment(plugins)
             .environment(router)
             .environment(\.nuvioColors, settings.app.colors)
             .environment(\.nuvioFont, settings.app.font)

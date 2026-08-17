@@ -143,7 +143,7 @@ struct SettingsView: View {
     @Environment(Router.self) private var router
 
     enum Section: String, CaseIterable, Identifiable {
-        case addons, appearance, layout, playback, debrid, tracking, metadata, extras, profiles, experience, about
+        case addons, appearance, layout, playback, debrid, plugins, tracking, metadata, extras, profiles, experience, about
         var id: String { rawValue }
 
         var title: String {
@@ -153,6 +153,7 @@ struct SettingsView: View {
             case .layout: return "Layout"
             case .playback: return "Playback"
             case .debrid: return "Debrid"
+            case .plugins: return "Plugins"
             case .tracking: return "Tracking"
             case .metadata: return "Metadata"
             case .extras: return "Extras"
@@ -169,6 +170,7 @@ struct SettingsView: View {
             case .layout: return "rectangle.3.group.fill"
             case .playback: return "play.rectangle.fill"
             case .debrid: return "link"
+            case .plugins: return "puzzlepiece.fill"
             case .tracking: return "chart.line.uptrend.xyaxis"
             case .metadata: return "photo.stack.fill"
             case .extras: return "sparkles"
@@ -181,7 +183,7 @@ struct SettingsView: View {
         /// Essential mode hides the deep surfaces, matching the Android experience gate.
         var isAdvancedOnly: Bool {
             switch self {
-            case .playback, .debrid, .tracking, .metadata, .extras: return true
+            case .playback, .debrid, .plugins, .tracking, .metadata, .extras: return true
             default: return false
             }
         }
@@ -190,7 +192,7 @@ struct SettingsView: View {
         /// its own restriction, or reconfigure sources for the whole household.
         var isBlockedWhenRestricted: Bool {
             switch self {
-            case .addons, .playback, .debrid, .profiles: return true
+            case .addons, .playback, .debrid, .plugins, .profiles: return true
             default: return false
             }
         }
@@ -270,6 +272,7 @@ struct SettingsView: View {
                 case .layout: LayoutSettingsContent()
                 case .playback: PlaybackSettingsContent()
                 case .debrid: DebridSettingsContent()
+                case .plugins: PluginsSettingsContent()
                 case .tracking: TrackingSettingsContent()
                 case .metadata: MetadataSettingsContent()
                 case .extras: ExtrasSettingsContent()

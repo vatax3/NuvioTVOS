@@ -67,7 +67,7 @@ final class StreamsViewModel {
         let providers = addonStore.addonsProviding(
             resource: "stream", type: request.contentType, id: request.videoId
         )
-        guard !providers.isEmpty else { return }
+        guard !providers.isEmpty || !pluginScrapers.isEmpty else { return }
 
         var collected: [(Addon, [Stream])] = []
         await withTaskGroup(of: (Addon, [Stream]?).self) { group in
@@ -89,10 +89,15 @@ final class StreamsViewModel {
             }
         }
 
+        var pluginGroups = await runPluginScrapers(request: request, settings: settings)
+
         // Parse once; both filtering and the row chips read from this.
         var parsed: [String: ParsedStreamAttributes] = [:]
         for (_, streams) in collected {
             for stream in streams { parsed[stream.stableKey] = StreamAttributeParser.parse(stream) }
+        }
+        for group in pluginGroups {
+            for stream in group.streams { parsed[stream.stableKey] = StreamAttributeParser.parse(stream) }
         }
         attributes = parsed
 
@@ -107,12 +112,107 @@ final class StreamsViewModel {
                 addonName: addon.displayName, addonLogo: addon.logo, streams: kept
             ))
         }
+        // Plugin results go through the same filters as addon streams.
+        for index in pluginGroups.indices {
+            let kept = StreamFilterEngine.apply(
+                to: pluginGroups[index].streams, attributes: parsed, input: filterInput
+            )
+            removed += pluginGroups[index].streams.count - kept.count
+            pluginGroups[index].streams = kept
+        }
         filteredOutCount = removed
         groups = rendered.sorted {
             $0.addonName.localizedCaseInsensitiveCompare($1.addonName) == .orderedAscending
-        }
+        } + pluginGroups.filter { !$0.streams.isEmpty }
 
         await refreshCacheStates(settings: settings)
+    }
+
+    // MARK: Plugins
+
+    /// Scrapers to run for this request; set by the view before `load`.
+    var pluginScrapers: [InstalledScraper] = []
+    /// Grouping preference, also supplied by the view.
+    var groupPluginsByRepository = false
+    /// Repository names, so a grouped section can be labelled.
+    var pluginRepositoryNames: [String: String] = [:]
+
+    /// Scrapers are keyed on TMDB ids, not IMDb, so the id has to be translated first.
+    private(set) var pluginTmdbId: String?
+
+    private func runPluginScrapers(
+        request: StreamRequest,
+        settings: AppSettings
+    ) async -> [AddonStreams] {
+        guard !pluginScrapers.isEmpty else { return [] }
+
+        let mediaType = ContentType.from(request.contentType) == .series ? "tv" : "movie"
+        let eligible = pluginScrapers.filter { $0.supports(type: request.contentType) }
+        guard !eligible.isEmpty else { return [] }
+
+        guard let tmdbId = await resolveTmdbId(request: request, settings: settings) else {
+            failedAddons.append("Plugins (no TMDB id)")
+            return []
+        }
+        pluginTmdbId = tmdbId
+
+        var byScraper: [(InstalledScraper, [LocalScraperResult])] = []
+        await withTaskGroup(of: (InstalledScraper, [LocalScraperResult]).self) { group in
+            for scraper in eligible {
+                group.addTask {
+                    let results = await PluginRuntime.shared.execute(
+                        code: scraper.code,
+                        tmdbId: tmdbId,
+                        mediaType: mediaType,
+                        season: request.season,
+                        episode: request.episode,
+                        scraperId: scraper.id,
+                        tmdbApiKey: settings.tmdb.apiKey
+                    )
+                    return (scraper, results)
+                }
+            }
+            for await entry in group where !entry.1.isEmpty {
+                byScraper.append(entry)
+            }
+        }
+
+        // One section per scraper, or one per repository when the viewer asked for that.
+        var sections: [String: (logo: String?, streams: [Stream])] = [:]
+        for (scraper, results) in byScraper {
+            let label = groupPluginsByRepository
+                ? (pluginRepositoryNames[scraper.repositoryId] ?? scraper.name)
+                : scraper.name
+            var bucket = sections[label] ?? (scraper.logo, [])
+            for (index, result) in results.enumerated() {
+                bucket.streams.append(result.asStream(sourceName: label, occurrence: index))
+            }
+            sections[label] = bucket
+        }
+
+        return sections
+            .sorted { $0.key.localizedCaseInsensitiveCompare($1.key) == .orderedAscending }
+            .map { AddonStreams(addonName: $0.key, addonLogo: $0.value.logo, streams: $0.value.streams) }
+    }
+
+    /// The request carries an IMDb id; TMDB's `find` endpoint converts it.
+    private func resolveTmdbId(request: StreamRequest, settings: AppSettings) async -> String? {
+        guard let imdbId = request.imdbId?.nilIfBlank
+            ?? (request.contentId.hasPrefix("tt") ? request.contentId : nil) else { return nil }
+        guard !settings.tmdb.apiKey.isEmpty else { return nil }
+        let enrichment = await TMDBClient.shared.enrich(
+            imdbId: imdbId,
+            type: ContentType.from(request.contentType),
+            apiKey: settings.tmdb.apiKey,
+            language: settings.tmdb.language,
+            // Only the id is needed; skip every optional append so this is one cheap call.
+            options: TMDBClient.TMDBOptions(
+                useArtwork: false, useBasicInfo: false, useCredits: false, useDetails: false,
+                useTrailers: false, useNetworks: false, useProductions: false,
+                useReleaseDates: false, useMoreLikeThis: false
+            )
+        )
+        return enrichment?.tmdbId.map(String.init)
     }
 
     /// Batch instant-availability lookup for the torrent sources on screen.
@@ -169,6 +269,7 @@ struct StreamsView: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(AddonStore.self) private var addons
     @Environment(LibraryStore.self) private var library
+    @Environment(PluginStore.self) private var plugins
     @Environment(AppSettings.self) private var settings
     @Environment(Router.self) private var router
 
@@ -218,6 +319,16 @@ struct StreamsView: View {
         .scrollClipDisabled()
         .background(colors.background)
         .task {
+            // Handed in rather than read inside the model: the store is main-actor state and
+            // the model runs the scrapers off it.
+            if settings.player.pluginsEnabled {
+                model.pluginScrapers = plugins.enabledScrapers
+                model.groupPluginsByRepository = settings.player.groupPluginStreamsByRepository
+                model.pluginRepositoryNames = Dictionary(
+                    plugins.repositories.map { ($0.id, $0.name) },
+                    uniquingKeysWith: { first, _ in first }
+                )
+            }
             await model.load(request: request, addonStore: addons, settings: settings)
             await autoPlayIfConfigured()
         }
