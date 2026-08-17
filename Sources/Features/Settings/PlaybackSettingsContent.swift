@@ -87,6 +87,8 @@ struct PlaybackSettingsContent: View {
                 )
             }
 
+            ExternalPlayerSettingsCard()
+
             StreamBadgeSettingsCard()
 
             SettingsCard(title: "On-screen") {
@@ -744,6 +746,75 @@ struct EssentialPlaybackSettingsContent: View {
                     text: $player.preferredAudioLanguage
                 )
             }
+        }
+    }
+}
+
+// MARK: - External players
+
+/// Picks which installed app a hand-off targets, and explains what the internal player can and
+/// cannot open — the container question is the main reason to reach for an external player at all.
+struct ExternalPlayerSettingsCard: View {
+    @Environment(\.nuvioColors) private var colors
+    @Environment(AppSettings.self) private var settings
+
+    private var installed: [ExternalPlayer] { ExternalPlayerLauncher.installed }
+
+    var body: some View {
+        @Bindable var player = settings.player
+
+        SettingsCard(
+            title: "External player",
+            footnote: """
+            AVFoundation plays H.264 and HEVC in MP4 and HLS but cannot open MKV, which a lot of \
+            debrid sources use. Handing those to Infuse, VLC, nPlayer or Outplayer works. The \
+            cost: a hand-off carries only a URL, so per-stream request headers are lost and Nuvio \
+            stops tracking progress once another app takes over.
+            """
+        ) {
+            if installed.isEmpty {
+                SettingsInfoRow(
+                    title: "Installed players",
+                    value: "None found — install Infuse, VLC, nPlayer or Outplayer",
+                    tint: colors.textSecondary
+                )
+            } else {
+                SettingsRow(
+                    title: "Ask each time",
+                    subtitle: "Choose at the moment of playback",
+                    systemImage: "questionmark.circle",
+                    trailing: {
+                        Image(systemName: player.preferredExternalPlayer.isEmpty
+                              ? "checkmark.circle.fill" : "circle")
+                            .font(.system(size: NuvioTheme.sizes.icons.md))
+                            .foregroundStyle(player.preferredExternalPlayer.isEmpty
+                                             ? colors.secondary : colors.textTertiary)
+                    },
+                    action: { player.preferredExternalPlayer = "" }
+                )
+                ForEach(installed) { candidate in
+                    SettingsRow(
+                        title: candidate.displayName,
+                        subtitle: candidate.summary,
+                        systemImage: "arrow.up.forward.app",
+                        trailing: {
+                            Image(systemName: player.preferredExternalPlayer == candidate.rawValue
+                                  ? "checkmark.circle.fill" : "circle")
+                                .font(.system(size: NuvioTheme.sizes.icons.md))
+                                .foregroundStyle(player.preferredExternalPlayer == candidate.rawValue
+                                                 ? colors.secondary : colors.textTertiary)
+                        },
+                        action: { player.preferredExternalPlayer = candidate.rawValue }
+                    )
+                }
+            }
+
+            SettingsToggle(
+                title: "Forward subtitles",
+                subtitle: "Pass the selected addon subtitle URL when the player accepts one",
+                systemImage: "captions.bubble",
+                isOn: $player.externalPlayerForwardSubtitles
+            )
         }
     }
 }

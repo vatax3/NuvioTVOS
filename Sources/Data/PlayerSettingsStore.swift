@@ -463,6 +463,12 @@ final class PlayerSettingsStore: PreferenceStore {
 
     // MARK: - External player
 
+    /// Which external app a hand-off targets. Empty means "ask me".
+    var preferredExternalPlayer: String {
+        get { string("preferred_external_player", default: "") }
+        set { setString("preferred_external_player", newValue) }
+    }
+
     var externalPlayerForwardSubtitles: Bool {
         get { bool("external_player_forward_subtitles", default: true) }
         set { setBool("external_player_forward_subtitles", newValue) }

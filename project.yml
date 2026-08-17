@@ -51,3 +51,9 @@ targets:
         # Trailer hand-off: canOpenURL only answers for schemes declared here.
         LSApplicationQueriesSchemes:
           - youtube
+          # External players Nuvio can hand a stream to; canOpenURL only answers for these.
+          - infuse
+          - vlc-x-callback
+          - vlc
+          - nplayer
+          - outplayer

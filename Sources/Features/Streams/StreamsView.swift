@@ -277,6 +277,8 @@ struct StreamsView: View {
 
     @State private var model = StreamsViewModel()
     @State private var didAutoPlay = false
+    /// Set when the viewer has to choose where a resolved stream opens.
+    @State private var handOff: HandOffRequest?
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -318,6 +320,12 @@ struct StreamsView: View {
         }
         .scrollClipDisabled()
         .background(colors.background)
+        .sheet(item: $handOff) { pending in
+            ExternalPlayerPicker(playback: pending.playback) {
+                handOff = nil
+                router.play(pending.playback)
+            }
+        }
         .task {
             // Handed in rather than read inside the model: the store is main-actor state and
             // the model runs the scrapers off it.
@@ -434,8 +442,38 @@ struct StreamsView: View {
         let result = await model.playableURL(for: stream, settings: settings)
         guard case .success(let url) = result else { return }
 
+        let playback = makePlaybackRequest(stream: stream, url: url)
+        let installed = ExternalPlayerLauncher.installed
+
+        // Where the stream opens: internally, in a chosen external app, or ask each time.
+        switch settings.player.playerPreference {
+        case .internalPlayer:
+            router.play(playback)
+
+        case .externalPlayer:
+            let preferred = ExternalPlayer(rawValue: settings.player.preferredExternalPlayer)
+            if let preferred, installed.contains(preferred) {
+                ExternalPlayerLauncher.open(preferred, stream: url, title: request.title)
+            } else if !installed.isEmpty {
+                // Set to external but no usable choice recorded — ask rather than guess.
+                handOff = HandOffRequest(playback: playback)
+            } else {
+                // Nothing installed: falling back beats refusing to play.
+                router.play(playback)
+            }
+
+        case .askEveryTime:
+            if installed.isEmpty {
+                router.play(playback)
+            } else {
+                handOff = HandOffRequest(playback: playback)
+            }
+        }
+    }
+
+    private func makePlaybackRequest(stream: Stream, url: String) -> PlaybackRequest {
         let preview = library.cachedPreview(contentType: request.contentType, contentId: request.contentId)
-        router.play(PlaybackRequest(
+        return PlaybackRequest(
             streamURL: url,
             title: request.title,
             subtitleLine: [request.episodeLabel, request.episodeName]
@@ -455,7 +493,7 @@ struct StreamsView: View {
             nextUp: nextUpRequest,
             imdbId: request.imdbId,
             subtitles: model.subtitles
-        ))
+        )
     }
 }
 
@@ -619,6 +657,82 @@ private struct StreamRow: View {
             Image(systemName: isPlayable ? "play.circle.fill" : "exclamationmark.circle")
                 .font(.system(size: NuvioTheme.sizes.icons.lg))
                 .foregroundStyle(isPlayable ? colors.textSecondary : colors.warning)
+        }
+    }
+}
+
+// MARK: - External player hand-off
+
+/// A resolved stream waiting on the viewer to say where it opens.
+struct HandOffRequest: Identifiable {
+    let playback: PlaybackRequest
+    var id: String { playback.id }
+}
+
+/// Port of the Android "play with" chooser. Lists only players that are actually installed, and
+/// says plainly when a hand-off would drop request headers the source needs.
+struct ExternalPlayerPicker: View {
+    @Environment(\.nuvioColors) private var colors
+    @Environment(\.dismiss) private var dismiss
+
+    let playback: PlaybackRequest
+    let onInternal: () -> Void
+
+    private var installed: [ExternalPlayer] { ExternalPlayerLauncher.installed }
+    private var losesHeaders: Bool { !playback.headers.isEmpty }
+
+    var body: some View {
+        NuvioScreenBackground {
+            VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
+                Text("Play with")
+                    .nuvioText(NuvioTextStyles.display)
+                    .foregroundStyle(colors.textPrimary)
+
+                Text(playback.title)
+                    .nuvioText(NuvioTextStyles.bodyCompact)
+                    .foregroundStyle(colors.textSecondary)
+
+                SettingsCard(
+                    title: "This device",
+                    footnote: "AVFoundation covers H.264 and HEVC in MP4 and HLS. It cannot open MKV — use an external player for those."
+                ) {
+                    SettingsRow(
+                        title: "Nuvio player",
+                        subtitle: "Resume, progress tracking, addon subtitles and auto-play all work here",
+                        systemImage: "play.rectangle.fill",
+                        action: onInternal
+                    )
+                }
+
+                SettingsCard(
+                    title: "External players",
+                    footnote: losesHeaders
+                        ? "This source needs request headers that a hand-off cannot carry, so it will probably fail outside Nuvio. Progress and auto-play also stop at the hand-off."
+                        : "Nuvio stops tracking progress once playback moves to another app."
+                ) {
+                    ForEach(installed) { player in
+                        SettingsRow(
+                            title: player.displayName,
+                            subtitle: player.summary,
+                            systemImage: "arrow.up.forward.app",
+                            action: {
+                                ExternalPlayerLauncher.open(
+                                    player, stream: playback.streamURL, title: playback.title
+                                )
+                                dismiss()
+                            }
+                        )
+                    }
+                }
+
+                Button(action: { dismiss() }) {
+                    Text("Cancel")
+                        .nuvioText(NuvioTextStyles.button)
+                        .padding(.horizontal, NuvioTheme.spacing.xl)
+                        .frame(height: NuvioTheme.components.buttonHeight)
+                }
+                .buttonStyle(NuvioPillButtonStyle(emphasis: .secondary))
+            }
         }
     }
 }

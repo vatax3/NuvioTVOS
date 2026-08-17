@@ -23,6 +23,11 @@
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>youtube</string>
+		<string>infuse</string>
+		<string>vlc-x-callback</string>
+		<string>vlc</string>
+		<string>nplayer</string>
+		<string>outplayer</string>
 	</array>
 	<key>NSAppTransportSecurity</key>
 	<dict>
