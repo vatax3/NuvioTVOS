@@ -18,10 +18,11 @@ class PreferenceStore {
     private var storage: [String: Any] = [:]
 
     init(namespace: String, defaults: UserDefaults = .standard) {
-        self.namespace = namespace
+        // Non-primary profiles get their own key space; the primary keeps the bare names.
+        self.namespace = ProfileScope.preferenceKeyPrefix + namespace
         self.defaults = defaults
         // Hydrate synchronously so the first frame renders the user's real configuration.
-        let prefix = "\(namespace)."
+        let prefix = "\(self.namespace)."
         for (key, value) in defaults.dictionaryRepresentation() where key.hasPrefix(prefix) {
             storage[String(key.dropFirst(prefix.count))] = value
         }

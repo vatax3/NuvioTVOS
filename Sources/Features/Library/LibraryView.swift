@@ -5,11 +5,12 @@ struct LibraryView: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(\.posterMetrics) private var metrics
     @Environment(LibraryStore.self) private var library
+    @Environment(CollectionStore.self) private var collections
     @Environment(AppSettings.self) private var settings
     @Environment(Router.self) private var router
 
     private enum Filter: String, CaseIterable, Identifiable {
-        case all, movies, series, continueWatching
+        case all, movies, series, continueWatching, collections
         var id: String { rawValue }
         var title: String {
             switch self {
@@ -17,11 +18,13 @@ struct LibraryView: View {
             case .movies: return "Movies"
             case .series: return "Series"
             case .continueWatching: return "Continue Watching"
+            case .collections: return "Collections"
             }
         }
     }
 
     @State private var filter: Filter = .all
+    @State private var isCreatingCollection = false
 
     private var columns: [GridItem] { metrics.gridColumns() }
 
@@ -35,7 +38,7 @@ struct LibraryView: View {
     private var savedItems: [MetaPreview] {
         let items = library.library.map(\.preview)
         switch filter {
-        case .all, .continueWatching: return items
+        case .all, .continueWatching, .collections: return items
         case .movies: return items.filter { $0.type == .movie }
         case .series: return items.filter { $0.type == .series }
         }
@@ -66,11 +69,14 @@ struct LibraryView: View {
         }
         .scrollClipDisabled()
         .background(colors.background)
+        .sheet(isPresented: $isCreatingCollection) { CollectionEditorView(collection: nil) }
     }
 
     @ViewBuilder
     private var content: some View {
-        if filter == .continueWatching {
+        if filter == .collections {
+            collectionsContent
+        } else if filter == .continueWatching {
             if continueWatching.isEmpty {
                 emptyState(
                     icon: "play.circle",
@@ -101,6 +107,39 @@ struct LibraryView: View {
                 }
             }
             .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)
+        }
+    }
+
+    /// One rail per collection, plus the create affordance.
+    @ViewBuilder
+    private var collectionsContent: some View {
+        if collections.collections.isEmpty {
+            EmptyStateView(
+                systemImage: "folder",
+                title: "No collections yet",
+                message: "Group titles into folders — a watchlist for tonight, a series to rewatch, anything.",
+                actionTitle: "New collection",
+                action: { isCreatingCollection = true }
+            )
+            .frame(height: dp(340))
+        } else {
+            VStack(alignment: .leading, spacing: NuvioTheme.spacing.rail.rowGap) {
+                ForEach(collections.collections) { collection in
+                    CollectionRail(collection: collection)
+                }
+
+                Button(action: { isCreatingCollection = true }) {
+                    HStack(spacing: NuvioTheme.spacing.sm) {
+                        Image(systemName: "plus")
+                        Text("New collection")
+                    }
+                    .nuvioText(NuvioTextStyles.button)
+                    .padding(.horizontal, NuvioTheme.spacing.xl)
+                    .frame(height: NuvioTheme.components.buttonHeight)
+                }
+                .buttonStyle(NuvioPillButtonStyle(emphasis: .secondary))
+                .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)
+            }
         }
     }
 

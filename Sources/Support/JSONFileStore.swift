@@ -7,11 +7,16 @@ struct JSONFileStore<Value: Codable> {
     private let url: URL
     private let log = Logger(subsystem: "com.nuvio.tvos", category: "JSONFileStore")
 
-    init(filename: String) {
+    /// `global` files (the profile list itself) live at the top level; everything else is
+    /// scoped to the active profile so each one keeps its own library and progress.
+    init(filename: String, scope: ProfileScope.Storage = .profile) {
         let base = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)
             .first ?? FileManager.default.temporaryDirectory
-        let directory = base.appendingPathComponent("Nuvio", isDirectory: true)
+        var directory = base.appendingPathComponent("Nuvio", isDirectory: true)
+        if case .profile = scope, let subdirectory = ProfileScope.storageSubdirectory {
+            directory = directory.appendingPathComponent(subdirectory, isDirectory: true)
+        }
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         url = directory.appendingPathComponent(filename)
     }

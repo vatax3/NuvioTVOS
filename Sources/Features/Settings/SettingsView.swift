@@ -139,10 +139,11 @@ struct SettingsView: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(AppSettings.self) private var settings
     @Environment(AddonStore.self) private var addons
+    @Environment(ProfileStore.self) private var profiles
     @Environment(Router.self) private var router
 
     enum Section: String, CaseIterable, Identifiable {
-        case addons, appearance, layout, playback, debrid, tracking, metadata, extras, experience, about
+        case addons, appearance, layout, playback, debrid, tracking, metadata, extras, profiles, experience, about
         var id: String { rawValue }
 
         var title: String {
@@ -155,6 +156,7 @@ struct SettingsView: View {
             case .tracking: return "Tracking"
             case .metadata: return "Metadata"
             case .extras: return "Extras"
+            case .profiles: return "Profiles"
             case .experience: return "Experience"
             case .about: return "About"
             }
@@ -170,6 +172,7 @@ struct SettingsView: View {
             case .tracking: return "chart.line.uptrend.xyaxis"
             case .metadata: return "photo.stack.fill"
             case .extras: return "sparkles"
+            case .profiles: return "person.2.fill"
             case .experience: return "slider.horizontal.3"
             case .about: return "info.circle.fill"
             }
@@ -182,13 +185,27 @@ struct SettingsView: View {
             default: return false
             }
         }
+
+        /// A restricted profile must not be able to reach the settings that would let it lift
+        /// its own restriction, or reconfigure sources for the whole household.
+        var isBlockedWhenRestricted: Bool {
+            switch self {
+            case .addons, .playback, .debrid, .profiles: return true
+            default: return false
+            }
+        }
     }
 
     @State private var section: Section =
         LaunchArguments.settingsSection.flatMap(Section.init(rawValue:)) ?? .addons
 
+    private var isRestricted: Bool { profiles.activeProfile?.isRestricted ?? false }
+
     private var sections: [Section] {
-        Section.allCases.filter { settings.app.showsAdvancedSettings || !$0.isAdvancedOnly }
+        Section.allCases.filter { section in
+            guard settings.app.showsAdvancedSettings || !section.isAdvancedOnly else { return false }
+            return !(isRestricted && section.isBlockedWhenRestricted)
+        }
     }
 
     var body: some View {
@@ -200,8 +217,10 @@ struct SettingsView: View {
         .padding(.vertical, NuvioTheme.layout.tvSafeVertical)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(colors.background)
-        .onChange(of: sections.map(\.id)) { _, available in
-            if !available.contains(section.id) { section = .addons }
+        .onChange(of: sections.map(\.id), initial: true) { _, available in
+            // Appearance is always present, so it is the safe landing spot when the current
+            // section disappears (experience mode change, or a restricted profile).
+            if !available.contains(section.id) { section = sections.first ?? .appearance }
         }
     }
 
@@ -254,6 +273,7 @@ struct SettingsView: View {
                 case .tracking: TrackingSettingsContent()
                 case .metadata: MetadataSettingsContent()
                 case .extras: ExtrasSettingsContent()
+                case .profiles: ProfilesSettingsContent()
                 case .experience: ExperienceSettingsContent()
                 case .about: AboutContent()
                 }
