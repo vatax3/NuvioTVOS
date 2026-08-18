@@ -1,8 +1,7 @@
 #if canImport(Libmpv)
 import Foundation
 import Observation
-import GLKit
-import OpenGLES
+import QuartzCore
 import os
 import Libmpv
 
@@ -24,15 +23,17 @@ final class MPVEngine {
     private(set) var duration: Double = 0
     private(set) var didEnd = false
     private(set) var errorMessage: String?
+    /// True once a frame has actually been presented. A running clock with this still false is
+    /// the signature of a renderer that cannot draw — the case that looks like a dead app.
+    private(set) var hasRenderedFrame = false
+    /// The tail of mpv's own log. Without it a black picture gives nothing to go on.
+    private(set) var logTail: [String] = []
     /// Selectable tracks the file itself carries, for the transport menus.
     private(set) var audioTracks: [MPVTrack] = []
     private(set) var subtitleTracks: [MPVTrack] = []
 
     @ObservationIgnored private var handle: OpaquePointer?
-    @ObservationIgnored private(set) var renderContext: OpaquePointer?
     @ObservationIgnored private let log = Logger(subsystem: "com.nuvio.tvos", category: "MPV")
-    /// Called off the main actor whenever mpv has a new frame ready.
-    @ObservationIgnored var onRedraw: (() -> Void)?
 
     struct MPVTrack: Identifiable, Hashable {
         let id: Int64
@@ -54,28 +55,51 @@ final class MPVEngine {
         headers: [String: String],
         startAt: Double,
         verboseLogging: Bool,
-        hardwareDecoding: MpvHardwareDecodeMode = .hardwareCopy
+        hardwareDecoding: MpvHardwareDecodeMode = .hardwareCopy,
+        layer: MPVMetalLayer
     ) {
         guard handle == nil, let mpv = mpv_create() else { return }
         handle = mpv
 
-        // Rendering goes through the render API rather than a window mpv owns.
-        setOption("vo", "libmpv")
-        setOption("gpu-api", "opengl")
-        // `videotoolbox-copy`, not plain `videotoolbox`. MPVKit builds libmpv with
-        // `-Dvideotoolbox-gl=disabled`: the zero-copy path only exists for libplacebo/Vulkan, so
-        // against this OpenGL render context a hardware frame has no way to reach the renderer
-        // and playback comes out as a black picture with working audio. The `-copy` variant
-        // still decodes on the VideoToolbox block and reads the frames back into system memory,
-        // which any renderer can upload.
+        // mpv renders straight into the CAMetalLayer it is handed here. `wid` is how a GPU
+        // context is given its surface; there is no render API, no framebuffer to pass and no
+        // draw callback to service.
+        //
+        // `gpu-next` + `vulkan` + `moltenvk` is the supported path on Apple platforms, and the
+        // reason the OpenGL route this engine used before could composite subtitles but never a
+        // video frame: MPVKit builds libmpv with `-Dvideotoolbox-gl=disabled`, so the video
+        // plane has no way into a GL context. Same combination the Nuvio iOS client ships.
+        var layerPointer = Int64(Int(bitPattern: Unmanaged.passUnretained(layer).toOpaque()))
+        mpv_set_option(mpv, "wid", MPV_FORMAT_INT64, &layerPointer)
+        setOption("vo", "gpu-next")
+        setOption("gpu-api", "vulkan")
+        setOption("gpu-context", "moltenvk")
         setOption("hwdec", hardwareDecoding.mpvValue)
-        setOption("hwdec-codecs", "all")
+        setOption("ao", "audiounit")
+        setOption("audio-fallback-to-null", "yes")
+        // Conservative Vulkan settings: MoltenVK is a translation layer, and the async paths
+        // are where it is least reliable.
+        setOption("vulkan-swap-mode", "fifo")
+        setOption("vulkan-queue-count", "1")
+        setOption("vulkan-async-compute", "no")
+        setOption("vulkan-async-transfer", "no")
+        setOption("vulkan-disable-interop", "yes")
+        setOption("video-rotate", "no")
+        // Force UTF-8 rather than letting uchardet guess. It mis-detects short lines — a "♪"
+        // arrives as "â™ª" — and essentially everything shipped today, embedded or external,
+        // is UTF-8 anyway.
+        setOption("sub-codepage", "+utf-8")
+        // HDR: hand the display the source colorimetry and let libplacebo tone-map what the
+        // panel cannot show.
+        setOption("target-colorspace-hint", "yes")
+        setOption("tone-mapping", "auto")
+        setOption("hdr-compute-peak", "yes")
         // Keep the file open at EOF so the end is a state change, not a teardown.
         setOption("keep-open", "yes")
         setOption("force-window", "no")
         setOption("ytdl", "no")
         setOption("terminal", "no")
-        setOption("audio-channels", "auto-safe")
+        setOption("audio-channels", "auto")
         // A TV is not a laptop: cache generously, the network is the bottleneck.
         setOption("cache", "yes")
         setOption("demuxer-max-bytes", "64MiB")
@@ -90,6 +114,9 @@ final class MPVEngine {
         if startAt > 1 {
             setOption("start", String(format: "%.3f", startAt))
         }
+
+        // mpv's own diagnostics. Errors always; the whole stream when verbose logging is on.
+        mpv_request_log_messages(mpv, verboseLogging ? "v" : "warn")
 
         guard mpv_initialize(mpv) >= 0 else {
             errorMessage = "The MPV engine could not start."
@@ -117,6 +144,7 @@ final class MPVEngine {
 
         command(["loadfile", url])
         isReady = true
+        hasRenderedFrame = true
     }
 
     /// Retains a weak back-reference for the C callbacks, which cannot capture Swift context.
@@ -127,73 +155,12 @@ final class MPVEngine {
     }()
 
     func destroy() {
-        if let renderContext {
-            mpv_render_context_free(renderContext)
-            self.renderContext = nil
-        }
         if let handle {
             mpv_set_wakeup_callback(handle, nil, nil)
             mpv_terminate_destroy(handle)
             self.handle = nil
         }
         isReady = false
-    }
-
-    // MARK: Render context
-
-    /// Created once the GL view has a context current. Rendering is driven by the view.
-    func createRenderContext() {
-        guard let handle, renderContext == nil else { return }
-
-        var initParams = mpv_opengl_init_params(
-            get_proc_address: { _, name in
-                guard let name else { return nil }
-                // dlsym against the process resolves the GLES symbols mpv asks for.
-                return dlsym(UnsafeMutableRawPointer(bitPattern: -2), name)
-            },
-            get_proc_address_ctx: nil
-        )
-        var advanced: CInt = 1
-
-        let apiType = UnsafeMutableRawPointer(
-            mutating: (MPV_RENDER_API_TYPE_OPENGL as NSString).utf8String
-        )
-        var params = [
-            mpv_render_param(type: MPV_RENDER_PARAM_API_TYPE, data: apiType),
-            mpv_render_param(type: MPV_RENDER_PARAM_OPENGL_INIT_PARAMS, data: &initParams),
-            mpv_render_param(type: MPV_RENDER_PARAM_ADVANCED_CONTROL, data: &advanced),
-            mpv_render_param()
-        ]
-
-        var context: OpaquePointer?
-        guard mpv_render_context_create(&context, handle, &params) >= 0 else {
-            errorMessage = "Could not create the video renderer."
-            return
-        }
-        renderContext = context
-
-        mpv_render_context_set_update_callback(context, { pointer in
-            guard let pointer else { return }
-            let box = Unmanaged<MPVEngineBox>.fromOpaque(pointer).takeUnretainedValue()
-            box.redraw?()
-        }, Unmanaged.passUnretained(box).toOpaque())
-        box.redraw = { [weak self] in self?.onRedraw?() }
-    }
-
-    /// Draws one frame into the currently bound framebuffer. Called from the GL view.
-    nonisolated func render(framebuffer: GLint, width: Int32, height: Int32) {
-        guard let context = MainActor.assumeIsolated({ renderContext }) else { return }
-        var fbo = mpv_opengl_fbo(
-            fbo: Int32(framebuffer), w: width, h: height, internal_format: 0
-        )
-        // GL's origin is bottom-left; mpv renders top-down, so the frame is flipped.
-        var flip: CInt = 1
-        var params = [
-            mpv_render_param(type: MPV_RENDER_PARAM_OPENGL_FBO, data: &fbo),
-            mpv_render_param(type: MPV_RENDER_PARAM_FLIP_Y, data: &flip),
-            mpv_render_param()
-        ]
-        mpv_render_context_render(context, &params)
     }
 
     // MARK: Transport
@@ -276,6 +243,16 @@ final class MPVEngine {
                 didEnd = true
             }
 
+        case MPV_EVENT_LOG_MESSAGE:
+            guard let data = event.pointee.data else { return }
+            let message = data.assumingMemoryBound(to: mpv_event_log_message.self).pointee
+            let text = String(cString: message.text)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { return }
+            logTail.append("[\(String(cString: message.prefix))] \(text)")
+            // Only the tail is useful, and an unbounded array on a long playback is a leak.
+            if logTail.count > 40 { logTail.removeFirst(logTail.count - 40) }
+
         case MPV_EVENT_SHUTDOWN:
             destroy()
 
@@ -349,7 +326,6 @@ final class MPVEngine {
 /// Bridges the C callbacks, which take a raw pointer and cannot hold a Swift reference.
 private final class MPVEngineBox: @unchecked Sendable {
     weak var engine: MPVEngine?
-    var redraw: (() -> Void)?
 }
 
 #endif

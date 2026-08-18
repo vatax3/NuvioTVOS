@@ -1,7 +1,6 @@
 #if canImport(Libmpv)
 import SwiftUI
-import GLKit
-import OpenGLES
+import UIKit
 
 /// The MPV playback surface plus its transport overlay.
 ///
@@ -25,6 +24,11 @@ struct MPVPlayerView: View {
     @State private var hideTask: Task<Void, Never>?
     @State private var lastPersistedPosition: Double = 0
     @State private var picker: TrackPicker?
+    /// Focus is placed explicitly rather than left to the engine. The surface and the transport
+    /// never coexist as focus candidates: whichever is on screen must hold it, or the remote
+    /// goes dead the moment the bar auto-hides and takes the focused button with it.
+    @FocusState private var surfaceFocused: Bool
+    @FocusState private var transportFocused: Bool
 
     private enum TrackPicker: String, Identifiable {
         case audio, subtitles
@@ -35,7 +39,8 @@ struct MPVPlayerView: View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            MPVRenderSurface(engine: engine)
+            MPVMetalSurface(engine: engine, request: request, resumeAt: resumeAt,
+                            verboseLogging: verboseLogging, hardwareDecoding: hardwareDecoding)
                 .ignoresSafeArea()
 
             if engine.isBuffering {
@@ -43,6 +48,12 @@ struct MPVPlayerView: View {
                     .progressViewStyle(.circular)
                     .tint(.white)
                     .scaleEffect(1.8)
+            }
+
+            // A running clock with nothing drawn is the black-screen case. Saying so beats a
+            // blank screen, and mpv's own log is the only thing that explains why.
+            if engine.position > 3, !engine.hasRenderedFrame {
+                renderDiagnostic
             }
 
             if let error = engine.errorMessage {
@@ -55,11 +66,11 @@ struct MPVPlayerView: View {
                     .transition(.opacity)
             }
         }
-        // Focusable, and it must be. Unlike AVPlayerViewController this view owns no focusable
-        // chrome while the transport is hidden, and tvOS only delivers move, select and
-        // play/pause to a view that holds focus — so without this the remote does nothing at all
-        // and the transport can never be summoned back.
+        // The surface is always focusable — tvOS delivers move, select and play/pause only to a
+        // focused view — but focus is handed to the transport whenever it appears, so the
+        // buttons are reachable instead of the surface swallowing everything.
         .focusable()
+        .focused($surfaceFocused)
         // The remote's select button is the primary control, so the whole surface is the target.
         .onTapGesture { toggleControls() }
         .onMoveCommand { direction in
@@ -103,17 +114,46 @@ struct MPVPlayerView: View {
         .onChange(of: engine.isPaused) { _, paused in
             if paused { wakeControls() } else { scheduleHide() }
         }
+        .onChange(of: showsControls, initial: true) { _, visible in
+            // One frame's grace: the buttons do not exist yet on the tick the bar appears.
+            Task { @MainActor in
+                if visible { transportFocused = true } else { surfaceFocused = true }
+            }
+        }
     }
 
+    private var renderDiagnostic: some View {
+        VStack(alignment: .leading, spacing: NuvioTheme.spacing.md) {
+            Text("Audio is playing but no picture is being drawn")
+                .nuvioText(NuvioTextStyles.headline)
+                .foregroundStyle(.white)
+            Text(
+                """
+                No video frames were produced. Try Settings → Playback → MPV hardware \
+                decoding → Disabled (software).
+                """
+            )
+            .nuvioText(NuvioTextStyles.bodyCompact)
+            .foregroundStyle(.white.opacity(0.75))
+
+            if !engine.logTail.isEmpty {
+                Text(engine.logTail.suffix(8).joined(separator: "\n"))
+                    .font(.system(size: sp(13), design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .lineLimit(8)
+            }
+        }
+        .padding(NuvioTheme.spacing.xl)
+        .frame(maxWidth: dp(600), alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: NuvioTheme.radii.lg, style: .continuous)
+                .fill(.black.opacity(0.72))
+        }
+    }
+
+    /// mpv is started by `MPVMetalSurface`, which owns the layer it has to be handed. All that
+    /// is left here is the addon subtitle tracks and the auto-hide timer.
     private func start() {
-        engine.start(
-            url: request.streamURL,
-            headers: request.headers,
-            startAt: resumeAt,
-            verboseLogging: verboseLogging,
-            hardwareDecoding: hardwareDecoding
-        )
-        // Addon subtitles are files, so mpv can load them directly rather than being drawn over.
         for subtitle in request.subtitles.prefix(8) {
             engine.addSubtitle(url: subtitle.url, title: subtitle.displayLanguage)
         }
@@ -144,6 +184,7 @@ struct MPVPlayerView: View {
                     engine.isPaused ? "play.fill" : "pause.fill",
                     label: engine.isPaused ? "Play" : "Pause"
                 ) { engine.togglePause() }
+                .focused($transportFocused)
 
                 controlButton("gobackward.10", label: "Back 10s") { engine.seek(by: -10) }
                 controlButton("goforward.10", label: "Forward 10s") { engine.seek(by: 10) }
@@ -304,76 +345,106 @@ private extension String {
     func prepending(_ prefix: String) -> String { prefix + self }
 }
 
-// MARK: - GL surface
+// MARK: - Metal surface
 
-/// Hosts mpv's OpenGL output. tvOS still ships GLES, and libmpv's render API targets it directly,
-/// which is a far shorter path than bridging through Metal.
-private struct MPVRenderSurface: UIViewControllerRepresentable {
+/// Hosts the `CAMetalLayer` mpv draws into, and starts mpv once that layer exists.
+///
+/// The order matters and is why starting mpv lives here rather than in the SwiftUI view: the
+/// surface is a constructor argument to mpv, not something attached afterwards.
+private struct MPVMetalSurface: UIViewControllerRepresentable {
     let engine: MPVEngine
+    let request: PlaybackRequest
+    let resumeAt: Double
+    let verboseLogging: Bool
+    let hardwareDecoding: MpvHardwareDecodeMode
 
-    func makeUIViewController(context: Context) -> MPVGLViewController {
-        MPVGLViewController(engine: engine)
+    func makeUIViewController(context: Context) -> MPVMetalViewController {
+        MPVMetalViewController(
+            engine: engine, request: request, resumeAt: resumeAt,
+            verboseLogging: verboseLogging, hardwareDecoding: hardwareDecoding
+        )
     }
 
-    func updateUIViewController(_ controller: MPVGLViewController, context: Context) {}
+    func updateUIViewController(_ controller: MPVMetalViewController, context: Context) {}
 }
 
-final class MPVGLViewController: UIViewController, GLKViewDelegate {
+final class MPVMetalViewController: UIViewController {
     private let engine: MPVEngine
-    private var glContext: EAGLContext?
-    private var glView: GLKView?
+    private let request: PlaybackRequest
+    private let resumeAt: Double
+    private let verboseLogging: Bool
+    private let hardwareDecoding: MpvHardwareDecodeMode
 
-    init(engine: MPVEngine) {
+    private let metalLayer = MPVMetalLayer()
+    private var lastDrawableSize: CGSize = .zero
+
+    init(
+        engine: MPVEngine,
+        request: PlaybackRequest,
+        resumeAt: Double,
+        verboseLogging: Bool,
+        hardwareDecoding: MpvHardwareDecodeMode
+    ) {
         self.engine = engine
+        self.request = request
+        self.resumeAt = resumeAt
+        self.verboseLogging = verboseLogging
+        self.hardwareDecoding = hardwareDecoding
         super.init(nibName: nil, bundle: nil)
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    override func loadView() {
-        guard let context = EAGLContext(api: .openGLES3) ?? EAGLContext(api: .openGLES2) else {
-            view = UIView()
-            return
-        }
-        glContext = context
-
-        let glView = GLKView(frame: .zero, context: context)
-        glView.delegate = self
-        glView.drawableDepthFormat = .formatNone
-        glView.drawableStencilFormat = .formatNone
-        glView.drawableColorFormat = .RGBA8888
-        // mpv drives redraws through its update callback; there is no free-running loop.
-        glView.enableSetNeedsDisplay = true
-        glView.backgroundColor = .black
-        glView.isUserInteractionEnabled = false
-        self.glView = glView
-        view = glView
-    }
-
     override func viewDidLoad() {
         super.viewDidLoad()
-        guard let glContext else { return }
-        EAGLContext.setCurrent(glContext)
-        engine.createRenderContext()
-        engine.onRedraw = { [weak self] in
-            // The callback arrives on mpv's thread; drawing has to be on the main one.
-            Task { @MainActor in self?.glView?.setNeedsDisplay() }
-        }
-    }
+        view.backgroundColor = .black
+        view.layer.masksToBounds = true
 
-    func glkView(_ view: GLKView, drawIn rect: CGRect) {
-        var framebuffer: GLint = 0
-        glGetIntegerv(GLenum(GL_FRAMEBUFFER_BINDING), &framebuffer)
-        engine.render(
-            framebuffer: framebuffer,
-            width: Int32(view.drawableWidth),
-            height: Int32(view.drawableHeight)
+        metalLayer.contentsGravity = .resizeAspect
+        metalLayer.framebufferOnly = true
+        metalLayer.backgroundColor = UIColor.black.cgColor
+        metalLayer.anchorPoint = .zero
+        metalLayer.position = .zero
+        view.layer.addSublayer(metalLayer)
+        layoutMetalLayer()
+
+        engine.start(
+            url: request.streamURL,
+            headers: request.headers,
+            startAt: resumeAt,
+            verboseLogging: verboseLogging,
+            hardwareDecoding: hardwareDecoding,
+            layer: metalLayer
         )
     }
 
-    deinit {
-        if EAGLContext.current() === glContext { EAGLContext.setCurrent(nil) }
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        layoutMetalLayer()
+    }
+
+    private func layoutMetalLayer() {
+        let size = view.bounds.size
+        guard size.width > 1, size.height > 1 else { return }
+        let scale = view.window?.screen.nativeScale ?? UIScreen.main.nativeScale
+        let drawable = CGSize(
+            width: (size.width * scale).rounded(.toNearestOrAwayFromZero),
+            height: (size.height * scale).rounded(.toNearestOrAwayFromZero)
+        )
+
+        // No implicit animation: mpv polls `drawableSize` from its own thread and a half-applied
+        // resize is a torn swapchain.
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        metalLayer.contentsScale = scale
+        metalLayer.position = .zero
+        metalLayer.bounds = CGRect(origin: .zero, size: size)
+        if drawable != lastDrawableSize {
+            metalLayer.drawableSize = drawable
+            lastDrawableSize = drawable
+        }
+        CATransaction.commit()
     }
 }
 

@@ -85,10 +85,9 @@ enum FrameRateMatchingMode: String, SettingsOption {
 /// Port of `MpvHardwareDecodeMode`, with Android's `mediacodec` values swapped for their
 /// VideoToolbox equivalents.
 ///
-/// `hardwareCopy` is the default rather than `hardwareDirect`, which is where Android lands.
-/// MPVKit builds libmpv with `-Dvideotoolbox-gl=disabled`, so a directly-mapped hardware frame
-/// has no route into an OpenGL render context and plays as a black picture with audio. The copy
-/// variant still decodes on the VideoToolbox block and reads frames back for the renderer.
+/// `hardwareDirect` is the default, as on Android: with the Vulkan/MoltenVK renderer the
+/// zero-copy VideoToolbox path is the supported one. The copy variants are the fallback for a
+/// file the direct path refuses.
 enum MpvHardwareDecodeMode: String, SettingsOption {
     case legacyDirectCopy = "LEGACY_DIRECT_COPY"
     case autoSafe = "AUTO_SAFE"
@@ -110,8 +109,8 @@ enum MpvHardwareDecodeMode: String, SettingsOption {
         switch self {
         case .legacyDirectCopy: return "Tries direct mapping first, falls back to a copy"
         case .autoSafe: return "Lets mpv pick whatever it considers safe"
-        case .hardwareCopy: return "VideoToolbox decode, frames copied back. The one that renders here."
-        case .hardwareDirect: return "Zero-copy. Needs a Vulkan renderer — black picture on this build."
+        case .hardwareCopy: return "VideoToolbox decode, frames copied back through system memory"
+        case .hardwareDirect: return "Zero-copy VideoToolbox. The fast path on Apple TV."
         case .disabled: return "Software decode. Slowest, but always draws."
         }
     }

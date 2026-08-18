@@ -7,6 +7,8 @@ struct NuvioApp: App {
     /// profile's rows, and switching profiles must not drop the session.
     @State private var account = NuvioAccountStore()
     @State private var sync = NuvioSyncService()
+    /// Profile pictures are account-wide, like the account itself.
+    @State private var avatars = AvatarCatalog()
 
     init() {
         NuvioFontRegistrar.registerIfNeeded()
@@ -14,7 +16,7 @@ struct NuvioApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ProfileGate(profiles: profiles, account: account, sync: sync)
+            ProfileGate(profiles: profiles, account: account, sync: sync, avatars: avatars)
         }
     }
 }
@@ -26,6 +28,7 @@ private struct ProfileGate: View {
     let profiles: ProfileStore
     let account: NuvioAccountStore
     let sync: NuvioSyncService
+    let avatars: AvatarCatalog
 
     var body: some View {
         Group {
@@ -45,7 +48,9 @@ private struct ProfileGate: View {
         .environment(profiles)
         .environment(account)
         .environment(sync)
+        .environment(avatars)
         .preferredColorScheme(.dark)
+        .task { avatars.loadIfNeeded(configuration: account.configuration) }
     }
 }
 

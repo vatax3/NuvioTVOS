@@ -142,14 +142,23 @@ struct PinKeypad: View {
 // MARK: - Avatar
 
 struct ProfileAvatar: View {
+    @Environment(AvatarCatalog.self) private var avatars
+
     let profile: Profile
     var diameter: CGFloat = dp(72)
 
     var body: some View {
-        Image(systemName: profile.symbol)
-            .font(.system(size: diameter * 0.42, weight: .semibold))
-            .foregroundStyle(.white)
+        Group {
+            // The picture the profile actually carries, when the account has one. An SF Symbol
+            // stands in only for profiles created here, or before the catalogue has loaded.
+            if let url = avatars.imageURL(for: profile) {
+                RemoteImage(url: url, contentMode: .fill) { symbolAvatar }
+            } else {
+                symbolAvatar
+            }
+        }
             .frame(width: diameter, height: diameter)
+            .clipShape(Circle())
             .background {
                 Circle().fill(Color(argbHex: profile.tintHex).opacity(0.85))
             }
@@ -162,5 +171,14 @@ struct ProfileAvatar: View {
                         .background(Circle().fill(.black.opacity(0.65)))
                 }
             }
+    }
+
+    /// Falls back to a person glyph rather than nothing: a synced profile can arrive with an
+    /// empty `symbol`, and `Image(systemName: "")` draws a blank circle.
+    private var symbolAvatar: some View {
+        Image(systemName: profile.symbol.nilIfBlank ?? "person.fill")
+            .font(.system(size: diameter * 0.42, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: diameter, height: diameter)
     }
 }

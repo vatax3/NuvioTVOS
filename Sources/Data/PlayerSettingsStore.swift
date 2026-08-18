@@ -26,7 +26,7 @@ final class PlayerSettingsStore: PreferenceStore {
     }
 
     var mpvHardwareDecodeMode: MpvHardwareDecodeMode {
-        get { option("mpv_hardware_decode_mode", default: .hardwareCopy) }
+        get { option("mpv_hardware_decode_mode", default: .hardwareDirect) }
         set { setOption("mpv_hardware_decode_mode", newValue) }
     }
 
