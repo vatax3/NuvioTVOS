@@ -178,12 +178,6 @@ struct SidebarScaffold<Content: View>: View {
 
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if isExpanded {
-                brandMark
-                    .padding(.bottom, NuvioTheme.spacing.lg)
-                    .transition(.opacity)
-            }
-
             VStack(alignment: .leading, spacing: NuvioTheme.spacing.sm - NuvioTheme.spacing.xxs) {
                 ForEach(visibleTabs, id: \.self) { tab in
                     SidebarItemView(
@@ -203,8 +197,8 @@ struct SidebarScaffold<Content: View>: View {
                 }
             }
         }
-        .padding(.horizontal, isExpanded ? NuvioTheme.spacing.md : 0)
-        .padding(.vertical, isExpanded ? NuvioTheme.spacing.lg - NuvioTheme.spacing.xxs : 0)
+        .padding(.horizontal, isExpanded ? NuvioTheme.spacing.sm : 0)
+        .padding(.vertical, isExpanded ? NuvioTheme.spacing.sm : 0)
         .frame(width: isExpanded ? tokens.expandedWidth : nil, alignment: .leading)
         .background {
             if isExpanded {
@@ -301,14 +295,6 @@ struct SidebarScaffold<Content: View>: View {
         }
     }
 
-    private var brandMark: some View {
-        Text("NUVIO")
-            .nuvioText(NuvioTextStyles.headline)
-            .foregroundStyle(colors.textPrimary)
-            .frame(height: dp(36), alignment: .leading)
-            .padding(.horizontal, NuvioTheme.spacing.lg - NuvioTheme.spacing.xxs)
-    }
-
     private func select(_ tab: RootTab) {
         router.select(tab)
         // Collapsing on activation matches the Android flow, where choosing a destination
@@ -347,13 +333,21 @@ private struct SidebarItemView: View {
     @ViewBuilder
     private var styledButton: some View {
         if #available(tvOS 26.0, *) {
-            Button(action: action) { label }
-                .buttonStyle(.glass)
-                .buttonBorderShape(showsLabel ? .roundedRectangle(radius: tokens.panelRadius / 2) : .capsule)
-                // Glass derives its label colour from the tint, and the app tint is the Nuvio
-                // red — which on an unfocused row reads as five red menu entries. Neutral here;
-                // the style still inverts to dark text when the row lifts on focus.
-                .tint(.white)
+            // The current destination gets the prominent glass so it reads without a separate
+            // marker; the others recede into the plain one. Both are the system material, so
+            // they refract the artwork behind the panel rather than imitating it.
+            Group {
+                if isSelected {
+                    Button(action: action) { label }.buttonStyle(.glassProminent)
+                } else {
+                    Button(action: action) { label }.buttonStyle(.glass)
+                }
+            }
+            .buttonBorderShape(showsLabel ? .roundedRectangle(radius: tokens.panelRadius / 2) : .capsule)
+            // Glass derives its label colour from the tint, and the app tint is the Nuvio red —
+            // which on an unfocused row reads as five red menu entries. Neutral here; the style
+            // still inverts to dark text when the row lifts on focus.
+            .tint(.white)
         } else {
             Button(action: action) { label }
                 .buttonStyle(SidebarItemButtonStyle(showsLabel: showsLabel, isSelected: isSelected))
@@ -377,18 +371,27 @@ private struct SidebarItemView: View {
         .contentShape(Rectangle())
     }
 
+    /// No disc behind the glyph when the row is glass: two stacked materials read as muddy, and
+    /// the row's own shape is already the affordance. The pre-26 style keeps its disc.
+    @ViewBuilder
     private var iconCircle: some View {
-        Image(systemName: tab.systemImage)
-            .font(.system(size: tokens.iconSize * 0.72, weight: .semibold))
-            .foregroundStyle(.white)
+        let glyph = Image(systemName: tab.systemImage)
+            .font(.system(size: tokens.iconSize * 0.82, weight: .semibold))
             .frame(width: tokens.leadingVisual, height: tokens.leadingVisual)
-            .background {
-                Circle().fill(
-                    isSelected
-                        ? Color.white.opacity(NuvioTheme.effects.glowSoftAlpha)
-                        : colors.surfaceVariant
-                )
-            }
+
+        if #available(tvOS 26.0, *) {
+            glyph
+        } else {
+            glyph
+                .foregroundStyle(.white)
+                .background {
+                    Circle().fill(
+                        isSelected
+                            ? Color.white.opacity(NuvioTheme.effects.glowSoftAlpha)
+                            : colors.surfaceVariant
+                    )
+                }
+        }
     }
 }
 

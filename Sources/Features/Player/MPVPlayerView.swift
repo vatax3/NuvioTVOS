@@ -24,10 +24,7 @@ struct MPVPlayerView: View {
     @State private var hideTask: Task<Void, Never>?
     @State private var lastPersistedPosition: Double = 0
     @State private var picker: TrackPicker?
-    /// Focus is placed explicitly rather than left to the engine. The surface and the transport
-    /// never coexist as focus candidates: whichever is on screen must hold it, or the remote
-    /// goes dead the moment the bar auto-hides and takes the focused button with it.
-    @FocusState private var surfaceFocused: Bool
+    /// Focus lands on Pause once and stays in the transport for the whole session.
     @FocusState private var transportFocused: Bool
 
     private enum TrackPicker: String, Identifiable {
@@ -61,36 +58,14 @@ struct MPVPlayerView: View {
                     .background(.black.opacity(0.75))
             }
 
-            if showsControls {
-                controls
-                    .transition(.opacity)
-            }
-        }
-        // The surface is always focusable — tvOS delivers move, select and play/pause only to a
-        // focused view — but focus is handed to the transport whenever it appears, so the
-        // buttons are reachable instead of the surface swallowing everything.
-        .focusable()
-        .focused($surfaceFocused)
-        // The remote's select button is the primary control, so the whole surface is the target.
-        .onTapGesture { toggleControls() }
-        .onMoveCommand { direction in
-            // Only scrub when the transport is hidden. `onMoveCommand` fires even when the move
-            // also shifts focus, so while the bar is up every step between Pause, Back 10s and
-            // the track pickers was seeking as well as moving.
-            guard !showsControls else {
-                wakeControls()
-                return
-            }
-            wakeControls()
-            switch direction {
-            case .left: engine.seek(by: -10)
-            case .right: engine.seek(by: 10)
-            default: break
-            }
-        }
-        .onPlayPauseCommand {
-            engine.togglePause()
-            wakeControls()
+            // Always mounted, only faded. Swapping the transport in and out — or giving it a
+            // focusable full-screen ancestor — means focus has to jump between subtrees every
+            // time the bar hides, and tvOS drops it on the way: the remote stops responding, or
+            // moving right off Pause lands nowhere. Keeping one set of buttons permanently in
+            // the hierarchy means focus never has to move at all.
+            controls
+                .opacity(showsControls ? 1 : 0)
+                .animation(NuvioMotion.quickTween, value: showsControls)
         }
         .onExitCommand { dismiss() }
         .sheet(item: $picker) { which in
@@ -114,11 +89,9 @@ struct MPVPlayerView: View {
         .onChange(of: engine.isPaused) { _, paused in
             if paused { wakeControls() } else { scheduleHide() }
         }
-        .onChange(of: showsControls, initial: true) { _, visible in
-            // One frame's grace: the buttons do not exist yet on the tick the bar appears.
-            Task { @MainActor in
-                if visible { transportFocused = true } else { surfaceFocused = true }
-            }
+        .onAppear {
+            // One hop's grace so the buttons are in the focus system before it is aimed at them.
+            Task { @MainActor in transportFocused = true }
         }
     }
 
@@ -214,6 +187,11 @@ struct MPVPlayerView: View {
             .ignoresSafeArea()
         }
         .focusSection()
+        .onMoveCommand { _ in wakeControls() }
+        .onPlayPauseCommand {
+            engine.togglePause()
+            wakeControls()
+        }
     }
 
     private var scrubber: some View {

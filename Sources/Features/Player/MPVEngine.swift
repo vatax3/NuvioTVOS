@@ -85,10 +85,11 @@ final class MPVEngine {
         setOption("vulkan-async-transfer", "no")
         setOption("vulkan-disable-interop", "yes")
         setOption("video-rotate", "no")
-        // Force UTF-8 rather than letting uchardet guess. It mis-detects short lines — a "♪"
-        // arrives as "â™ª" — and essentially everything shipped today, embedded or external,
-        // is UTF-8 anyway.
-        setOption("sub-codepage", "+utf-8")
+        // UTF-8 preferred, but *not* forced. The `+` prefix forces it even on a subtitle that
+        // genuinely is not UTF-8, and every byte then decodes to a replacement character —
+        // which libass draws as a row of empty boxes. Without the prefix a legacy-encoded file
+        // still gets read properly.
+        setOption("sub-codepage", "utf-8")
         // HDR: hand the display the source colorimetry and let libplacebo tone-map what the
         // panel cannot show.
         setOption("target-colorspace-hint", "yes")
