@@ -29,6 +29,9 @@ struct RootView: View {
         .environment(\.navigationFeel, settings.navigationFeel)
         .fullScreenCover(item: $router.playback) { request in
             PlayerView(request: request)
+                // Replacing a source remains in the same full-screen presentation, but the
+                // decoder must be rebuilt for the new URL rather than retaining the old engine.
+                .id(request.id)
         }
         .task {
             // "Add Profile" and the long-press gesture leave the chooser asking for the
@@ -48,6 +51,10 @@ struct RootView: View {
         // The addon store owns catalog ordering but the preference lives in Layout settings.
         .onChange(of: settings.layout.followAddonsOrder, initial: true) { _, follows in
             addons.followsAddonOrder = follows
+        }
+        .onOpenURL { url in
+            guard let deepLink = DeepLink.parse(url) else { return }
+            router.open(deepLink)
         }
     }
 

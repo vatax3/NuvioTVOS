@@ -25,14 +25,13 @@ struct ProfileSelectionView: View {
         Color(argbHex: tintedProfile?.tintHex ?? "#1E88E5")
     }
 
-    /// Android switches to `CompactCardWidth` / `CompactAvatarSize` once the row gets busy.
-    /// The compact numbers are a little tighter than Android's: five profiles plus the add
-    /// card is the maximum, and at dp(128) that row is ~200pt wider than the tvOS safe area,
-    /// so the first and last cards were clipped.
-    private var isCompact: Bool { profiles.profiles.count >= 4 }
-    private var cardWidth: CGFloat { isCompact ? dp(112) : dp(152) }
-    private var avatarSize: CGFloat { isCompact ? dp(76) : dp(104) }
-    private var cardGap: CGFloat { isCompact ? dp(20) : dp(28) }
+    /// A TV profile picker reads best as one compact, centred row.  The previous Android-sized
+    /// cards became needlessly imposing on an Apple TV canvas, especially with four or more
+    /// household profiles.  Keep the roomy variant for one or two profiles, then tighten it.
+    private var isCompact: Bool { profiles.profiles.count >= 3 }
+    private var cardWidth: CGFloat { isCompact ? dp(96) : dp(120) }
+    private var avatarSize: CGFloat { isCompact ? dp(64) : dp(82) }
+    private var cardGap: CGFloat { isCompact ? dp(14) : dp(18) }
 
     var body: some View {
         ZStack {
@@ -40,13 +39,6 @@ struct ProfileSelectionView: View {
 
             VStack(spacing: 0) {
                 Spacer()
-
-                Text("NUVIO")
-                    .nuvioText(NuvioTextStyles.display)
-                    .foregroundStyle(colors.textPrimary)
-                    .frame(height: dp(44))
-
-                Spacer().frame(height: dp(28))
 
                 if let challenging {
                     pinChallenge(for: challenging)
@@ -98,17 +90,17 @@ struct ProfileSelectionView: View {
 
     private var chooser: some View {
         VStack(spacing: 0) {
-            Text("Who's watching?")
-                .nuvioText(NuvioTextStyles.display)
+            Text(L10n.text("profiles.whos_watching"))
+                .nuvioText(NuvioTextStyles.headline)
                 .foregroundStyle(colors.textPrimary)
 
-            Spacer().frame(height: NuvioTheme.spacing.sm)
+            Spacer().frame(height: NuvioTheme.spacing.xs)
 
-            Text("Select a profile to continue")
-                .nuvioText(NuvioTextStyles.body)
+            Text(L10n.text("profiles.select_to_continue"))
+                .nuvioText(NuvioTextStyles.bodyCompact)
                 .foregroundStyle(colors.textSecondary)
 
-            Spacer().frame(height: dp(40))
+            Spacer().frame(height: dp(26))
 
             // No scroll view: five is the ceiling, and at compact metrics six cards fit the
             // safe area, so the row is centred rather than anchored to the left edge.
@@ -118,13 +110,13 @@ struct ProfileSelectionView: View {
                 }
                 addCard
             }
-            .padding(.vertical, NuvioTheme.spacing.lg)
+            .padding(.vertical, NuvioTheme.spacing.md)
             .frame(maxWidth: .infinity)
             .focusSection()
 
-            Spacer().frame(height: dp(28))
+            Spacer().frame(height: dp(18))
 
-            Text("Hold Select on a profile to manage it")
+            Text(L10n.text("profiles.hold_to_manage"))
                 .nuvioText(NuvioTypography.labelSmall)
                 .foregroundStyle(colors.textTertiary)
         }
@@ -140,8 +132,8 @@ struct ProfileSelectionView: View {
                     .lineLimit(1)
             }
             .frame(width: cardWidth)
-            .padding(.horizontal, dp(10))
-            .padding(.vertical, NuvioTheme.spacing.md)
+            .padding(.horizontal, dp(8))
+            .padding(.vertical, NuvioTheme.spacing.sm)
             .contentShape(Rectangle())
         }
         .buttonStyle(NuvioRowButtonStyle(cornerRadius: NuvioTheme.radii.lg))
@@ -164,14 +156,14 @@ struct ProfileSelectionView: View {
                             colors.border, lineWidth: NuvioTheme.strokes.thin
                         )
                     }
-                Text("Add Profile")
+                Text(L10n.text("profiles.add"))
                     .nuvioText(NuvioTextStyles.cardTitle)
                     .foregroundStyle(colors.textSecondary)
                     .lineLimit(1)
             }
             .frame(width: cardWidth)
-            .padding(.horizontal, dp(10))
-            .padding(.vertical, NuvioTheme.spacing.md)
+            .padding(.horizontal, dp(8))
+            .padding(.vertical, NuvioTheme.spacing.sm)
             .contentShape(Rectangle())
         }
         .buttonStyle(NuvioRowButtonStyle(cornerRadius: NuvioTheme.radii.lg))
@@ -192,7 +184,7 @@ struct ProfileSelectionView: View {
 
             Spacer().frame(height: NuvioTheme.spacing.sm)
 
-            Text(didFail ? "Wrong PIN. Try again." : "Enter your PIN")
+            Text(didFail ? L10n.text("profiles.wrong_pin") : L10n.text("profiles.enter_pin"))
                 .nuvioText(NuvioTextStyles.body)
                 .foregroundStyle(didFail ? colors.error : colors.textSecondary)
 
@@ -219,7 +211,7 @@ struct ProfileSelectionView: View {
 
             Spacer().frame(height: NuvioTheme.spacing.lg)
 
-            Button("Back") { challenging = nil }
+            Button(L10n.text("common.back")) { challenging = nil }
                 .buttonStyle(NuvioRowButtonStyle(cornerRadius: NuvioTheme.radii.md))
         }
         .focusSection()

@@ -126,7 +126,7 @@ struct SearchView: View {
     }
 
     private var header: some View {
-        Text("Search")
+        Text(L10n.text("navigation.search"))
             .nuvioText(NuvioTextStyles.display)
             .foregroundStyle(colors.textPrimary)
             .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)

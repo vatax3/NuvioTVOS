@@ -93,7 +93,7 @@ struct DiscoverView: View {
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: NuvioTheme.spacing.xl) {
-                Text("Discover")
+                Text(L10n.text("navigation.discover"))
                     .nuvioText(NuvioTextStyles.display)
                     .foregroundStyle(colors.textPrimary)
                     .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)

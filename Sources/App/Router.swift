@@ -9,11 +9,11 @@ enum RootTab: String, CaseIterable, Identifiable, Hashable {
 
     var title: String {
         switch self {
-        case .home: return "Home"
-        case .discover: return "Discover"
-        case .search: return "Search"
-        case .library: return "Library"
-        case .settings: return "Settings"
+        case .home: return L10n.text("navigation.home")
+        case .discover: return L10n.text("navigation.discover")
+        case .search: return L10n.text("navigation.search")
+        case .library: return L10n.text("navigation.library")
+        case .settings: return L10n.text("navigation.settings")
         }
     }
 
@@ -130,6 +130,19 @@ struct PlaybackRequest: Hashable, Identifiable {
     var imdbId: String?
     /// External tracks gathered from every addon advertising `subtitles` for this video.
     var subtitles: [Subtitle] = []
+    /// Originating source request. Retaining it lets the player reopen the source picker,
+    /// matching Android TV's in-player Sources side panel without rebuilding title metadata.
+    var sourceRequest: StreamRequest? = nil
+    /// Source presentation is retained for the in-player Stream info panel, mirroring Android
+    /// TV's diagnostic overlay without forcing the viewer back to the stream list.
+    var sourceAddonName: String? = nil
+    var sourceAddonLogo: String? = nil
+    var sourceDescription: String? = nil
+    var sourceHints: [String] = []
+    /// The stable stream identity is retained independently from its display name.  Several
+    /// providers publish identically named releases; matching a current source by label makes
+    /// the wrong row look selected and can focus the wrong replacement stream.
+    var sourceStableKey: String? = nil
 
     var id: String { "\(videoId)|\(streamURL)" }
 }

@@ -9,7 +9,7 @@ struct LibraryView: View {
     @Environment(AppSettings.self) private var settings
     @Environment(Router.self) private var router
 
-    private enum Filter: String, CaseIterable, Identifiable {
+    enum Filter: String, CaseIterable, Identifiable {
         case all, movies, series, continueWatching, collections
         var id: String { rawValue }
         var title: String {
@@ -44,10 +44,18 @@ struct LibraryView: View {
         }
     }
 
+    private var remoteTypeFilter: ContentType? {
+        switch filter {
+        case .movies: return .movie
+        case .series: return .series
+        case .all, .continueWatching, .collections: return nil
+        }
+    }
+
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: NuvioTheme.spacing.xl) {
-                Text("Library")
+                Text(L10n.text("navigation.library"))
                     .nuvioText(NuvioTextStyles.display)
                     .foregroundStyle(colors.textPrimary)
                     .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)
@@ -62,6 +70,8 @@ struct LibraryView: View {
                     }
                 }
 
+                CloudLibrarySection()
+
                 content
             }
             .padding(.top, NuvioTheme.layout.tvSafeVertical)
@@ -74,9 +84,7 @@ struct LibraryView: View {
 
     @ViewBuilder
     private var content: some View {
-        if filter == .collections {
-            collectionsContent
-        } else if filter == .continueWatching {
+        if filter == .continueWatching {
             if continueWatching.isEmpty {
                 emptyState(
                     icon: "play.circle",
@@ -90,6 +98,17 @@ struct LibraryView: View {
                     onSelect: { router.openDetail($0.preview) }
                 )
             }
+        } else if settings.tracking.librarySourceMode == .trakt {
+            TraktLibraryContent(typeFilter: remoteTypeFilter)
+        } else if settings.tracking.librarySourceMode == .simkl {
+            EmptyStateView(
+                systemImage: "checklist",
+                title: "Simkl library is not available yet",
+                message: "Choose This device or Trakt collection in Settings → Integrations → Sources."
+            )
+            .frame(height: dp(260))
+        } else if filter == .collections {
+            collectionsContent
         } else if savedItems.isEmpty {
             emptyState(
                 icon: "bookmark",

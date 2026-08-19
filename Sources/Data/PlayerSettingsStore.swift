@@ -53,13 +53,24 @@ final class PlayerSettingsStore: PreferenceStore {
     }
 
     var frameRateMatching: Bool {
-        get { bool("frame_rate_matching", default: true) }
-        set { setBool("frame_rate_matching", newValue) }
+        get { bool("frame_rate_matching", default: false) }
+        set { frameRateMatchingMode = newValue ? .startStop : .off }
     }
 
+    /// Android stores the mode alongside the older boolean and derives one from the other, so a
+    /// profile written by either version resolves to the same behaviour.  Kept identical here
+    /// because these keys are synced between devices.
     var frameRateMatchingMode: FrameRateMatchingMode {
-        get { option("frame_rate_matching_mode", default: .seamless) }
-        set { setOption("frame_rate_matching_mode", newValue) }
+        get {
+            option(
+                "frame_rate_matching_mode",
+                default: bool("frame_rate_matching", default: false) ? .startStop : .off
+            )
+        }
+        set {
+            setOption("frame_rate_matching_mode", newValue)
+            setBool("frame_rate_matching", newValue != .off)
+        }
     }
 
     var resolutionMatchingEnabled: Bool {

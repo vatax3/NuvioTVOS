@@ -254,19 +254,21 @@ struct SidebarScaffold<Content: View>: View {
         let shape = RoundedRectangle(cornerRadius: tokens.panelRadius, style: .continuous)
         if settings.layout.glassSidePanelEnabled {
             shape
-                .fill(
-                    LinearGradient(
-                        colors: [colors.glassPanelTop, colors.glassPanelBottom],
-                        startPoint: .top,
-                        endPoint: .bottom
+                // The material must be the visible base layer.  Filling an opaque tint above
+                // it (as before) technically kept the blur in the hierarchy but hid all of
+                // its refraction, which made the menu read as a flat grey dialog.
+                .fill(settings.layout.modernSidebarBlurEnabled ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(colors.surface.opacity(0.82)))
+                .overlay {
+                    shape.fill(
+                        LinearGradient(
+                            colors: [
+                                colors.glassPanelTop.opacity(0.42),
+                                colors.glassPanelBottom.opacity(0.22)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
                     )
-                )
-                .background {
-                    if settings.layout.modernSidebarBlurEnabled {
-                        shape.fill(.ultraThinMaterial)
-                    } else {
-                        shape.fill(colors.surface)
-                    }
                 }
                 .overlay {
                     // A single flat hairline reads as a border; glass reads as a lit edge, so
@@ -285,7 +287,7 @@ struct SidebarScaffold<Content: View>: View {
                     )
                 }
                 // Glass sits above the content rather than being painted into it.
-                .shadow(color: .black.opacity(0.45), radius: dp(24), y: dp(8))
+                .shadow(color: .black.opacity(0.34), radius: dp(18), y: dp(7))
         } else {
             shape
                 .fill(colors.surface)
@@ -333,16 +335,11 @@ private struct SidebarItemView: View {
     @ViewBuilder
     private var styledButton: some View {
         if #available(tvOS 26.0, *) {
-            // The current destination gets the prominent glass so it reads without a separate
-            // marker; the others recede into the plain one. Both are the system material, so
-            // they refract the artwork behind the panel rather than imitating it.
-            Group {
-                if isSelected {
-                    Button(action: action) { label }.buttonStyle(.glassProminent)
-                } else {
-                    Button(action: action) { label }.buttonStyle(.glass)
-                }
-            }
+            // Focus alone owns the bright, lifted glass state.  A prominent selected row plus
+            // a focused row produced two competing white cards in the popup.  The active
+            // destination instead gets the restrained accent marker in `label`.
+            Button(action: action) { label }
+                .buttonStyle(.glass)
             .buttonBorderShape(showsLabel ? .roundedRectangle(radius: tokens.panelRadius / 2) : .capsule)
             // Glass derives its label colour from the tint, and the app tint is the Nuvio red —
             // which on an unfocused row reads as five red menu entries. Neutral here; the style
@@ -368,6 +365,15 @@ private struct SidebarItemView: View {
         .padding(.vertical, showsLabel ? NuvioTheme.spacing.sm + NuvioTheme.spacing.xxs : 0)
         .frame(height: showsLabel ? nil : NuvioTheme.sizes.player.control)
         .frame(maxWidth: showsLabel ? .infinity : nil, alignment: .leading)
+        .overlay(alignment: .trailing) {
+            if showsLabel && isSelected {
+                Capsule(style: .continuous)
+                    .fill(colors.primary.opacity(isFocused ? 0.9 : 0.65))
+                    .frame(width: dp(3), height: dp(18))
+                    .padding(.trailing, NuvioTheme.spacing.sm)
+                    .accessibilityHidden(true)
+            }
+        }
         .contentShape(Rectangle())
     }
 

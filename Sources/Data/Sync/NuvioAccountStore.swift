@@ -34,6 +34,7 @@ final class NuvioAccountStore {
     private let sessionFile = JSONFileStore<NuvioSession>(
         filename: "nuvio-session.json", scope: .global, durability: .critical
     )
+    private let secureSession = KeychainCodableStore<NuvioSession>(key: "nuvio.account.session")
     private let log = Logger(subsystem: "com.nuvio.tvos", category: "NuvioAccount")
 
     private var loginTask: Task<Void, Never>?
@@ -42,7 +43,12 @@ final class NuvioAccountStore {
 
     init() {
         configuration = configurationFile.load() ?? .nuvioDefault
-        session = sessionFile.load()
+        session = secureSession.load()
+        if session == nil, let legacySession = sessionFile.load() {
+            session = legacySession
+            secureSession.save(legacySession)
+            sessionFile.delete()
+        }
         if session != nil { loginState = .signedIn }
 
         let configuration = self.configuration
@@ -242,7 +248,8 @@ final class NuvioAccountStore {
 
     private func apply(session newSession: NuvioSession) {
         session = newSession
-        sessionFile.save(newSession)
+        secureSession.save(newSession)
+        sessionFile.delete()
         Task { await NuvioBackend.shared.updateSession(newSession) }
     }
 
@@ -282,6 +289,7 @@ final class NuvioAccountStore {
         loginTask = nil
         session = nil
         syncOwnerId = nil
+        secureSession.delete()
         sessionFile.delete()
         loginState = .idle
         Task { await NuvioBackend.shared.updateSession(nil) }

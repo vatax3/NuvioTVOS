@@ -51,6 +51,68 @@ private struct AnyEncodable: Encodable {
     func encode(to encoder: Encoder) throws { try encodeClosure(encoder) }
 }
 
+// MARK: - Parental guide (port of ParentalGuideRepository)
+
+struct ParentalWarning: Hashable, Sendable {
+    let label: String
+    let severity: String
+}
+
+actor ParentalGuideClient {
+    static let shared = ParentalGuideClient()
+    private let base = "https://api.tiffara.com"
+    private var cache: [String: [ParentalWarning]] = [:]
+
+    func warnings(imdbId: String) async -> [ParentalWarning] {
+        guard imdbId.hasPrefix("tt") else { return [] }
+        if let cached = cache[imdbId] { return cached }
+        guard let response = try? await HTTP.get(
+            "\(base)/titles/\(imdbId)/parentsGuide", as: ParentalGuideResponse.self
+        ) else { return [] }
+
+        let names: [String: String] = [
+            "SEXUAL_CONTENT": "Sexual content",
+            "VIOLENCE": "Violence",
+            "PROFANITY": "Profanity",
+            "ALCOHOL_DRUGS": "Alcohol & drugs",
+            "FRIGHTENING_INTENSE_SCENES": "Frightening scenes"
+        ]
+        let result = response.parentsGuide.compactMap { category -> ParentalWarning? in
+            guard let label = names[category.category.uppercased()],
+                  let severity = dominantSeverity(category.severityBreakdowns)
+            else { return nil }
+            return ParentalWarning(label: label, severity: severity.capitalized)
+        }
+        cache[imdbId] = result
+        return result
+    }
+
+    private func dominantSeverity(_ values: [ParentalGuideSeverity]?) -> String? {
+        guard let values else { return nil }
+        let noneVotes = values.first { $0.severityLevel.lowercased() == "none" }?.voteCount ?? 0
+        guard let candidate = values
+            .filter({ $0.severityLevel.lowercased() != "none" })
+            .max(by: { $0.voteCount < $1.voteCount }),
+              candidate.voteCount > noneVotes
+        else { return nil }
+        return candidate.severityLevel.lowercased()
+    }
+}
+
+private struct ParentalGuideResponse: Decodable {
+    let parentsGuide: [ParentalGuideCategory]
+}
+
+private struct ParentalGuideCategory: Decodable {
+    let category: String
+    let severityBreakdowns: [ParentalGuideSeverity]?
+}
+
+private struct ParentalGuideSeverity: Decodable {
+    let severityLevel: String
+    let voteCount: Int
+}
+
 // MARK: - TMDB (port of TmdbApi usage)
 
 /// Metadata enrichment: better artwork, logos, cast photos, episode stills and recommendations
@@ -604,6 +666,12 @@ actor TraktClient {
         let pausedAt: Date?
     }
 
+    struct LibraryList: Sendable, Identifiable {
+        let id: String
+        let title: String
+        let items: [MetaPreview]
+    }
+
     /// Trakt's resume points, used when watch progress is sourced from Trakt.
     func playbackProgress(clientId: String, token: String) async -> [PlaybackItem] {
         struct Ids: Decodable { let imdb: String? }
@@ -641,13 +709,35 @@ actor TraktClient {
 
     /// The user's Trakt collection, used when the library is sourced from Trakt.
     func collection(type: ContentType, clientId: String, token: String) async -> [MetaPreview] {
+        await libraryEntries(path: "sync/collection", type: type, clientId: clientId, token: token)
+    }
+
+    /// The account watchlist is distinct from the collection on Android's Library screen.
+    func watchlist(type: ContentType, clientId: String, token: String) async -> [MetaPreview] {
+        await libraryEntries(path: "sync/watchlist", type: type, clientId: clientId, token: token)
+    }
+
+    func libraryLists(clientId: String, token: String) async -> [LibraryList] {
+        async let collectionMovies = collection(type: .movie, clientId: clientId, token: token)
+        async let collectionShows = collection(type: .series, clientId: clientId, token: token)
+        async let watchlistMovies = watchlist(type: .movie, clientId: clientId, token: token)
+        async let watchlistShows = watchlist(type: .series, clientId: clientId, token: token)
+        let collection = await collectionMovies + collectionShows
+        let watchlist = await watchlistMovies + watchlistShows
+        return [
+            LibraryList(id: "collection", title: "Collection", items: collection),
+            LibraryList(id: "watchlist", title: "Watchlist", items: watchlist)
+        ].filter { !$0.items.isEmpty }
+    }
+
+    private func libraryEntries(path prefix: String, type: ContentType, clientId: String, token: String) async -> [MetaPreview] {
         struct Ids: Decodable { let imdb: String?; let trakt: Int? }
         struct Entry: Decodable { let title: String?; let year: Int?; let ids: Ids? }
         struct Item: Decodable { let movie: Entry?; let show: Entry? }
 
         let path = type == .series ? "shows" : "movies"
         guard let items = try? await HTTP.get(
-            "\(base)/sync/collection/\(path)",
+            "\(base)/\(prefix)/\(path)",
             headers: headers(clientId: clientId, token: token),
             as: [Item].self
         ) else { return [] }
@@ -747,6 +837,8 @@ struct SkipSegment: Hashable, Sendable {
     var kind: Kind
     var start: Double
     var end: Double
+
+    var id: String { "\(kind.rawValue):\(start):\(end)" }
 }
 
 actor SkipIntroClient {

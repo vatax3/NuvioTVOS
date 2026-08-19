@@ -220,7 +220,10 @@ final class ProfileStore {
 
     /// The primary profile's `app` namespace is unprefixed, so the key is the bare name.
     static var remembersLastProfile: Bool {
-        UserDefaults.standard.object(forKey: "app.remember_last_profile") as? Bool ?? true
+        // Android defaults this off: a household with multiple profiles returns to “Who's
+        // watching?” at launch, complete with the synced avatar photographs. Existing viewers
+        // who opted in keep their explicit value.
+        UserDefaults.standard.object(forKey: "app.remember_last_profile") as? Bool ?? false
     }
 
     private static let everSelectedKey = "nuvio.has_ever_selected_profile"

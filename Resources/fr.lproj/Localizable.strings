@@ -1,0 +1,113 @@
+/* Application shell */
+"navigation.home" = "Accueil";
+"navigation.discover" = "Découvrir";
+"navigation.search" = "Recherche";
+"navigation.library" = "Bibliothèque";
+"navigation.settings" = "Réglages";
+
+/* Player */
+"player.audio" = "Piste audio";
+"player.subtitles" = "Sous-titres";
+"player.sources" = "Sources";
+"player.reload" = "Actualiser";
+"player.close" = "Fermer";
+"player.all_sources" = "Toutes";
+"player.playback_controls" = "Commandes de lecture";
+"player.stream_information" = "Informations du flux";
+"player.tracks_in_file" = "Pistes de ce fichier";
+"player.no_playable_source" = "Aucune source lisible n’a été trouvée.";
+"player.off" = "Désactivés";
+"player.subtitle_appearance" = "Apparence des sous-titres";
+"player.subtitle_appearance_detail" = "Taille, contour et position";
+"player.applies_immediately" = "Les changements s’appliquent sans interrompre la lecture";
+"player.text_size" = "Taille du texte";
+"player.style" = "Style";
+"player.bold_text" = "Texte en gras";
+"player.outline" = "Contour";
+"player.position" = "Position";
+"player.bottom" = "Bas";
+"player.raised" = "Relevés";
+"player.high" = "Haut";
+"player.reset_subtitle_style" = "Réinitialiser le style";
+"player.text_color" = "Couleur du texte";
+"player.text_opacity" = "Opacité du texte";
+"player.color_white" = "Blanc";
+"player.color_yellow" = "Jaune";
+"player.color_cyan" = "Cyan";
+"player.color_green" = "Vert";
+
+/* Réglages */
+"settings.account" = "Compte";
+"settings.profiles" = "Profils";
+"settings.appearance" = "Apparence";
+"settings.layout" = "Mise en page";
+"settings.content_discovery" = "Contenu et découverte";
+"settings.integrations" = "Intégrations";
+"settings.playback" = "Lecture";
+"settings.advanced" = "Avancé";
+"settings.tracking" = "Suivi";
+"settings.about" = "À propos";
+
+/* Sélection de profil */
+"profiles.whos_watching" = "Qui regarde ?";
+"profiles.select_to_continue" = "Sélectionnez un profil pour continuer";
+"profiles.hold_to_manage" = "Maintenez Sélection sur un profil pour le gérer";
+"profiles.add" = "Ajouter un profil";
+"profiles.wrong_pin" = "Code PIN incorrect. Réessayez.";
+"profiles.enter_pin" = "Saisissez votre code PIN";
+
+/* Vocabulaire partagé */
+"common.back" = "Retour";
+"common.unavailable" = "Indisponible";
+"player.episodes" = "Épisodes";
+"player.season_format" = "Saison %@";
+"player.loading_episodes" = "Chargement des épisodes…";
+
+"topshelf.continue_watching" = "Reprendre la lecture";
+
+/* Lecteur — barre de transport */
+"player.play" = "Lecture";
+"player.pause" = "Pause";
+"player.progress" = "Progression";
+"player.next_episode" = "Épisode suivant";
+"player.switch_engine" = "Changer de moteur de lecture";
+"player.speed" = "Vitesse de lecture";
+"player.speed_normal" = "Normale";
+"player.aspect_ratio" = "Format d'image";
+"player.open_external" = "Ouvrir dans un lecteur externe";
+"player.more_actions" = "Plus d'options";
+"player.close_more_actions" = "Fermer les options";
+"player.via" = "via %@";
+"player.ends_at" = "Fin à %@";
+"player.aspect_fit" = "Ajusté (original)";
+"player.aspect_crop" = "Rogné";
+"player.aspect_stretch" = "Étiré";
+"player.aspect_slight_zoom" = "Zoom léger";
+"player.aspect_cinema_zoom" = "Zoom cinéma";
+"player.aspect_fit_height" = "Ajusté en hauteur";
+"player.aspect_fit_width" = "Ajusté en largeur";
+"player.audio_delay" = "Décalage audio";
+"player.subtitle_delay" = "Décalage des sous-titres";
+"player.reset_subtitle_delay" = "Réinitialiser le décalage";
+"player.amplification" = "Amplification (PCM)";
+"player.delay_range" = "Plage : %@ à %@";
+"player.amplification_range" = "Plage : %d dB à %d dB";
+"player.audio_default_only" = "Ce fichier ne contient qu'une seule piste audio.";
+
+/* À propos & licences */
+"about.made_with_love" = "Créé avec ❤️ par Tapframe et ses amis. Client Apple TV par la communauté Nuvio.";
+"licenses.section_app" = "Licence de l'application";
+"licenses.section_data" = "Données & services";
+"licenses.section_playback" = "Licences de lecture";
+"licenses.nuvio_title" = "Nuvio";
+"licenses.nuvio_body" = "Le code source et les termes de la licence sont disponibles dans le dépôt du projet. Sous licence GNU General Public License v3.0. Ce client Apple TV est une version non officielle et indépendante.";
+"licenses.tmdb_body" = "Nuvio utilise l'API TMDB pour les métadonnées, les visuels, les bandes-annonces, la distribution, les détails de production, les collections et les recommandations. Ce produit utilise l'API TMDB sans être approuvé ni certifié par TMDB.";
+"licenses.trakt_body" = "Nuvio se connecte à Trakt pour l'authentification, l'historique, la synchronisation de la progression, la bibliothèque, les notes, les listes et les commentaires. Nuvio n'est ni affilié à Trakt ni approuvé par lui.";
+"licenses.simkl_body" = "Nuvio se connecte à Simkl pour l'authentification, les listes de suivi, l'historique, la progression de lecture et le scrobbling. Nuvio n'est ni affilié à Simkl ni approuvé par lui.";
+"licenses.debrid_body" = "Nuvio se connecte à ce service pour l'authentification, la vérification du cache, l'accès à la bibliothèque cloud et la résolution des liens. Nuvio n'y est ni affilié ni approuvé par lui.";
+"licenses.mdblist_body" = "Nuvio utilise MDBList pour les notes agrégées et les fournisseurs de scores externes. Nuvio n'est ni affilié à MDBList ni approuvé par lui.";
+"licenses.aniskip_body" = "Nuvio utilise l'API AniSkip pour les repères d'intro, de résumé et de générique fournis par la communauté et utilisés par les commandes de saut. Nuvio n'est ni affilié à AniSkip ni approuvé par lui.";
+"licenses.avfoundation_body" = "La pile de lecture d'Apple, utilisée pour les sources H.264/HEVC et HLS ainsi que pour l'intégration « À l'écoute ».";
+"licenses.libmpv_body" = "Le moteur interne à codecs étendus. mpv est sous licence GNU General Public License v2 ou ultérieure ; les composants de libmpv conservent leurs termes d'origine.";
+"licenses.ffmpeg_body" = "Démultiplexage, décodage et filtrage au sein du moteur mpv. Sous licence GNU Lesser General Public License v2.1 ou ultérieure, avec des composants GPL lorsqu'ils sont activés.";
+"licenses.native_body" = "Rendu des sous-titres, gestion des couleurs, décodage AV1 et couche Vulkan-sur-Metal qui dessine l'image. Chacun conserve sa licence d'origine — ISC, LGPL, BSD et Apache 2.0 respectivement.";

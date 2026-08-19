@@ -72,6 +72,7 @@ final class LibraryStore {
         previewCache = previewFile.load() ?? [:]
         episodeThumbnails = thumbnailFile.load() ?? [:]
         pendingLibraryDeletions = deletionFile.load() ?? []
+        refreshTopShelf()
     }
 
     // MARK: Progress
@@ -280,8 +281,15 @@ final class LibraryStore {
 
     // MARK: Persistence
 
-    private func persistProgress() { progressFile.save(progress) }
-    private func persistLibrary() { libraryFile.save(library) }
+    private func persistProgress() {
+        progressFile.save(progress)
+        refreshTopShelf()
+    }
+
+    private func persistLibrary() {
+        libraryFile.save(library)
+        refreshTopShelf()
+    }
 
     private func persistThumbnails() {
         if episodeThumbnails.count > 600 {
@@ -299,5 +307,10 @@ final class LibraryStore {
             previewCache = previewCache.filter { keep.contains($0.key) }
         }
         previewFile.save(previewCache)
+        refreshTopShelf()
+    }
+
+    private func refreshTopShelf() {
+        TopShelfSnapshotPublisher.publish(progress: progress, previews: previewCache)
     }
 }

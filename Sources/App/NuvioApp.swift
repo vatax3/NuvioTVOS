@@ -51,6 +51,13 @@ private struct ProfileGate: View {
         .environment(avatars)
         .preferredColorScheme(.dark)
         .task { avatars.loadIfNeeded(configuration: account.configuration) }
+        // On a first-run QR sign-in the initial task ran before a server configuration existed.
+        // Reloading here is what makes the Android/iOS avatar photographs appear in the very
+        // next profile chooser instead of leaving the household with generic symbols.
+        .onChange(of: account.isSignedIn) { _, signedIn in
+            guard signedIn else { return }
+            avatars.loadIfNeeded(configuration: account.configuration)
+        }
     }
 }
 

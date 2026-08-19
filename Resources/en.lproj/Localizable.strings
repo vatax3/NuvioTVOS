@@ -1,0 +1,113 @@
+/* Application shell */
+"navigation.home" = "Home";
+"navigation.discover" = "Discover";
+"navigation.search" = "Search";
+"navigation.library" = "Library";
+"navigation.settings" = "Settings";
+
+/* Player */
+"player.audio" = "Audio";
+"player.subtitles" = "Subtitles";
+"player.sources" = "Sources";
+"player.reload" = "Reload";
+"player.close" = "Close";
+"player.all_sources" = "All";
+"player.playback_controls" = "Playback controls";
+"player.stream_information" = "Stream information";
+"player.tracks_in_file" = "Tracks in this file";
+"player.no_playable_source" = "No playable source was found.";
+"player.off" = "Off";
+"player.subtitle_appearance" = "Subtitle appearance";
+"player.subtitle_appearance_detail" = "Size, outline and position";
+"player.applies_immediately" = "Changes apply without interrupting playback";
+"player.text_size" = "Text size";
+"player.style" = "Style";
+"player.bold_text" = "Bold text";
+"player.outline" = "Outline";
+"player.position" = "Position";
+"player.bottom" = "Bottom";
+"player.raised" = "Raised";
+"player.high" = "High";
+"player.reset_subtitle_style" = "Reset subtitle style";
+"player.text_color" = "Text colour";
+"player.text_opacity" = "Text opacity";
+"player.color_white" = "White";
+"player.color_yellow" = "Yellow";
+"player.color_cyan" = "Cyan";
+"player.color_green" = "Green";
+
+/* Settings rail */
+"settings.account" = "Account";
+"settings.profiles" = "Profiles";
+"settings.appearance" = "Appearance";
+"settings.layout" = "Layout";
+"settings.content_discovery" = "Content & Discovery";
+"settings.integrations" = "Integrations";
+"settings.playback" = "Playback";
+"settings.advanced" = "Advanced";
+"settings.tracking" = "Tracking";
+"settings.about" = "About";
+
+/* Profile selection */
+"profiles.whos_watching" = "Who's watching?";
+"profiles.select_to_continue" = "Select a profile to continue";
+"profiles.hold_to_manage" = "Hold Select on a profile to manage it";
+"profiles.add" = "Add Profile";
+"profiles.wrong_pin" = "Wrong PIN. Try again.";
+"profiles.enter_pin" = "Enter your PIN";
+
+/* Shared player vocabulary */
+"common.back" = "Back";
+"common.unavailable" = "Unavailable";
+"player.episodes" = "Episodes";
+"player.season_format" = "Season %@";
+"player.loading_episodes" = "Loading episodes…";
+
+"topshelf.continue_watching" = "Continue Watching";
+
+/* Player transport */
+"player.play" = "Play";
+"player.pause" = "Pause";
+"player.progress" = "Progress";
+"player.next_episode" = "Next episode";
+"player.switch_engine" = "Switch player engine";
+"player.speed" = "Playback speed";
+"player.speed_normal" = "Normal";
+"player.aspect_ratio" = "Aspect ratio";
+"player.open_external" = "Open in external player";
+"player.more_actions" = "More actions";
+"player.close_more_actions" = "Close more actions";
+"player.via" = "via %@";
+"player.ends_at" = "Ends at %@";
+"player.aspect_fit" = "Fit (Original)";
+"player.aspect_crop" = "Crop";
+"player.aspect_stretch" = "Stretch";
+"player.aspect_slight_zoom" = "Slight Zoom";
+"player.aspect_cinema_zoom" = "Cinema Zoom";
+"player.aspect_fit_height" = "Fit Height";
+"player.aspect_fit_width" = "Fit Width";
+"player.audio_delay" = "Audio delay";
+"player.subtitle_delay" = "Subtitle delay";
+"player.reset_subtitle_delay" = "Reset subtitle delay";
+"player.amplification" = "Amplification (PCM)";
+"player.delay_range" = "Range: %@ to %@";
+"player.amplification_range" = "Range: %d dB to %d dB";
+"player.audio_default_only" = "This file carries a single audio track.";
+
+/* About & licences */
+"about.made_with_love" = "Made with ❤️ by Tapframe and friends. Apple TV client by the Nuvio community.";
+"licenses.section_app" = "App licence";
+"licenses.section_data" = "Data & services";
+"licenses.section_playback" = "Playback licences";
+"licenses.nuvio_title" = "Nuvio";
+"licenses.nuvio_body" = "Source code and licence terms are available in the project repository. Licensed under the GNU General Public License v3.0. This Apple TV client is an unofficial, independent build.";
+"licenses.tmdb_body" = "Nuvio uses the TMDB API for metadata, artwork, trailers, cast, production details, collections and recommendations. This product uses the TMDB API but is not endorsed or certified by TMDB.";
+"licenses.trakt_body" = "Nuvio connects to Trakt for authentication, watched history, progress sync, library data, ratings, lists and comments. Nuvio is not affiliated with or endorsed by Trakt.";
+"licenses.simkl_body" = "Nuvio connects to Simkl for authentication, watchlists, watched history, playback progress and scrobbling. Nuvio is not affiliated with or endorsed by Simkl.";
+"licenses.debrid_body" = "Nuvio connects to this service for authentication, cache checks, cloud library access and link resolution. Nuvio is not affiliated with or endorsed by it.";
+"licenses.mdblist_body" = "Nuvio uses MDBList for aggregated ratings and external score providers. Nuvio is not affiliated with or endorsed by MDBList.";
+"licenses.aniskip_body" = "Nuvio uses the AniSkip API for community-provided intro, recap and credits timestamps used by the skip controls. Nuvio is not affiliated with or endorsed by AniSkip.";
+"licenses.avfoundation_body" = "Apple's playback stack, used for H.264/HEVC and HLS sources and for Now Playing integration.";
+"licenses.libmpv_body" = "The internal extended-codec engine. mpv is licensed under the GNU General Public License v2 or later; libmpv components retain their upstream terms.";
+"licenses.ffmpeg_body" = "Demuxing, decoding and filtering inside the mpv engine. Licensed under the GNU Lesser General Public License v2.1 or later, with GPL components where enabled.";
+"licenses.native_body" = "Subtitle rendering, colour management, AV1 decoding and the Vulkan-on-Metal layer that draws the picture. Each retains its upstream licence — ISC, LGPL, BSD and Apache 2.0 respectively.";

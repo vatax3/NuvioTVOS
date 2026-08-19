@@ -120,13 +120,14 @@ metadata) and the marquee-on-focus card titles.
 These are choices, not gaps — each one is a place where copying Android would have made the tvOS
 app worse:
 
-1. **Playback uses `AVPlayerViewController`.** NuvioTV ships a bespoke overlay over ExoPlayer and
-   libmpv. On tvOS the system player owns the Siri Remote gestures, scrubbing preview, audio and
-   subtitle pickers, and Now Playing integration that viewers expect; a hand-rolled SwiftUI overlay
-   would be strictly worse. Nuvio's own logic (resume, progress, headers, metadata) is layered on
-   top. The trade-off is codec coverage: AVFoundation handles H.264/HEVC/HLS, but not the MKV and
-   exotic-audio range libmpv gives the Android build. Wiring in VLCKit or MPVKit is the natural
-   next step if that matters.
+1. **Two playback engines, chosen per file.** NuvioTV runs ExoPlayer and libmpv side by side;
+   this build does the same with AVFoundation and libmpv (rendered through MoltenVK). AVFoundation
+   gets H.264/HEVC/HLS, where the system player also brings Siri Remote gestures, scrubbing
+   preview and Now Playing for free; anything AVFoundation cannot demux — MKV above all — is
+   routed to mpv, which carries Nuvio's own transport: a focusable, accelerating scrub bar, the
+   Android control row, and the bottom-left audio and subtitle overlays. The transport is a port
+   rather than a tvOS invention, including Menu's whole meaning during playback, which is decided
+   in one place (`PlayerExitPolicy`) exactly as Android decides it in one `BackHandler`.
 2. **Focus is the tvOS focus engine**, not a reimplementation of Compose's. `focusSection()` and
    the native engine give correct D-pad behaviour for free; Nuvio's *visual* focus treatment
    (2 dp accent ring, 1.02 scale, 8 dp elevation) is reproduced by hand because tvOS's stock
@@ -152,6 +153,12 @@ Four things from the Android surface are missing, and each for a concrete reason
    than sitting inert.
 4. **crypto-js inside the plugin runtime.** Not bundled, so a scraper that depends on it throws a
    descriptive error. The rest of the documented plugin surface is present.
+
+Smaller player gaps, all in the mpv transport: there is no seek overlay while the controls are
+hidden (scrubbing brings them back instead), no sync-by-line subtitle timing dialog, no playback
+issue reporting, and no torrent progress overlay. Frame-rate and dynamic-range matching is wired
+to `AVDisplayManager` on both engines but has only been exercised on the simulator, which has no
+display modes to switch between.
 
 The **in-app addon configurator** is present but adapted: with no browser on tvOS, the addon's
 configure URL is rendered as a QR code to finish on a phone, and the resulting manifest URL is

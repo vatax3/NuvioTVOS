@@ -233,14 +233,16 @@ struct NuvioRowComponentTokens {
 struct NuvioSidebarComponentTokens {
     let legacyCollapsedWidth = dp(72)
     let legacyExpandedWidth = dp(196)
-    let collapsedWidth = dp(184)
-    let expandedWidth = dp(262)
-    let itemHeight = dp(52)
-    let itemWidth = dp(148)
-    let iconSize = dp(22)
-    let leadingVisual = dp(34)
-    let panelRadius = dp(30)
-    let contentGap = dp(14)
+    /// The modern panel is deliberately smaller than the Android drawer.  On tvOS it is an
+    /// overlay, not a persistent rail, so a compact glass card leaves the content visible.
+    let collapsedWidth = dp(156)
+    let expandedWidth = dp(222)
+    let itemHeight = dp(44)
+    let itemWidth = dp(128)
+    let iconSize = dp(20)
+    let leadingVisual = dp(30)
+    let panelRadius = dp(24)
+    let contentGap = dp(11)
 }
 
 struct NuvioDialogComponentTokens {

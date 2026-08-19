@@ -71,13 +71,24 @@ enum ResizeMode: String, SettingsOption {
 
 enum FrameRateMatchingMode: String, SettingsOption {
     case off = "OFF"
-    case seamless = "SEAMLESS"
-    case always = "ALWAYS"
+    /// Match on the way in and leave the panel there.
+    case start = "START"
+    /// Match on the way in, hand the display back on the way out.
+    case startStop = "START_STOP"
+
     var displayName: String {
         switch self {
         case .off: return "Off"
-        case .seamless: return "Seamless only"
-        case .always: return "Always"
+        case .start: return "On playback start"
+        case .startStop: return "Start and stop"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .off: return "Leave the display in whatever mode tvOS is using"
+        case .start: return "Switch the panel to the film's frame rate and stay there"
+        case .startStop: return "Switch for playback, then restore the previous mode"
         }
     }
 }

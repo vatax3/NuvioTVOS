@@ -8,6 +8,10 @@ import Observation
 final class DebridSettingsStore: PreferenceStore {
     init() { super.init(namespace: "debrid") }
 
+    override var secureKeys: Set<String> {
+        ["real_debrid_api_key", "premiumize_api_key", "torbox_api_key"]
+    }
+
     var enabled: Bool {
         get { bool("debrid_enabled", default: false) }
         set { setBool("debrid_enabled", newValue) }
@@ -19,18 +23,18 @@ final class DebridSettingsStore: PreferenceStore {
     }
 
     var realDebridApiKey: String {
-        get { string("real_debrid_api_key", default: "") }
-        set { setString("real_debrid_api_key", newValue) }
+        get { secureString("real_debrid_api_key", default: "") }
+        set { setSecureString("real_debrid_api_key", newValue) }
     }
 
     var premiumizeApiKey: String {
-        get { string("premiumize_api_key", default: "") }
-        set { setString("premiumize_api_key", newValue) }
+        get { secureString("premiumize_api_key", default: "") }
+        set { setSecureString("premiumize_api_key", newValue) }
     }
 
     var torboxApiKey: String {
-        get { string("torbox_api_key", default: "") }
-        set { setString("torbox_api_key", newValue) }
+        get { secureString("torbox_api_key", default: "") }
+        set { setSecureString("torbox_api_key", newValue) }
     }
 
     var preferredResolverProviderId: String {
@@ -138,6 +142,10 @@ final class DebridSettingsStore: PreferenceStore {
 final class TrackingSettingsStore: PreferenceStore {
     init() { super.init(namespace: "tracking") }
 
+    override var secureKeys: Set<String> {
+        ["trakt_client_secret", "trakt_access_token", "trakt_refresh_token", "simkl_access_token"]
+    }
+
     var watchProgressSource: WatchProgressSource {
         get { option("watch_progress_source", default: .local) }
         set { setOption("watch_progress_source", newValue) }
@@ -186,18 +194,18 @@ final class TrackingSettingsStore: PreferenceStore {
     }
 
     var traktClientSecret: String {
-        get { string("trakt_client_secret", default: "") }
-        set { setString("trakt_client_secret", newValue) }
+        get { secureString("trakt_client_secret", default: "") }
+        set { setSecureString("trakt_client_secret", newValue) }
     }
 
     var traktAccessToken: String {
-        get { string("trakt_access_token", default: "") }
-        set { setString("trakt_access_token", newValue) }
+        get { secureString("trakt_access_token", default: "") }
+        set { setSecureString("trakt_access_token", newValue) }
     }
 
     var traktRefreshToken: String {
-        get { string("trakt_refresh_token", default: "") }
-        set { setString("trakt_refresh_token", newValue) }
+        get { secureString("trakt_refresh_token", default: "") }
+        set { setSecureString("trakt_refresh_token", newValue) }
     }
 
     var traktUsername: String {
@@ -227,8 +235,8 @@ final class TrackingSettingsStore: PreferenceStore {
     }
 
     var simklAccessToken: String {
-        get { string("simkl_access_token", default: "") }
-        set { setString("simkl_access_token", newValue) }
+        get { secureString("simkl_access_token", default: "") }
+        set { setSecureString("simkl_access_token", newValue) }
     }
 
     var simklUsername: String {
@@ -257,14 +265,16 @@ final class TrackingSettingsStore: PreferenceStore {
 final class TmdbSettingsStore: PreferenceStore {
     init() { super.init(namespace: "tmdb") }
 
+    override var secureKeys: Set<String> { ["tmdb_api_key"] }
+
     var enabled: Bool {
         get { bool("tmdb_enabled", default: false) }
         set { setBool("tmdb_enabled", newValue) }
     }
 
     var apiKey: String {
-        get { string("tmdb_api_key", default: "") }
-        set { setString("tmdb_api_key", newValue) }
+        get { secureString("tmdb_api_key", default: "") }
+        set { setSecureString("tmdb_api_key", newValue) }
     }
 
     var language: String {
@@ -347,14 +357,16 @@ final class TmdbSettingsStore: PreferenceStore {
 final class MDBListSettingsStore: PreferenceStore {
     init() { super.init(namespace: "mdblist") }
 
+    override var secureKeys: Set<String> { ["mdblist_api_key"] }
+
     var enabled: Bool {
         get { bool("mdblist_enabled", default: false) }
         set { setBool("mdblist_enabled", newValue) }
     }
 
     var apiKey: String {
-        get { string("mdblist_api_key", default: "") }
-        set { setString("mdblist_api_key", newValue) }
+        get { secureString("mdblist_api_key", default: "") }
+        set { setSecureString("mdblist_api_key", newValue) }
     }
 
     var showImdb: Bool {

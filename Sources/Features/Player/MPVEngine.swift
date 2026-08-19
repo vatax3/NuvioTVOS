@@ -3,6 +3,8 @@ import Foundation
 import Observation
 import QuartzCore
 import os
+import SwiftUI
+import UIKit
 import Libmpv
 
 /// libmpv wrapper — the internal engine for everything AVFoundation will not open.
@@ -16,11 +18,48 @@ import Libmpv
 @Observable
 @MainActor
 final class MPVEngine {
+    /// The seven picture modes the Android TV player offers, in its order.  The aspect button
+    /// steps through the list one press at a time, so the sequence is part of the port, not an
+    /// arbitrary ordering of an enum.
+    enum AspectMode: String, CaseIterable, Identifiable {
+        case fit, crop, stretch, slightZoom, cinemaZoom, fitHeight, fitWidth
+
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .fit: return L10n.text("player.aspect_fit")
+            case .crop: return L10n.text("player.aspect_crop")
+            case .stretch: return L10n.text("player.aspect_stretch")
+            case .slightZoom: return L10n.text("player.aspect_slight_zoom")
+            case .cinemaZoom: return L10n.text("player.aspect_cinema_zoom")
+            case .fitHeight: return L10n.text("player.aspect_fit_height")
+            case .fitWidth: return L10n.text("player.aspect_fit_width")
+            }
+        }
+
+        var next: AspectMode {
+            let all = AspectMode.allCases
+            let index = all.firstIndex(of: self) ?? 0
+            return all[(index + 1) % all.count]
+        }
+    }
+
+    struct StreamInfo: Hashable {
+        var videoCodec: String?
+        var resolution: String?
+        var frameRate: String?
+        var audioCodec: String?
+        var audioChannels: String?
+    }
+
     private(set) var isReady = false
     private(set) var isPaused = false
     private(set) var isBuffering = true
     private(set) var position: Double = 0
     private(set) var duration: Double = 0
+    /// Media time up to which the demuxer has data. Android draws it behind the played fill so
+    /// a stalling source is visible before it stops.
+    private(set) var bufferedPosition: Double = 0
     private(set) var didEnd = false
     private(set) var errorMessage: String?
     /// True once a frame has actually been presented. A running clock with this still false is
@@ -31,9 +70,24 @@ final class MPVEngine {
     /// Selectable tracks the file itself carries, for the transport menus.
     private(set) var audioTracks: [MPVTrack] = []
     private(set) var subtitleTracks: [MPVTrack] = []
+    private(set) var playbackSpeed: Double = 1
+    private(set) var audioDelay: Double = 0
+    private(set) var subtitleDelay: Double = 0
+    private(set) var amplificationDb: Int = 0
+    private(set) var aspectMode: AspectMode = .fit
+    private(set) var streamInfo = StreamInfo()
+    /// Everything the display server needs to pick a mode. Published separately from
+    /// `streamInfo` because it is machine-readable rather than something to print.
+    private(set) var videoFormat: DisplayModeMatcher.VideoFormat?
 
     @ObservationIgnored private var handle: OpaquePointer?
     @ObservationIgnored private let log = Logger(subsystem: "com.nuvio.tvos", category: "MPV")
+    @ObservationIgnored private var appliedSubtitleFont: String?
+    @ObservationIgnored private let subtitleFontResolver = MPVSubtitleFontResolver()
+    /// libmpv emits `time-pos` much more often than a TV UI needs to redraw. Publishing every
+    /// sample invalidates the complete SwiftUI player tree on the main actor and can starve
+    /// AudioUnit. The reference iOS bridge samples state; tvOS now does the same at 4 Hz.
+    @ObservationIgnored private var lastPositionPublication = CACurrentMediaTime()
 
     struct MPVTrack: Identifiable, Hashable {
         let id: Int64
@@ -56,6 +110,7 @@ final class MPVEngine {
         startAt: Double,
         verboseLogging: Bool,
         hardwareDecoding: MpvHardwareDecodeMode = .hardwareCopy,
+        subtitleStyle: SubtitleStyle,
         layer: MPVMetalLayer
     ) {
         guard handle == nil, let mpv = mpv_create() else { return }
@@ -77,19 +132,29 @@ final class MPVEngine {
         setOption("hwdec", hardwareDecoding.mpvValue)
         setOption("ao", "audiounit")
         setOption("audio-fallback-to-null", "yes")
+        // Headroom for the amplification control; mpv refuses volumes above `volume-max`.
+        setOption("volume-max", "400")
         // Conservative Vulkan settings: MoltenVK is a translation layer, and the async paths
         // are where it is least reliable.
         setOption("vulkan-swap-mode", "fifo")
         setOption("vulkan-queue-count", "1")
         setOption("vulkan-async-compute", "no")
         setOption("vulkan-async-transfer", "no")
-        setOption("vulkan-disable-interop", "yes")
+        // VideoToolbox needs its normal Metal interop path. Disabling it forces costly copies
+        // and can cause AudioUnit underruns on Apple TV.
         setOption("video-rotate", "no")
-        // UTF-8 preferred, but *not* forced. The `+` prefix forces it even on a subtitle that
-        // genuinely is not UTF-8, and every byte then decodes to a replacement character —
-        // which libass draws as a row of empty boxes. Without the prefix a legacy-encoded file
-        // still gets read properly.
-        setOption("sub-codepage", "utf-8")
+        // Let libass detect BOM/declared encodings. Forcing UTF-8 corrupts valid UTF-16 and
+        // Windows-1252 releases into replacement squares.
+        setOption("sub-codepage", "auto")
+        // Register and select the bundled Noto CJK face. System font names alone are not
+        // sufficient: libass loads them through FreeType, which cannot read some sandboxed
+        // tvOS system font files even though CoreText can display them.
+        if let family = subtitleFontResolver.prepare() {
+            setOption("sub-font", family)
+            appliedSubtitleFont = family
+        }
+        setOption("subs-match-os-language", "yes")
+        setOption("subs-fallback", "yes")
         // HDR: hand the display the source colorimetry and let libplacebo tone-map what the
         // panel cannot show.
         setOption("target-colorspace-hint", "yes")
@@ -101,10 +166,11 @@ final class MPVEngine {
         setOption("ytdl", "no")
         setOption("terminal", "no")
         setOption("audio-channels", "auto")
+        applySubtitleStyle(subtitleStyle, asOption: true)
         // A TV is not a laptop: cache generously, the network is the bottleneck.
         setOption("cache", "yes")
-        setOption("demuxer-max-bytes", "64MiB")
-        setOption("demuxer-readahead-secs", "20")
+        setOption("demuxer-max-bytes", "96MiB")
+        setOption("demuxer-readahead-secs", "30")
         if verboseLogging { setOption("msg-level", "all=v") }
 
         // The header set a debrid link needs — the reason this path exists at all.
@@ -125,11 +191,12 @@ final class MPVEngine {
             return
         }
 
-        for property in ["time-pos", "duration", "pause", "eof-reached", "core-idle", "track-list"] {
+        for property in ["time-pos", "duration", "demuxer-cache-time", "pause", "eof-reached", "core-idle", "track-list", "current-tracks/sub/lang", "sub-text"] {
             let format: mpv_format = {
                 switch property {
-                case "time-pos", "duration": return MPV_FORMAT_DOUBLE
+                case "time-pos", "duration", "demuxer-cache-time": return MPV_FORMAT_DOUBLE
                 case "pause", "eof-reached", "core-idle": return MPV_FORMAT_FLAG
+                case "current-tracks/sub/lang", "sub-text": return MPV_FORMAT_STRING
                 default: return MPV_FORMAT_NODE
                 }
             }()
@@ -185,12 +252,138 @@ final class MPVEngine {
     func selectAudioTrack(_ id: Int64) { command(["set", "aid", String(id)]) }
 
     func selectSubtitleTrack(_ id: Int64?) {
+        if let id, let track = subtitleTracks.first(where: { $0.id == id }) {
+            if let family = subtitleFontResolver.familyForLanguage(track.language) {
+                applySubtitleFont(family)
+            }
+        }
         command(["set", "sid", id.map(String.init) ?? "no"])
     }
 
     /// Loads an addon-supplied subtitle file into the running instance.
     func addSubtitle(url: String, title: String) {
         command(["sub-add", url, "select", title])
+    }
+
+    func setPlaybackSpeed(_ speed: Double) {
+        let clamped = min(3, max(0.25, speed))
+        playbackSpeed = clamped
+        command(["set", "speed", String(format: "%.2f", clamped)])
+    }
+
+    /// Android's ranges: audio delay is ±3 s in 25 ms steps, subtitle delay ±60 s in 100 ms
+    /// steps.  The asymmetry is not arbitrary — an out-of-sync audio track is a decoder-level
+    /// offset of a few frames, while a mismatched subtitle file can be a whole minute out.
+    static let audioDelayLimit: Double = 3
+    static let subtitleDelayLimit: Double = 60
+
+    func adjustAudioDelay(by seconds: Double) {
+        setAudioDelay(audioDelay + seconds)
+    }
+
+    func setAudioDelay(_ seconds: Double) {
+        audioDelay = min(Self.audioDelayLimit, max(-Self.audioDelayLimit, seconds))
+        command(["set", "audio-delay", String(format: "%.3f", audioDelay)])
+    }
+
+    func adjustSubtitleDelay(by seconds: Double) {
+        setSubtitleDelay(subtitleDelay + seconds)
+    }
+
+    func setSubtitleDelay(_ seconds: Double) {
+        subtitleDelay = min(Self.subtitleDelayLimit, max(-Self.subtitleDelayLimit, seconds))
+        command(["set", "sub-delay", String(format: "%.3f", subtitleDelay)])
+    }
+
+    /// Post-decode gain, Android's "Amplification (PCM)" control. mpv expresses volume as a
+    /// percentage, so the dB the viewer picks is converted rather than passed through.
+    static let amplificationLimitDb = 10
+
+    func setAmplification(db: Int) {
+        let clamped = min(Self.amplificationLimitDb, max(0, db))
+        amplificationDb = clamped
+        let percent = pow(10.0, Double(clamped) / 20.0) * 100
+        command(["set", "volume", String(format: "%.0f", percent)])
+    }
+
+    func setAspectMode(_ mode: AspectMode) {
+        aspectMode = mode
+        // The modes are alternatives, not layers, and mpv keeps whichever knob was last set —
+        // so every one of them is returned to its neutral value before the new mode is applied.
+        command(["set", "keepaspect", "yes"])
+        command(["set", "panscan", "0"])
+        command(["set", "video-zoom", "0"])
+
+        // mpv's panscan is its content-aware crop-to-fill implementation. `video-zoom` is a
+        // log₂ scale, hence 0.20 ≈ 1.15× and 0.41 ≈ 1.33× — the same steps as Android TV.
+        switch mode {
+        case .fit:
+            break
+        case .crop:
+            command(["set", "panscan", "1"])
+        case .stretch:
+            command(["set", "keepaspect", "no"])
+        case .slightZoom:
+            command(["set", "video-zoom", "0.20"])
+        case .cinemaZoom:
+            command(["set", "video-zoom", "0.41"])
+        case .fitHeight:
+            // Android fills the height only when the picture is wider than the panel; a 4:3
+            // source is deliberately left untouched rather than blown up.
+            if let aspect = sourceAspect, aspect > displayAspect { command(["set", "panscan", "1"]) }
+        case .fitWidth:
+            if let aspect = sourceAspect, aspect < displayAspect { command(["set", "panscan", "1"]) }
+        }
+    }
+
+    /// Display aspect ratio of the decoded picture, as mpv reports it after applying the
+    /// container's pixel aspect — the same number Android reads off `VideoSize`.
+    private var sourceAspect: Double? {
+        propertyString("video-params/aspect").flatMap(Double.init).flatMap { $0 > 0 ? $0 : nil }
+    }
+
+    /// Apple TV outputs 16:9 in every supported mode, so the panel aspect is a constant here
+    /// rather than something to measure off the layer.
+    private var displayAspect: Double { 16.0 / 9.0 }
+
+    /// Apply the same subtitle preferences used by AVKit and the custom external-subtitle
+    /// overlay.  This is deliberately a live update: changing an audio/subtitle preference
+    /// must never recreate the MPV surface or briefly interrupt playback.
+    func applySubtitleStyle(_ style: SubtitleStyle) {
+        applySubtitleStyle(style, asOption: false)
+    }
+
+    private func applySubtitleStyle(_ style: SubtitleStyle, asOption: Bool) {
+        let set: (String, String) -> Void = { name, value in
+            if asOption { self.setOption(name, value) }
+            else { self.command(["set", name, value]) }
+        }
+        set("sub-ass-override", "no")
+        set("sub-font-size", String(format: "%.0f", min(96, max(18, 55 * style.sizeScale))))
+        set("sub-bold", style.bold ? "yes" : "no")
+        set("sub-color", mpvColor(style.textColor))
+        set("sub-back-color", mpvColor(style.backgroundColor))
+        set("sub-outline-color", mpvColor(style.outlineColor))
+        set("sub-border-color", mpvColor(style.outlineColor))
+        let outlineSize = style.outlineEnabled ? String(format: "%.1f", max(1, style.outlineWidth * 1.5)) : "0"
+        set("sub-outline-size", outlineSize)
+        set("sub-border-size", outlineSize)
+        set("sub-border-style", style.backgroundColor.alphaComponent > 0.01 ? "opaque-box" : "outline-and-shadow")
+        // MPV places subtitles using a percentage from the bottom.  Nuvio's stored offset is
+        // intentionally in small display points, so a 2:1 conversion produces useful remote
+        // presets without making the transport bar overlap the text.
+        set("sub-pos", String(format: "%.0f", min(100, max(0, 100 - style.verticalOffset / 10))))
+    }
+
+    private func mpvColor(_ color: Color) -> String {
+        let uiColor = UIColor(color)
+        var red: CGFloat = 1, green: CGFloat = 1, blue: CGFloat = 1, alpha: CGFloat = 1
+        uiColor.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+        return String(
+            format: "#%02X%02X%02X%02X",
+            Int((alpha * 255).rounded()), Int((red * 255).rounded()),
+            Int((green * 255).rounded()), Int((blue * 255).rounded())
+        )
     }
 
     // MARK: Commands
@@ -233,6 +426,7 @@ final class MPVEngine {
         case MPV_EVENT_FILE_LOADED:
             isBuffering = false
             refreshTracks()
+            refreshStreamInfo()
 
         case MPV_EVENT_END_FILE:
             guard let data = event.pointee.data else { return }
@@ -268,12 +462,17 @@ final class MPVEngine {
         case "time-pos":
             if let value = property.data?.assumingMemoryBound(to: Double.self).pointee,
                value.isFinite {
-                position = value
+                publishPositionIfNeeded(value)
             }
         case "duration":
             if let value = property.data?.assumingMemoryBound(to: Double.self).pointee,
                value.isFinite, value > 0 {
                 duration = value
+            }
+        case "demuxer-cache-time":
+            if let value = property.data?.assumingMemoryBound(to: Double.self).pointee,
+               value.isFinite, value >= 0 {
+                bufferedPosition = value
             }
         case "pause":
             if let value = property.data?.assumingMemoryBound(to: CInt.self).pointee {
@@ -290,6 +489,14 @@ final class MPVEngine {
             }
         case "track-list":
             refreshTracks()
+        case "current-tracks/sub/lang":
+            if let family = subtitleFontResolver.familyForLanguage(property.stringValue) {
+                applySubtitleFont(family)
+            }
+        case "sub-text":
+            if let family = subtitleFontResolver.familyForText(property.stringValue) {
+                applySubtitleFont(family)
+            }
         default:
             break
         }
@@ -321,12 +528,75 @@ final class MPVEngine {
         }
         audioTracks = audio
         subtitleTracks = subtitles
+        if let family = subtitleFontResolver.familyForLanguage(subtitles.first(where: \.isSelected)?.language) {
+            applySubtitleFont(family)
+        }
+    }
+
+    private func applySubtitleFont(_ family: String) {
+        guard family != appliedSubtitleFont else { return }
+        appliedSubtitleFont = family
+        command(["set", "sub-font", family])
+    }
+
+    private func publishPositionIfNeeded(_ value: Double) {
+        let now = CACurrentMediaTime()
+        let isDiscontinuity = value < position || abs(value - position) > 1.25
+        guard isDiscontinuity || now - lastPositionPublication >= 0.25 else { return }
+        lastPositionPublication = now
+        position = value
+    }
+
+    private func refreshStreamInfo() {
+        let width = propertyString("video-params/w")
+        let height = propertyString("video-params/h")
+        // `video-params` has no fps member. `container-fps` is the declared rate — the one a
+        // display should be matched to — and the filtered estimate is the fallback for a
+        // container that declares nothing.
+        let fps = (propertyString("container-fps") ?? propertyString("estimated-vf-fps"))
+            .flatMap(Double.init)
+        let codec = propertyString("video-codec") ?? propertyString("video-format")
+        streamInfo = StreamInfo(
+            videoCodec: codec,
+            resolution: width.flatMap { width in height.map { "\(width) × \($0)" } },
+            frameRate: fps.map { String(format: "%.3g fps", $0) },
+            audioCodec: propertyString("audio-codec-name") ?? propertyString("audio-codec"),
+            audioChannels: propertyString("audio-params/channel-count")
+        )
+
+        if let fps, let width = width.flatMap(Int32.init), let height = height.flatMap(Int32.init) {
+            videoFormat = DisplayModeMatcher.VideoFormat(
+                codec: codec,
+                width: width,
+                height: height,
+                frameRate: fps,
+                transfer: propertyString("video-params/gamma"),
+                primaries: propertyString("video-params/primaries"),
+                matrix: propertyString("video-params/colormatrix")
+            )
+        }
+    }
+
+    private func propertyString(_ name: String) -> String? {
+        guard let handle, let raw = mpv_get_property_string(handle, name) else { return nil }
+        defer { mpv_free(raw) }
+        let value = String(cString: raw).trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.nilIfBlank
     }
 }
 
 /// Bridges the C callbacks, which take a raw pointer and cannot hold a Swift reference.
 private final class MPVEngineBox: @unchecked Sendable {
     weak var engine: MPVEngine?
+}
+
+private extension mpv_event_property {
+    var stringValue: String? {
+        guard format == MPV_FORMAT_STRING,
+              let pointer = data?.assumingMemoryBound(to: UnsafePointer<CChar>?.self).pointee
+        else { return nil }
+        return String(cString: pointer).nilIfBlank
+    }
 }
 
 #endif

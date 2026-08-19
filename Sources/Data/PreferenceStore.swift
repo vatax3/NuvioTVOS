@@ -28,6 +28,10 @@ class PreferenceStore {
         }
     }
 
+    /// Credential keys are device-local, excluded from account sync, and migrated away from
+    /// `UserDefaults` on first access.
+    var secureKeys: Set<String> { [] }
+
     private func persist(_ key: String, _ value: Any?) {
         storage[key] = value
         if let value {
@@ -52,6 +56,7 @@ class PreferenceStore {
     func exportForSync() -> [String: AnyJSONValue] {
         var out: [String: AnyJSONValue] = [:]
         for (key, value) in storage {
+            guard !secureKeys.contains(key) else { continue }
             switch value {
             case let bool as Bool: out[key] = .bool(bool)
             case let int as Int: out[key] = .int(int)
@@ -76,6 +81,7 @@ class PreferenceStore {
         isApplyingSyncedValues = true
         defer { isApplyingSyncedValues = false }
         for (key, value) in values {
+            guard !secureKeys.contains(key) else { continue }
             switch value {
             case .bool(let bool):
                 persist(key, bool)
@@ -132,6 +138,29 @@ class PreferenceStore {
 
     func setString(_ key: String, _ value: String) { persist(key, value) }
 
+    func secureString(_ key: String, default fallback: String) -> String {
+        precondition(secureKeys.contains(key), "Only declared secure keys may use secureString")
+        let namespacedKey = "\(namespace).\(key)"
+        if let legacy = storage[key] as? String {
+            KeychainStore.setString(legacy, forKey: namespacedKey)
+            defaults.removeObject(forKey: namespacedKey)
+            return legacy
+        }
+        if let value = KeychainStore.string(forKey: namespacedKey) {
+            storage[key] = value
+            return value
+        }
+        return fallback
+    }
+
+    func setSecureString(_ key: String, _ value: String) {
+        precondition(secureKeys.contains(key), "Only declared secure keys may use setSecureString")
+        storage[key] = value
+        let namespacedKey = "\(namespace).\(key)"
+        KeychainStore.setString(value, forKey: namespacedKey)
+        defaults.removeObject(forKey: namespacedKey)
+    }
+
     func stringList(_ key: String, default fallback: [String] = []) -> [String] {
         storage[key] as? [String] ?? fallback
     }
@@ -171,6 +200,9 @@ class PreferenceStore {
         let prefix = "\(namespace)."
         for key in storage.keys {
             defaults.removeObject(forKey: prefix + key)
+        }
+        for key in secureKeys {
+            KeychainStore.removeValue(forKey: prefix + key)
         }
         storage.removeAll()
     }

@@ -399,7 +399,7 @@ struct GridHomeContent: View {
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: NuvioTheme.spacing.rail.rowGap) {
-                Text("Home")
+                Text(L10n.text("navigation.home"))
                     .nuvioText(NuvioTextStyles.display)
                     .foregroundStyle(colors.textPrimary)
                     .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)

@@ -152,16 +152,16 @@ struct SettingsView: View {
 
         var title: String {
             switch self {
-            case .account: return "Account"
-            case .profiles: return "Profiles"
-            case .appearance: return "Appearance"
-            case .layout: return "Layout"
-            case .contentDiscovery: return "Content & Discovery"
-            case .integrations: return "Integrations"
-            case .playback: return "Playback"
-            case .advanced: return "Advanced"
-            case .tracking: return "Tracking"
-            case .about: return "About"
+            case .account: return L10n.text("settings.account")
+            case .profiles: return L10n.text("settings.profiles")
+            case .appearance: return L10n.text("settings.appearance")
+            case .layout: return L10n.text("settings.layout")
+            case .contentDiscovery: return L10n.text("settings.content_discovery")
+            case .integrations: return L10n.text("settings.integrations")
+            case .playback: return L10n.text("settings.playback")
+            case .advanced: return L10n.text("settings.advanced")
+            case .tracking: return L10n.text("settings.tracking")
+            case .about: return L10n.text("settings.about")
             }
         }
 
@@ -239,7 +239,7 @@ struct SettingsView: View {
     private var rail: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: NuvioTheme.spacing.sm) {
-                Text("Settings")
+                Text(L10n.text("navigation.settings"))
                     .nuvioText(NuvioTextStyles.headline)
                     .foregroundStyle(colors.textPrimary)
                     .padding(.bottom, NuvioTheme.spacing.md)
@@ -643,10 +643,15 @@ struct AboutContent: View {
                         .nuvioText(NuvioTextStyles.bodyCompact)
                         .foregroundStyle(colors.textSecondary)
                         .frame(maxWidth: dp(720), alignment: .leading)
+                    Text(L10n.text("about.made_with_love"))
+                        .nuvioText(NuvioTextStyles.metadata)
+                        .foregroundStyle(colors.textTertiary)
                 }
                 .padding(.horizontal, NuvioTheme.spacing.lg)
                 .padding(.vertical, NuvioTheme.spacing.sm)
             }
+
+            LicensesContent()
         }
     }
 }

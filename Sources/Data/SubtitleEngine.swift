@@ -186,13 +186,25 @@ actor SubtitleLoader {
             throw URLError(.badServerResponse)
         }
 
-        // Addons serve a mix of UTF-8 and legacy Latin-1; a failed UTF-8 decode is common.
-        let text = String(data: data, encoding: .utf8)
-            ?? String(data: data, encoding: .isoLatin1)
-            ?? ""
+        let text = decodeSubtitleText(data)
         let cues = SubtitleParser.parse(text)
         cache[subtitle.url] = cues
         return cues
+    }
+
+    /// Community SRTs frequently omit their charset. UTF-16 and Windows-1252 need dedicated
+    /// handling; treating their bytes as Latin-1 is what produces boxes/mojibake on screen.
+    private func decodeSubtitleText(_ data: Data) -> String {
+        if data.starts(with: [0xFF, 0xFE]) {
+            return String(data: data, encoding: .utf16LittleEndian) ?? ""
+        }
+        if data.starts(with: [0xFE, 0xFF]) {
+            return String(data: data, encoding: .utf16BigEndian) ?? ""
+        }
+        return String(data: data, encoding: .utf8)
+            ?? String(data: data, encoding: .windowsCP1252)
+            ?? String(data: data, encoding: .isoLatin1)
+            ?? ""
     }
 }
 

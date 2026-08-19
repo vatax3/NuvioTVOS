@@ -22,11 +22,39 @@ struct PlayerView: View {
     @State private var lastScrobbleProgress: Double = 0
     @State private var didSimklCheckin = false
     @State private var subtitles = SubtitleTrackController()
+    /// AniSkip intervals are deliberately owned by the player rather than the detail screen:
+    /// an episode can be started from Continue Watching, a deep link, or the stream picker.
+    @State private var skipSegments: [SkipSegment] = []
+    @State private var skipLookupKey: String?
+    @State private var dismissedSkipSegments: Set<String> = []
+    @State private var playbackPosition: Double = 0
+    /// Both player backends consume this one-shot seek request and acknowledge it by clearing it.
+    @State private var requestedSeek: Double?
+    /// A one-shot pause command shared by AVPlayer and MPV. The still-watching prompt must
+    /// freeze the episode; otherwise it can expire underneath the viewer while they decide.
+    @State private var requestedPause: UUID?
+    @State private var nextEpisodeCountdown: Int?
+    @State private var didDeclineNextEpisode = false
+    @State private var postPlayTask: Task<Void, Never>?
+    @State private var isLoading = true
+    @State private var isPaused = false
+    @State private var parentalWarnings: [ParentalWarning] = []
+    @State private var showsParentalGuide = false
+    @State private var parentalGuideTask: Task<Void, Never>?
+    @State private var consecutiveAutoAdvances = 0
+    @State private var showsStillWatchingPrompt = false
+    @State private var handledStillWatchingPrompt = false
+    /// AVPlayer's transport menu can request a source change.  Keep the picker above the player
+    /// instead of navigating back to the Sources route, just like the Android/iOS side panel.
+    @State private var showsSourcePanel = false
 
     /// MKV and friends have no AVFoundation demuxer, so those files are routed to MPV even when
     /// the viewer left the engine on Default — an unplayable file is worse than a slower decode.
     private var resolvedEngine: InternalPlayerEngine {
         guard MPVEngineSupport.isAvailable else { return .exoplayer }
+        // Android's in-player engine switch is a one-session override, not a settings change:
+        // the viewer is fixing this file, not changing their default.
+        if let engineOverride { return engineOverride }
         if settings.player.internalPlayerEngine == .mpv { return .mpv }
         // AVFoundation already refused this source once — see `avPlayer`'s `onFailed`.
         if didFallBackToMPV { return .mpv }
@@ -40,6 +68,8 @@ struct PlayerView: View {
     /// container sniffing alone cannot tell an MKV from an MP4 and the refusal is the only
     /// reliable signal. Without this the viewer just gets AVPlayer's blank "no entry" screen.
     @State private var didFallBackToMPV = false
+    /// Set by the in-player engine button, and cleared only by leaving playback.
+    @State private var engineOverride: InternalPlayerEngine?
 
     var body: some View {
         Group {
@@ -50,31 +80,72 @@ struct PlayerView: View {
             }
         }
         .ignoresSafeArea()
-        .task { await loadSubtitles() }
+        .task {
+            consecutiveAutoAdvances = PlaybackSessionStore.shared.consumeAutoAdvance(for: request.videoId)
+            await loadSubtitles()
+            await loadParentalGuide()
+        }
+        .onDisappear {
+            postPlayTask?.cancel()
+            parentalGuideTask?.cancel()
+        }
     }
 
     @ViewBuilder
     private var mpvPlayer: some View {
         #if canImport(Libmpv)
-        MPVPlayerView(
-            request: request,
-            resumeAt: resumePosition,
-            verboseLogging: settings.player.verboseLoggingEnabled,
-            hardwareDecoding: settings.player.mpvHardwareDecodeMode,
-            subtitleStyle: settings.subtitleStyle,
-            onProgress: { position, duration, completed in
-                persist(position: position, duration: duration, completed: completed)
-                scrobble(position: position, duration: duration)
-                simklCheckin()
-                advanceIfDue(position: position, duration: duration)
-            },
-            onFinished: {
-                persist(position: 0, duration: 0, completed: true)
-                scrobbleStop()
-                advanceToNextEpisode()
-                dismiss()
+        ZStack {
+            MPVPlayerView(
+                request: request,
+                resumeAt: resumePosition,
+                verboseLogging: settings.player.verboseLoggingEnabled,
+                hardwareDecoding: settings.player.mpvHardwareDecodeMode,
+                subtitleStyle: settings.subtitleStyle,
+                seekTarget: requestedSeek,
+                onSeekApplied: { requestedSeek = nil },
+                pauseRequest: requestedPause,
+                onPauseApplied: { requestedPause = nil },
+                onChooseEpisode: request.contentType == "series" ? chooseEpisode : nil,
+                onPlayNextEpisode: request.nextUp == nil ? nil : playNextEpisodeNow,
+                onSwitchEngine: { engineOverride = .exoplayer },
+                hasOpenPrompt: nextEpisodeCountdown != nil || showsStillWatchingPrompt,
+                onDismissPrompt: dismissTransientPrompt,
+                onPlaybackTime: observePlaybackTime,
+                onPlaybackState: { paused, loading in
+                    observePlaybackState(paused: paused, loading: loading)
+                },
+                onProgress: { position, duration, completed in
+                    observePlaybackTime(position, duration)
+                    persist(position: position, duration: duration, completed: completed)
+                    scrobble(position: position, duration: duration)
+                    simklCheckin()
+                    advanceIfDue(position: position, duration: duration)
+                },
+                onFinished: {
+                    persist(position: 0, duration: 0, completed: true)
+                    scrobbleStop()
+                    advanceToNextEpisode()
+                    dismiss()
+                }
+            )
+
+            if let segment = activeSkipSegment {
+                SkipSegmentButton(segment: segment, action: { skip(segment) })
+                    .padding(.leading, NuvioTheme.layout.tvSafeHorizontal)
+                    .padding(.bottom, dp(116))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                    .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .bottomLeading)))
             }
-        )
+
+            postPlayOverlay
+            stillWatchingOverlay
+            playerStatusOverlay
+
+            if showsSourcePanel {
+                InPlayerSourcesPanel(request: request) { showsSourcePanel = false }
+            }
+        }
+        .animation(NuvioMotion.quickTween, value: activeSkipSegment?.id)
         #else
         avPlayer
         #endif
@@ -85,12 +156,26 @@ struct PlayerView: View {
             AVPlayerContainer(
                 request: request,
                 resumeAt: resumePosition,
-                subtitleStyleRules: settings.subtitleStyle.textStyleRules,
+                subtitleStyle: settings.subtitleStyle,
                 subtitleTracks: subtitles.available,
                 selectedSubtitle: subtitles.selected,
                 onSelectSubtitle: { subtitles.select($0) },
-                onTick: { subtitles.currentTime = $0 },
+                seekTarget: requestedSeek,
+                onSeekApplied: { requestedSeek = nil },
+                pauseRequest: requestedPause,
+                onPauseApplied: { requestedPause = nil },
+                onChooseSource: request.sourceRequest == nil ? nil : { showsSourcePanel = true },
+                onSwitchEngine: MPVEngineSupport.isAvailable ? { engineOverride = .mpv } : nil,
+                frameRateMatchingMode: settings.player.frameRateMatchingMode,
+                onPlaybackState: { paused, loading in
+                    observePlaybackState(paused: paused, loading: loading)
+                },
+                onTick: { position, duration in
+                    subtitles.currentTime = position
+                    observePlaybackTime(position, duration)
+                },
                 onProgress: { position, duration, completed in
+                    observePlaybackTime(position, duration)
                     persist(position: position, duration: duration, completed: completed)
                     scrobble(position: position, duration: duration)
                     simklCheckin()
@@ -112,7 +197,22 @@ struct PlayerView: View {
             )
 
             SubtitleOverlay(cue: subtitles.activeCue, style: settings.subtitleStyle)
+
+            if let segment = activeSkipSegment {
+                SkipSegmentButton(segment: segment, action: { skip(segment) })
+                    .padding(.leading, NuvioTheme.layout.tvSafeHorizontal)
+                    // Clear AVPlayerViewController's transport bar while remaining reachable
+                    // with the Siri Remote when the system controls are hidden.
+                    .padding(.bottom, dp(116))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                    .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .bottomLeading)))
+            }
+
+            postPlayOverlay
+            stillWatchingOverlay
+            playerStatusOverlay
         }
+        .animation(NuvioMotion.quickTween, value: activeSkipSegment?.id)
     }
 
     // MARK: External subtitles
@@ -134,6 +234,129 @@ struct PlayerView: View {
            ) {
             subtitles.select(automatic)
         }
+    }
+
+    // MARK: - Intro / outro skipping
+
+    private var activeSkipSegment: SkipSegment? {
+        guard settings.player.skipIntroEnabled else { return nil }
+        return skipSegments.first { segment in
+            playbackPosition >= segment.start && playbackPosition < segment.end
+                && !dismissedSkipSegments.contains(segment.id)
+        }
+    }
+
+    @ViewBuilder
+    private var playerStatusOverlay: some View {
+        if isLoading, settings.player.loadingOverlayEnabled {
+            PlayerLoadingOverlay(request: request, showsDetail: settings.player.showPlayerLoadingStatus)
+                .transition(.opacity)
+        } else if isPaused, settings.player.pauseOverlayEnabled,
+                  nextEpisodeCountdown == nil, !showsStillWatchingPrompt {
+            PlayerPauseOverlay(request: request, showsClock: settings.player.osdClockEnabled)
+                .transition(.opacity)
+        }
+
+        if showsParentalGuide {
+            ParentalGuideOverlay(warnings: parentalWarnings)
+                .transition(.opacity)
+        }
+    }
+
+    private func observePlaybackState(paused: Bool, loading: Bool) {
+        isPaused = paused
+        isLoading = loading
+        if !loading { showParentalGuideIfReady() }
+    }
+
+    private func loadParentalGuide() async {
+        guard settings.player.parentalGuideEnabled, let imdbId = request.imdbId else { return }
+        parentalWarnings = await ParentalGuideClient.shared.warnings(imdbId: imdbId)
+        showParentalGuideIfReady()
+    }
+
+    private func showParentalGuideIfReady() {
+        guard !isLoading, !showsParentalGuide, !parentalWarnings.isEmpty else { return }
+        showsParentalGuide = true
+        parentalGuideTask?.cancel()
+        parentalGuideTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(5))
+            guard !Task.isCancelled else { return }
+            showsParentalGuide = false
+        }
+    }
+
+    /// The fine-grained player clock also drives the skip button. Persisting progress on this
+    /// cadence would be wasteful, but using only the five-second persistence tick makes a short
+    /// recap interval impossible to catch.
+    private func observePlaybackTime(_ position: Double, _ duration: Double) {
+        playbackPosition = position
+        if duration.isFinite, duration > 0 {
+            loadSkipSegmentsIfNeeded(duration: duration)
+        }
+    }
+
+    private func loadSkipSegmentsIfNeeded(duration: Double) {
+        guard settings.player.skipIntroEnabled,
+              request.episode != nil,
+              duration > 0,
+              skipLookupKey == nil
+        else { return }
+
+        let ids = [request.videoId, request.contentId, request.imdbId ?? ""]
+        let directMAL = ids.lazy.compactMap(Self.malEpisode(from:)).first
+        let key: String
+        if let directMAL {
+            key = "mal:\(directMAL.id):\(directMAL.episode)"
+        } else if let imdbId = ids.lazy.first(where: { $0.hasPrefix("tt") }),
+                  let episode = request.episode {
+            key = "imdb:\(imdbId.split(separator: ":")[0]):\(episode)"
+        } else {
+            return
+        }
+        skipLookupKey = key
+
+        Task {
+            let segments: [SkipSegment]
+            if let directMAL {
+                segments = await SkipIntroClient.shared.segments(
+                    malId: directMAL.id, episode: directMAL.episode, episodeLength: duration
+                )
+            } else if let imdbId = ids.lazy.first(where: { $0.hasPrefix("tt") }),
+                      let episode = request.episode,
+                      let malId = await SkipIntroClient.shared.malId(
+                        imdbId: String(imdbId.split(separator: ":")[0]), tvdbId: nil
+                      ) {
+                segments = await SkipIntroClient.shared.segments(
+                    malId: malId, episode: episode, episodeLength: duration
+                )
+            } else {
+                segments = []
+            }
+            guard skipLookupKey == key else { return }
+            skipSegments = segments
+        }
+    }
+
+    private func skip(_ segment: SkipSegment) {
+        dismissedSkipSegments.insert(segment.id)
+        requestedSeek = segment.end
+    }
+
+    /// Android's in-player Episodes panel opens the stream picker for the selected episode.
+    /// Keeping the same transition on tvOS means the current player is dismissed before the
+    /// next source is resolved, avoiding two full-screen playback covers fighting for focus.
+    private func chooseEpisode(_ episode: StreamRequest) {
+        router.playback = nil
+        router.openStreams(episode)
+    }
+
+    private static func malEpisode(from id: String) -> (id: Int, episode: Int)? {
+        let parts = id.split(separator: ":")
+        guard parts.count >= 3, parts[0].lowercased() == "mal",
+              let malId = Int(parts[1]), let episode = Int(parts[2])
+        else { return nil }
+        return (malId, episode)
     }
 
     // MARK: Trakt
@@ -217,15 +440,120 @@ struct PlayerView: View {
     /// Honours the percent / minutes-before-end threshold from Playback settings.
     private func advanceIfDue(position: Double, duration: Double) {
         guard settings.player.autoPlayNextEpisodeEnabled, request.nextUp != nil,
+              !didDeclineNextEpisode, nextEpisodeCountdown == nil, !showsStillWatchingPrompt,
               settings.player.shouldAdvanceToNextEpisode(position: position, duration: duration)
         else { return }
+        if settings.player.stillWatchingEnabled,
+           consecutiveAutoAdvances >= settings.player.stillWatchingEpisodeThreshold,
+           !handledStillWatchingPrompt {
+            handledStillWatchingPrompt = true
+            showsStillWatchingPrompt = true
+            requestedPause = UUID()
+            return
+        }
+        beginPostPlayCountdown()
+    }
+
+    @ViewBuilder
+    private var stillWatchingOverlay: some View {
+        if showsStillWatchingPrompt {
+            StillWatchingOverlay(
+                continuePlayback: continueAfterStillWatchingPrompt,
+                stopAutoPlay: stopAutoPlayAfterStillWatchingPrompt
+            )
+            .padding(.trailing, NuvioTheme.layout.tvSafeHorizontal)
+            .padding(.bottom, dp(110))
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+            .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .bottomTrailing)))
+        }
+    }
+
+    private func continueAfterStillWatchingPrompt() {
+        showsStillWatchingPrompt = false
+        PlaybackSessionStore.shared.resetAutoAdvanceCount()
+        consecutiveAutoAdvances = 0
+        beginPostPlayCountdown()
+    }
+
+    private func stopAutoPlayAfterStillWatchingPrompt() {
+        showsStillWatchingPrompt = false
+        didDeclineNextEpisode = true
+        PlaybackSessionStore.shared.resetAutoAdvanceCount()
+    }
+
+    @ViewBuilder
+    private var postPlayOverlay: some View {
+        if let countdown = nextEpisodeCountdown, let next = request.nextUp {
+            PostPlayOverlay(
+                next: next,
+                countdown: countdown,
+                continuePlayback: continueToNextEpisode,
+                cancel: declineNextEpisode
+            )
+            .padding(.trailing, NuvioTheme.layout.tvSafeHorizontal)
+            .padding(.bottom, dp(110))
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+            .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .bottomTrailing)))
+        }
+    }
+
+    private func beginPostPlayCountdown() {
+        guard postPlayTask == nil else { return }
+        nextEpisodeCountdown = 8
+        postPlayTask = Task { @MainActor in
+            for remaining in stride(from: 8, through: 1, by: -1) {
+                nextEpisodeCountdown = remaining
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled else { return }
+            }
+            continueToNextEpisode()
+        }
+    }
+
+    /// Menu's first claim once the panels are closed, matching Android's chain: a prompt over
+    /// the picture is dismissed before the transport is, and long before playback ends.
+    private func dismissTransientPrompt() {
+        if nextEpisodeCountdown != nil {
+            declineNextEpisode()
+        } else if showsStillWatchingPrompt {
+            stopAutoPlayAfterStillWatchingPrompt()
+        }
+    }
+
+    /// The transport's next-episode button: no countdown, no consent prompt — the viewer has
+    /// already decided by pressing it.
+    private func playNextEpisodeNow() {
+        postPlayTask?.cancel()
+        postPlayTask = nil
+        nextEpisodeCountdown = nil
+        didDeclineNextEpisode = false
+        scrobbleStop()
+        guard let next = request.nextUp else { return }
+        PlaybackSessionStore.shared.markAutoAdvance(to: next.videoId)
+        router.openStreams(next)
+        dismiss()
+    }
+
+    private func continueToNextEpisode() {
+        postPlayTask?.cancel()
+        postPlayTask = nil
+        nextEpisodeCountdown = nil
         scrobbleStop()
         advanceToNextEpisode()
         dismiss()
     }
 
+    private func declineNextEpisode() {
+        postPlayTask?.cancel()
+        postPlayTask = nil
+        nextEpisodeCountdown = nil
+        didDeclineNextEpisode = true
+    }
+
     private func advanceToNextEpisode() {
-        guard settings.player.autoPlayNextEpisodeEnabled, let next = request.nextUp else { return }
+        guard settings.player.autoPlayNextEpisodeEnabled, !didDeclineNextEpisode,
+              let next = request.nextUp else { return }
+        PlaybackSessionStore.shared.markAutoAdvance(to: next.videoId)
         router.openStreams(next)
     }
 
@@ -270,11 +598,20 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
     let request: PlaybackRequest
     let resumeAt: Double
     /// Applied to tracks the container itself carries; addon tracks are drawn by the overlay.
-    let subtitleStyleRules: [AVTextStyleRule]
+    let subtitleStyle: SubtitleStyle
     let subtitleTracks: [Subtitle]
     let selectedSubtitle: Subtitle?
     let onSelectSubtitle: (Subtitle?) -> Void
-    let onTick: (Double) -> Void
+    let seekTarget: Double?
+    let onSeekApplied: () -> Void
+    let pauseRequest: UUID?
+    let onPauseApplied: () -> Void
+    let onChooseSource: (() -> Void)?
+    /// Mirrors the MPV transport's engine button so the switch works in both directions.
+    let onSwitchEngine: (() -> Void)?
+    let frameRateMatchingMode: FrameRateMatchingMode
+    let onPlaybackState: (Bool, Bool) -> Void
+    let onTick: (Double, Double) -> Void
     let onProgress: (Double, Double, Bool) -> Void
     /// Called when AVFoundation cannot open the source, so the caller can hand it to MPV.
     let onFailed: () -> Void
@@ -282,7 +619,8 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
 
     func makeCoordinator() -> Coordinator {
         Coordinator(
-            onProgress: onProgress, onFinished: onFinished, onTick: onTick, onFailed: onFailed
+            onProgress: onProgress, onFinished: onFinished, onTick: onTick, onFailed: onFailed,
+            onPlaybackState: onPlaybackState
         )
     }
 
@@ -290,6 +628,10 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
         let controller = AVPlayerViewController()
         controller.showsPlaybackControls = true
         controller.allowsPictureInPicturePlayback = false
+        // The system player will match the panel to the asset, but only when asked — the
+        // property defaults to off.  AVKit restores the previous mode itself when full-screen
+        // playback ends, so `start` and `startStop` behave alike on this engine.
+        controller.appliesPreferredDisplayCriteriaAutomatically = frameRateMatchingMode != .off
 
         guard let url = URL(string: request.streamURL) else { return controller }
 
@@ -301,12 +643,13 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
         let asset = AVURLAsset(url: url, options: options)
         let item = AVPlayerItem(asset: asset)
         item.externalMetadata = metadata()
-        item.textStyleRules = subtitleStyleRules
+        item.textStyleRules = subtitleStyle.textStyleRules
 
         let player = AVPlayer(playerItem: item)
         player.automaticallyWaitsToMinimizeStalling = true
         controller.player = player
 
+        context.coordinator.appliedSubtitleStyle = subtitleStyle
         context.coordinator.attach(player: player, item: item, resumeAt: resumeAt)
         configureAudioSession()
         player.play()
@@ -314,8 +657,36 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {
-        controller.player?.currentItem?.textStyleRules = subtitleStyleRules
-        controller.transportBarCustomMenuItems = subtitleTracks.isEmpty ? [] : [subtitleMenu()]
+        if context.coordinator.appliedSubtitleStyle != subtitleStyle {
+            controller.player?.currentItem?.textStyleRules = subtitleStyle.textStyleRules
+            context.coordinator.appliedSubtitleStyle = subtitleStyle
+        }
+
+        let menuSignature = subtitleTracks.map(\.id).joined(separator: "|")
+            + "#\(selectedSubtitle?.id ?? "off")#\(onChooseSource != nil)#\(onSwitchEngine != nil)"
+        if context.coordinator.appliedMenuSignature != menuSignature {
+            var menuItems: [UIMenuElement] = []
+            if !subtitleTracks.isEmpty { menuItems.append(subtitleMenu()) }
+            if let onChooseSource {
+                menuItems.append(UIAction(
+                    title: L10n.text("player.sources"), image: UIImage(systemName: "list.bullet")
+                ) { _ in onChooseSource() })
+            }
+            if let onSwitchEngine {
+                menuItems.append(UIAction(
+                    title: L10n.text("player.switch_engine"),
+                    image: UIImage(systemName: "arrow.triangle.2.circlepath")
+                ) { _ in onSwitchEngine() })
+            }
+            controller.transportBarCustomMenuItems = menuItems
+            context.coordinator.appliedMenuSignature = menuSignature
+        }
+        if let seekTarget, context.coordinator.applySeek(seekTarget) {
+            onSeekApplied()
+        }
+        if let pauseRequest, context.coordinator.applyPause(pauseRequest) {
+            onPauseApplied()
+        }
     }
 
     /// tvOS has no API to add a track to the system subtitle picker, so addon tracks get their
@@ -389,24 +760,31 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
     final class Coordinator {
         private let onProgress: (Double, Double, Bool) -> Void
         private let onFinished: () -> Void
-        private let onTick: (Double) -> Void
+        private let onTick: (Double, Double) -> Void
         private let onFailed: () -> Void
+        private let onPlaybackState: (Bool, Bool) -> Void
         private var statusObserver: NSKeyValueObservation?
         private var timeObserver: Any?
         private var cueObserver: Any?
         private weak var player: AVPlayer?
         private var endObserver: NSObjectProtocol?
+        private var timeControlObserver: NSKeyValueObservation?
+        private var lastPauseRequest: UUID?
+        var appliedSubtitleStyle: SubtitleStyle?
+        var appliedMenuSignature: String?
 
         init(
             onProgress: @escaping (Double, Double, Bool) -> Void,
             onFinished: @escaping () -> Void,
-            onTick: @escaping (Double) -> Void,
-            onFailed: @escaping () -> Void
+            onTick: @escaping (Double, Double) -> Void,
+            onFailed: @escaping () -> Void,
+            onPlaybackState: @escaping (Bool, Bool) -> Void
         ) {
             self.onProgress = onProgress
             self.onFinished = onFinished
             self.onTick = onTick
             self.onFailed = onFailed
+            self.onPlaybackState = onPlaybackState
         }
 
         func attach(player: AVPlayer, item: AVPlayerItem, resumeAt: Double) {
@@ -417,6 +795,16 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
             statusObserver = item.observe(\.status, options: [.new]) { [weak self] item, _ in
                 guard item.status == .failed else { return }
                 Task { @MainActor in self?.onFailed() }
+            }
+            timeControlObserver = player.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self] player, _ in
+                let state: (paused: Bool, loading: Bool)
+                switch player.timeControlStatus {
+                case .playing: state = (false, false)
+                case .waitingToPlayAtSpecifiedRate: state = (false, true)
+                case .paused: state = (true, false)
+                @unknown default: state = (false, false)
+                }
+                Task { @MainActor in self?.onPlaybackState(state.paused, state.loading) }
             }
 
             if resumeAt > 1 {
@@ -441,7 +829,8 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
                 forInterval: CMTime(seconds: 0.25, preferredTimescale: 600),
                 queue: .main
             ) { [weak self] time in
-                self?.onTick(time.seconds)
+                let duration = self?.player?.currentItem?.duration.seconds ?? 0
+                self?.onTick(time.seconds, duration)
             }
 
             endObserver = NotificationCenter.default.addObserver(
@@ -453,6 +842,24 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
             }
         }
 
+        /// Returns false for the duplicate SwiftUI update emitted while the seek is in flight.
+        func applySeek(_ seconds: Double) -> Bool {
+            guard seconds.isFinite, seconds >= 0 else { return false }
+            player?.seek(
+                to: CMTime(seconds: seconds, preferredTimescale: 600),
+                toleranceBefore: .zero,
+                toleranceAfter: .zero
+            )
+            return player != nil
+        }
+
+        func applyPause(_ request: UUID) -> Bool {
+            guard lastPauseRequest != request else { return false }
+            lastPauseRequest = request
+            player?.pause()
+            return player != nil
+        }
+
         func detach() {
             if let player {
                 if let timeObserver { player.removeTimeObserver(timeObserver) }
@@ -462,6 +869,8 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
             cueObserver = nil
             statusObserver?.invalidate()
             statusObserver = nil
+            timeControlObserver?.invalidate()
+            timeControlObserver = nil
             if let endObserver {
                 NotificationCenter.default.removeObserver(endObserver)
             }

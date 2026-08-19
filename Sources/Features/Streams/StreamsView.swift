@@ -312,49 +312,35 @@ struct StreamsView: View {
 
     @State private var model = StreamsViewModel()
     @State private var didAutoPlay = false
+    /// The reference apps keep the provider filter local to the source picker.  Keeping it in
+    /// the view (rather than mutating the resolver's results) makes changing filters instant
+    /// and preserves the complete list for auto-play.
+    @State private var selectedAddon: String?
     /// Set when the viewer has to choose where a resolved stream opens.
     @State private var handOff: HandOffRequest?
 
+    private var displayedGroups: [AddonStreams] {
+        guard let selectedAddon else { return model.groups }
+        return model.groups.filter { $0.addonName == selectedAddon }
+    }
+
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: NuvioTheme.spacing.xl) {
-                header
+        ZStack {
+            sourceBackdrop
+            GeometryReader { proxy in
+                HStack(spacing: 0) {
+                    sourceContext
+                        .frame(width: proxy.size.width * 0.40)
 
-                if let error = model.resolveError {
-                    banner(error, tint: colors.error)
-                }
-                if !settings.debrid.enabled, hasTorrentOnlySources {
-                    banner(
-                        "Torrent-only sources need a debrid service. Add one in Settings → Debrid.",
-                        tint: colors.warning
-                    )
-                }
-
-                if model.isLoading && model.groups.isEmpty {
-                    NuvioLoadingView(message: "Searching your addons for sources…")
-                        .frame(height: dp(320))
-                } else if model.groups.isEmpty {
-                    EmptyStateView(
-                        systemImage: "antenna.radiowaves.left.and.right.slash",
-                        title: "No sources found",
-                        message: emptyMessage
-                    )
-                    .frame(height: dp(320))
-                } else {
-                    ForEach(model.groups) { group in
-                        StreamGroupSection(
-                            group: group,
-                            model: model,
-                            onSelect: { stream in Task { await play(stream) } }
-                        )
-                    }
+                    sourcePicker
+                        .frame(width: proxy.size.width * 0.60)
+                        .padding(.top, NuvioTheme.layout.tvSafeVertical)
+                        .padding(.trailing, NuvioTheme.layout.tvSafeHorizontal)
+                        .padding(.bottom, NuvioTheme.layout.tvSafeVertical)
                 }
             }
-            .padding(.top, NuvioTheme.layout.tvSafeVertical)
-            .padding(.bottom, NuvioTheme.spacing.rail.tailPadding)
         }
-        .scrollClipDisabled()
-        .background(colors.background)
+        .ignoresSafeArea()
         .sheet(item: $handOff) { pending in
             ExternalPlayerPicker(playback: pending.playback) {
                 handOff = nil
@@ -375,6 +361,19 @@ struct StreamsView: View {
             await model.load(request: request, addonStore: addons, settings: settings)
             await autoPlayIfConfigured()
         }
+    }
+
+    private var sourceBackdrop: some View {
+        ZStack {
+            RemoteImage(url: request.backdrop ?? request.poster, contentMode: .fill) {
+                colors.background
+            }
+            .opacity(0.42)
+            .blur(radius: dp(2))
+
+            ModernHeroGradient(background: colors.background, fullScreen: true)
+        }
+        .ignoresSafeArea()
     }
 
     private var hasTorrentOnlySources: Bool {
@@ -406,12 +405,23 @@ struct StreamsView: View {
         return "No sources returned. These addons failed: \(model.failedAddons.joined(separator: ", "))."
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: NuvioTheme.spacing.xs) {
+    /// The iOS/tablet implementation uses the artwork side for identity and reserves the
+    /// glass panel for source comparison.  This deliberately avoids repeating a giant title
+    /// above every list, which was the main difference from the official picker.
+    private var sourceContext: some View {
+        VStack(alignment: .center, spacing: NuvioTheme.spacing.lg) {
+            if let logo = request.logo?.nilIfBlank {
+                RemoteImage(url: logo, contentMode: .fit) { Color.clear }
+                    .frame(maxWidth: dp(420), maxHeight: dp(150))
+                    .accessibilityLabel(request.title)
+            }
+
             Text(request.title)
                 .nuvioText(NuvioTextStyles.display)
                 .foregroundStyle(colors.textPrimary)
-                .lineLimit(1)
+                .multilineTextAlignment(.center)
+                .lineLimit(3)
+                .shadow(color: .black.opacity(0.82), radius: dp(5), y: dp(2))
 
             HStack(spacing: NuvioTheme.spacing.md) {
                 if let label = request.episodeLabel {
@@ -423,19 +433,123 @@ struct StreamsView: View {
                         .foregroundStyle(colors.textSecondary)
                         .lineLimit(1)
                 }
-                if model.totalCount > 0 {
-                    Text("\(model.totalCount) sources")
-                        .nuvioText(NuvioTextStyles.metadata)
-                        .foregroundStyle(colors.textTertiary)
-                }
-                if model.filteredOutCount > 0 {
-                    Text("\(model.filteredOutCount) filtered")
-                        .nuvioText(NuvioTextStyles.metadata)
-                        .foregroundStyle(colors.textTertiary)
-                }
+            }
+
+            if model.totalCount > 0 {
+                Text("\(model.totalCount) sources\(model.filteredOutCount > 0 ? " · \(model.filteredOutCount) filtered" : "")")
+                    .nuvioText(NuvioTextStyles.metadata)
+                    .foregroundStyle(colors.textTertiary)
             }
         }
-        .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, NuvioTheme.layout.tvSafeHorizontal)
+        .padding(.vertical, NuvioTheme.layout.tvSafeVertical)
+    }
+
+    private var sourcePicker: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            sourceToolbar
+                .padding(.horizontal, NuvioTheme.spacing.lg)
+                .padding(.vertical, NuvioTheme.spacing.md)
+
+            Divider().overlay(colors.borderMuted)
+
+            ScrollView(.vertical, showsIndicators: true) {
+                LazyVStack(alignment: .leading, spacing: NuvioTheme.spacing.xl) {
+                    if let error = model.resolveError {
+                        banner(error, tint: colors.error)
+                    }
+                    if !settings.debrid.enabled, hasTorrentOnlySources {
+                        banner(
+                            "Torrent-only sources need a debrid service. Add one in Settings → Debrid.",
+                            tint: colors.warning
+                        )
+                    }
+
+                    if model.isLoading && model.groups.isEmpty {
+                        NuvioLoadingView(message: "Searching your addons for sources…")
+                            .frame(maxWidth: .infinity, minHeight: dp(320))
+                    } else if model.groups.isEmpty {
+                        EmptyStateView(
+                            systemImage: "antenna.radiowaves.left.and.right.slash",
+                            title: "No sources found",
+                            message: emptyMessage
+                        )
+                        .frame(maxWidth: .infinity, minHeight: dp(320))
+                    } else {
+                        ForEach(displayedGroups) { group in
+                            StreamGroupSection(
+                                group: group,
+                                model: model,
+                                showsHeader: selectedAddon == nil,
+                                onSelect: { stream in Task { await play(stream) } }
+                            )
+                        }
+                    }
+                }
+                .padding(.vertical, NuvioTheme.spacing.lg)
+                .padding(.bottom, NuvioTheme.spacing.rail.tailPadding)
+            }
+            .scrollClipDisabled()
+        }
+        .background(sourcePickerSurface)
+        .clipShape(RoundedRectangle(cornerRadius: NuvioTheme.radii.xl, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: NuvioTheme.radii.xl, style: .continuous)
+                .strokeBorder(.white.opacity(0.16), lineWidth: NuvioTheme.strokes.hairline)
+        }
+        .shadow(color: .black.opacity(0.36), radius: dp(28), x: -dp(6), y: dp(10))
+    }
+
+    private var sourceToolbar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: NuvioTheme.spacing.sm) {
+                Button { Task { await reload() } } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: NuvioTheme.sizes.icons.sm, weight: .semibold))
+                        .frame(width: dp(38), height: dp(38))
+                }
+                .buttonStyle(NuvioPillButtonStyle(emphasis: .ghost))
+                .accessibilityLabel(L10n.text("player.reload"))
+
+                sourceFilter("All", isSelected: selectedAddon == nil) {
+                    selectedAddon = nil
+                }
+                ForEach(model.groups) { group in
+                    sourceFilter(group.addonName, isSelected: selectedAddon == group.addonName) {
+                        selectedAddon = group.addonName
+                    }
+                }
+            }
+            .padding(.horizontal, NuvioTheme.spacing.xxs)
+        }
+        .focusSection()
+    }
+
+    private func sourceFilter(_ title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .nuvioText(NuvioTextStyles.metadata)
+                .lineLimit(1)
+                .padding(.horizontal, NuvioTheme.spacing.md)
+                .frame(height: dp(38))
+        }
+        .buttonStyle(NuvioPillButtonStyle(emphasis: .secondary, selected: isSelected))
+    }
+
+    private var sourcePickerSurface: some View {
+        RoundedRectangle(cornerRadius: NuvioTheme.radii.xl, style: .continuous)
+            .fill(.ultraThinMaterial)
+            .overlay {
+                RoundedRectangle(cornerRadius: NuvioTheme.radii.xl, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [colors.glassPanelTop.opacity(0.52), colors.glassPanelBottom.opacity(0.26)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
     }
 
     private func banner(_ text: String, tint: Color) -> some View {
@@ -470,6 +584,12 @@ struct StreamsView: View {
         ) else { return }
         didAutoPlay = true
         await play(candidate)
+    }
+
+    private func reload() async {
+        selectedAddon = nil
+        await model.load(request: request, addonStore: addons, settings: settings)
+        await autoPlayIfConfigured()
     }
 
     /// The follow-on episode, rebuilt from the current request so the player can chain.
@@ -543,7 +663,13 @@ struct StreamsView: View {
             preview: preview,
             nextUp: nextUpRequest,
             imdbId: request.imdbId,
-            subtitles: model.subtitles
+            subtitles: model.subtitles,
+            sourceRequest: request,
+            sourceAddonName: stream.addonName,
+            sourceAddonLogo: stream.addonLogo,
+            sourceDescription: stream.displayDescription,
+            sourceHints: stream.sources ?? [],
+            sourceStableKey: stream.stableKey
         )
     }
 }
@@ -556,24 +682,27 @@ private struct StreamGroupSection: View {
 
     let group: AddonStreams
     let model: StreamsViewModel
+    let showsHeader: Bool
     let onSelect: (Stream) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: NuvioTheme.spacing.md) {
-            HStack(spacing: NuvioTheme.spacing.sm) {
-                if settings.streamBadges.showAddonLogo, let logo = group.addonLogo?.nilIfBlank {
-                    RemoteImage(url: logo, contentMode: .fit) { Color.clear }
-                        .frame(width: NuvioTheme.sizes.icons.lg, height: NuvioTheme.sizes.icons.lg)
-                        .clipShape(RoundedRectangle(cornerRadius: NuvioTheme.radii.xs))
+            if showsHeader {
+                HStack(spacing: NuvioTheme.spacing.sm) {
+                    if settings.streamBadges.showAddonLogo, let logo = group.addonLogo?.nilIfBlank {
+                        RemoteImage(url: logo, contentMode: .fit) { Color.clear }
+                            .frame(width: NuvioTheme.sizes.icons.md, height: NuvioTheme.sizes.icons.md)
+                            .clipShape(RoundedRectangle(cornerRadius: NuvioTheme.radii.xs))
+                    }
+                    Text(group.addonName)
+                        .nuvioText(NuvioTextStyles.cardTitle)
+                        .foregroundStyle(colors.textPrimary)
+                    Text("\(group.streams.count)")
+                        .nuvioText(NuvioTextStyles.metadata)
+                        .foregroundStyle(colors.textTertiary)
                 }
-                Text(group.addonName)
-                    .nuvioText(NuvioTextStyles.sectionTitle)
-                    .foregroundStyle(colors.textPrimary)
-                Text("\(group.streams.count)")
-                    .nuvioText(NuvioTextStyles.metadata)
-                    .foregroundStyle(colors.textTertiary)
+                .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)
             }
-            .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)
 
             VStack(spacing: NuvioTheme.spacing.sm) {
                 ForEach(group.streams) { stream in
@@ -597,6 +726,7 @@ private struct StreamGroupSection: View {
 private struct StreamRow: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(AppSettings.self) private var settings
+    @FocusState private var rowFocused: Bool
 
     let stream: Stream
     let attributes: ParsedStreamAttributes?
@@ -611,43 +741,68 @@ private struct StreamRow: View {
     }
 
     var body: some View {
-        Button(action: action) {
-            HStack(alignment: .center, spacing: NuvioTheme.spacing.lg) {
-                VStack(alignment: .leading, spacing: NuvioTheme.spacing.xs) {
-                    Text(stream.displayName)
-                        .nuvioText(NuvioTextStyles.cardTitle)
-                        .foregroundStyle(colors.textPrimary)
-                        .lineLimit(1)
+        // A SwiftUI `Button` in tvOS 26 still gets the platform's opaque light focus plate,
+        // even with `.buttonStyle(.plain)`.  That plate is applied *after* our view tree, so
+        // it makes the light metadata illegible.  A focusable semantic row keeps Select on the
+        // Siri Remote while letting this view own every pixel of its focus treatment.
+        HStack(alignment: .center, spacing: NuvioTheme.spacing.lg) {
+            VStack(alignment: .leading, spacing: NuvioTheme.spacing.xs) {
+                Text(stream.displayName)
+                    .nuvioText(NuvioTextStyles.cardTitle)
+                    .foregroundStyle(colors.textPrimary)
+                    .lineLimit(1)
+                    .multilineTextAlignment(.leading)
+
+                if let detail = stream.displayDescription?.nilIfBlank, detail != stream.displayName {
+                    Text(detail)
+                        .nuvioText(NuvioTextStyles.metadata)
+                        .foregroundStyle(colors.textSecondary)
+                        .lineLimit(3)
                         .multilineTextAlignment(.leading)
-
-                    if let detail = stream.displayDescription?.nilIfBlank, detail != stream.displayName {
-                        Text(detail)
-                            .nuvioText(NuvioTextStyles.metadata)
-                            .foregroundStyle(colors.textSecondary)
-                            .lineLimit(2)
-                            .multilineTextAlignment(.leading)
-                    }
-
-                    if settings.streamBadges.placement != .hidden {
-                        badges
-                    }
                 }
 
-                Spacer(minLength: 0)
+                if let sources = stream.sources?.filter({ !$0.isEmpty }), !sources.isEmpty {
+                    Text(sources.prefix(4).joined(separator: " · "))
+                        .nuvioText(NuvioTextStyles.metadata)
+                        .foregroundStyle(colors.textTertiary)
+                        .lineLimit(1)
+                }
 
-                trailingIcon
+                if settings.streamBadges.placement != .hidden {
+                    badges
+                }
             }
-            .padding(.horizontal, NuvioTheme.spacing.xl)
-            .padding(.vertical, NuvioTheme.spacing.lg)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
+
+            Spacer(minLength: 0)
+
+            trailingIcon
         }
-        .buttonStyle(NuvioRowButtonStyle(cornerRadius: NuvioTheme.radii.lg, scaleOnFocus: false))
+        .padding(.horizontal, NuvioTheme.spacing.xl)
+        .padding(.vertical, NuvioTheme.spacing.lg)
+        .frame(maxWidth: .infinity, minHeight: dp(104), alignment: .leading)
+        .contentShape(Rectangle())
+        .focusEffectDisabled()
         .background {
             RoundedRectangle(cornerRadius: NuvioTheme.radii.lg, style: .continuous)
-                .fill(colors.backgroundCard.opacity(0.55))
+                .fill(rowFocused ? colors.focusBackground.opacity(0.96) : colors.backgroundCard.opacity(0.78))
         }
-        .disabled(!isPlayable)
+        .overlay {
+            RoundedRectangle(cornerRadius: NuvioTheme.radii.lg, style: .continuous)
+                .strokeBorder(
+                    rowFocused ? colors.focusRing : .white.opacity(0.10),
+                    lineWidth: rowFocused ? NuvioTheme.strokes.focus : NuvioTheme.strokes.hairline
+                )
+        }
+        .scaleEffect(rowFocused ? 1.012 : 1)
+        .shadow(color: .black.opacity(rowFocused ? 0.42 : 0.12), radius: rowFocused ? dp(14) : dp(4), y: dp(5))
+        .animation(NuvioMotion.focusTween, value: rowFocused)
+        .focusable(isPlayable)
+        .focused($rowFocused)
+        .onTapGesture {
+            guard isPlayable else { return }
+            action()
+        }
+        .accessibilityAddTraits(.isButton)
         .opacity(isPlayable ? 1 : NuvioTheme.effects.disabledAlpha)
     }
 
@@ -705,9 +860,14 @@ private struct StreamRow: View {
                 .progressViewStyle(.circular)
                 .tint(colors.secondary)
         } else {
-            Image(systemName: isPlayable ? "play.circle.fill" : "exclamationmark.circle")
-                .font(.system(size: NuvioTheme.sizes.icons.lg))
-                .foregroundStyle(isPlayable ? colors.textSecondary : colors.warning)
+            ZStack {
+                Circle().fill(isPlayable ? colors.textPrimary.opacity(rowFocused ? 0.98 : 0.78) : colors.warning.opacity(0.28))
+                Image(systemName: isPlayable ? "play.fill" : "exclamationmark")
+                    .font(.system(size: NuvioTheme.sizes.icons.sm, weight: .bold))
+                    .foregroundStyle(isPlayable ? colors.background : colors.warning)
+                    .offset(x: isPlayable ? dp(1) : 0)
+            }
+            .frame(width: dp(40), height: dp(40))
         }
     }
 }
