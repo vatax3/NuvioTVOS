@@ -18,6 +18,16 @@ struct NuvioServerConfiguration: Codable, Hashable, Sendable {
     /// Overrides where the phone finishes a TV login. Left empty, `tvLoginWebBaseUrl` guesses.
     var tvLoginWebBaseUrlOverride: String = ""
 
+    /// Nuvio's own backend, pre-filled the way the official app ships pointing at it.
+    ///
+    /// Only the host: the publishable key is a build-time secret in the official app and is not
+    /// in its public source, so it cannot be shipped here and still has to be pasted in. Having
+    /// the URL already right is what makes that one field instead of three.
+    static let nuvioDefault = NuvioServerConfiguration(
+        backendUrl: "https://api.nuvio.tv",
+        publishableKey: ""
+    )
+
     var isConfigured: Bool {
         !normalizedBackendUrl.isEmpty && !publishableKey.trimmingCharacters(in: .whitespaces).isEmpty
     }
@@ -64,6 +74,34 @@ struct NuvioServerConfiguration: Codable, Hashable, Sendable {
 
     var avatarPublicBaseUrl: String {
         "\(normalizedBackendUrl)/storage/v1/object/public/avatars"
+    }
+
+    /// Hand-written because Swift's synthesised `Decodable` ignores property defaults: a stored
+    /// document written before a field existed fails to decode outright, and the whole value is
+    /// discarded. That is how adding `tvLoginWebBaseUrlOverride` quietly signed people out.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        backendUrl = try container.decodeIfPresent(String.self, forKey: .backendUrl) ?? ""
+        publishableKey = try container.decodeIfPresent(String.self, forKey: .publishableKey) ?? ""
+        supportsTvLogin = try container.decodeIfPresent(Bool.self, forKey: .supportsTvLogin) ?? true
+        supportsEmailPassword =
+            try container.decodeIfPresent(Bool.self, forKey: .supportsEmailPassword) ?? true
+        tvLoginWebBaseUrlOverride =
+            try container.decodeIfPresent(String.self, forKey: .tvLoginWebBaseUrlOverride) ?? ""
+    }
+
+    init(
+        backendUrl: String,
+        publishableKey: String,
+        supportsTvLogin: Bool = true,
+        supportsEmailPassword: Bool = true,
+        tvLoginWebBaseUrlOverride: String = ""
+    ) {
+        self.backendUrl = backendUrl
+        self.publishableKey = publishableKey
+        self.supportsTvLogin = supportsTvLogin
+        self.supportsEmailPassword = supportsEmailPassword
+        self.tvLoginWebBaseUrlOverride = tvLoginWebBaseUrlOverride
     }
 }
 

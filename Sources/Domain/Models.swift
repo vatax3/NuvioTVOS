@@ -235,6 +235,112 @@ struct MetaPreview: Codable, Hashable, Identifiable, Sendable {
     var voteCount: Int?
     var sourceAddonBaseUrl: String?
 
+
+    /// Restored by hand: writing `init(from:)` above suppresses the memberwise one.
+    init(
+        id: String,
+        type: ContentType,
+        rawType: String,
+        name: String,
+        poster: String? = nil,
+        posterShape: PosterShape = .poster,
+        background: String? = nil,
+        logo: String? = nil,
+        description: String? = nil,
+        releaseInfo: String? = nil,
+        imdbRating: Float? = nil,
+        genres: [String] = [],
+        runtime: String? = nil,
+        status: String? = nil,
+        ageRating: String? = nil,
+        language: String? = nil,
+        released: String? = nil,
+        country: String? = nil,
+        imdbId: String? = nil,
+        slug: String? = nil,
+        landscapePoster: String? = nil,
+        rawPosterUrl: String? = nil,
+        director: [String] = [],
+        writer: [String] = [],
+        links: [MetaLink] = [],
+        behaviorHints: MetaBehaviorHints? = nil,
+        trailers: [MetaTrailer] = [],
+        trailerYtIds: [String] = [],
+        seasonCount: Int? = nil,
+        voteCount: Int? = nil,
+        sourceAddonBaseUrl: String? = nil
+    ) {
+        self.id = id
+        self.type = type
+        self.rawType = rawType
+        self.name = name
+        self.poster = poster
+        self.posterShape = posterShape
+        self.background = background
+        self.logo = logo
+        self.description = description
+        self.releaseInfo = releaseInfo
+        self.imdbRating = imdbRating
+        self.genres = genres
+        self.runtime = runtime
+        self.status = status
+        self.ageRating = ageRating
+        self.language = language
+        self.released = released
+        self.country = country
+        self.imdbId = imdbId
+        self.slug = slug
+        self.landscapePoster = landscapePoster
+        self.rawPosterUrl = rawPosterUrl
+        self.director = director
+        self.writer = writer
+        self.links = links
+        self.behaviorHints = behaviorHints
+        self.trailers = trailers
+        self.trailerYtIds = trailerYtIds
+        self.seasonCount = seasonCount
+        self.voteCount = voteCount
+        self.sourceAddonBaseUrl = sourceAddonBaseUrl
+    }
+
+    /// Tolerant of documents written before a field existed — see `Profile`. This one
+    /// matters twice over: a `MetaPreview` is embedded in every saved library item, so a
+    /// strict decode failure here does not lose a poster, it loses the library.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        type = try c.decode(ContentType.self, forKey: .type)
+        rawType = try c.decode(String.self, forKey: .rawType)
+        name = try c.decode(String.self, forKey: .name)
+        poster = try c.decodeIfPresent(String.self, forKey: .poster)
+        posterShape = try c.decodeIfPresent(PosterShape.self, forKey: .posterShape) ?? .poster
+        background = try c.decodeIfPresent(String.self, forKey: .background)
+        logo = try c.decodeIfPresent(String.self, forKey: .logo)
+        description = try c.decodeIfPresent(String.self, forKey: .description)
+        releaseInfo = try c.decodeIfPresent(String.self, forKey: .releaseInfo)
+        imdbRating = try c.decodeIfPresent(Float.self, forKey: .imdbRating)
+        genres = try c.decodeIfPresent([String].self, forKey: .genres) ?? []
+        runtime = try c.decodeIfPresent(String.self, forKey: .runtime)
+        status = try c.decodeIfPresent(String.self, forKey: .status)
+        ageRating = try c.decodeIfPresent(String.self, forKey: .ageRating)
+        language = try c.decodeIfPresent(String.self, forKey: .language)
+        released = try c.decodeIfPresent(String.self, forKey: .released)
+        country = try c.decodeIfPresent(String.self, forKey: .country)
+        imdbId = try c.decodeIfPresent(String.self, forKey: .imdbId)
+        slug = try c.decodeIfPresent(String.self, forKey: .slug)
+        landscapePoster = try c.decodeIfPresent(String.self, forKey: .landscapePoster)
+        rawPosterUrl = try c.decodeIfPresent(String.self, forKey: .rawPosterUrl)
+        director = try c.decodeIfPresent([String].self, forKey: .director) ?? []
+        writer = try c.decodeIfPresent([String].self, forKey: .writer) ?? []
+        links = try c.decodeIfPresent([MetaLink].self, forKey: .links) ?? []
+        behaviorHints = try c.decodeIfPresent(MetaBehaviorHints.self, forKey: .behaviorHints)
+        trailers = try c.decodeIfPresent([MetaTrailer].self, forKey: .trailers) ?? []
+        trailerYtIds = try c.decodeIfPresent([String].self, forKey: .trailerYtIds) ?? []
+        seasonCount = try c.decodeIfPresent(Int.self, forKey: .seasonCount)
+        voteCount = try c.decodeIfPresent(Int.self, forKey: .voteCount)
+        sourceAddonBaseUrl = try c.decodeIfPresent(String.self, forKey: .sourceAddonBaseUrl)
+    }
+
     var apiType: String { type.apiString(fallback: rawType) }
     var backdropUrl: String? { background ?? landscapePoster ?? poster }
 

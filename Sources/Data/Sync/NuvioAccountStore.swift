@@ -29,9 +29,11 @@ final class NuvioAccountStore {
     private(set) var syncOwnerId: String?
 
     private let configurationFile = JSONFileStore<NuvioServerConfiguration>(
-        filename: "nuvio-server.json", scope: .global
+        filename: "nuvio-server.json", scope: .global, durability: .critical
     )
-    private let sessionFile = JSONFileStore<NuvioSession>(filename: "nuvio-session.json", scope: .global)
+    private let sessionFile = JSONFileStore<NuvioSession>(
+        filename: "nuvio-session.json", scope: .global, durability: .critical
+    )
     private let log = Logger(subsystem: "com.nuvio.tvos", category: "NuvioAccount")
 
     private var loginTask: Task<Void, Never>?
@@ -39,8 +41,7 @@ final class NuvioAccountStore {
     private var deviceNonce = UUID().uuidString
 
     init() {
-        configuration = configurationFile.load()
-            ?? NuvioServerConfiguration(backendUrl: "", publishableKey: "")
+        configuration = configurationFile.load() ?? .nuvioDefault
         session = sessionFile.load()
         if session != nil { loginState = .signedIn }
 

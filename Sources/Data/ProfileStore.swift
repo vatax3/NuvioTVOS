@@ -50,13 +50,23 @@ enum ProfileScope {
             defaults.removeObject(forKey: key)
         }
 
-        let base = FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask)
-            .first ?? FileManager.default.temporaryDirectory
-        let directory = base
-            .appendingPathComponent("Nuvio", isDirectory: true)
-            .appendingPathComponent("profiles/\(profileId)", isDirectory: true)
-        try? FileManager.default.removeItem(at: directory)
+        // Both homes: the current one, and the pre-split one an upgraded install still has.
+        let manager = FileManager.default
+        let roots = [
+            manager.urls(for: .cachesDirectory, in: .userDomainMask).first,
+            manager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+        ].compactMap { $0 }
+        for root in roots {
+            let directory = root
+                .appendingPathComponent("Nuvio", isDirectory: true)
+                .appendingPathComponent("profiles/\(profileId)", isDirectory: true)
+            try? manager.removeItem(at: directory)
+        }
+        // Critical stores for this profile live in UserDefaults, keyed by the same path.
+        for key in defaults.dictionaryRepresentation().keys
+        where key.hasPrefix("nuvio.store.profiles/\(profileId)/") {
+            defaults.removeObject(forKey: key)
+        }
     }
 }
 
@@ -98,6 +108,56 @@ struct Profile: Codable, Hashable, Identifiable {
         "gamecontroller.fill", "popcorn.fill", "pawprint.fill", "leaf.fill"
     ]
 
+    /// Tolerant of documents written before a field existed — Swift's synthesised `Decodable`
+    /// treats a missing key as an error even when the property has a default, so every field
+    /// added to this struct used to wipe the whole profile list on the next launch.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? "Me"
+        symbol = try c.decodeIfPresent(String.self, forKey: .symbol) ?? "person.fill"
+        tintHex = try c.decodeIfPresent(String.self, forKey: .tintHex) ?? "#1E88E5"
+        pinHash = try c.decodeIfPresent(String.self, forKey: .pinHash)
+        isRestricted = try c.decodeIfPresent(Bool.self, forKey: .isRestricted) ?? false
+        createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        remoteIndex = try c.decodeIfPresent(Int.self, forKey: .remoteIndex)
+        hasRemoteLock = try c.decodeIfPresent(Bool.self, forKey: .hasRemoteLock) ?? false
+        avatarId = try c.decodeIfPresent(String.self, forKey: .avatarId)
+        avatarUrl = try c.decodeIfPresent(String.self, forKey: .avatarUrl)
+        usesPrimaryAddons = try c.decodeIfPresent(Bool.self, forKey: .usesPrimaryAddons) ?? false
+        usesPrimaryPlugins = try c.decodeIfPresent(Bool.self, forKey: .usesPrimaryPlugins) ?? false
+    }
+
+    init(
+        id: String,
+        name: String,
+        symbol: String,
+        tintHex: String,
+        pinHash: String?,
+        isRestricted: Bool,
+        createdAt: Date,
+        remoteIndex: Int? = nil,
+        hasRemoteLock: Bool = false,
+        avatarId: String? = nil,
+        avatarUrl: String? = nil,
+        usesPrimaryAddons: Bool = false,
+        usesPrimaryPlugins: Bool = false
+    ) {
+        self.id = id
+        self.name = name
+        self.symbol = symbol
+        self.tintHex = tintHex
+        self.pinHash = pinHash
+        self.isRestricted = isRestricted
+        self.createdAt = createdAt
+        self.remoteIndex = remoteIndex
+        self.hasRemoteLock = hasRemoteLock
+        self.avatarId = avatarId
+        self.avatarUrl = avatarUrl
+        self.usesPrimaryAddons = usesPrimaryAddons
+        self.usesPrimaryPlugins = usesPrimaryPlugins
+    }
+
     static let availableTints = [
         "#E50914", "#1E88E5", "#8E44AD", "#2ECC71", "#F39C12", "#EC407A", "#00ACC1", "#FFFFFF"
     ]
@@ -115,7 +175,9 @@ final class ProfileStore {
     /// True while a locked profile has not yet been unlocked in this session.
     private(set) var isLocked = false
 
-    private let file = JSONFileStore<[Profile]>(filename: "profiles.json", scope: .global)
+    private let file = JSONFileStore<[Profile]>(
+        filename: "profiles.json", scope: .global, durability: .critical
+    )
 
     init() {
         profiles = file.load() ?? []

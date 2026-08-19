@@ -10,6 +10,24 @@ struct InstalledAddon: Codable, Hashable, Identifiable {
     var manifest: Addon?
     var fetchedAt: Date?
     var id: String { baseUrl }
+
+    init(baseUrl: String, enabled: Bool = true, manifest: Addon? = nil, fetchedAt: Date? = nil) {
+        self.baseUrl = baseUrl
+        self.enabled = enabled
+        self.manifest = manifest
+        self.fetchedAt = fetchedAt
+    }
+
+    /// Tolerant of documents written before a field existed — see `NuvioServerConfiguration`.
+    /// A stale cached manifest is dropped rather than taking the addon with it; the next refresh
+    /// re-fetches it anyway.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        baseUrl = try container.decode(String.self, forKey: .baseUrl)
+        enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+        manifest = try? container.decodeIfPresent(Addon.self, forKey: .manifest)
+        fetchedAt = try? container.decodeIfPresent(Date.self, forKey: .fetchedAt)
+    }
 }
 
 /// Ordering entry for the "Catalog Order" screen — mirrors `CatalogOrderViewModel`.
