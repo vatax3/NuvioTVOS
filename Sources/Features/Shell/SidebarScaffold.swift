@@ -12,6 +12,7 @@ struct SidebarScaffold<Content: View>: View {
     @Environment(Router.self) private var router
     @Environment(AppSettings.self) private var settings
     @Environment(ProfileStore.self) private var profiles
+    @Environment(\.resetFocus) private var resetFocus
 
     @ViewBuilder var content: Content
 
@@ -23,6 +24,7 @@ struct SidebarScaffold<Content: View>: View {
     @State private var hasUserNavigated = false
     /// Held between "panel closed" and "focus released" so the focus observer cannot re-open it.
     @State private var isDismissing = false
+    @State private var focusReclaim: Task<Void, Never>?
     @Namespace private var shellFocus
 
     private var tokens: NuvioSidebarComponentTokens { NuvioTheme.components.sidebar }
@@ -36,10 +38,18 @@ struct SidebarScaffold<Content: View>: View {
     /// `modern_sidebar_enabled` off means the classic always-open rail: no pill, no bloom.
     private var isModernSidebar: Bool { settings.layout.modernSidebarEnabled }
 
+    /// Where the content starts. Every destination gets the same gap, and the gap is at least
+    /// the rail's own width — which is the point, not a detail of spacing.
+    ///
+    /// A leftward move only considers candidates whose frame lies to the left of the focused
+    /// item. Home used to pull its hero full-bleed with a negative inset, so the content sat on
+    /// top of the rail column: from any row below the first there was nothing to the left of it
+    /// and the menu could only be reached from the very top of the page. Keeping the content
+    /// clear of the column costs Home its full-bleed hero and buys the same gesture, from any
+    /// row, on every screen.
     private var contentLeadingOffset: CGFloat {
         guard isModernSidebar else { return NuvioTheme.components.sidebar.expandedWidth }
-        let heroIsFullBleed = router.selectedTab == .home && settings.layout.selectedLayout != .grid
-        return heroIsFullBleed ? 0 : NuvioTheme.layout.sidebarContentOffset
+        return max(NuvioTheme.layout.sidebarContentOffset, railColumnWidth)
     }
 
     /// Width reserved for the sidebar column: the collapsed pill and its own padding, nothing
@@ -118,6 +128,16 @@ struct SidebarScaffold<Content: View>: View {
         .onChange(of: isModernSidebar, initial: true) { _, _ in
             updateExpansion(focusedTab: focusedTab)
         }
+        // Switching destination swaps the whole content subtree. `collapse()` releases the
+        // sidebar's focus on the next tick, and if the incoming screen has not laid out
+        // anything focusable by then — which is every screen whose first row is waiting on a
+        // catalogue — tvOS drops focus entirely and never looks again. The remote then does
+        // nothing at all until the viewer stumbles back through the menu. Asking the focus
+        // engine to redo its default-focus pass, a few times while the screen fills in, is what
+        // makes a destination usable the moment it is chosen.
+        .onChange(of: router.selectedTab, initial: true) { _, _ in
+            reclaimContentFocus()
+        }
     }
 
     /// Back opens the panel on the current destination; pressing it again hands focus back to
@@ -126,6 +146,20 @@ struct SidebarScaffold<Content: View>: View {
     private func toggleFromBackButton() {
         guard router.contentHasFocusableViews else { return }
         if isExpanded { collapse() } else { expand() }
+    }
+
+    /// The engine only picks a default when the scope has a candidate, so this retries across
+    /// the first second of a screen's life and stops as soon as the sidebar has focus — which
+    /// means the viewer got there first.
+    private func reclaimContentFocus() {
+        focusReclaim?.cancel()
+        focusReclaim = Task { @MainActor in
+            for delay in [120, 200, 500, 900] {
+                try? await Task.sleep(for: .milliseconds(delay))
+                guard !Task.isCancelled, !isExpanded, focusedTab == nil else { return }
+                resetFocus(in: shellFocus)
+            }
+        }
     }
 
     private func expand() {
