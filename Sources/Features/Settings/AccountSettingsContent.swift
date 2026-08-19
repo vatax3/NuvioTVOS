@@ -30,8 +30,12 @@ struct AccountSettingsContent: View {
                 syncCard
                 DeviceLinkingCard()
             } else {
+                // Signing in comes first, because that is what someone opening this screen is
+                // here to do. The server fields exist only because Nuvio's publishable key is a
+                // build secret we cannot ship, and they belong under the thing they unblock —
+                // not in front of it.
+                signInCard
                 serverCard
-                if account.isConfigured { signInCard }
             }
         }
         .onAppear(perform: loadConfigurationOnce)
@@ -42,16 +46,29 @@ struct AccountSettingsContent: View {
     @ViewBuilder
     private var serverCard: some View {
         SettingsCard(
-            title: "Find a server",
+            title: "Server",
             footnote: """
-            Type a server's address and Nuvio reads its /.well-known/nuvio document for the rest. \
-            This is the same discovery the official app uses, and like the official app it only \
-            works for self-hosted servers — Nuvio's own backend is deliberately not configurable \
-            this way.
+            Nuvio's backend URL is already right; its publishable key is a build-time secret in \
+            the official app, absent from its public source, so it has to be pasted in once. A \
+            self-hosted server can be found by address instead — Nuvio reads its \
+            /.well-known/nuvio document for the rest, the same discovery the official app uses.
             """
         ) {
             SettingsTextFieldRow(
-                title: "Server address",
+                title: "Publishable key",
+                subtitle: "The anon / publishable key — safe to store on the device, it is what every Nuvio client ships",
+                masked: true,
+                text: $publishableKey
+            )
+            SettingsRow(
+                title: "Save",
+                systemImage: "checkmark.circle",
+                action: saveConfiguration
+            )
+
+            SettingsTextFieldRow(
+                title: "Self-hosted server",
+                subtitle: "Find one by address instead",
                 placeholder: "example.com",
                 text: $serverAddress,
                 trailingAction: (label: isDiscovering ? "Looking…" : "Connect", action: discover)
@@ -63,17 +80,7 @@ struct AccountSettingsContent: View {
                     tint: discoveryMessage.hasPrefix("Found") ? colors.success : colors.error
                 )
             }
-        }
 
-        SettingsCard(
-            title: "Or enter it by hand",
-            footnote: """
-            Nuvio's own backend URL and publishable key are build-time secrets in the official \
-            app and are not in its public source, so they cannot be shipped here — paste them in, \
-            or point this at a self-hosted server with the same schema. The official app has the \
-            same custom-server option.
-            """
-        ) {
             SettingsTextFieldRow(
                 title: "Backend URL",
                 subtitle: "The Supabase project URL, e.g. https://xyz.supabase.co",
@@ -81,22 +88,10 @@ struct AccountSettingsContent: View {
                 text: $backendUrl
             )
             SettingsTextFieldRow(
-                title: "Publishable key",
-                subtitle: "The anon / publishable key — safe to store on the device, it is what every Nuvio client ships",
-                masked: true,
-                text: $publishableKey
-            )
-            SettingsTextFieldRow(
                 title: "Sign-in page URL",
                 subtitle: "Only if the QR code 404s — the page the phone opens, e.g. https://nuvio.tv/tv-login. Left blank Nuvio derives it from the backend.",
                 placeholder: "https://…/tv-login",
                 text: $tvLoginWebUrl
-            )
-            SettingsRow(
-                title: "Save backend",
-                subtitle: "Then sign in below",
-                systemImage: "server.rack",
-                action: saveConfiguration
             )
         }
     }
@@ -107,7 +102,9 @@ struct AccountSettingsContent: View {
     private var signInCard: some View {
         SettingsCard(
             title: "Sign in",
-            footnote: "Scan the code with a phone, sign in there, and this device is signed in too."
+            footnote: account.isConfigured
+                ? "Scan the code with a phone, sign in there, and this device is signed in too. Your library, progress, collections, addons and settings arrive straight away."
+                : "Add the publishable key below first — without it there is no server to sign in to."
         ) {
             // The code itself lives on its own screen. It has to be large enough to scan from a
             // sofa, and a settings column that also holds a section rail has neither the width
@@ -118,13 +115,15 @@ struct AccountSettingsContent: View {
                 systemImage: "qrcode",
                 action: { router.push(.qrSignIn) }
             )
+            .disabled(!account.isConfigured)
+            .opacity(account.isConfigured ? 1 : NuvioTheme.effects.disabledAlpha)
 
             if case .failed(let message) = account.loginState {
                 SettingsInfoRow(title: "Error", value: message, tint: colors.error)
             }
         }
 
-        if account.configuration.supportsEmailPassword {
+        if account.isConfigured, account.configuration.supportsEmailPassword {
             SettingsCard(
                 title: "Or use email and password",
                 footnote: "The official deployment prefers phone sign-in; a self-hosted server may allow this."

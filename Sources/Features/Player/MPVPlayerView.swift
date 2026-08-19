@@ -19,6 +19,8 @@ struct MPVPlayerView: View {
     let hardwareDecoding: MpvHardwareDecodeMode
     let audioOutput: MpvAudioOutput
     let audioChannels: AudioOutputChannels
+    let audioLanguages: [String]
+    let subtitleLanguages: [String]
     let subtitleStyle: SubtitleStyle
     let seekTarget: Double?
     let onSeekApplied: () -> Void
@@ -90,6 +92,7 @@ struct MPVPlayerView: View {
             MPVMetalSurface(engine: engine, request: request, resumeAt: resumeAt,
                             verboseLogging: verboseLogging, hardwareDecoding: hardwareDecoding,
                             audioOutput: audioOutput, audioChannels: audioChannels,
+                            audioLanguages: audioLanguages, subtitleLanguages: subtitleLanguages,
                             subtitleStyle: subtitleStyle)
                 .ignoresSafeArea()
 
@@ -597,7 +600,8 @@ struct MPVPlayerView: View {
                 ForEach(Array(engine.audioTracks.enumerated()), id: \.element.id) { index, track in
                     PlayerRailCard(
                         title: track.displayName,
-                        subtitle: track.language.flatMap(Self.languageName),
+                        subtitle: MediaLanguage.named(track.language),
+                        metadata: track.details.joined(separator: " · "),
                         isSelected: track.isSelected,
                         requestsInitialFocus: track.isSelected
                             || (index == 0 && !engine.audioTracks.contains(where: \.isSelected))
@@ -656,7 +660,8 @@ struct MPVPlayerView: View {
                 ForEach(engine.subtitleTracks) { track in
                     PlayerRailCard(
                         title: track.displayName,
-                        subtitle: track.language.flatMap(Self.languageName),
+                        subtitle: MediaLanguage.named(track.language),
+                        metadata: track.details.joined(separator: " · "),
                         isSelected: track.isSelected,
                         requestsInitialFocus: track.isSelected
                     ) { engine.selectSubtitleTrack(track.id) }
@@ -707,11 +712,6 @@ struct MPVPlayerView: View {
     }
 
     private static let playbackSpeeds: [Double] = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
-
-    private static func languageName(_ code: String) -> String? {
-        guard code.lowercased() != "und" else { return nil }
-        return Locale.current.localizedString(forLanguageCode: code)?.capitalized
-    }
 
     private var subtitleAppearancePanel: some View {
         @Bindable var player = settings.player
@@ -1093,6 +1093,8 @@ private struct MPVMetalSurface: UIViewControllerRepresentable {
     let hardwareDecoding: MpvHardwareDecodeMode
     let audioOutput: MpvAudioOutput
     let audioChannels: AudioOutputChannels
+    let audioLanguages: [String]
+    let subtitleLanguages: [String]
     let subtitleStyle: SubtitleStyle
 
     func makeUIViewController(context: Context) -> MPVMetalViewController {
@@ -1100,6 +1102,7 @@ private struct MPVMetalSurface: UIViewControllerRepresentable {
             engine: engine, request: request, resumeAt: resumeAt,
             verboseLogging: verboseLogging, hardwareDecoding: hardwareDecoding,
             audioOutput: audioOutput, audioChannels: audioChannels,
+            audioLanguages: audioLanguages, subtitleLanguages: subtitleLanguages,
             subtitleStyle: subtitleStyle
         )
     }
@@ -1117,6 +1120,8 @@ final class MPVMetalViewController: UIViewController {
     private let hardwareDecoding: MpvHardwareDecodeMode
     private let audioOutput: MpvAudioOutput
     private let audioChannels: AudioOutputChannels
+    private let audioLanguages: [String]
+    private let subtitleLanguages: [String]
     private let subtitleStyle: SubtitleStyle
 
     private let metalLayer = MPVMetalLayer()
@@ -1131,6 +1136,8 @@ final class MPVMetalViewController: UIViewController {
         hardwareDecoding: MpvHardwareDecodeMode,
         audioOutput: MpvAudioOutput,
         audioChannels: AudioOutputChannels,
+        audioLanguages: [String],
+        subtitleLanguages: [String],
         subtitleStyle: SubtitleStyle
     ) {
         self.engine = engine
@@ -1140,6 +1147,8 @@ final class MPVMetalViewController: UIViewController {
         self.hardwareDecoding = hardwareDecoding
         self.audioOutput = audioOutput
         self.audioChannels = audioChannels
+        self.audioLanguages = audioLanguages
+        self.subtitleLanguages = subtitleLanguages
         self.subtitleStyle = subtitleStyle
         super.init(nibName: nil, bundle: nil)
     }
@@ -1172,6 +1181,8 @@ final class MPVMetalViewController: UIViewController {
             hardwareDecoding: hardwareDecoding,
             audioOutput: audioOutput,
             audioChannels: audioChannels,
+            audioLanguages: audioLanguages,
+            subtitleLanguages: subtitleLanguages,
             subtitleStyle: subtitleStyle,
             layer: metalLayer
         )

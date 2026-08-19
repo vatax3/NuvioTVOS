@@ -114,6 +114,8 @@ struct PlayerView: View {
                 hardwareDecoding: settings.player.mpvHardwareDecodeMode,
                 audioOutput: settings.player.mpvAudioOutput,
                 audioChannels: settings.player.audioOutputChannels,
+                audioLanguages: settings.audioTrackLanguages,
+                subtitleLanguages: settings.subtitleTrackLanguages,
                 subtitleStyle: settings.subtitleStyle,
                 seekTarget: requestedSeek,
                 onSeekApplied: { requestedSeek = nil },
@@ -182,6 +184,7 @@ struct PlayerView: View {
                 onChooseSource: request.sourceRequest == nil ? nil : { showsSourcePanel = true },
                 onSwitchEngine: MPVEngineSupport.isAvailable ? { engineOverride = .mpv } : nil,
                 frameRateMatchingMode: settings.player.frameRateMatchingMode,
+                audioLanguages: settings.audioTrackLanguages,
                 onPlaybackState: { paused, loading in
                     observePlaybackState(paused: paused, loading: loading)
                 },
@@ -675,6 +678,7 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
     /// Mirrors the MPV transport's engine button so the switch works in both directions.
     let onSwitchEngine: (() -> Void)?
     let frameRateMatchingMode: FrameRateMatchingMode
+    let audioLanguages: [String]
     let onPlaybackState: (Bool, Bool) -> Void
     let onTick: (Double, Double) -> Void
     let onProgress: (Double, Double, Bool) -> Void
@@ -712,6 +716,14 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
 
         let player = AVPlayer(playerItem: item)
         player.automaticallyWaitsToMinimizeStalling = true
+        // The same preference the MPV engine gets through `alang`/`slang`. AVFoundation takes it
+        // as selection criteria and applies it to every item, including the next episode.
+        if !audioLanguages.isEmpty {
+            player.setMediaSelectionCriteria(
+                AVPlayerMediaSelectionCriteria(preferredLanguages: audioLanguages, preferredMediaCharacteristics: nil),
+                forMediaCharacteristic: .audible
+            )
+        }
         controller.player = player
 
         context.coordinator.appliedSubtitleStyle = subtitleStyle

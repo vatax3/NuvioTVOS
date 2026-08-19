@@ -365,3 +365,156 @@ struct SettingsInfoRow: View {
         .padding(.vertical, NuvioTheme.spacing.sm)
     }
 }
+
+/// A language preference, chosen from a list rather than typed.
+///
+/// The two-letter code is an implementation detail of the file format, not something a viewer
+/// should have to know — and typing it wrong fails silently, which is the worst way for a
+/// preference to be wrong. The catalogue is the same one the Android app offers, because these
+/// values sync between the two.
+struct SettingsLanguageRow: View {
+    @Environment(\.nuvioColors) private var colors
+
+    struct Choice: Identifiable, Hashable {
+        let code: String
+        let name: String
+        var id: String { code }
+    }
+
+    let title: String
+    var subtitle: String?
+    var systemImage: String?
+    /// Entries that are not languages — "None", "Media default", "Device language".
+    var specials: [Choice] = []
+    @Binding var code: String
+
+    @State private var isPickerPresented = false
+
+    private var currentLabel: String {
+        if let special = specials.first(where: { $0.code == code }) { return special.name }
+        return MediaLanguage.named(code) ?? specials.first?.name ?? "—"
+    }
+
+    var body: some View {
+        SettingsRow(
+            title: title,
+            subtitle: subtitle,
+            systemImage: systemImage,
+            trailing: {
+                Text(currentLabel)
+                    .nuvioText(NuvioTextStyles.bodyCompact)
+                    .foregroundStyle(colors.secondary)
+                    .lineLimit(1)
+            },
+            action: { isPickerPresented = true }
+        )
+        .fullScreenCover(isPresented: $isPickerPresented) {
+            LanguagePickerView(title: title, specials: specials, code: $code) {
+                isPickerPresented = false
+            }
+        }
+    }
+}
+
+private struct LanguagePickerView: View {
+    @Environment(\.nuvioColors) private var colors
+
+    let title: String
+    let specials: [SettingsLanguageRow.Choice]
+    @Binding var code: String
+    let onDismiss: () -> Void
+
+    /// Seventy-odd entries do not fit a single column on a television, and a viewer scrolling
+    /// one line at a time to reach Ukrainian is not a picker. Three columns puts the whole
+    /// catalogue within a few presses in any direction.
+    private let columns = 3
+
+    private var rows: [[SettingsLanguageRow.Choice]] {
+        let all = specials + MediaLanguage.all.map { .init(code: $0.code, name: $0.displayName) }
+        return stride(from: 0, to: all.count, by: columns).map {
+            Array(all[$0 ..< min($0 + columns, all.count)])
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            colors.background.ignoresSafeArea()
+
+            VStack(alignment: .leading, spacing: NuvioTheme.spacing.lg) {
+                Text(title)
+                    .nuvioText(NuvioTextStyles.headline)
+                    .foregroundStyle(colors.textPrimary)
+
+                ScrollView(.vertical, showsIndicators: false) {
+                    LazyVStack(spacing: NuvioTheme.spacing.sm) {
+                        ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                            HStack(spacing: NuvioTheme.spacing.sm) {
+                                ForEach(row) { choice in
+                                    LanguageChoiceCard(
+                                        choice: choice,
+                                        isSelected: choice.code == code,
+                                        requestsInitialFocus: choice.code == code
+                                    ) {
+                                        code = choice.code
+                                        onDismiss()
+                                    }
+                                }
+                                if row.count < columns {
+                                    ForEach(0 ..< (columns - row.count), id: \.self) { _ in
+                                        Color.clear.frame(maxWidth: .infinity)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(.vertical, NuvioTheme.spacing.sm)
+                }
+                .scrollClipDisabled()
+            }
+            .padding(.horizontal, NuvioTheme.layout.tvSafeHorizontal)
+            .padding(.vertical, NuvioTheme.layout.tvSafeVertical)
+        }
+        .onExitCommand(perform: onDismiss)
+    }
+}
+
+private struct LanguageChoiceCard: View {
+    @Environment(\.nuvioColors) private var colors
+    @FocusState private var focused: Bool
+
+    let choice: SettingsLanguageRow.Choice
+    let isSelected: Bool
+    let requestsInitialFocus: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: NuvioTheme.spacing.sm) {
+                Text(choice.name)
+                    .nuvioText(NuvioTextStyles.cardTitle)
+                    .foregroundStyle(isSelected ? colors.onSecondary : colors.textPrimary)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: NuvioTheme.sizes.icons.sm, weight: .semibold))
+                        .foregroundStyle(colors.onSecondary)
+                }
+            }
+            .padding(.horizontal, NuvioTheme.spacing.lg)
+            .padding(.vertical, NuvioTheme.spacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(NuvioRowButtonStyle(cornerRadius: NuvioTheme.radii.md, selected: isSelected))
+        .background {
+            RoundedRectangle(cornerRadius: NuvioTheme.radii.md, style: .continuous)
+                .fill(isSelected ? colors.secondary : colors.backgroundCard)
+        }
+        .focused($focused)
+        .onAppear {
+            guard requestsInitialFocus else { return }
+            Task { @MainActor in focused = true }
+        }
+    }
+}

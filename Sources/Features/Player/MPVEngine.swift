@@ -100,11 +100,45 @@ final class MPVEngine {
         let title: String
         let language: String?
         let isSelected: Bool
+        /// mpv's `external` flag: true for the addon subtitles loaded with `sub-add`, false for
+        /// what the container itself carries. It is the difference a viewer most wants to see
+        /// in the list, because it predicts whether the timing will match this exact release.
+        let isExternal: Bool
+        let isDefault: Bool
+        let isForced: Bool
+        let isHearingImpaired: Bool
+        /// `subrip`, `ass`, `webvtt`, `eac3`, `dts`… as the demuxer names it.
+        let codec: String?
+        let channelCount: Int?
 
         var displayName: String {
-            let label = title.nilIfBlank ?? language?.uppercased() ?? "Track \(id)"
+            let label = title.nilIfBlank ?? MediaLanguage.named(language) ?? "Track \(id)"
             guard let language, title.nilIfBlank != nil else { return label }
             return "\(label) · \(language.uppercased())"
+        }
+
+        /// The second line of a track card: where it came from, what it is, and how it is
+        /// flagged. Everything here is already in the demuxer's own metadata.
+        var details: [String] {
+            var parts: [String] = [isExternal ? "Addon" : "Built-in"]
+            if let codec = codec?.nilIfBlank { parts.append(Self.formatName(codec)) }
+            if let channelCount { parts.append("\(channelCount) ch") }
+            if isDefault { parts.append("Default") }
+            if isForced { parts.append("Forced") }
+            if isHearingImpaired { parts.append("SDH") }
+            return parts
+        }
+
+        private static func formatName(_ codec: String) -> String {
+            switch codec.lowercased() {
+            case "subrip": return "SRT"
+            case "webvtt": return "VTT"
+            case "ass", "ssa": return "ASS"
+            case "hdmv_pgs_subtitle": return "PGS"
+            case "dvd_subtitle": return "VobSub"
+            case "mov_text": return "TX3G"
+            default: return codec.uppercased()
+            }
         }
     }
 
@@ -118,6 +152,8 @@ final class MPVEngine {
         hardwareDecoding: MpvHardwareDecodeMode = .hardwareCopy,
         audioOutput: MpvAudioOutput = .automatic,
         audioChannels: AudioOutputChannels = .auto,
+        audioLanguages: [String] = [],
+        subtitleLanguages: [String] = [],
         subtitleStyle: SubtitleStyle,
         layer: MPVMetalLayer
     ) {
@@ -161,6 +197,11 @@ final class MPVEngine {
             setOption("sub-font", family)
             appliedSubtitleFont = family
         }
+        // The preferred-language settings were stored and read by nobody, so a file with five
+        // audio tracks always opened on whichever one it listed first. mpv takes an ordered
+        // list and picks the best match, which is exactly the semantics the settings describe.
+        if !audioLanguages.isEmpty { setOption("alang", audioLanguages.joined(separator: ",")) }
+        if !subtitleLanguages.isEmpty { setOption("slang", subtitleLanguages.joined(separator: ",")) }
         setOption("subs-match-os-language", "yes")
         setOption("subs-fallback", "yes")
         // HDR: hand the display the source colorimetry and let libplacebo tone-map what the
@@ -379,7 +420,7 @@ final class MPVEngine {
             if asOption { self.setOption(name, value) }
             else { self.command(["set", name, value]) }
         }
-        set("sub-ass-override", "no")
+        set("sub-ass-override", style.assOverride)
         set("sub-font-size", String(format: "%.0f", min(96, max(18, 55 * style.sizeScale))))
         set("sub-bold", style.bold ? "yes" : "no")
         set("sub-color", mpvColor(style.textColor))
@@ -575,7 +616,14 @@ final class MPVEngine {
                 id: id,
                 title: (entry["title"] as? String) ?? "",
                 language: entry["lang"] as? String,
-                isSelected: (entry["selected"] as? Bool) ?? false
+                isSelected: (entry["selected"] as? Bool) ?? false,
+                isExternal: (entry["external"] as? Bool) ?? false,
+                isDefault: (entry["default"] as? Bool) ?? false,
+                isForced: (entry["forced"] as? Bool) ?? false,
+                isHearingImpaired: (entry["hearing-impaired"] as? Bool) ?? false,
+                codec: entry["codec"] as? String,
+                channelCount: (entry["demux-channel-count"] as? Int)
+                    ?? (entry["audio-channels"] as? Int)
             )
             if type == "audio" { audio.append(track) }
             if type == "sub" { subtitles.append(track) }

@@ -148,8 +148,34 @@ final class AppSettings {
             outlineEnabled: player.subtitleOutlineEnabled,
             outlineColor: Color(argbHex: player.subtitleOutlineColor),
             outlineWidth: player.subtitleOutlineWidth,
-            verticalOffset: player.subtitleVerticalOffset
+            verticalOffset: player.subtitleVerticalOffset,
+            assOverride: player.subtitleStyleOverride.mpvValue
         )
+    }
+
+    /// Track languages in preference order, with the placeholders resolved. mpv takes the list
+    /// and picks the best match; an empty list leaves the choice to the file.
+    private func trackLanguages(_ preferred: String, _ fallback: String) -> [String] {
+        [preferred, fallback]
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .flatMap { value -> [String] in
+                switch value {
+                case "": return []
+                case "device": return [Locale.current.language.languageCode?.identifier].compactMap { $0 }
+                default: return [MediaLanguage.normalise(value)]
+                }
+            }
+            .reduce(into: [String]()) { list, code in
+                if !list.contains(code) { list.append(code) }
+            }
+    }
+
+    var audioTrackLanguages: [String] {
+        trackLanguages(player.preferredAudioLanguage, player.secondaryPreferredAudioLanguage)
+    }
+
+    var subtitleTrackLanguages: [String] {
+        trackLanguages(player.subtitlePreferredLanguage, player.subtitleSecondaryLanguage)
     }
 
     var navigationFeel: NavigationFeel {

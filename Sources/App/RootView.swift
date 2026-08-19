@@ -48,6 +48,11 @@ struct RootView: View {
         .onChange(of: router.playback == nil) { _, closed in
             if closed { syncAccount() }
         }
+        // Signing in is the other one. Waiting for the next launch to pull a library the viewer
+        // has just proved they own makes the sign-in look as though it did nothing.
+        .onChange(of: account.isSignedIn) { _, signedIn in
+            if signedIn { syncAccount() }
+        }
         // The addon store owns catalog ordering but the preference lives in Layout settings.
         .onChange(of: settings.layout.followAddonsOrder, initial: true) { _, follows in
             addons.followsAddonOrder = follows

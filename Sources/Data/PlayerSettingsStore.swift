@@ -188,6 +188,14 @@ final class PlayerSettingsStore: PreferenceStore {
         set { setString("subtitle_secondary_language", newValue) }
     }
 
+    /// Defaults to scaling rather than to mpv's own "respect the script" behaviour: a viewer
+    /// who has set a text size expects it to take effect, and size is the setting they are
+    /// most often reaching for. Colours are left to the script, so signs still read correctly.
+    var subtitleStyleOverride: SubtitleStyleOverride {
+        get { option("subtitle_style_override", default: .scale) }
+        set { setOption("subtitle_style_override", newValue) }
+    }
+
     var subtitleShowOnlyPreferredLanguages: Bool {
         get { bool("subtitle_show_only_preferred_languages", default: false) }
         set { setBool("subtitle_show_only_preferred_languages", newValue) }

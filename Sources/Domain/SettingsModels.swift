@@ -213,6 +213,42 @@ enum AudioOutputChannels: String, SettingsOption {
 
 // MARK: - Subtitles
 
+/// How far the viewer's subtitle style reaches into subtitles that carry their own.
+///
+/// SRT and WebVTT have no styling of their own, so every appearance setting applies. ASS/SSA —
+/// which is what most anime and a good share of remuxes ship — carries a full script: fonts,
+/// colours, positions, sign placement. mpv honours that script by default, which is why the
+/// appearance settings looked broken on some files and fine on others.
+enum SubtitleStyleOverride: String, SettingsOption {
+    case respect = "NO"
+    case scale = "SCALE"
+    case force = "FORCE"
+
+    var displayName: String {
+        switch self {
+        case .respect: return "Keep the file's own style"
+        case .scale: return "Apply size and position only"
+        case .force: return "Apply my style to everything"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .respect: return "ASS/SSA subtitles keep their fonts, colours and sign placement"
+        case .scale: return "Resize and reposition styled subtitles, leave their colours alone"
+        case .force: return "Override styled subtitles too — signs and karaoke lose their placement"
+        }
+    }
+
+    var mpvValue: String {
+        switch self {
+        case .respect: return "no"
+        case .scale: return "scale"
+        case .force: return "force"
+        }
+    }
+}
+
 enum LibassRenderType: String, SettingsOption {
     case native = "NATIVE"
     case libass = "LIBASS"

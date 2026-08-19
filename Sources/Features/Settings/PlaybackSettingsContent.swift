@@ -205,6 +205,30 @@ struct PlaybackSettingsContent: View {
             }
 
             SettingsCard(
+                title: "Languages",
+                footnote: """
+                Picks the audio track when a file carries several. Media default leaves the \
+                choice to the file; Device language follows the Apple TV's own language.
+                """
+            ) {
+                SettingsLanguageRow(
+                    title: "Preferred audio language",
+                    systemImage: "waveform",
+                    specials: [
+                        .init(code: "", name: "Media default"),
+                        .init(code: "device", name: "Device language")
+                    ],
+                    code: $player.preferredAudioLanguage
+                )
+                SettingsLanguageRow(
+                    title: "Fallback audio language",
+                    systemImage: "waveform",
+                    specials: [.init(code: "", name: "None")],
+                    code: $player.secondaryPreferredAudioLanguage
+                )
+            }
+
+            SettingsCard(
                 title: "Channel layout",
                 footnote: """
                 Auto takes multichannel only when the output has confirmed it and downmixes \
@@ -242,15 +266,19 @@ struct PlaybackSettingsContent: View {
         @Bindable var player = player
         return VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
             SettingsCard(title: "Languages") {
-                SettingsTextFieldRow(
+                SettingsLanguageRow(
                     title: "Preferred subtitle language",
-                    placeholder: "en",
-                    text: $player.subtitlePreferredLanguage
+                    subtitle: "Chosen automatically when the file or an addon offers it",
+                    systemImage: "captions.bubble",
+                    specials: [.init(code: "", name: "None")],
+                    code: $player.subtitlePreferredLanguage
                 )
-                SettingsTextFieldRow(
+                SettingsLanguageRow(
                     title: "Fallback subtitle language",
-                    placeholder: "fr",
-                    text: $player.subtitleSecondaryLanguage
+                    subtitle: "Used when the preferred one is not available",
+                    systemImage: "captions.bubble",
+                    specials: [.init(code: "", name: "None")],
+                    code: $player.subtitleSecondaryLanguage
                 )
                 SettingsToggle(
                     title: "Only show preferred languages",
@@ -266,6 +294,12 @@ struct PlaybackSettingsContent: View {
                     range: 0.5...3.0,
                     step: 0.1,
                     format: { String(format: "%.0f%%", $0 * 100) }
+                )
+                SettingsOptionRow(
+                    title: "Apply to styled subtitles",
+                    subtitle: player.subtitleStyleOverride.summary,
+                    systemImage: "textformat",
+                    selection: $player.subtitleStyleOverride
                 )
                 SettingsToggle(title: "Bold text", isOn: $player.subtitleBold)
                 SettingsTextFieldRow(

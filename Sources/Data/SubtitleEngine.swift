@@ -106,6 +106,9 @@ struct SubtitleStyle: Equatable {
     var outlineColor: Color = .black
     var outlineWidth: Double = 2
     var verticalOffset: Double = 0
+    /// How far these settings reach into subtitles that carry their own styling. Only the MPV
+    /// engine can act on it: AVFoundation has no ASS renderer to override in the first place.
+    var assOverride: String = SubtitleStyleOverride.scale.mpvValue
 
     static let `default` = SubtitleStyle()
 
