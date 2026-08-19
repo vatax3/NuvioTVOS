@@ -1,4 +1,5 @@
 #if canImport(Libmpv)
+import AVFoundation
 import Foundation
 import Observation
 import QuartzCore
@@ -50,6 +51,7 @@ final class MPVEngine {
         var frameRate: String?
         var audioCodec: String?
         var audioChannels: String?
+        var audioOutput: String?
     }
 
     private(set) var isReady = false
@@ -76,6 +78,10 @@ final class MPVEngine {
     private(set) var amplificationDb: Int = 0
     private(set) var aspectMode: AspectMode = .fit
     private(set) var streamInfo = StreamInfo()
+    /// Which audio output mpv actually ended up with. `null` means the real one refused to
+    /// start and the fallback took over — the picture keeps playing and nothing is heard, so
+    /// this is the only way to tell that case apart from a file with no soundtrack.
+    private(set) var audioOutput: String?
     /// Everything the display server needs to pick a mode. Published separately from
     /// `streamInfo` because it is machine-readable rather than something to print.
     private(set) var videoFormat: DisplayModeMatcher.VideoFormat?
@@ -110,6 +116,8 @@ final class MPVEngine {
         startAt: Double,
         verboseLogging: Bool,
         hardwareDecoding: MpvHardwareDecodeMode = .hardwareCopy,
+        audioOutput: MpvAudioOutput = .automatic,
+        audioChannels: AudioOutputChannels = .auto,
         subtitleStyle: SubtitleStyle,
         layer: MPVMetalLayer
     ) {
@@ -130,7 +138,7 @@ final class MPVEngine {
         setOption("gpu-api", "vulkan")
         setOption("gpu-context", "moltenvk")
         setOption("hwdec", hardwareDecoding.mpvValue)
-        setOption("ao", "audiounit")
+        setOption("ao", audioOutput.mpvValue)
         setOption("audio-fallback-to-null", "yes")
         // Headroom for the amplification control; mpv refuses volumes above `volume-max`.
         setOption("volume-max", "400")
@@ -165,7 +173,9 @@ final class MPVEngine {
         setOption("force-window", "no")
         setOption("ytdl", "no")
         setOption("terminal", "no")
-        setOption("audio-channels", "auto")
+        // The layout mpv asks the AudioUnit for. Getting this wrong is not a quality problem
+        // but a silence problem — see `PlayerSettingsStore.audioOutputChannels`.
+        setOption("audio-channels", audioChannels.mpvValue)
         applySubtitleStyle(subtitleStyle, asOption: true)
         // A TV is not a laptop: cache generously, the network is the bottleneck.
         setOption("cache", "yes")
@@ -295,6 +305,12 @@ final class MPVEngine {
         command(["set", "sub-delay", String(format: "%.3f", subtitleDelay)])
     }
 
+    /// Changing the layout makes mpv rebuild its audio output, so it takes effect without
+    /// leaving playback — which matters when the setting is the one being tested.
+    func setAudioChannels(_ channels: AudioOutputChannels) {
+        command(["set", "audio-channels", channels.mpvValue])
+    }
+
     /// Post-decode gain, Android's "Amplification (PCM)" control. mpv expresses volume as a
     /// percentage, so the dB the viewer picks is converted rather than passed through.
     static let amplificationLimitDb = 10
@@ -334,6 +350,11 @@ final class MPVEngine {
         case .fitWidth:
             if let aspect = sourceAspect, aspect < displayAspect { command(["set", "panscan", "1"]) }
         }
+    }
+
+    /// Playing to no audio device at all: there is a soundtrack, and it is going nowhere.
+    var isSilentlyFallingBack: Bool {
+        !audioTracks.isEmpty && audioOutput == "null"
     }
 
     /// Display aspect ratio of the decoded picture, as mpv reports it after applying the
@@ -425,6 +446,12 @@ final class MPVEngine {
 
         case MPV_EVENT_FILE_LOADED:
             isBuffering = false
+            // The audio output is built when the file opens, not when mpv starts, and it needs
+            // an active session at that moment. Taking it once in `viewDidLoad` is not enough:
+            // a session left active by the AVFoundation engine, or an interruption between the
+            // two, leaves the AudioUnit unable to start — and `audio-fallback-to-null` then
+            // hides that as silent video.
+            activateAudioSession()
             refreshTracks()
             refreshStreamInfo()
 
@@ -444,7 +471,20 @@ final class MPVEngine {
             let text = String(cString: message.text)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else { return }
-            logTail.append("[\(String(cString: message.prefix))] \(text)")
+            let prefix = String(cString: message.prefix)
+            logTail.append("[\(prefix)] \(text)")
+            // mpv's own diagnosis of a failure — "unable to initialize audio unit" and the
+            // like — used to exist only inside a player panel, where nobody looking at a bug
+            // report can see it. Mirroring it into the system log makes a silent playback
+            // reproducible from a `log stream` instead of a screenshot.
+            switch String(cString: message.level) {
+            case "fatal", "error":
+                log.error("[\(prefix, privacy: .public)] \(text, privacy: .public)")
+            case "warn":
+                log.warning("[\(prefix, privacy: .public)] \(text, privacy: .public)")
+            default:
+                log.debug("[\(prefix, privacy: .public)] \(text, privacy: .public)")
+            }
             // Only the tail is useful, and an unbounded array on a long playback is a leak.
             if logTail.count > 40 { logTail.removeFirst(logTail.count - 40) }
 
@@ -502,6 +542,20 @@ final class MPVEngine {
         }
     }
 
+    /// Claims the playback route. Failures are recorded rather than swallowed — a refused
+    /// session is one of the two ways playback ends up silent, and it is invisible otherwise.
+    func activateAudioSession() {
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(.playback, mode: .moviePlayback)
+            try session.setActive(true)
+        } catch {
+            let message = "audio session: \(error.localizedDescription)"
+            log.error("\(message, privacy: .public)")
+            logTail.append("[error] \(message)")
+        }
+    }
+
     /// Reads the track list back as JSON, which is far less error-prone than walking mpv_node.
     private func refreshTracks() {
         guard let handle,
@@ -556,12 +610,14 @@ final class MPVEngine {
         let fps = (propertyString("container-fps") ?? propertyString("estimated-vf-fps"))
             .flatMap(Double.init)
         let codec = propertyString("video-codec") ?? propertyString("video-format")
+        audioOutput = propertyString("current-ao")
         streamInfo = StreamInfo(
             videoCodec: codec,
             resolution: width.flatMap { width in height.map { "\(width) × \($0)" } },
             frameRate: fps.map { String(format: "%.3g fps", $0) },
             audioCodec: propertyString("audio-codec-name") ?? propertyString("audio-codec"),
-            audioChannels: propertyString("audio-params/channel-count")
+            audioChannels: propertyString("audio-params/channel-count"),
+            audioOutput: audioOutput
         )
 
         if let fps, let width = width.flatMap(Int32.init), let height = height.flatMap(Int32.init) {

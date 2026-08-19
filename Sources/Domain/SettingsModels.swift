@@ -140,6 +140,44 @@ enum MpvHardwareDecodeMode: String, SettingsOption {
 
 // MARK: - Audio
 
+/// Which of libmpv's audio outputs to drive.
+///
+/// `audiounit` is mpv's older Apple output, built on a RemoteIO AudioUnit. It works on iOS and
+/// in the tvOS simulator, and refuses to open on Apple TV hardware — the unit fails to start,
+/// `audio-fallback-to-null` swallows that into a silent picture, and nothing in the interface
+/// says why. `avfoundation` is the newer driver, built on `AVSampleBufferAudioRenderer`, which
+/// is the path Apple actually supports on a television. Hence the default order.
+enum MpvAudioOutput: String, SettingsOption {
+    case automatic = "AUTO"
+    case avfoundation = "AVFOUNDATION"
+    case audiounit = "AUDIOUNIT"
+
+    var displayName: String {
+        switch self {
+        case .automatic: return "Automatic"
+        case .avfoundation: return "AVFoundation"
+        case .audiounit: return "AudioUnit"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .automatic: return "Try AVFoundation, then AudioUnit"
+        case .avfoundation: return "AVSampleBufferAudioRenderer — the supported path on Apple TV"
+        case .audiounit: return "RemoteIO — works on iOS, refused by some Apple TV routes"
+        }
+    }
+
+    /// mpv takes a priority list and walks it until one output initialises.
+    var mpvValue: String {
+        switch self {
+        case .automatic: return "avfoundation,audiounit"
+        case .avfoundation: return "avfoundation"
+        case .audiounit: return "audiounit"
+        }
+    }
+}
+
 enum AudioOutputChannels: String, SettingsOption {
     case auto = "AUTO"
     case stereo = "STEREO"
@@ -151,6 +189,24 @@ enum AudioOutputChannels: String, SettingsOption {
         case .stereo: return "Stereo"
         case .surround51: return "5.1"
         case .surround71: return "7.1"
+        }
+    }
+
+    var mpvValue: String {
+        switch self {
+        case .auto: return "auto-safe"
+        case .stereo: return "stereo"
+        case .surround51: return "5.1"
+        case .surround71: return "7.1"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .auto: return "Follow whatever layout the Apple TV reports it can take"
+        case .stereo: return "Always downmix — the layout every television accepts"
+        case .surround51: return "Send 5.1 to the receiver"
+        case .surround71: return "Send 7.1 to the receiver"
         }
     }
 }

@@ -152,7 +152,9 @@ struct PlaybackSettingsContent: View {
             SettingsCard(
                 title: "Display matching",
                 footnote: """
-                Apple TV Settings → Video and Audio → Match Content decides whether the panel is                 allowed to change mode at all; this decides whether Nuvio asks it to. Both have                 to be on for 23.976 fps film to play without judder.
+                Apple TV Settings → Video and Audio → Match Content decides whether the \
+                panel may change mode at all; this decides whether Nuvio asks it to. Both \
+                have to be on for 23.976 fps film to play without judder.
                 """
             ) {
                 SettingsOptionRow(
@@ -166,7 +168,9 @@ struct PlaybackSettingsContent: View {
             SettingsCard(
                 title: "HDR & Dolby Vision",
                 footnote: """
-                tvOS owns tone mapping and the Dolby Vision path. The MPV engine hands the                 display the source colorimetry and lets libplacebo map anything the panel                 cannot show.
+                tvOS owns tone mapping and the Dolby Vision path. The MPV engine hands the \
+                display the source colorimetry and lets libplacebo map anything the panel \
+                cannot show.
                 """
             ) {
                 SettingsInfoRow(
@@ -181,13 +185,50 @@ struct PlaybackSettingsContent: View {
     // MARK: Audio
 
     private var audio: some View {
+        @Bindable var player = player
         return VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
             SettingsCard(
+                title: "Audio output",
+                footnote: """
+                Which of MPV's audio drivers to use. AVFoundation is the path Apple supports \
+                on a television; AudioUnit is the older one, which works on iOS and in the \
+                simulator but is refused by Apple TV hardware — where it fails silently and \
+                leaves the picture playing with no sound. Takes effect on the next playback.
+                """
+            ) {
+                SettingsOptionRow(
+                    title: "Driver",
+                    subtitle: player.mpvAudioOutput.summary,
+                    systemImage: "waveform.circle",
+                    selection: $player.mpvAudioOutput
+                )
+            }
+
+            SettingsCard(
+                title: "Channel layout",
+                footnote: """
+                Auto takes multichannel only when the output has confirmed it and downmixes \
+                otherwise; force Stereo if a receiver mishandles what it is sent. Applies \
+                immediately, without leaving playback.
+                """
+            ) {
+                SettingsOptionRow(
+                    title: "Output channels",
+                    subtitle: player.audioOutputChannels.summary,
+                    systemImage: "hifispeaker.2.fill",
+                    selection: $player.audioOutputChannels
+                )
+            }
+
+            SettingsCard(
                 title: "Audio",
-                footnote: "Track selection, channel output, passthrough and dynamic-range handling are supplied by the native tvOS player and Apple TV audio settings."
+                footnote: """
+                Track selection, passthrough and dynamic-range handling are supplied by the \
+                native tvOS player and Apple TV audio settings.
+                """
             ) {
                 SettingsInfoRow(
-                    title: "Audio controls",
+                    title: "Passthrough & dynamic range",
                     value: "Managed by tvOS",
                     tint: colors.textTertiary
                 )

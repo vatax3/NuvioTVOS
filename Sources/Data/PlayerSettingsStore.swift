@@ -11,7 +11,7 @@ final class PlayerSettingsStore: PreferenceStore {
     // MARK: - Engine
 
     var internalPlayerEngine: InternalPlayerEngine {
-        get { option("internal_player_engine", default: .exoplayer) }
+        get { option("internal_player_engine", default: MPVEngineSupport.isAvailable ? .mpv : .exoplayer) }
         set { setOption("internal_player_engine", newValue) }
     }
 
@@ -117,6 +117,15 @@ final class PlayerSettingsStore: PreferenceStore {
         set { setString("secondary_preferred_audio_language", newValue) }
     }
 
+    /// Which libmpv audio driver to use. See `MpvAudioOutput` — the default is not cosmetic,
+    /// it is the difference between sound and silence on Apple TV hardware.
+    var mpvAudioOutput: MpvAudioOutput {
+        get { option("mpv_audio_output", default: .automatic) }
+        set { setOption("mpv_audio_output", newValue) }
+    }
+
+    /// `auto` here is mpv's `auto-safe`: take multichannel only when the output has confirmed
+    /// it, and downmix otherwise.
     var audioOutputChannels: AudioOutputChannels {
         get { option("audio_output_channels", default: .auto) }
         set { setOption("audio_output_channels", newValue) }

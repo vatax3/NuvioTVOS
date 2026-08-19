@@ -111,3 +111,11 @@
 "licenses.libmpv_body" = "The internal extended-codec engine. mpv is licensed under the GNU General Public License v2 or later; libmpv components retain their upstream terms.";
 "licenses.ffmpeg_body" = "Demuxing, decoding and filtering inside the mpv engine. Licensed under the GNU Lesser General Public License v2.1 or later, with GPL components where enabled.";
 "licenses.native_body" = "Subtitle rendering, colour management, AV1 decoding and the Vulkan-on-Metal layer that draws the picture. Each retains its upstream licence — ISC, LGPL, BSD and Apache 2.0 respectively.";
+
+/* Detail & player diagnostics */
+"detail.trailers" = "Trailers";
+"detail.trailer" = "Trailer";
+"player.no_audio_device" = "No audio device";
+"player.no_audio_device_detail" = "The soundtrack is decoding but no audio driver would open, so nothing is being sent to the television. Try Settings → Playback → Audio → Driver.";
+"player.you_are_watching" = "You are watching";
+"player.preparing_stream" = "Preparing stream…";

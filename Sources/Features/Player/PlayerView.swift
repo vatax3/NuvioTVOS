@@ -37,6 +37,17 @@ struct PlayerView: View {
     @State private var didDeclineNextEpisode = false
     @State private var postPlayTask: Task<Void, Never>?
     @State private var isLoading = true
+    /// The loading overlay covers the whole picture, so it belongs to the moment before the
+    /// first frame and to nothing after it. Changing an audio or subtitle track makes mpv go
+    /// briefly idle while it re-reads the stream; showing "Preparing stream" over that reads
+    /// as the player having thrown the film away and started again.
+    @State private var hasStartedPlayback = false
+    /// The pause card is not simply "paused is true". Android raises it a few seconds after a
+    /// deliberate pause and hides the transport underneath it, because the two draw the same
+    /// title in almost the same place — shown together they read as one title rendered twice,
+    /// a few pixels apart.
+    @State private var showsPauseOverlay = false
+    @State private var pauseOverlayTask: Task<Void, Never>?
     @State private var isPaused = false
     @State private var parentalWarnings: [ParentalWarning] = []
     @State private var showsParentalGuide = false
@@ -88,6 +99,7 @@ struct PlayerView: View {
         .onDisappear {
             postPlayTask?.cancel()
             parentalGuideTask?.cancel()
+            pauseOverlayTask?.cancel()
         }
     }
 
@@ -100,6 +112,8 @@ struct PlayerView: View {
                 resumeAt: resumePosition,
                 verboseLogging: settings.player.verboseLoggingEnabled,
                 hardwareDecoding: settings.player.mpvHardwareDecodeMode,
+                audioOutput: settings.player.mpvAudioOutput,
+                audioChannels: settings.player.audioOutputChannels,
                 subtitleStyle: settings.subtitleStyle,
                 seekTarget: requestedSeek,
                 onSeekApplied: { requestedSeek = nil },
@@ -108,7 +122,8 @@ struct PlayerView: View {
                 onChooseEpisode: request.contentType == "series" ? chooseEpisode : nil,
                 onPlayNextEpisode: request.nextUp == nil ? nil : playNextEpisodeNow,
                 onSwitchEngine: { engineOverride = .exoplayer },
-                hasOpenPrompt: nextEpisodeCountdown != nil || showsStillWatchingPrompt,
+                showsPauseOverlay: showsPauseOverlay,
+                hasOpenPrompt: showsPauseOverlay || nextEpisodeCountdown != nil || showsStillWatchingPrompt,
                 onDismissPrompt: dismissTransientPrompt,
                 onPlaybackTime: observePlaybackTime,
                 onPlaybackState: { paused, loading in
@@ -248,11 +263,10 @@ struct PlayerView: View {
 
     @ViewBuilder
     private var playerStatusOverlay: some View {
-        if isLoading, settings.player.loadingOverlayEnabled {
+        if isLoading, !hasStartedPlayback, settings.player.loadingOverlayEnabled {
             PlayerLoadingOverlay(request: request, showsDetail: settings.player.showPlayerLoadingStatus)
                 .transition(.opacity)
-        } else if isPaused, settings.player.pauseOverlayEnabled,
-                  nextEpisodeCountdown == nil, !showsStillWatchingPrompt {
+        } else if showsPauseOverlay {
             PlayerPauseOverlay(request: request, showsClock: settings.player.osdClockEnabled)
                 .transition(.opacity)
         }
@@ -264,9 +278,39 @@ struct PlayerView: View {
     }
 
     private func observePlaybackState(paused: Bool, loading: Bool) {
+        let wasPaused = isPaused
         isPaused = paused
         isLoading = loading
-        if !loading { showParentalGuideIfReady() }
+        if !loading {
+            hasStartedPlayback = true
+            showParentalGuideIfReady()
+        }
+        if paused != wasPaused { schedulePauseOverlay(paused: paused) }
+    }
+
+    /// Android's five seconds: long enough that pausing to read a subtitle or answer the door
+    /// never swaps the screen out from under the viewer, short enough to settle into the card
+    /// when the pause is a real interruption.
+    private func schedulePauseOverlay(paused: Bool) {
+        pauseOverlayTask?.cancel()
+        pauseOverlayTask = nil
+        guard paused, settings.player.pauseOverlayEnabled, hasStartedPlayback else {
+            withAnimation(NuvioMotion.quickTween) { showsPauseOverlay = false }
+            return
+        }
+        pauseOverlayTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(5))
+            guard !Task.isCancelled, isPaused,
+                  nextEpisodeCountdown == nil, !showsStillWatchingPrompt
+            else { return }
+            withAnimation(NuvioMotion.quickTween) { showsPauseOverlay = true }
+        }
+    }
+
+    private func dismissPauseOverlay() {
+        pauseOverlayTask?.cancel()
+        pauseOverlayTask = nil
+        withAnimation(NuvioMotion.quickTween) { showsPauseOverlay = false }
     }
 
     private func loadParentalGuide() async {
@@ -316,7 +360,26 @@ struct PlayerView: View {
         }
         skipLookupKey = key
 
+        let introDbUrl = settings.skipIntro.introDbApiUrl
         Task {
+            // IntroDB first: it is the only provider that knows about ordinary series, and its
+            // answer is keyed by the IMDb id directly rather than through an anime id mapping.
+            if !introDbUrl.isEmpty,
+               let imdbId = ids.lazy.first(where: { $0.hasPrefix("tt") }),
+               let season = request.season, let episode = request.episode {
+                let found = await SkipIntroClient.shared.introDbSegments(
+                    baseURL: introDbUrl,
+                    imdbId: String(imdbId.split(separator: ":")[0]),
+                    season: season,
+                    episode: episode
+                )
+                if !found.isEmpty {
+                    guard skipLookupKey == key else { return }
+                    skipSegments = found
+                    return
+                }
+            }
+
             let segments: [SkipSegment]
             if let directMAL {
                 segments = await SkipIntroClient.shared.segments(
@@ -513,7 +576,9 @@ struct PlayerView: View {
     /// Menu's first claim once the panels are closed, matching Android's chain: a prompt over
     /// the picture is dismissed before the transport is, and long before playback ends.
     private func dismissTransientPrompt() {
-        if nextEpisodeCountdown != nil {
+        if showsPauseOverlay {
+            dismissPauseOverlay()
+        } else if nextEpisodeCountdown != nil {
             declineNextEpisode()
         } else if showsStillWatchingPrompt {
             stopAutoPlayAfterStillWatchingPrompt()

@@ -17,6 +17,8 @@ struct MPVPlayerView: View {
     let resumeAt: Double
     let verboseLogging: Bool
     let hardwareDecoding: MpvHardwareDecodeMode
+    let audioOutput: MpvAudioOutput
+    let audioChannels: AudioOutputChannels
     let subtitleStyle: SubtitleStyle
     let seekTarget: Double?
     let onSeekApplied: () -> Void
@@ -29,6 +31,9 @@ struct MPVPlayerView: View {
     /// Hands the same source to AVFoundation.  Android's control row carries the mirror of
     /// this, and it is the escape hatch when a file decodes badly on one engine.
     let onSwitchEngine: (() -> Void)?
+    /// The host's pause card owns the bottom-left of the screen while it is up, so the
+    /// transport steps aside rather than drawing the same title behind it.
+    let showsPauseOverlay: Bool
     /// Whether the host is drawing a prompt over the picture — the next-episode card or the
     /// still-watching check — and how to dismiss it.  Menu is owned here for the whole session,
     /// so those layers have to be offered the press before the transport is.
@@ -84,6 +89,7 @@ struct MPVPlayerView: View {
 
             MPVMetalSurface(engine: engine, request: request, resumeAt: resumeAt,
                             verboseLogging: verboseLogging, hardwareDecoding: hardwareDecoding,
+                            audioOutput: audioOutput, audioChannels: audioChannels,
                             subtitleStyle: subtitleStyle)
                 .ignoresSafeArea()
 
@@ -100,6 +106,10 @@ struct MPVPlayerView: View {
                 renderDiagnostic
             }
 
+            if engine.isSilentlyFallingBack {
+                audioDiagnostic
+            }
+
             if let error = engine.errorMessage {
                 ErrorStateView(message: error) { dismiss() }
                     .background(.black.opacity(0.75))
@@ -114,9 +124,10 @@ struct MPVPlayerView: View {
             // the bottom of the screen — the overlay's own columns start where the control row
             // would be.  Fading rather than unmounting keeps the focus caveat above intact.
             controls
-                .opacity(showsControls && picker == nil ? 1 : 0)
+                .opacity(showsControls && picker == nil && !showsPauseOverlay ? 1 : 0)
                 .animation(NuvioMotion.quickTween, value: showsControls)
                 .animation(NuvioMotion.quickTween, value: picker)
+                .animation(NuvioMotion.quickTween, value: showsPauseOverlay)
 
             clockOverlay
             aspectFlashPill
@@ -165,6 +176,12 @@ struct MPVPlayerView: View {
         }
         // The panel can only be matched once the decoder has told us what it is decoding, which
         // is a little after playback starts rather than at load time.
+        // Applying it live is the point: the layout is the setting a viewer is changing
+        // precisely because they cannot hear anything, and making them leave playback to try
+        // the next one turns a ten-second check into a chore.
+        .onChange(of: audioChannels) { _, channels in
+            engine.setAudioChannels(channels)
+        }
         .onChange(of: engine.videoFormat) { _, format in
             guard let format else { return }
             DisplayModeMatcher.apply(format, mode: settings.player.frameRateMatchingMode)
@@ -212,6 +229,25 @@ struct MPVPlayerView: View {
             RoundedRectangle(cornerRadius: NuvioTheme.radii.lg, style: .continuous)
                 .fill(.black.opacity(0.72))
         }
+    }
+
+    /// Silent video is otherwise indistinguishable from a file with no soundtrack, and a
+    /// viewer has no way to tell which they are looking at. Naming it makes the difference —
+    /// and names the one setting that can do something about it.
+    private var audioDiagnostic: some View {
+        VStack(alignment: .leading, spacing: NuvioTheme.spacing.xs) {
+            Label(L10n.text("player.no_audio_device"), systemImage: "speaker.slash.fill")
+                .nuvioText(NuvioTextStyles.cardTitle)
+                .foregroundStyle(.white)
+            Text(L10n.text("player.no_audio_device_detail"))
+                .nuvioText(NuvioTextStyles.metadata)
+                .foregroundStyle(.white.opacity(0.75))
+        }
+        .padding(NuvioTheme.spacing.lg)
+        .background(RoundedRectangle(cornerRadius: NuvioTheme.radii.lg, style: .continuous).fill(.black.opacity(0.72)))
+        .padding(.top, NuvioTheme.layout.tvSafeVertical)
+        .padding(.leading, NuvioTheme.layout.tvSafeHorizontal)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     /// mpv is started by `MPVMetalSurface`, which owns the layer it has to be handed. All that
@@ -465,7 +501,10 @@ struct MPVPlayerView: View {
     /// up, so "how long is left" does not need arithmetic against the elapsed counter.
     @ViewBuilder
     private var clockOverlay: some View {
-        if settings.player.osdClockEnabled, showsControls, picker == nil, engine.errorMessage == nil {
+        // The pause card carries its own clock, so the two must never be up together — the
+        // transport merely fades behind it, which is not the same as being gone.
+        if settings.player.osdClockEnabled, showsControls, picker == nil,
+           !showsPauseOverlay, engine.errorMessage == nil {
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 VStack(alignment: .trailing, spacing: 0) {
                     Text(context.date.formatted(date: .omitted, time: .shortened))
@@ -831,6 +870,7 @@ struct MPVPlayerView: View {
             InPlayerPanelSection(title: "Audio & subtitles") {
                 infoRow("Codec", engine.streamInfo.audioCodec)
                 infoRow("Channels", engine.streamInfo.audioChannels)
+                infoRow("Output", engine.streamInfo.audioOutput)
                 InPlayerInfoRow(title: "Audio delay", value: delayLabel(engine.audioDelay))
                 InPlayerInfoRow(title: "Subtitle delay", value: delayLabel(engine.subtitleDelay))
             }
@@ -1051,12 +1091,15 @@ private struct MPVMetalSurface: UIViewControllerRepresentable {
     let resumeAt: Double
     let verboseLogging: Bool
     let hardwareDecoding: MpvHardwareDecodeMode
+    let audioOutput: MpvAudioOutput
+    let audioChannels: AudioOutputChannels
     let subtitleStyle: SubtitleStyle
 
     func makeUIViewController(context: Context) -> MPVMetalViewController {
         MPVMetalViewController(
             engine: engine, request: request, resumeAt: resumeAt,
             verboseLogging: verboseLogging, hardwareDecoding: hardwareDecoding,
+            audioOutput: audioOutput, audioChannels: audioChannels,
             subtitleStyle: subtitleStyle
         )
     }
@@ -1072,6 +1115,8 @@ final class MPVMetalViewController: UIViewController {
     private let resumeAt: Double
     private let verboseLogging: Bool
     private let hardwareDecoding: MpvHardwareDecodeMode
+    private let audioOutput: MpvAudioOutput
+    private let audioChannels: AudioOutputChannels
     private let subtitleStyle: SubtitleStyle
 
     private let metalLayer = MPVMetalLayer()
@@ -1084,6 +1129,8 @@ final class MPVMetalViewController: UIViewController {
         resumeAt: Double,
         verboseLogging: Bool,
         hardwareDecoding: MpvHardwareDecodeMode,
+        audioOutput: MpvAudioOutput,
+        audioChannels: AudioOutputChannels,
         subtitleStyle: SubtitleStyle
     ) {
         self.engine = engine
@@ -1091,6 +1138,8 @@ final class MPVMetalViewController: UIViewController {
         self.resumeAt = resumeAt
         self.verboseLogging = verboseLogging
         self.hardwareDecoding = hardwareDecoding
+        self.audioOutput = audioOutput
+        self.audioChannels = audioChannels
         self.subtitleStyle = subtitleStyle
         super.init(nibName: nil, bundle: nil)
     }
@@ -1121,6 +1170,8 @@ final class MPVMetalViewController: UIViewController {
             startAt: resumeAt,
             verboseLogging: verboseLogging,
             hardwareDecoding: hardwareDecoding,
+            audioOutput: audioOutput,
+            audioChannels: audioChannels,
             subtitleStyle: subtitleStyle,
             layer: metalLayer
         )
@@ -1162,9 +1213,7 @@ final class MPVMetalViewController: UIViewController {
     }
 
     private func configureAudioSession() {
-        let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playback, mode: .moviePlayback)
-        try? session.setActive(true)
+        engine.activateAudioSession()
     }
 }
 

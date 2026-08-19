@@ -36,7 +36,7 @@ struct PlayerLoadingOverlay: View {
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
                 if showsDetail {
-                    Text("Preparing stream…")
+                    Text(L10n.text("player.preparing_stream"))
                         .nuvioText(NuvioTextStyles.metadata)
                         .foregroundStyle(.white.opacity(0.72))
                 }
@@ -58,7 +58,7 @@ struct PlayerPauseOverlay: View {
     var body: some View {
         VStack(alignment: .leading, spacing: NuvioTheme.spacing.md) {
             HStack(alignment: .firstTextBaseline) {
-                Text("You are watching")
+                Text(L10n.text("player.you_are_watching"))
                     .nuvioText(NuvioTextStyles.metadata)
                     .foregroundStyle(.white.opacity(0.72))
                 Spacer()

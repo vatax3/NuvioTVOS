@@ -79,6 +79,13 @@ struct MetaDetailsView: View {
                     EpisodesSection(model: model, meta: meta, onPlay: playEpisode)
                 }
 
+                // Every card in this rail hands off to the YouTube app, so with the app absent
+                // the whole rail is dead weight — and worse, a section the focus engine has to
+                // step over. Drop it rather than draw it.
+                if TrailerLauncher.isAvailable, !trailerItems(meta).isEmpty {
+                    TrailerSection(trailers: trailerItems(meta))
+                }
+
                 if !meta.castMembers.isEmpty {
                     CastSection(members: meta.castMembers)
                 }
@@ -264,6 +271,23 @@ struct MetaDetailsView: View {
     }
 
     /// Stremio and TMDB both hand back YouTube ids; either source is fine.
+    /// Every trailer the metadata carries, addon entries first so their names and languages
+    /// survive, then any bare TMDB id that was not already covered.
+    private func trailerItems(_ meta: Meta) -> [TrailerItem] {
+        var seen = Set<String>()
+        var items: [TrailerItem] = []
+        for trailer in meta.trailers {
+            guard let id = (trailer.ytId?.nilIfBlank ?? trailer.source?.nilIfBlank),
+                  seen.insert(id).inserted else { continue }
+            items.append(TrailerItem(youTubeId: id, name: trailer.name?.nilIfBlank, kind: trailer.type?.nilIfBlank, language: trailer.lang?.nilIfBlank))
+        }
+        for id in meta.trailerYtIds {
+            guard let id = id.nilIfBlank, seen.insert(id).inserted else { continue }
+            items.append(TrailerItem(youTubeId: id, name: nil, kind: nil, language: nil))
+        }
+        return items
+    }
+
     private func trailerYouTubeId(_ meta: Meta) -> String? {
         meta.trailerYtIds.first?.nilIfBlank
             ?? meta.trailers.compactMap { $0.ytId?.nilIfBlank ?? $0.source?.nilIfBlank }.first
@@ -405,6 +429,95 @@ struct EpisodesSection: View {
     }
 }
 
+// MARK: - Trailers (port of TrailerSection)
+
+struct TrailerItem: Identifiable, Hashable {
+    let youTubeId: String
+    let name: String?
+    let kind: String?
+    let language: String?
+
+    var id: String { youTubeId }
+
+    var title: String { name ?? kind?.capitalized ?? L10n.text("detail.trailer") }
+
+    var subtitle: String? {
+        [kind?.capitalized, language?.uppercased()].compactMap { $0 }.joined(separator: " • ").nilIfBlank
+    }
+
+    /// YouTube serves a still for any video id at a stable path, so a trailer row needs no
+    /// extra metadata request to have artwork.
+    var thumbnailURL: String { "https://img.youtube.com/vi/\(youTubeId)/hqdefault.jpg" }
+}
+
+/// The landscape trailer rail from the Android detail screen.
+///
+/// The cards hand off to the YouTube app rather than playing in place: the ids are YouTube
+/// watch ids and AVFoundation has no way to turn one into a stream. Android resolves them
+/// through its own InnerTube extractor, which is the piece that would have to be ported for
+/// playback to happen on this screen.
+struct TrailerSection: View {
+    @Environment(\.nuvioColors) private var colors
+    let trailers: [TrailerItem]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: NuvioTheme.spacing.lg) {
+            Text(L10n.text("detail.trailers"))
+                .nuvioText(NuvioTextStyles.sectionTitle)
+                .foregroundStyle(colors.textPrimary)
+                .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: NuvioTheme.spacing.lg) {
+                    ForEach(trailers) { trailer in
+                        TrailerCard(trailer: trailer)
+                    }
+                }
+                .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)
+                .padding(.vertical, NuvioTheme.spacing.sm)
+            }
+            .scrollClipDisabled()
+        }
+        .focusSection()
+    }
+}
+
+private struct TrailerCard: View {
+    @Environment(\.nuvioColors) private var colors
+    let trailer: TrailerItem
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: NuvioTheme.spacing.sm) {
+            Button(action: { TrailerLauncher.open(youTubeId: trailer.youTubeId) }) {
+                ZStack {
+                    RemoteImage(url: trailer.thumbnailURL, contentMode: .fill) {
+                        colors.backgroundCard
+                    }
+                    Image(systemName: "play.circle.fill")
+                        .font(.system(size: NuvioTheme.sizes.icons.xl))
+                        .foregroundStyle(.white.opacity(0.92))
+                        .shadow(color: .black.opacity(0.6), radius: dp(4))
+                }
+                .frame(width: dp(260), height: dp(146))
+                .clipped()
+            }
+            .buttonStyle(NuvioCardButtonStyle(cornerRadius: NuvioTheme.spacing.md))
+
+            Text(trailer.title)
+                .nuvioText(NuvioTextStyles.metadata)
+                .foregroundStyle(colors.textPrimary)
+                .lineLimit(1)
+            if let subtitle = trailer.subtitle {
+                Text(subtitle)
+                    .nuvioText(NuvioTypography.labelSmall)
+                    .foregroundStyle(colors.textTertiary)
+                    .lineLimit(1)
+            }
+        }
+        .frame(width: dp(260), alignment: .leading)
+    }
+}
+
 // MARK: - Cast (port of CastSection)
 
 struct CastSection: View {
@@ -469,9 +582,12 @@ private struct CastMemberCard: View {
             }
             .buttonStyle(NuvioCardButtonStyle(cornerRadius: NuvioTheme.sizes.avatars.xl / 2))
             .onFocusChange { isFocused = $0 }
-            // A credit with no TMDB id has no destination; leave it unfocusable rather than
-            // offering a button that does nothing.
-            .disabled(!isNavigable)
+            // Credits keep their focus even with nowhere to go. Disabling them looks harmless
+            // one card at a time, but an addon that supplies no TMDB ids — Cinemeta, for one —
+            // disables every card in the row at once, and a row with nothing focusable in it is
+            // a row the focus engine steps straight over: pressing Down past the episodes
+            // landed on More like this and the cast could be seen but never reached. Select on
+            // a credit with no id is already a no-op in `action`.
 
             Text(member.name)
                 .nuvioText(NuvioTextStyles.metadata)

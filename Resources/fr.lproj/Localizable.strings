@@ -111,3 +111,11 @@
 "licenses.libmpv_body" = "Le moteur interne à codecs étendus. mpv est sous licence GNU General Public License v2 ou ultérieure ; les composants de libmpv conservent leurs termes d'origine.";
 "licenses.ffmpeg_body" = "Démultiplexage, décodage et filtrage au sein du moteur mpv. Sous licence GNU Lesser General Public License v2.1 ou ultérieure, avec des composants GPL lorsqu'ils sont activés.";
 "licenses.native_body" = "Rendu des sous-titres, gestion des couleurs, décodage AV1 et couche Vulkan-sur-Metal qui dessine l'image. Chacun conserve sa licence d'origine — ISC, LGPL, BSD et Apache 2.0 respectivement.";
+
+/* Fiche & diagnostics du lecteur */
+"detail.trailers" = "Bandes-annonces";
+"detail.trailer" = "Bande-annonce";
+"player.no_audio_device" = "Aucune sortie audio";
+"player.no_audio_device_detail" = "La bande-son est décodée mais aucun pilote audio n'a pu s'ouvrir : rien n'est envoyé au téléviseur. Essayez Réglages → Lecture → Audio → Pilote.";
+"player.you_are_watching" = "Vous regardez";
+"player.preparing_stream" = "Préparation du flux…";

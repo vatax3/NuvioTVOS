@@ -435,6 +435,13 @@ final class SkipIntroSettingsStore: PreferenceStore {
         set { setBool("aniskip_enabled", newValue) }
     }
 
+    /// IntroDB's endpoint. The official app compiles it in from a private build config, so it
+    /// cannot ship here; without it, skip marks exist for anime only.
+    var introDbApiUrl: String {
+        get { string("introdb_api_url", default: "") }
+        set { setString("introdb_api_url", newValue) }
+    }
+
     var autoSkipIntro: Bool {
         get { bool("auto_skip_intro", default: false) }
         set { setBool("auto_skip_intro", newValue) }

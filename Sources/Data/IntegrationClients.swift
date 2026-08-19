@@ -877,6 +877,55 @@ actor SkipIntroClient {
         return segments
     }
 
+    /// IntroDB covers everything AniSkip does not — ordinary series rather than anime — and is
+    /// where the Android app gets intro, recap and outro marks for the rest of the catalogue.
+    /// Its base URL is a build-time secret in the official app, absent from its public source,
+    /// so it is asked for rather than hard-coded; with no URL configured this simply returns
+    /// nothing and the AniSkip path is unaffected.
+    func introDbSegments(baseURL: String, imdbId: String, season: Int, episode: Int) async -> [SkipSegment] {
+        let key = "introdb-\(imdbId)-\(season)-\(episode)"
+        if let hit = cache[key] { return hit }
+
+        struct Segment: Decodable {
+            let start_sec: Double?
+            let end_sec: Double?
+            let start_ms: Double?
+            let end_ms: Double?
+
+            var range: (start: Double, end: Double)? {
+                guard let start = start_sec ?? start_ms.map({ $0 / 1000 }),
+                      let end = end_sec ?? end_ms.map({ $0 / 1000 }),
+                      end > start else { return nil }
+                return (start, end)
+            }
+        }
+        struct Response: Decodable {
+            let intro: Segment?
+            let recap: Segment?
+            let outro: Segment?
+        }
+
+        let base = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard !base.isEmpty,
+              let encoded = imdbId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
+        else { return [] }
+
+        let url = "\(base)/segments?imdb_id=\(encoded)&season=\(season)&episode=\(episode)"
+        guard let response = try? await HTTP.get(url, as: Response.self) else { return [] }
+
+        let segments = [
+            (response.intro, SkipSegment.Kind.intro),
+            (response.recap, SkipSegment.Kind.recap),
+            (response.outro, SkipSegment.Kind.outro)
+        ].compactMap { entry -> SkipSegment? in
+            guard let range = entry.0?.range else { return nil }
+            return SkipSegment(kind: entry.1, start: range.start, end: range.end)
+        }
+        cache[key] = segments
+        return segments
+    }
+
     /// Maps an IMDb/TVDB id to a MAL id so AniSkip can be queried at all.
     func malId(imdbId: String?, tvdbId: Int?) async -> Int? {
         struct Response: Decodable { let myanimelist: Int? }

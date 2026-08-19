@@ -410,18 +410,20 @@ struct StreamsView: View {
     /// above every list, which was the main difference from the official picker.
     private var sourceContext: some View {
         VStack(alignment: .center, spacing: NuvioTheme.spacing.lg) {
+            // The logo is the title, set in the film's own lettering. Printing the name under
+            // it says the same thing twice and costs the panel a third of its height.
             if let logo = request.logo?.nilIfBlank {
                 RemoteImage(url: logo, contentMode: .fit) { Color.clear }
                     .frame(maxWidth: dp(420), maxHeight: dp(150))
                     .accessibilityLabel(request.title)
+            } else {
+                Text(request.title)
+                    .nuvioText(NuvioTextStyles.display)
+                    .foregroundStyle(colors.textPrimary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(3)
+                    .shadow(color: .black.opacity(0.82), radius: dp(5), y: dp(2))
             }
-
-            Text(request.title)
-                .nuvioText(NuvioTextStyles.display)
-                .foregroundStyle(colors.textPrimary)
-                .multilineTextAlignment(.center)
-                .lineLimit(3)
-                .shadow(color: .black.opacity(0.82), radius: dp(5), y: dp(2))
 
             HStack(spacing: NuvioTheme.spacing.md) {
                 if let label = request.episodeLabel {
