@@ -11,6 +11,7 @@ struct RootView: View {
     @Environment(ProfileStore.self) private var profiles
     @Environment(NuvioAccountStore.self) private var account
     @Environment(NuvioSyncService.self) private var sync
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         @Bindable var router = router
@@ -52,6 +53,11 @@ struct RootView: View {
         // has just proved they own makes the sign-in look as though it did nothing.
         .onChange(of: account.isSignedIn) { _, signedIn in
             if signedIn { syncAccount() }
+        }
+        // And coming back to the app: a television is left running for days, so "at launch"
+        // can mean "a week ago". What was watched on a phone this afternoon should be here.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { syncAccount() }
         }
         // The addon store owns catalog ordering but the preference lives in Layout settings.
         .onChange(of: settings.layout.followAddonsOrder, initial: true) { _, follows in

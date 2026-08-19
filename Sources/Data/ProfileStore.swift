@@ -174,6 +174,11 @@ final class ProfileStore {
     private(set) var activeProfileId: String = ProfileScope.activeProfileId
     /// True while a locked profile has not yet been unlocked in this session.
     private(set) var isLocked = false
+    /// Bumped when the local data is wiped. The per-profile store graph is keyed on the active
+    /// profile, which does not change when the primary is reset in place — without this the
+    /// old stores would stay mounted, still holding the signed-out account's library in memory,
+    /// and would write it straight back out.
+    private(set) var resetToken = 0
 
     private let file = JSONFileStore<[Profile]>(
         filename: "profiles.json", scope: .global, durability: .critical
@@ -277,6 +282,29 @@ final class ProfileStore {
     }
 
     var hasMultipleProfiles: Bool { profiles.count > 1 }
+
+    /// Back to a single empty primary profile, after the account's data has been removed.
+    func resetAfterSignOut() {
+        AccountLocalDataReset.clearAfterSignOut()
+        profiles = []
+        activeProfileId = ProfileScope.primaryProfileId
+        ProfileScope.activate(activeProfileId)
+        isLocked = false
+        profiles = [
+            Profile(
+                id: ProfileScope.primaryProfileId,
+                name: "Me",
+                symbol: "person.fill",
+                tintHex: "#E50914",
+                pinHash: nil,
+                isRestricted: false,
+                createdAt: Date(),
+                remoteIndex: 1
+            )
+        ]
+        persist()
+        resetToken += 1
+    }
 
     // MARK: Switching
 

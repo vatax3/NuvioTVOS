@@ -22,6 +22,9 @@ struct AccountSettingsContent: View {
     @State private var didLoadConfiguration = false
     @State private var discoveryMessage: String?
     @State private var isDiscovering = false
+    /// Signing out erases this television's copy of the account. Android asks first, and so
+    /// does this — there is no undo, and the row is one press away from Sync now.
+    @State private var isConfirmingSignOut = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
@@ -160,12 +163,29 @@ struct AccountSettingsContent: View {
                 )
             }
             SettingsRow(
-                title: "Sign out",
-                subtitle: "Local library and settings stay on this device",
+                title: isConfirmingSignOut ? "Sign out and erase — press again to confirm" : "Sign out",
+                subtitle: isConfirmingSignOut
+                    ? "Library, watch progress, collections, profiles, addons, plugins, debrid keys and settings are removed from this Apple TV"
+                    : "Removes this account's content from this Apple TV",
                 systemImage: "rectangle.portrait.and.arrow.right",
-                action: { account.signOut() }
+                action: signOut
             )
         }
+    }
+
+    /// Two presses, not a dialog: the confirmation has to say what is about to be destroyed,
+    /// and saying it in the row itself puts the warning where the viewer is already looking.
+    private func signOut() {
+        guard isConfirmingSignOut else {
+            isConfirmingSignOut = true
+            return
+        }
+        isConfirmingSignOut = false
+        sync.cancel()
+        account.signOut()
+        // Order matters: the session goes first so nothing can push the library back up while
+        // it is being removed, and the wipe runs before the store graph is rebuilt around it.
+        profiles.resetAfterSignOut()
     }
 
     private var syncCard: some View {

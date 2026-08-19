@@ -44,6 +44,15 @@ enum KeychainStore {
         set(Data(value.utf8), forKey: key)
     }
 
+    /// Drops every secret this app owns. Used when signing out: the debrid keys and tracking
+    /// tokens belong to the account that is leaving, not to the television.
+    static func removeAll() {
+        SecItemDelete([
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service
+        ] as CFDictionary)
+    }
+
     private static func baseQuery(forKey key: String) -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,

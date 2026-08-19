@@ -42,7 +42,7 @@ private struct ProfileGate: View {
                 ProfileLockView(profile: profile, profiles: profiles)
             } else {
                 ProfileScopedRoot()
-                    .id(profiles.activeProfileId)
+                    .id("\(profiles.activeProfileId)#\(profiles.resetToken)")
             }
         }
         .environment(profiles)

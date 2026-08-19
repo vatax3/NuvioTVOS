@@ -33,6 +33,13 @@ final class NuvioSyncService {
     private let log = Logger(subsystem: "com.nuvio.tvos", category: "NuvioSync")
     private var runningTask: Task<Void, Never>?
 
+    /// Stops a pass mid-flight. Signing out has to do this before the local data is removed,
+    /// or a pull already in progress adopts rows into stores that are about to be deleted.
+    func cancel() {
+        runningTask?.cancel()
+        runningTask = nil
+    }
+
     // MARK: Entry point
 
     /// Full two-way pass. Serialised — a second request while one is running is a no-op.

@@ -41,6 +41,14 @@ enum TopShelfSnapshotPublisher {
         defaults.set(data, forKey: defaultsKey)
     }
 
+    /// Empties the row on the tvOS home screen. This lives in the app-group container rather
+    /// than the app's own, so a reset of the latter does not reach it — and what is left behind
+    /// is the signed-out account's viewing history, on the television's home screen, visible
+    /// without opening Nuvio at all.
+    static func clear() {
+        defaults.removeObject(forKey: defaultsKey)
+    }
+
     static var defaults: UserDefaults {
         UserDefaults(suiteName: appGroupIdentifier) ?? .standard
     }
