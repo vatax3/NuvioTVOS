@@ -80,11 +80,22 @@ final class NuvioSyncService {
                 status = .syncing("Collections")
                 try await syncCollections(collections: collections, library: library, profileId: profileId)
 
+                // A profile that borrows the primary's addons shares its rows too. Syncing the
+                // shared list under the borrowing profile's own index would fork it on the
+                // server the first time either side changed.
                 status = .syncing("Addons")
-                try await syncAddons(addons: addons, profileId: profileId, ownerId: account.syncOwnerId)
+                try await syncAddons(
+                    addons: addons,
+                    profileId: ProfileScope.sharesPrimaryAddons ? 1 : profileId,
+                    ownerId: account.syncOwnerId
+                )
 
                 status = .syncing("Plugins")
-                try await syncPlugins(plugins: plugins, profileId: profileId, ownerId: account.syncOwnerId)
+                try await syncPlugins(
+                    plugins: plugins,
+                    profileId: ProfileScope.sharesPrimaryPlugins ? 1 : profileId,
+                    ownerId: account.syncOwnerId
+                )
 
                 status = .syncing("Settings")
                 try await syncSettings(settings: settings, profileId: profileId)

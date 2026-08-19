@@ -46,8 +46,15 @@ final class AddonStore {
     private(set) var isRefreshing = false
     private(set) var lastError: String?
 
-    private let addonsFile = JSONFileStore<[InstalledAddon]>(filename: "addons.json")
-    private let orderFile = JSONFileStore<[CatalogOrderEntry]>(filename: "catalog-order.json")
+    // A profile set to "use the primary's addons" reads and writes the primary's list rather
+    // than one of its own — the flag was stored and synced but acted on nowhere, so such a
+    // profile silently started from the default two addons and never saw the account's.
+    private let addonsFile = JSONFileStore<[InstalledAddon]>(
+        filename: "addons.json", scope: ProfileScope.addonStorage
+    )
+    private let orderFile = JSONFileStore<[CatalogOrderEntry]>(
+        filename: "catalog-order.json", scope: ProfileScope.addonStorage
+    )
     private let client: StremioClient
     private let log = Logger(subsystem: "com.nuvio.tvos", category: "AddonStore")
 

@@ -86,8 +86,12 @@ final class PluginStore {
     private(set) var isBusy = false
     private(set) var lastError: String?
 
-    private let repositoryFile = JSONFileStore<[PluginRepository]>(filename: "plugin-repositories.json")
-    private let scraperFile = JSONFileStore<[InstalledScraper]>(filename: "plugin-scrapers.json")
+    private let repositoryFile = JSONFileStore<[PluginRepository]>(
+        filename: "plugin-repositories.json", scope: ProfileScope.pluginStorage
+    )
+    private let scraperFile = JSONFileStore<[InstalledScraper]>(
+        filename: "plugin-scrapers.json", scope: ProfileScope.pluginStorage
+    )
     private let log = Logger(subsystem: "com.nuvio.tvos", category: "PluginStore")
 
     /// 2 MB — the Android manager applies the same ceiling per scraper file.

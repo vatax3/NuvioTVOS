@@ -16,7 +16,26 @@ final class SearchViewModel {
         let addonName: String
         let catalogName: String
         let items: [MetaPreview]
-        var id: String { "\(addonName)#\(catalogName)" }
+        /// Identity has to come from the catalogue itself, not from what is printed above it.
+        /// Addons routinely expose the same catalogue name for more than one type — Cinemeta's
+        /// search is "Search" for both movies and series — so a name-based id put two different
+        /// sections under one key. A `ForEach` with duplicate ids reuses the wrong rows as a
+        /// lazy stack recycles them, which is why results appeared and vanished on scroll.
+        let addonBaseUrl: String
+        let catalogId: String
+        let contentType: String
+        var id: String { "\(addonBaseUrl)#\(contentType)#\(catalogId)" }
+
+        /// Same reason the id carries the type: two rows headed "Search" from one addon tell
+        /// the viewer nothing about which is which.
+        var displayTitle: String {
+            let type = ContentType.from(contentType)
+            guard type != .unknown else { return catalogName }
+            let kind = type.displayName
+            return catalogName.localizedCaseInsensitiveContains(kind)
+                ? catalogName
+                : "\(catalogName) · \(kind)"
+        }
     }
 
     init(client: StremioClient = .shared) {
@@ -66,7 +85,10 @@ final class SearchViewModel {
                     return SearchSection(
                         addonName: entry.addon.displayName,
                         catalogName: entry.catalog.name,
-                        items: items
+                        items: items,
+                        addonBaseUrl: entry.addon.baseUrl,
+                        catalogId: entry.catalog.id,
+                        contentType: entry.catalog.apiType
                     )
                 }
             }
@@ -158,7 +180,7 @@ struct SearchView: View {
             LazyVStack(alignment: .leading, spacing: NuvioTheme.spacing.rail.rowGap) {
                 ForEach(model.results) { section in
                     CatalogRowView(
-                        title: section.catalogName,
+                        title: section.displayTitle,
                         subtitle: section.addonName,
                         items: section.items,
                         showsSeeAll: false,

@@ -72,6 +72,8 @@ struct ProfileEditorView: View {
     @State private var symbol = Profile.availableSymbols[0]
     @State private var tintHex = Profile.availableTints[0]
     @State private var isRestricted = false
+    @State private var usesPrimaryAddons = false
+    @State private var usesPrimaryPlugins = false
     @State private var pin = ""
     @State private var didLoad = false
     @State private var isConfirmingDelete = false
@@ -110,6 +112,28 @@ struct ProfileEditorView: View {
                             masked: true,
                             text: $pin
                         )
+                    }
+
+                    if profile?.id != ProfileScope.primaryProfileId {
+                        SettingsCard(
+                            title: "Sources",
+                            footnote: """
+                            Share the primary profile's addons and plugins instead of keeping \
+                            a separate set. The account carries this choice, so it follows the \
+                            profile onto every device.
+                            """
+                        ) {
+                            SettingsToggle(
+                                title: "Use the primary profile's addons",
+                                systemImage: "puzzlepiece.extension.fill",
+                                isOn: $usesPrimaryAddons
+                            )
+                            SettingsToggle(
+                                title: "Use the primary profile's plugins",
+                                systemImage: "chevron.left.forwardslash.chevron.right",
+                                isOn: $usesPrimaryPlugins
+                            )
+                        }
                     }
 
                     SettingsCard(
@@ -248,6 +272,8 @@ struct ProfileEditorView: View {
         symbol = profile.symbol
         tintHex = profile.tintHex
         isRestricted = profile.isRestricted
+        usesPrimaryAddons = profile.usesPrimaryAddons
+        usesPrimaryPlugins = profile.usesPrimaryPlugins
     }
 
     private func save() {
@@ -257,6 +283,8 @@ struct ProfileEditorView: View {
             existing.symbol = symbol
             existing.tintHex = tintHex
             existing.isRestricted = isRestricted
+            existing.usesPrimaryAddons = usesPrimaryAddons
+            existing.usesPrimaryPlugins = usesPrimaryPlugins
             profiles.update(existing)
             // An untouched field leaves the existing PIN alone; clearing it removes the lock.
             if pin.isEmpty, existing.isLocked {

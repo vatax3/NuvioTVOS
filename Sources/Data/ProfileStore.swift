@@ -8,7 +8,7 @@ import Observation
 /// read from a single global rather than threaded through every store's constructor — that also
 /// means a store created during view initialisation cannot miss it.
 enum ProfileScope {
-    enum Storage {
+    enum Storage: Equatable {
         /// Per-profile: library, progress, addons, settings.
         case profile
         /// Shared across profiles: the profile list itself.
@@ -18,6 +18,8 @@ enum ProfileScope {
     static let primaryProfileId = "primary"
 
     @ObservationIgnored private static let activeKey = "nuvio.active_profile_id"
+    @ObservationIgnored private static let sharesAddonsKey = "nuvio.active_profile_shares_addons"
+    @ObservationIgnored private static let sharesPluginsKey = "nuvio.active_profile_shares_plugins"
 
     static var activeProfileId: String {
         UserDefaults.standard.string(forKey: activeKey) ?? primaryProfileId
@@ -26,6 +28,28 @@ enum ProfileScope {
     static func activate(_ profileId: String) {
         UserDefaults.standard.set(profileId, forKey: activeKey)
     }
+
+    /// A profile can be set to share the primary's addons or plugins rather than keep its own.
+    /// The flags are mirrored here because the stores that need them are built before any
+    /// profile object is in scope — `JSONFileStore` resolves its path in its initialiser.
+    static func setSharing(addons: Bool, plugins: Bool) {
+        UserDefaults.standard.set(addons, forKey: sharesAddonsKey)
+        UserDefaults.standard.set(plugins, forKey: sharesPluginsKey)
+    }
+
+    static var sharesPrimaryAddons: Bool {
+        !isPrimaryActive && UserDefaults.standard.bool(forKey: sharesAddonsKey)
+    }
+
+    static var sharesPrimaryPlugins: Bool {
+        !isPrimaryActive && UserDefaults.standard.bool(forKey: sharesPluginsKey)
+    }
+
+    /// The primary's own files sit at the top level, unprefixed — so "share with the primary"
+    /// and "global" resolve to the same path, and a borrowing profile simply reads and writes
+    /// the list the primary owns.
+    static var addonStorage: Storage { sharesPrimaryAddons ? .global : .profile }
+    static var pluginStorage: Storage { sharesPrimaryPlugins ? .global : .profile }
 
     /// The primary profile deliberately keeps the original, unprefixed keys and paths: its
     /// preference names stay wire-compatible with the Android app, and an install that never
@@ -213,6 +237,7 @@ final class ProfileStore {
             activeProfileId = ProfileScope.primaryProfileId
             ProfileScope.activate(activeProfileId)
         }
+        publishSharingFlags()
         isLocked = activeProfile?.isLocked ?? false
 
         // The startup shortcut, matching Android's `LaunchedEffect(hasEverSelectedProfile, …)`:
@@ -283,6 +308,20 @@ final class ProfileStore {
 
     var hasMultipleProfiles: Bool { profiles.count > 1 }
 
+    /// Mirrors the active profile's sharing flags where `JSONFileStore` can read them, and
+    /// reports whether they changed — the per-profile store graph has to be rebuilt when they
+    /// do, because each store resolved its path when it was created.
+    @discardableResult
+    func publishSharingFlags() -> Bool {
+        let profile = activeProfile
+        let addons = profile?.usesPrimaryAddons ?? false
+        let plugins = profile?.usesPrimaryPlugins ?? false
+        let changed = addons != ProfileScope.sharesPrimaryAddons
+            || plugins != ProfileScope.sharesPrimaryPlugins
+        ProfileScope.setSharing(addons: addons, plugins: plugins)
+        return changed
+    }
+
     /// Back to a single empty primary profile, after the account's data has been removed.
     func resetAfterSignOut() {
         AccountLocalDataReset.clearAfterSignOut()
@@ -316,6 +355,7 @@ final class ProfileStore {
         }
         ProfileScope.activate(profile.id)
         activeProfileId = profile.id
+        publishSharingFlags()
         isLocked = false
         return true
     }
@@ -351,6 +391,12 @@ final class ProfileStore {
         guard let index = profiles.firstIndex(where: { $0.id == profile.id }) else { return }
         profiles[index] = profile
         persist()
+        // Turning sharing on or off for the profile in use moves where its addon and plugin
+        // lists live. The stores resolved that when they were built, so the graph is rebuilt
+        // around the new answer rather than left writing to the file it no longer owns.
+        if profile.id == activeProfileId, publishSharingFlags() {
+            resetToken += 1
+        }
     }
 
     func setPin(_ pin: String?, for profile: Profile) {
@@ -392,6 +438,8 @@ final class ProfileStore {
     /// everything that belongs to it.
     func merge(remote: [RemoteProfile]) {
         guard !remote.isEmpty else { return }
+        let sharedAddonsBefore = ProfileScope.sharesPrimaryAddons
+        let sharedPluginsBefore = ProfileScope.sharesPrimaryPlugins
 
         var merged: [Profile] = []
         for entry in remote.sorted(by: { $0.index < $1.index }) {
@@ -445,6 +493,15 @@ final class ProfileStore {
             ProfileScope.activate(activeProfileId)
         }
         persist()
+
+        // The account decides whether this profile borrows the primary's addons, so a pull can
+        // change where its stores read from. They resolved their paths when they were built, so
+        // the graph has to come up again around the new answer.
+        publishSharingFlags()
+        if ProfileScope.sharesPrimaryAddons != sharedAddonsBefore
+            || ProfileScope.sharesPrimaryPlugins != sharedPluginsBefore {
+            resetToken += 1
+        }
     }
 
     /// The list as it should be pushed, with an index assigned to anything new.
@@ -496,7 +553,8 @@ final class ProfileStore {
         }
         if changed {
             persist()
-            isLocked = activeProfile?.isLocked ?? false
+            publishSharingFlags()
+        isLocked = activeProfile?.isLocked ?? false
         }
     }
 
