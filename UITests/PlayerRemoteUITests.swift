@@ -81,6 +81,29 @@ final class PlayerRemoteUITests: XCTestCase {
         }
     }
 
+    /// Bringing the row back is only half of it: the buttons then have to work. Focus flags in
+    /// the accessibility tree turned out to be an unreliable witness for this — operating a
+    /// control and watching it change is not.
+    func testTheRowCanBeOperatedOnceTheTransportIsBack() {
+        hideTransport()
+        XCUIRemote.shared.press(.down)
+        XCTAssertTrue(wait(for: { self.transportHoldsRemote }))
+
+        // Walk to the trailing chevron — focus stops at the end of the row, so pressing past
+        // it is harmless — and open the second half of the row with it.
+        XCTAssertTrue(app.buttons["chevron.right"].exists, "the row should end in the expand chevron")
+        for _ in 0..<6 {
+            XCUIRemote.shared.press(.right)
+            usleep(300_000)
+        }
+        XCUIRemote.shared.press(.select)
+
+        XCTAssertTrue(
+            wait(for: { self.app.buttons["chevron.left"].exists }),
+            "Select on a transport button must act — the chevron should have flipped"
+        )
+    }
+
     func testSelectBringsTheTransportBack() {
         hideTransport()
         XCUIRemote.shared.press(.select)
@@ -113,6 +136,28 @@ final class PlayerRemoteUITests: XCTestCase {
             wait(for: { !self.playPause.exists }),
             "a second Menu press, with nothing left showing, should leave playback"
         )
+    }
+
+    /// The oldest of these failures, and the one worth guarding hardest: Menu from inside a
+    /// track or information panel used to close the panel *and* tear playback down, dropping
+    /// the viewer back on the stream list. One press, one meaning.
+    func testMenuFromAPanelClosesOnlyThePanel() {
+        XCTAssertTrue(wait(for: { self.transportHoldsRemote }, timeout: 20))
+
+        // Walk to the trailing chevron, expand the row, then step onto Stream information.
+        for _ in 0..<6 { XCUIRemote.shared.press(.right); usleep(300_000) }
+        XCUIRemote.shared.press(.select)
+        Thread.sleep(forTimeInterval: 1)
+        XCUIRemote.shared.press(.left)
+        usleep(500_000)
+        XCUIRemote.shared.press(.select)
+
+        let panelRow = app.staticTexts["MPV"]
+        XCTAssertTrue(wait(for: { panelRow.exists }), "the stream information panel should open")
+
+        XCUIRemote.shared.press(.menu)
+        XCTAssertTrue(wait(for: { !panelRow.exists }), "Menu should close the panel")
+        XCTAssertTrue(playPause.exists, "…and leave playback running")
     }
 
     func testPlayPauseBringsTheTransportBack() {

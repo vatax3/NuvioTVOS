@@ -33,6 +33,14 @@ struct RootView: View {
                 // Replacing a source remains in the same full-screen presentation, but the
                 // decoder must be rebuilt for the new URL rather than retaining the old engine.
                 .id(request.id)
+                // What Menu means during playback is decided in one place — `PlayerExitPolicy`,
+                // which closes a panel before it hides the transport and hides the transport
+                // before it ends playback. The presentation must not have an opinion of its
+                // own: any press that slips past the player's own handling and reaches the
+                // presentation controller would tear playback down mid-panel, which is the
+                // failure this guards. Playback still ends the moment the player calls
+                // `dismiss()` — that is not interactive dismissal.
+                .interactiveDismissDisabled()
         }
         .task {
             #if DEBUG

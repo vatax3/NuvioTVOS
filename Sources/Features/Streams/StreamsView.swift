@@ -363,15 +363,27 @@ struct StreamsView: View {
         }
     }
 
+    /// The artwork carries the screen. It used to be held at 42% behind a blur and a
+    /// full-frame gradient, which is a lot of machinery for something the viewer then cannot
+    /// see — and the panel in front of it needs contrast in one place, not everywhere.
     private var sourceBackdrop: some View {
         ZStack {
             RemoteImage(url: request.backdrop ?? request.poster, contentMode: .fill) {
                 colors.background
             }
-            .opacity(0.42)
-            .blur(radius: dp(2))
 
-            ModernHeroGradient(background: colors.background, fullScreen: true)
+            // Weighted to the leading edge, where the logo and episode line sit; the trailing
+            // side keeps enough of a wash to seat the panel without hiding what is behind it.
+            LinearGradient(
+                stops: [
+                    .init(color: colors.background.opacity(0.94), location: 0),
+                    .init(color: colors.background.opacity(0.72), location: 0.28),
+                    .init(color: colors.background.opacity(0.34), location: 0.55),
+                    .init(color: colors.background.opacity(0.24), location: 1)
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
         }
         .ignoresSafeArea()
     }
@@ -539,19 +551,23 @@ struct StreamsView: View {
         .buttonStyle(NuvioPillButtonStyle(emphasis: .secondary, selected: isSelected))
     }
 
+    /// Now that the backdrop is actually visible, the panel has to earn its own contrast: a
+    /// blur alone tracks whatever is behind it, and over a bright frame that leaves the rows
+    /// competing with the picture. The base coat is what keeps six lines of metadata readable
+    /// while the artwork still shows around the panel's edges.
     private var sourcePickerSurface: some View {
-        RoundedRectangle(cornerRadius: NuvioTheme.radii.xl, style: .continuous)
-            .fill(.ultraThinMaterial)
-            .overlay {
-                RoundedRectangle(cornerRadius: NuvioTheme.radii.xl, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [colors.glassPanelTop.opacity(0.52), colors.glassPanelBottom.opacity(0.26)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            }
+        let shape = RoundedRectangle(cornerRadius: NuvioTheme.radii.xl, style: .continuous)
+        return ZStack {
+            shape.fill(.ultraThinMaterial)
+            shape.fill(colors.background.opacity(0.58))
+            shape.fill(
+                LinearGradient(
+                    colors: [colors.glassPanelTop.opacity(0.34), colors.glassPanelBottom.opacity(0.16)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+        }
     }
 
     private func banner(_ text: String, tint: Color) -> some View {
@@ -747,41 +763,66 @@ private struct StreamRow: View {
         // even with `.buttonStyle(.plain)`.  That plate is applied *after* our view tree, so
         // it makes the light metadata illegible.  A focusable semantic row keeps Select on the
         // Siri Remote while letting this view own every pixel of its focus treatment.
-        HStack(alignment: .center, spacing: NuvioTheme.spacing.lg) {
-            VStack(alignment: .leading, spacing: NuvioTheme.spacing.xs) {
-                Text(stream.displayName)
-                    .nuvioText(NuvioTextStyles.cardTitle)
-                    .foregroundStyle(colors.textPrimary)
-                    .lineLimit(1)
-                    .multilineTextAlignment(.leading)
+        HStack(alignment: .top, spacing: NuvioTheme.spacing.md) {
+            VStack(alignment: .leading, spacing: dp(3)) {
+                HStack(alignment: .firstTextBaseline, spacing: NuvioTheme.spacing.sm) {
+                    Text(stream.displayName)
+                        .nuvioText(NuvioTextStyles.cardTitle)
+                        .foregroundStyle(colors.textPrimary)
+                        .lineLimit(1)
+                        .multilineTextAlignment(.leading)
 
+                    Spacer(minLength: 0)
+
+                    if let size = sizeLabel {
+                        Text(size)
+                            .nuvioText(NuvioTextStyles.metadata)
+                            .foregroundStyle(colors.textSecondary)
+                            .monospacedDigit()
+                            .lineLimit(1)
+                            .fixedSize()
+                    }
+                }
+
+                // Whatever the addon chose to say, in full. This is the line that carries the
+                // codec, the audio layout, the running time, the seeders and the indexer —
+                // clipping it to three lines threw away most of what a viewer compares on.
                 if let detail = stream.displayDescription?.nilIfBlank, detail != stream.displayName {
                     Text(detail)
                         .nuvioText(NuvioTextStyles.metadata)
                         .foregroundStyle(colors.textSecondary)
-                        .lineLimit(3)
+                        .lineLimit(6)
+                        .fixedSize(horizontal: false, vertical: true)
                         .multilineTextAlignment(.leading)
                 }
 
-                if let sources = stream.sources?.filter({ !$0.isEmpty }), !sources.isEmpty {
-                    Text(sources.prefix(4).joined(separator: " · "))
+                // The release itself. Two files from one addon can describe themselves
+                // identically and still be different cuts; the name is where that shows.
+                if let filename = distinctFilename {
+                    Label(filename, systemImage: "doc")
+                        .nuvioText(NuvioTextStyles.metadata)
+                        .foregroundStyle(colors.textTertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+
+                if !undescribedSources.isEmpty {
+                    Text(undescribedSources.joined(separator: " · "))
                         .nuvioText(NuvioTextStyles.metadata)
                         .foregroundStyle(colors.textTertiary)
                         .lineLimit(1)
                 }
 
-                if settings.streamBadges.placement != .hidden {
+                if settings.streamBadges.placement != .hidden, !visibleBadges.isEmpty {
                     badges
                 }
             }
 
-            Spacer(minLength: 0)
-
             trailingIcon
         }
-        .padding(.horizontal, NuvioTheme.spacing.xl)
-        .padding(.vertical, NuvioTheme.spacing.lg)
-        .frame(maxWidth: .infinity, minHeight: dp(104), alignment: .leading)
+        .padding(.horizontal, NuvioTheme.spacing.lg)
+        .padding(.vertical, NuvioTheme.spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .focusEffectDisabled()
         .background {
@@ -808,70 +849,163 @@ private struct StreamRow: View {
         .opacity(isPlayable ? 1 : NuvioTheme.effects.disabledAlpha)
     }
 
+    // MARK: Size, filename, badges
+
+    /// The number a viewer actually compares between two sources, kept at the trailing edge of
+    /// the title so the eye can run down it.
+    private var sizeLabel: String? {
+        guard settings.streamBadges.showFileSizeBadges, let gb = attributes?.sizeGb,
+              !describesSize
+        else { return nil }
+        return gb >= 1
+            ? String(format: "%.1f GB", gb)
+            : String(format: "%.0f MB", gb * 1024)
+    }
+
+    /// Most addons write the size into their own text, and this column is parsed back out of
+    /// exactly that text — printing it twice on one row is noise, not information.
+    private var describesSize: Bool {
+        let text = (stream.displayDescription ?? "").lowercased()
+        return text.contains("gb") || text.contains("mb") || text.contains(" go") || text.contains("gib")
+    }
+
+    /// The release name, shown only when it says something the description has not. Two files
+    /// from one addon can describe themselves identically and still be different cuts.
+    private var distinctFilename: String? {
+        guard let filename = stream.behaviorHints?.filename?.nilIfBlank,
+              filename != stream.displayName,
+              !(stream.displayDescription ?? "").contains(filename)
+        else { return nil }
+        return filename
+    }
+
+    /// Everything the addon already wrote out in words, ready to be matched against.
+    /// Trackers the addon has not already named in its own text — the description usually ends
+    /// with the indexer it came from, and repeating it underneath says nothing new.
+    private var undescribedSources: [String] {
+        (stream.sources ?? [])
+            .filter { !$0.isEmpty && !isDescribed($0) }
+            .prefix(4)
+            .map { $0 }
+    }
+
+    private var describedText: String {
+        [stream.displayName, stream.displayDescription, stream.behaviorHints?.filename]
+            .compactMap { $0 }
+            .joined(separator: " ")
+            .lowercased()
+            // Letters and digits only: "2160p" has to survive, "🎧 |" must not get in the way.
+            .filter { $0.isLetter || $0.isNumber }
+    }
+
+    /// A chip is worth its line only when it tells the viewer something the description did
+    /// not. Most addons write "BluRay REMUX · HDR10+ · TrueHD 7.1" into the text themselves,
+    /// and repeating each of those as a chip underneath was most of what made a row so tall.
+    /// Addons that return a bare name still get the full set, which is where chips earn their
+    /// place.
+    private func isDescribed(_ text: String) -> Bool {
+        // Compound chips are matched part by part. "HDR+DV" never appears verbatim in a
+        // description that reads "HDR10+ | DV", yet it tells the viewer nothing new — and it
+        // is the last chip that would otherwise survive on a well-described row.
+        let parts = text.lowercased()
+            .split { !$0.isLetter && !$0.isNumber }
+            .map(String.init)
+            .filter { $0.count >= 2 }
+        // A chip made only of two-letter fragments is too weak to rule on.
+        guard parts.contains(where: { $0.count >= 3 }) else { return false }
+        return parts.allSatisfy { describedText.contains($0) }
+    }
+
+    private var attributeBadges: [RowBadge] {
+        guard let a = attributes else { return [] }
+        var badges: [RowBadge] = []
+        if a.resolution != .unknown {
+            badges.append(RowBadge(text: a.resolution.displayName, tint: colors.secondary, filled: true))
+        }
+        if a.quality != .unknown {
+            badges.append(RowBadge(text: a.quality.displayName))
+        }
+        badges += a.visualTags.filter { $0 != .unknown }.prefix(2)
+            .map { RowBadge(text: $0.displayName, tint: colors.premium) }
+        badges += a.audioTags.filter { $0 != .unknown }.prefix(2)
+            .map { RowBadge(text: $0.displayName) }
+        if a.encode != .unknown {
+            badges.append(RowBadge(text: a.encode.displayName))
+        }
+        return badges.filter { !isDescribed($0.text) }
+    }
+
+    /// The debrid state and the seeder count are not the addon's to describe: one comes from
+    /// the debrid account, the other only sometimes appears in the text.
+    private var visibleBadges: [RowBadge] {
+        var badges = attributeBadges
+        if settings.streamBadges.showCacheBadges, let cache, cache.state != .unknown {
+            badges.append(RowBadge(
+                text: cache.state == .cached ? "Cached" : "Not cached",
+                tint: cache.state == .cached ? colors.cached : colors.textTertiary,
+                filled: cache.state == .cached
+            ))
+        }
+        if stream.isTorrent {
+            badges.append(RowBadge(text: "Torrent", tint: colors.torrent))
+        }
+        return badges
+    }
+
+    private var seederCount: Int? {
+        guard settings.streamBadges.showSeederBadges, let seeders = attributes?.seeders,
+              !describedSeeders(seeders) else { return nil }
+        return seeders
+    }
+
+    private func describedSeeders(_ count: Int) -> Bool {
+        (stream.displayDescription ?? "").contains("\(count)")
+    }
+
     @ViewBuilder
     private var badges: some View {
-        let a = attributes
         HStack(spacing: NuvioTheme.spacing.sm) {
-            if let resolution = a?.resolution, resolution != .unknown {
-                NuvioBadge(text: resolution.displayName, tint: colors.secondary, filled: true)
+            ForEach(visibleBadges) { badge in
+                NuvioBadge(text: badge.text, tint: badge.tint, filled: badge.filled)
             }
-            if let quality = a?.quality, quality != .unknown {
-                NuvioBadge(text: quality.displayName)
-            }
-            ForEach((a?.visualTags ?? []).filter { $0 != .unknown }.prefix(2), id: \.self) { tag in
-                NuvioBadge(text: tag.displayName, tint: colors.premium)
-            }
-            ForEach((a?.audioTags ?? []).filter { $0 != .unknown }.prefix(2), id: \.self) { tag in
-                NuvioBadge(text: tag.displayName)
-            }
-            if let encode = a?.encode, encode != .unknown {
-                NuvioBadge(text: encode.displayName)
-            }
-
-            if settings.streamBadges.showFileSizeBadges, let size = a?.sizeGb {
-                Text(String(format: "%.2f GB", size))
-                    .nuvioText(NuvioTextStyles.metadata)
-                    .foregroundStyle(colors.textTertiary)
-            }
-            if settings.streamBadges.showSeederBadges, let seeders = a?.seeders {
+            if let seederCount {
                 HStack(spacing: dp(3)) {
                     Image(systemName: "person.2.fill")
                         .font(.system(size: NuvioTheme.sizes.icons.xs))
-                    Text("\(seeders)")
+                    Text("\(seederCount)")
                         .nuvioText(NuvioTextStyles.metadata)
                 }
                 .foregroundStyle(colors.success)
             }
-            if settings.streamBadges.showCacheBadges, let cache, cache.state != .unknown {
-                NuvioBadge(
-                    text: cache.state == .cached ? "Cached" : "Not cached",
-                    tint: cache.state == .cached ? colors.cached : colors.textTertiary,
-                    filled: cache.state == .cached
-                )
-            }
-            if stream.isTorrent {
-                NuvioBadge(text: "Torrent", tint: colors.torrent)
-            }
         }
+        .padding(.top, dp(2))
     }
 
+    /// Only the two states a viewer cannot infer: this one is being resolved, or it cannot be
+    /// played at all. The play disc that used to sit here said nothing the focus ring does not
+    /// already say, on every row, at forty points a time.
     @ViewBuilder
     private var trailingIcon: some View {
         if isResolving {
             ProgressView()
                 .progressViewStyle(.circular)
                 .tint(colors.secondary)
-        } else {
-            ZStack {
-                Circle().fill(isPlayable ? colors.textPrimary.opacity(rowFocused ? 0.98 : 0.78) : colors.warning.opacity(0.28))
-                Image(systemName: isPlayable ? "play.fill" : "exclamationmark")
-                    .font(.system(size: NuvioTheme.sizes.icons.sm, weight: .bold))
-                    .foregroundStyle(isPlayable ? colors.background : colors.warning)
-                    .offset(x: isPlayable ? dp(1) : 0)
-            }
-            .frame(width: dp(40), height: dp(40))
+                .frame(width: dp(28), height: dp(28))
+        } else if !isPlayable {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: NuvioTheme.sizes.icons.sm))
+                .foregroundStyle(colors.warning)
+                .frame(width: dp(28), height: dp(28))
         }
     }
+}
+
+/// One chip in a stream row.
+private struct RowBadge: Identifiable {
+    let text: String
+    var tint: Color?
+    var filled: Bool = false
+    var id: String { text }
 }
 
 // MARK: - External player hand-off

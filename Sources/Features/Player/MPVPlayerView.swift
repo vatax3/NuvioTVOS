@@ -405,21 +405,28 @@ struct MPVPlayerView: View {
         focusRetry?.cancel()
         applyFocusOwner(preferring: target)
         focusRetry = Task { @MainActor in
-            for delay in [16, 120, 320, 650] {
+            for delay in [16, 120, 320, 650, 1000] {
                 try? await Task.sleep(for: .milliseconds(delay))
-                guard !Task.isCancelled, !focusHasSettled else { return }
+                guard !Task.isCancelled, focusNeedsRepair else { return }
                 applyFocusOwner(preferring: target)
             }
         }
     }
 
-    /// Whether focus is where this state says it belongs. `unmanaged` is settled by definition:
-    /// a panel or a card owns focus and the player is not entitled to an opinion about it.
-    private var focusHasSettled: Bool {
+    /// Whether focus is somewhere it should not be, or nowhere at all.
+    ///
+    /// The second half is what `@FocusState` cannot answer. Read straight after a write it
+    /// returns the value just written rather than what the focus engine did with it, which is
+    /// exactly when the answer matters: a retry loop asking the binding whether its own write
+    /// landed always hears yes, stops, and leaves the transport on screen with the remote dead.
+    /// `PlayerFocusSystem` asks UIKit instead.
+    private var focusNeedsRepair: Bool {
         switch PlayerRemotePolicy.focusOwner(remoteState) {
-        case .sink: return controlFocus == .sink
-        case .transport, .progress: return isFocusInTransport
-        case .unmanaged: return true
+        // A panel or one of the host's cards owns focus; the player is not entitled to an
+        // opinion about where it sits.
+        case .unmanaged: return false
+        case .sink: return !PlayerFocusSystem.hasFocusedItem || controlFocus != .sink
+        case .transport, .progress: return !PlayerFocusSystem.hasFocusedItem || controlFocus == .sink
         }
     }
 
@@ -444,13 +451,8 @@ struct MPVPlayerView: View {
         // taking it back here is what would strand the viewer inside it.
         case .unmanaged: intended = nil
         }
-        // Read before writing: the binding reports back what the focus engine did, and the
-        // question here is where focus is now, not where it has just been asked to go.
-        let wasSettled = focusHasSettled
         controlFocus = intended
-        // The reset is only worth asking for while focus is not already inside the right
-        // region — otherwise it would drag a viewer off the button they moved to themselves.
-        guard let intended, !wasSettled else { return }
+        guard let intended else { return }
         preferredFocus = intended
         resetFocus(in: playerFocus)
     }
