@@ -11,6 +11,7 @@ import UIKit
 struct MPVPlayerView: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.resetFocus) private var resetFocus
     @Environment(AppSettings.self) private var settings
 
     let request: PlaybackRequest
@@ -41,6 +42,10 @@ struct MPVPlayerView: View {
     /// so those layers have to be offered the press before the transport is.
     let hasOpenPrompt: Bool
     let onDismissPrompt: () -> Void
+    /// Whether one of those layers is focusable in its own right — the skip-intro card, the
+    /// next-episode countdown, the still-watching check.  Each owns the remote while it is up,
+    /// so the player must neither claim focus back nor read presses that were meant for it.
+    let hasFocusableOverlay: Bool
     let onPlaybackTime: (Double, Double) -> Void
     let onPlaybackState: (Bool, Bool) -> Void
     let onProgress: (Double, Double, Bool) -> Void
@@ -77,8 +82,25 @@ struct MPVPlayerView: View {
     /// Focus lands on Pause when the transport appears, and moves between the progress bar and
     /// the buttons from there — the same two stops the Android control row has.
     @FocusState private var controlFocus: ControlFocus?
+    /// See `retargetFocus`: aiming focus is a race against the render that makes the target
+    /// focusable, so the attempt is repeated until it lands.
+    @State private var focusRetry: Task<Void, Never>?
+    /// Where a focus reset should land. Writing the binding is not always enough — the focus
+    /// engine can decline an update whose target became focusable in the same frame — so the
+    /// player also asks for the whole scope to be re-evaluated, and this is what it should
+    /// choose when it is.
+    @State private var preferredFocus: ControlFocus = .playPause
+    @Namespace private var playerFocus
 
-    private enum ControlFocus: Hashable { case progress, playPause }
+    /// `sink` is the invisible full-screen target that owns the remote while the transport is
+    /// down; see `remoteSink`. Every button in the row is bound too — not to aim focus at them,
+    /// but so that "focus is still somewhere in the transport" is a question this view can
+    /// answer. Without it, focus resting on a button with no binding is indistinguishable from
+    /// focus having been lost, and those two need opposite responses.
+    private enum ControlFocus: Hashable {
+        case sink, progress, playPause
+        case control(String)
+    }
 
     private enum TrackPicker: String, Identifiable {
         case audio, subtitles, subtitleAppearance, speed, streamInfo, sources, episodes
@@ -118,6 +140,8 @@ struct MPVPlayerView: View {
                     .background(.black.opacity(0.75))
             }
 
+            remoteSink
+
             // Always mounted, only faded. Swapping the transport in and out — or giving it a
             // focusable full-screen ancestor — means focus has to jump between subtrees every
             // time the bar hides, and tvOS drops it on the way: the remote stops responding, or
@@ -139,6 +163,9 @@ struct MPVPlayerView: View {
                 playerPanel(picker)
             }
         }
+        // One focus scope for the whole player, so a focus reset has something to aim at: see
+        // `applyFocusOwner`.
+        .focusScope(playerFocus)
         // Menu is owned here for the whole playback session, the way Android owns Back with a
         // single `BackHandler`.  A press recognizer sits above the responder chain, so the
         // presentation controller behind the player never gets to interpret the press as a
@@ -148,11 +175,22 @@ struct MPVPlayerView: View {
         .onExitCommand {
             handleExitCommand()
         }
+        // Every other press is read here rather than inside the transport, for the same reason
+        // Menu is: while the transport is down its buttons are out of the focus graph, so a
+        // handler attached to them cannot be reached.  The sink holds focus instead, and these
+        // two commands are what it forwards.
+        .onPlayPauseCommand {
+            perform(PlayerRemotePolicy.playPause(in: remoteState))
+        }
+        .onMoveCommand { direction in
+            perform(PlayerRemotePolicy.move(direction.playerDirection, in: remoteState))
+        }
         .task { start() }
         .onDisappear {
             hideTask?.cancel()
             scrubCommit?.cancel()
             aspectFlashTask?.cancel()
+            focusRetry?.cancel()
             persist(completed: false)
             engine.destroy()
             DisplayModeMatcher.restore(mode: settings.player.frameRateMatchingMode)
@@ -169,13 +207,33 @@ struct MPVPlayerView: View {
         }
         .onChange(of: engine.isPaused) { _, paused in
             if paused { wakeControls() } else { scheduleHide() }
-            onPlaybackState(paused, engine.isBuffering)
+            onPlaybackState(paused, isStalled)
         }
-        .onChange(of: engine.isBuffering) { _, buffering in
-            onPlaybackState(engine.isPaused, buffering)
+        // Derived, and reported from its initial value, because the events it replaces could
+        // be missed entirely: mpv is started by the surface controller during the same body
+        // evaluation that mounts this view, so a local file could reach its first frame before
+        // `start()` ran — and the "Preparing stream" cover, set there, then had nothing left
+        // to change and stayed up over a film that was already playing.
+        .onChange(of: isStalled, initial: true) { _, stalled in
+            onPlaybackState(engine.isPaused, stalled)
         }
-        .onChange(of: engine.hasRenderedFrame) { _, rendered in
-            if rendered { onPlaybackState(engine.isPaused, false) }
+        // Anything that covers the transport or uncovers it moves the remote's owner with it.
+        .onChange(of: picker) { _, panel in
+            if panel == nil { retargetFocus() } else { controlFocus = nil }
+        }
+        .onChange(of: showsPauseOverlay) { _, _ in retargetFocus() }
+        .onChange(of: hasFocusableOverlay) { _, _ in retargetFocus() }
+        .onChange(of: engine.errorMessage) { _, message in
+            retargetFocus()
+            // The host's "Preparing stream" cover is drawn above this view, so a source that
+            // never opens sat behind a spinner that could not end. Reporting the stall as
+            // finished is what lets mpv's own account of the failure be read.
+            if message != nil { onPlaybackState(engine.isPaused, false) }
+        }
+        // Browsing the row is use, not idleness: restart the countdown as focus walks it.
+        .onChange(of: controlFocus) { _, _ in
+            guard isFocusInTransport else { return }
+            scheduleHide()
         }
         // The panel can only be matched once the decoder has told us what it is decoding, which
         // is a little after playback starts rather than at load time.
@@ -201,7 +259,7 @@ struct MPVPlayerView: View {
         }
         .onAppear {
             // One hop's grace so the buttons are in the focus system before it is aimed at them.
-            Task { @MainActor in controlFocus = .playPause }
+            retargetFocus()
         }
     }
 
@@ -260,7 +318,141 @@ struct MPVPlayerView: View {
             engine.addSubtitle(url: subtitle.url, title: subtitle.displayLanguage)
         }
         scheduleHide()
-        onPlaybackState(engine.isPaused, true)
+    }
+
+    // MARK: Remote input
+
+    /// Nothing has been drawn yet, or the picture has stopped for want of data. Either way the
+    /// host's loading cover belongs on screen and playback has not really begun.
+    private var isStalled: Bool { engine.isBuffering || !engine.hasRenderedFrame }
+
+    /// The player's current shape, as the input rules need to see it.
+    private var remoteState: PlayerRemotePolicy.State {
+        PlayerRemotePolicy.State(
+            hasError: engine.errorMessage != nil,
+            hasOpenPanel: picker != nil,
+            hasFocusableOverlay: hasFocusableOverlay,
+            showsPauseCard: showsPauseOverlay,
+            showsControls: showsControls
+        )
+    }
+
+    /// Whether the transport is drawn *and* reachable. Being faded out is not the same as being
+    /// gone: without this the buttons keep their place in the focus graph while invisible, and
+    /// a Select over black opens a panel the viewer never asked for.
+    private var controlsInteractable: Bool {
+        PlayerRemotePolicy.controlsInteractable(remoteState)
+    }
+
+    /// The focus sink: a full-screen, invisible focus target that owns the remote whenever the
+    /// transport is down.
+    ///
+    /// tvOS delivers directional input, Select and Play/Pause to the focused view and to
+    /// nothing else. The instant the transport's buttons leave the focus graph something has to
+    /// take their place, or focus lands nowhere and the remote goes dead until Menu is pressed —
+    /// which is exactly the failure this replaces. A bare `Color`, not a Button: a Button draws
+    /// a full-screen focus highlight over the picture, and dimming it to hide that also drops it
+    /// out of the focus engine, so `up` produced no move command at all.
+    ///
+    /// It must also stay visible to accessibility. `accessibilityHidden(true)` reads like the
+    /// right thing for an invisible helper and is not: on tvOS 26 it takes the view out of the
+    /// focus system along with the accessibility tree, and the transport hides onto nothing —
+    /// measured, with focus landing nowhere at all for the rest of the session.
+    private var remoteSink: some View {
+        Color.clear
+            .ignoresSafeArea()
+            .contentShape(Rectangle())
+            .focusable(PlayerRemotePolicy.focusOwner(remoteState) == .sink)
+            .focused($controlFocus, equals: .sink)
+            .prefersDefaultFocus(preferredFocus == .sink, in: playerFocus)
+            .onTapGesture { perform(PlayerRemotePolicy.select(in: remoteState)) }
+            .accessibilityIdentifier("player.remoteSink")
+            .accessibilityLabel(L10n.text("player.reveal_controls"))
+    }
+
+    private func perform(_ action: PlayerRemoteAction) {
+        switch action {
+        case .none:
+            break
+        case .reveal:
+            wakeControls()
+        case .togglePause:
+            engine.togglePause()
+            wakeControls()
+        case .resume:
+            onDismissPrompt()
+            engine.setPaused(false)
+        case .seek(let forward):
+            scrub(forward: forward)
+        case .dismissPauseCard:
+            onDismissPrompt()
+            wakeControls()
+        }
+    }
+
+    /// Aims focus at whatever should own the remote now, and keeps trying until it lands.
+    ///
+    /// A focus binding only takes if its target is already in the focus graph, and the write
+    /// races the render that puts it there. Revealing the transport is the worst case in both
+    /// directions at once: the sink leaves the graph in the same frame the buttons enter it,
+    /// and a single write falls between the two. Measured, that left focus on a sink that was
+    /// no longer focusable — the transport was on screen and the remote was dead, which is the
+    /// original complaint wearing a different hat.
+    ///
+    /// So it retries, briefly, and stops the moment focus is genuinely inside the transport —
+    /// including on a button the viewer moved to themselves, which must never be yanked back.
+    private func retargetFocus(preferring target: ControlFocus = .playPause) {
+        focusRetry?.cancel()
+        applyFocusOwner(preferring: target)
+        focusRetry = Task { @MainActor in
+            for delay in [16, 120, 320, 650] {
+                try? await Task.sleep(for: .milliseconds(delay))
+                guard !Task.isCancelled, !focusHasSettled else { return }
+                applyFocusOwner(preferring: target)
+            }
+        }
+    }
+
+    /// Whether focus is where this state says it belongs. `unmanaged` is settled by definition:
+    /// a panel or a card owns focus and the player is not entitled to an opinion about it.
+    private var focusHasSettled: Bool {
+        switch PlayerRemotePolicy.focusOwner(remoteState) {
+        case .sink: return controlFocus == .sink
+        case .transport, .progress: return isFocusInTransport
+        case .unmanaged: return true
+        }
+    }
+
+    private var isFocusInTransport: Bool {
+        switch controlFocus {
+        case .playPause, .progress, .control: return true
+        case .sink, nil: return false
+        }
+    }
+
+    /// Two mechanisms, because one is not reliable on its own. The binding is precise but is
+    /// silently declined when its target entered the focus graph in the same frame; the scope
+    /// reset always re-runs an update but can only aim at whatever prefers default focus, which
+    /// is what `preferredFocus` is for. Together they cover both halves of the race.
+    private func applyFocusOwner(preferring target: ControlFocus) {
+        let intended: ControlFocus?
+        switch PlayerRemotePolicy.focusOwner(remoteState) {
+        case .sink: intended = .sink
+        case .transport: intended = target == .sink ? .playPause : target
+        case .progress: intended = .progress
+        // A panel, an error or one of the host's cards is up: it claims focus itself, and
+        // taking it back here is what would strand the viewer inside it.
+        case .unmanaged: intended = nil
+        }
+        // Read before writing: the binding reports back what the focus engine did, and the
+        // question here is where focus is now, not where it has just been asked to go.
+        let wasSettled = focusHasSettled
+        controlFocus = intended
+        // The reset is only worth asking for while focus is not already inside the right
+        // region — otherwise it would drag a viewer off the button they moved to themselves.
+        guard let intended, !wasSettled else { return }
+        preferredFocus = intended
+        resetFocus(in: playerFocus)
     }
 
     // MARK: Controls
@@ -313,59 +505,59 @@ struct MPVPlayerView: View {
             .ignoresSafeArea()
         }
         .focusSection()
-        .onMoveCommand { _ in wakeControls() }
-        .onPlayPauseCommand {
-            engine.togglePause()
-            wakeControls()
-        }
     }
 
     @ViewBuilder
     private var transportButtons: some View {
         controlButton(
             engine.isPaused ? "play.fill" : "pause.fill",
-            label: engine.isPaused ? L10n.text("player.play") : L10n.text("player.pause")
+            label: engine.isPaused ? L10n.text("player.play") : L10n.text("player.pause"),
+            focus: .playPause
         ) { engine.togglePause() }
-        .focused($controlFocus, equals: .playPause)
+        .prefersDefaultFocus(preferredFocus == .playPause, in: playerFocus)
+        // The transport's home position, and what the UI tests watch to know whether a press
+        // reached the player at all. Fixed rather than derived from the localised label.
+        .accessibilityIdentifier("player.transport.playPause")
 
         if let onPlayNextEpisode {
-            controlButton("forward.end.fill", label: L10n.text("player.next_episode")) {
+            controlButton("forward.end.fill", label: L10n.text("player.next_episode"), focus: .control("next")) {
                 onPlayNextEpisode()
             }
         }
 
         if !engine.subtitleTracks.isEmpty {
-            controlButton("captions.bubble", label: L10n.text("player.subtitles")) { picker = .subtitles }
+            controlButton("captions.bubble", label: L10n.text("player.subtitles"), focus: .control("subtitles")) { picker = .subtitles }
         }
         if !engine.audioTracks.isEmpty {
-            controlButton("speaker.wave.2.fill", label: L10n.text("player.audio")) { picker = .audio }
+            controlButton("speaker.wave.2.fill", label: L10n.text("player.audio"), focus: .control("audio")) { picker = .audio }
         }
         if request.sourceRequest != nil {
-            controlButton("arrow.left.arrow.right", label: L10n.text("player.sources")) { picker = .sources }
+            controlButton("arrow.left.arrow.right", label: L10n.text("player.sources"), focus: .control("sources")) { picker = .sources }
         }
         if let onSwitchEngine {
-            controlButton("arrow.triangle.2.circlepath", label: L10n.text("player.switch_engine")) {
+            controlButton("arrow.triangle.2.circlepath", label: L10n.text("player.switch_engine"), focus: .control("engine")) {
                 onSwitchEngine()
             }
         }
         if onChooseEpisode != nil, request.contentType == "series" {
-            controlButton("list.bullet", label: L10n.text("player.episodes")) { picker = .episodes }
+            controlButton("list.bullet", label: L10n.text("player.episodes"), focus: .control("episodes")) { picker = .episodes }
         }
 
         if showsMoreActions {
-            controlButton("speedometer", label: L10n.text("player.speed")) { picker = .speed }
-            controlButton("aspectratio", label: L10n.text("player.aspect_ratio")) { cycleAspectMode() }
+            controlButton("speedometer", label: L10n.text("player.speed"), focus: .control("speed")) { picker = .speed }
+            controlButton("aspectratio", label: L10n.text("player.aspect_ratio"), focus: .control("aspect")) { cycleAspectMode() }
             if externalPlayerTarget != nil {
-                controlButton("arrow.up.forward.app", label: L10n.text("player.open_external")) {
+                controlButton("arrow.up.forward.app", label: L10n.text("player.open_external"), focus: .control("external")) {
                     handOffToExternalPlayer()
                 }
             }
-            controlButton("info.circle", label: L10n.text("player.stream_information")) { picker = .streamInfo }
+            controlButton("info.circle", label: L10n.text("player.stream_information"), focus: .control("info")) { picker = .streamInfo }
         }
 
         controlButton(
             showsMoreActions ? "chevron.left" : "chevron.right",
-            label: showsMoreActions ? L10n.text("player.close_more_actions") : L10n.text("player.more_actions")
+            label: showsMoreActions ? L10n.text("player.close_more_actions") : L10n.text("player.more_actions"),
+            focus: .control("more")
         ) {
             withAnimation(NuvioMotion.quickTween) { showsMoreActions.toggle() }
         }
@@ -390,8 +582,9 @@ struct MPVPlayerView: View {
         }
         .frame(height: controlFocus == .progress ? NuvioTheme.spacing.md : NuvioTheme.spacing.sm)
         .animation(NuvioMotion.focusTween, value: controlFocus)
-        .focusable(true)
+        .focusable(controlsInteractable)
         .focused($controlFocus, equals: .progress)
+        .prefersDefaultFocus(preferredFocus == .progress, in: playerFocus)
         .onMoveCommand { direction in
             switch direction {
             case .left: scrub(forward: false)
@@ -422,7 +615,9 @@ struct MPVPlayerView: View {
     }
 
     private func scrub(forward: Bool) {
-        wakeControls()
+        // Revealed by a seek, so focus belongs on the bar: the presses that follow continue the
+        // scrub and pick up Android's acceleration instead of walking the button row.
+        wakeControls(focusing: .progress)
         let now = Date()
         scrubRepeatCount = now.timeIntervalSince(lastScrubAt) <= PlayerScrubRates.repeatWindow
             ? scrubRepeatCount + 1
@@ -483,6 +678,7 @@ struct MPVPlayerView: View {
     private func controlButton(
         _ systemImage: String,
         label: String,
+        focus: ControlFocus,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: {
@@ -495,6 +691,11 @@ struct MPVPlayerView: View {
                 .contentShape(Circle())
         }
         .buttonStyle(PlayerControlButtonStyle())
+        .focused($controlFocus, equals: focus)
+        // `disabled` rather than `focusable(false)`: on a Button the latter can leave the
+        // control looking focused while Select no longer fires, whereas this simply takes it
+        // out of the spatial focus graph. Appearance is unaffected — it is faded out anyway.
+        .disabled(!controlsInteractable)
         .accessibilityLabel(label)
     }
 
@@ -784,7 +985,7 @@ struct MPVPlayerView: View {
     private func closePicker() {
         picker = nil
         wakeControls()
-        Task { @MainActor in controlFocus = .playPause }
+        retargetFocus()
     }
 
     /// The whole meaning of Menu during playback, in one place — the port of Android's single
@@ -901,21 +1102,29 @@ struct MPVPlayerView: View {
         scrubCommit?.cancel()
         scrubTarget = nil
         withAnimation(NuvioMotion.quickTween) { showsControls = false }
+        retargetFocus()
     }
 
-    private func wakeControls() {
+    /// Brings the transport back and hands it the remote. The focus handoff only happens on the
+    /// way up from a hidden transport: called from a button's own action — every one of them
+    /// does, to restart the countdown — it must leave focus exactly where the viewer put it.
+    private func wakeControls(focusing target: ControlFocus = .playPause) {
+        let wasDown = !controlsInteractable
         withAnimation(NuvioMotion.quickTween) { showsControls = true }
         scheduleHide()
+        guard wasDown else { return }
+        retargetFocus(preferring: target)
     }
 
-    /// Controls stay up while paused — that is when the viewer is looking at them.
+    /// Controls stay up while paused — that is when the viewer is looking at them — and while a
+    /// panel is open, which draws over them and would otherwise leave nothing to come back to.
     private func scheduleHide() {
         hideTask?.cancel()
-        guard !engine.isPaused else { return }
+        guard !engine.isPaused, picker == nil else { return }
         hideTask = Task {
             try? await Task.sleep(for: .seconds(5))
             guard !Task.isCancelled, !engine.isPaused else { return }
-            withAnimation(NuvioMotion.quickTween) { showsControls = false }
+            hideControls()
         }
     }
 
@@ -938,6 +1147,20 @@ struct MPVPlayerView: View {
 
 private extension String {
     func prepending(_ prefix: String) -> String { prefix + self }
+}
+
+private extension MoveCommandDirection {
+    var playerDirection: PlayerRemoteDirection {
+        switch self {
+        case .up: return .up
+        case .down: return .down
+        case .left: return .left
+        case .right: return .right
+        // A direction this build does not know about still means "the viewer touched the
+        // remote", and revealing the transport is the answer to that.
+        @unknown default: return .down
+        }
+    }
 }
 
 // MARK: - Transport chrome

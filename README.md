@@ -166,7 +166,10 @@ pasted back to install.
 
 ## Verification status
 
-The UI, layout, subtitle, plugin and catalog paths are exercised on an Apple TV 4K simulator, and
+The player's remote handling — which control owns focus in every state, and that a press with
+the transport hidden brings it back — is checked on an Apple TV 4K simulator by driving the
+remote itself; see `UITests/`. The UI, layout, subtitle, plugin and catalog paths are exercised
+on the same simulator, and
 the HTML/selector, subtitle and plugin-runtime code is checked against fixture inputs. The debrid,
 Trakt, Simkl, TMDB, MDBList and Nuvio-account clients are written against the real APIs — the sync
 layer against the Android source itself, so endpoints, RPC names and row shapes match — but have
@@ -192,6 +195,20 @@ xcodebuild -project NuvioTVOS.xcodeproj -scheme NuvioTVOS \
 ```
 
 `project.yml` is the source of truth — `NuvioTVOS.xcodeproj` is generated and gitignored.
+
+Tests:
+
+```bash
+xcodebuild -project NuvioTVOS.xcodeproj -scheme NuvioTVOS \
+  -destination 'platform=tvOS Simulator,name=Apple TV 4K (3rd generation)' test
+```
+
+`Tests/` holds the unit tests. `UITests/` drives an actual Siri Remote through `XCUIRemote`,
+because the player's remote handling only exists at runtime: whether a press reaches the
+transport depends on where the tvOS focus engine has put focus, and no amount of reading the
+view can answer that. Those tests launch straight into playback through a debug-only harness
+(`PlayerHarness`, behind the `-nuvioPlayerHarness` launch argument) so no account, addon or
+stream list stands between the test and the player.
 
 Cinemeta and OpenSubtitles v3 are installed by default (the same defaults as
 `AddonPreferences.getDefaultAddons()`). Add more under **Settings → Addons → Addon Manager**,

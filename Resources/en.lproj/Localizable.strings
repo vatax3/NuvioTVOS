@@ -117,5 +117,8 @@
 "detail.trailer" = "Trailer";
 "player.no_audio_device" = "No audio device";
 "player.no_audio_device_detail" = "The soundtrack is decoding but no audio driver would open, so nothing is being sent to the television. Try Settings → Playback → Audio → Driver.";
+"player.error_unplayable_url" = "This link cannot be opened by the system player. Its address is not a valid URL — try the MPV engine, which accepts it as written.";
+"player.error_playback_failed" = "The system player could not play this stream.";
+"player.reveal_controls" = "Show playback controls";
 "player.you_are_watching" = "You are watching";
 "player.preparing_stream" = "Preparing stream…";

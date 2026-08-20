@@ -117,5 +117,8 @@
 "detail.trailer" = "Bande-annonce";
 "player.no_audio_device" = "Aucune sortie audio";
 "player.no_audio_device_detail" = "La bande-son est décodée mais aucun pilote audio n'a pu s'ouvrir : rien n'est envoyé au téléviseur. Essayez Réglages → Lecture → Audio → Pilote.";
+"player.error_unplayable_url" = "Le lecteur système ne peut pas ouvrir ce lien : son adresse n'est pas une URL valide. Essayez le moteur MPV, qui l'accepte telle quelle.";
+"player.error_playback_failed" = "Le lecteur système n'a pas réussi à lire ce flux.";
+"player.reveal_controls" = "Afficher les commandes de lecture";
 "player.you_are_watching" = "Vous regardez";
 "player.preparing_stream" = "Préparation du flux…";

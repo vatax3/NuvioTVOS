@@ -12,6 +12,7 @@ import Combine
 /// progress persistence, custom metadata, and per-stream request headers.
 struct PlayerView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(LibraryStore.self) private var library
     @Environment(AppSettings.self) private var settings
     @Environment(Router.self) private var router
@@ -81,6 +82,8 @@ struct PlayerView: View {
     @State private var didFallBackToMPV = false
     /// Set by the in-player engine button, and cleared only by leaving playback.
     @State private var engineOverride: InternalPlayerEngine?
+    /// AVFoundation's refusal, once there is nowhere left to hand the stream to.
+    @State private var avPlaybackError: String?
 
     var body: some View {
         Group {
@@ -96,11 +99,29 @@ struct PlayerView: View {
             await loadSubtitles()
             await loadParentalGuide()
         }
+        // Held for the whole presentation. tvOS keeps itself awake for a system video
+        // controller, but the MPV surface is a Metal layer it knows nothing about: without
+        // this, Settings -> General -> Sleep After applies during a film exactly as it would to
+        // a menu left on screen, and the television sleeps mid-episode.
+        .onAppear { PlaybackWakeLock.acquire() }
         .onDisappear {
+            PlaybackWakeLock.release()
             postPlayTask?.cancel()
             parentalGuideTask?.cancel()
             pauseOverlayTask?.cancel()
         }
+        .onChange(of: scenePhase) { _, phase in
+            // Coming back from the background can clear the flag underneath us.
+            if phase == .active { PlaybackWakeLock.reassert() }
+        }
+    }
+
+    /// The layers the host draws over playback that hold focus themselves. The player has to
+    /// know: while one is up it must not claim the remote back, or the viewer cannot reach the
+    /// Skip button, and the countdown card cannot be answered.
+    private var hasFocusableOverlay: Bool {
+        activeSkipSegment != nil || nextEpisodeCountdown != nil
+            || showsStillWatchingPrompt || showsSourcePanel
     }
 
     @ViewBuilder
@@ -127,6 +148,7 @@ struct PlayerView: View {
                 showsPauseOverlay: showsPauseOverlay,
                 hasOpenPrompt: showsPauseOverlay || nextEpisodeCountdown != nil || showsStillWatchingPrompt,
                 onDismissPrompt: dismissTransientPrompt,
+                hasFocusableOverlay: hasFocusableOverlay,
                 onPlaybackTime: observePlaybackTime,
                 onPlaybackState: { paused, loading in
                     observePlaybackState(paused: paused, loading: loading)
@@ -199,13 +221,7 @@ struct PlayerView: View {
                     simklCheckin()
                     advanceIfDue(position: position, duration: duration)
                 },
-                onFailed: {
-                    guard MPVEngineSupport.isAvailable,
-                          settings.player.autoSwitchInternalPlayerOnError,
-                          !didFallBackToMPV
-                    else { return }
-                    didFallBackToMPV = true
-                },
+                onFailed: handleAVFoundationFailure,
                 onFinished: {
                     persist(position: 0, duration: 0, completed: true)
                     scrobbleStop()
@@ -229,8 +245,37 @@ struct PlayerView: View {
             postPlayOverlay
             stillWatchingOverlay
             playerStatusOverlay
+
+            if let avPlaybackError {
+                ErrorStateView(message: avPlaybackError) { retryOnMPV() }
+                    .background(.black.opacity(0.85))
+            }
         }
         .animation(NuvioMotion.quickTween, value: activeSkipSegment?.id)
+    }
+
+    /// Android's `auto_switch_internal_player_on_error`: a debrid link usually carries no
+    /// extension, so container sniffing cannot tell an MKV from an MP4 and AVFoundation's
+    /// refusal is the only reliable signal. The silent hand-off applies to a stream that landed
+    /// here by that guess — when the viewer pressed the engine button themselves, switching back
+    /// without a word would read as the button doing nothing, so the failure is named instead.
+    private func handleAVFoundationFailure(_ reason: String?) {
+        guard avPlaybackError == nil else { return }
+        if MPVEngineSupport.isAvailable, settings.player.autoSwitchInternalPlayerOnError,
+           !didFallBackToMPV, engineOverride == nil {
+            didFallBackToMPV = true
+            return
+        }
+        avPlaybackError = reason?.nilIfBlank ?? L10n.text("player.error_playback_failed")
+    }
+
+    private func retryOnMPV() {
+        avPlaybackError = nil
+        guard MPVEngineSupport.isAvailable else {
+            dismiss()
+            return
+        }
+        engineOverride = .mpv
     }
 
     // MARK: External subtitles
@@ -682,8 +727,10 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
     let onPlaybackState: (Bool, Bool) -> Void
     let onTick: (Double, Double) -> Void
     let onProgress: (Double, Double, Bool) -> Void
-    /// Called when AVFoundation cannot open the source, so the caller can hand it to MPV.
-    let onFailed: () -> Void
+    /// Called when AVFoundation cannot open the source, with its own account of why, so the
+    /// caller can hand the stream to MPV or — when the viewer chose this engine deliberately —
+    /// say what happened instead of leaving a black screen.
+    let onFailed: (String?) -> Void
     let onFinished: () -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -702,7 +749,13 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
         // playback ends, so `start` and `startStop` behave alike on this engine.
         controller.appliesPreferredDisplayCriteriaAutomatically = frameRateMatchingMode != .off
 
-        guard let url = URL(string: request.streamURL) else { return controller }
+        guard let url = Self.playbackURL(request.streamURL) else {
+            // AVFoundation needs a parsed `URL`; MPV takes the string as it stands, which is
+            // why a link the addon has not escaped plays on one engine and shows a black
+            // screen with no message on the other.
+            Task { @MainActor in onFailed(L10n.text("player.error_unplayable_url")) }
+            return controller
+        }
 
         // Addons hand back `behaviorHints.proxyHeaders.request` for sources that need auth
         // or a specific referer; AVURLAsset can only take those at construction time.
@@ -712,6 +765,7 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
         let asset = AVURLAsset(url: url, options: options)
         let item = AVPlayerItem(asset: asset)
         item.externalMetadata = metadata()
+        loadArtwork(into: item)
         item.textStyleRules = subtitleStyle.textStyleRules
 
         let player = AVPlayer(playerItem: item)
@@ -728,7 +782,7 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
 
         context.coordinator.appliedSubtitleStyle = subtitleStyle
         context.coordinator.attach(player: player, item: item, resumeAt: resumeAt)
-        configureAudioSession()
+        PlaybackAudioSession.activateMoviePlayback()
         player.play()
         return controller
     }
@@ -799,9 +853,36 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
         controller.player = nil
     }
 
-    private func configureAudioSession() {
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
-        try? AVAudioSession.sharedInstance().setActive(true)
+    /// Addons hand back links they have not always escaped — a space or a bracket in a
+    /// filename is enough — and `URL(string:)` refuses those outright. Escaping what is left
+    /// after the first attempt recovers the common case without touching links that were
+    /// already valid.
+    static func playbackURL(_ string: String) -> URL? {
+        if let url = URL(string: string) { return url }
+        return string
+            .addingPercentEncoding(withAllowedCharacters: .urlFragmentAllowed)
+            .flatMap(URL.init(string:))
+    }
+
+    /// Artwork used to be fetched with `Data(contentsOf:)` while the view was being built: a
+    /// synchronous download on the main thread, holding the whole interface — and the start of
+    /// playback — for as long as the poster host took to answer.
+    private func loadArtwork(into item: AVPlayerItem) {
+        guard let artworkURL = (request.poster ?? request.backdrop).flatMap(URL.init(string:))
+        else { return }
+        // Awaited from the main actor rather than handed to a detached task: the request
+        // suspends instead of blocking, and the player item is only ever touched here.
+        Task { @MainActor in
+            guard let (data, _) = try? await URLSession.shared.data(from: artworkURL),
+                  !data.isEmpty else { return }
+            let artwork = AVMutableMetadataItem()
+            artwork.identifier = .commonIdentifierArtwork
+            artwork.value = data as NSData
+            artwork.dataType = data.starts(with: [0x89, 0x50, 0x4E, 0x47])
+                ? kCMMetadataBaseDataType_PNG as String
+                : kCMMetadataBaseDataType_JPEG as String
+            item.externalMetadata += [artwork]
+        }
     }
 
     /// Drives the tvOS Info panel and Now Playing screen.
@@ -821,16 +902,6 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
         add(.iTunesMetadataTrackSubTitle, request.subtitleLine)
         add(.commonIdentifierDescription, request.streamName)
 
-        if let artworkURL = request.poster ?? request.backdrop,
-           let url = URL(string: artworkURL),
-           let data = try? Data(contentsOf: url) {
-            let artwork = AVMutableMetadataItem()
-            artwork.identifier = .commonIdentifierArtwork
-            artwork.value = data as NSData
-            artwork.dataType = kCMMetadataBaseDataType_PNG as String
-            items.append(artwork)
-        }
-
         return items
     }
 
@@ -838,13 +909,14 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
         private let onProgress: (Double, Double, Bool) -> Void
         private let onFinished: () -> Void
         private let onTick: (Double, Double) -> Void
-        private let onFailed: () -> Void
+        private let onFailed: (String?) -> Void
         private let onPlaybackState: (Bool, Bool) -> Void
         private var statusObserver: NSKeyValueObservation?
         private var timeObserver: Any?
         private var cueObserver: Any?
         private weak var player: AVPlayer?
         private var endObserver: NSObjectProtocol?
+        private var failureObserver: NSObjectProtocol?
         private var timeControlObserver: NSKeyValueObservation?
         private var lastPauseRequest: UUID?
         var appliedSubtitleStyle: SubtitleStyle?
@@ -854,7 +926,7 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
             onProgress: @escaping (Double, Double, Bool) -> Void,
             onFinished: @escaping () -> Void,
             onTick: @escaping (Double, Double) -> Void,
-            onFailed: @escaping () -> Void,
+            onFailed: @escaping (String?) -> Void,
             onPlaybackState: @escaping (Bool, Bool) -> Void
         ) {
             self.onProgress = onProgress
@@ -871,7 +943,19 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
             // construction, so this is the only place the refusal can be caught.
             statusObserver = item.observe(\.status, options: [.new]) { [weak self] item, _ in
                 guard item.status == .failed else { return }
-                Task { @MainActor in self?.onFailed() }
+                let reason = (item.error as NSError?)?.localizedDescription
+                Task { @MainActor in self?.onFailed(reason) }
+            }
+
+            // A container that opens and then stops part-way through never reaches `.failed`;
+            // this is the only notice of it, and without it the picture simply freezes.
+            failureObserver = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemFailedToPlayToEndTime,
+                object: item,
+                queue: .main
+            ) { [weak self] note in
+                let error = note.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? NSError
+                self?.onFailed(error?.localizedDescription)
             }
             timeControlObserver = player.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self] player, _ in
                 let state: (paused: Bool, loading: Bool)
@@ -952,6 +1036,10 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
                 NotificationCenter.default.removeObserver(endObserver)
             }
             endObserver = nil
+            if let failureObserver {
+                NotificationCenter.default.removeObserver(failureObserver)
+            }
+            failureObserver = nil
         }
 
         deinit { detach() }

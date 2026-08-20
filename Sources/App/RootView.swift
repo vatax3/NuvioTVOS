@@ -35,6 +35,12 @@ struct RootView: View {
                 .id(request.id)
         }
         .task {
+            #if DEBUG
+            // Opens playback directly, so the UI tests can exercise the transport's focus
+            // behaviour without an account, an addon or a stream picker in the way. Inert
+            // unless the launch argument is passed.
+            if let harness = PlayerHarness.request() { router.playback = harness }
+            #endif
             // "Add Profile" and the long-press gesture leave the chooser asking for the
             // Profiles settings rather than Home.
             if profiles.consumeProfileManagementRequest() {

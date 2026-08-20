@@ -33,6 +33,10 @@ struct SkipSegmentButton: View {
         }
         .buttonStyle(.plain)
         .focused($isFocused)
+        // Android focuses the card as it appears so a single Select skips. It is also the only
+        // focus target over bare video while it is up, and leaving focus unclaimed there is
+        // what makes the remote look dead.
+        .onAppear { Task { @MainActor in isFocused = true } }
         .accessibilityHint("Skips to \(Int(segment.end / 60)) minutes \(Int(segment.end) % 60) seconds")
     }
 }

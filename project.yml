@@ -14,6 +14,7 @@ schemes:
     test:
       targets:
         - NuvioTVOSTests
+        - NuvioTVOSUITests
 
 settings:
   base:
@@ -185,6 +186,23 @@ targets:
         NSExtension:
           NSExtensionPointIdentifier: com.apple.tv-top-shelf
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NuvioTopShelfProvider
+
+  # The player's remote handling only exists at runtime — whether a press reaches the transport
+  # depends on where tvOS put focus — so it is checked by driving an actual Siri Remote through
+  # XCUIRemote rather than by reasoning about the view.
+  NuvioTVOSUITests:
+    type: bundle.ui-testing
+    platform: tvOS
+    deploymentTarget: "17.0"
+    dependencies:
+      - target: NuvioTVOS
+    sources:
+      - path: UITests
+    settings:
+      base:
+        TEST_TARGET_NAME: NuvioTVOS
+        PRODUCT_BUNDLE_IDENTIFIER: com.nuvio.tvos.uitests
+        GENERATE_INFOPLIST_FILE: YES
 
   NuvioTVOSTests:
     type: bundle.unit-test

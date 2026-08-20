@@ -50,6 +50,10 @@ struct PostPlayOverlay: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Next episode")
+        // The transport is out of the focus graph while a card is up, so the card has to take
+        // the remote itself — otherwise focus lands nowhere and the countdown cannot be
+        // answered at all.
+        .onAppear { Task { @MainActor in continueFocused = true } }
     }
 }
 
@@ -93,5 +97,9 @@ struct StillWatchingOverlay: View {
         .frame(maxWidth: dp(620), alignment: .leading)
         .background(.black.opacity(0.9), in: RoundedRectangle(cornerRadius: NuvioTheme.radii.lg))
         .accessibilityElement(children: .contain)
+        // The transport is out of the focus graph while a card is up, so the card has to take
+        // the remote itself — otherwise focus lands nowhere and the countdown cannot be
+        // answered at all.
+        .onAppear { Task { @MainActor in continueFocused = true } }
     }
 }
