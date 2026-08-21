@@ -206,6 +206,13 @@ final class PlayerSettingsStore: PreferenceStore {
         set { setBool("subtitle_use_forced_subtitles", newValue) }
     }
 
+    /// Off by default: an SDH track is still a correct subtitle track, and a viewer who chose
+    /// one may have chosen it deliberately.
+    var subtitleStripSDH: Bool {
+        get { bool("subtitle_strip_sdh", default: false) }
+        set { setBool("subtitle_strip_sdh", newValue) }
+    }
+
     var subtitleSize: Double {
         get { double("subtitle_size", default: 1.0) }
         set { setDouble("subtitle_size", newValue) }

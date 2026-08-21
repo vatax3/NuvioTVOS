@@ -109,6 +109,10 @@ struct SubtitleStyle: Equatable {
     /// How far these settings reach into subtitles that carry their own styling. Only the MPV
     /// engine can act on it: AVFoundation has no ASS renderer to override in the first place.
     var assOverride: String = SubtitleStyleOverride.scale.mpvValue
+    /// Drop the sound effects and speaker labels an SDH track carries. Both engines honour it,
+    /// by different means: mpv has a native filter for its embedded tracks, and sidecar files
+    /// are drawn by Nuvio, so those go through `SubtitleSDHFilter`.
+    var stripsSDH: Bool = false
 
     static let `default` = SubtitleStyle()
 
@@ -189,25 +193,63 @@ actor SubtitleLoader {
             throw URLError(.badServerResponse)
         }
 
-        let text = decodeSubtitleText(data)
+        let text = Self.decodeSubtitleText(data)
         let cues = SubtitleParser.parse(text)
         cache[subtitle.url] = cues
         return cues
     }
 
-    /// Community SRTs frequently omit their charset. UTF-16 and Windows-1252 need dedicated
-    /// handling; treating their bytes as Latin-1 is what produces boxes/mojibake on screen.
-    private func decodeSubtitleText(_ data: Data) -> String {
+    /// Community SRTs frequently omit their charset, so the bytes are the only clue.
+    ///
+    /// A fallback chain cannot do this, which is why the one that stood here did not: Windows-1252
+    /// assigns a character to very nearly every byte value, so it never fails, and everything
+    /// behind it was unreachable. A Cyrillic, Greek or Turkish subtitle run through it does not
+    /// error — it yields confident mojibake, which is the failure a viewer actually sees.
+    /// Foundation's detector weighs the whole buffer instead of taking the first encoding that
+    /// does not throw.
+    static func decodeSubtitleText(_ data: Data) -> String {
+        // The byte order mark is dropped rather than decoded. Left in, it becomes a real
+        // U+FEFF at the head of the string, and the first thing an SRT file contains is the cue
+        // number — so the first cue of every BOM-marked track failed to parse and simply never
+        // appeared. Windows editors write a UTF-8 BOM by default, which makes this common.
         if data.starts(with: [0xFF, 0xFE]) {
-            return String(data: data, encoding: .utf16LittleEndian) ?? ""
+            return String(data: data.dropFirst(2), encoding: .utf16LittleEndian) ?? ""
         }
         if data.starts(with: [0xFE, 0xFF]) {
-            return String(data: data, encoding: .utf16BigEndian) ?? ""
+            return String(data: data.dropFirst(2), encoding: .utf16BigEndian) ?? ""
         }
-        return String(data: data, encoding: .utf8)
-            ?? String(data: data, encoding: .windowsCP1252)
-            ?? String(data: data, encoding: .isoLatin1)
-            ?? ""
+        if data.starts(with: [0xEF, 0xBB, 0xBF]) {
+            return String(data: data.dropFirst(3), encoding: .utf8) ?? ""
+        }
+        // UTF-8 stays ahead of detection: it is the common case and it is self-validating, so a
+        // buffer that decodes cleanly is never better served by a guess.
+        if let utf8 = String(data: data, encoding: .utf8) { return utf8 }
+
+        var converted: NSString?
+        let detected = NSString.stringEncoding(
+            for: data,
+            // The single-byte encodings addons serve subtitles in. Listing them narrows the
+            // detector's search without excluding anything else it might recognise.
+            encodingOptions: [
+                .suggestedEncodingsKey: [
+                    String.Encoding.windowsCP1252.rawValue,   // Western European
+                    String.Encoding.windowsCP1251.rawValue,   // Cyrillic
+                    String.Encoding.windowsCP1253.rawValue,   // Greek
+                    String.Encoding.windowsCP1254.rawValue,   // Turkish
+                    String.Encoding.windowsCP1250.rawValue,   // Central European
+                    String.Encoding.isoLatin1.rawValue,
+                    String.Encoding.isoLatin2.rawValue
+                ],
+                .allowLossyKey: false
+            ],
+            convertedString: &converted,
+            usedLossyConversion: nil
+        )
+        if detected != 0, let converted { return converted as String }
+
+        // Nothing recognised it. Western European is the likeliest of the remaining guesses and
+        // decodes any byte sequence, so this always returns something rather than a blank track.
+        return String(data: data, encoding: .windowsCP1252) ?? ""
     }
 }
 

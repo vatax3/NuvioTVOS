@@ -523,6 +523,11 @@ struct EssentialPlaybackSettingsContent: View {
                     subtitle: "Show subtitles for foreign dialogue in an otherwise understood track",
                     isOn: $player.subtitleUseForcedSubtitles
                 )
+                SettingsToggle(
+                    title: "Strip SDH subtitles",
+                    subtitle: "Hide sound effects and speaker labels when only an SDH track is offered",
+                    isOn: $player.subtitleStripSDH
+                )
                 SettingsTextFieldRow(
                     title: "Audio language",
                     subtitle: "Preferred track language when a source carries several",

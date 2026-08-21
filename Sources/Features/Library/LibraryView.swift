@@ -80,6 +80,12 @@ struct LibraryView: View {
         .scrollClipDisabled()
         .background(colors.background)
         .sheet(isPresented: $isCreatingCollection) { CollectionEditorView(collection: nil) }
+        // The tab is restored rather than reset. `@State` cannot read the environment at
+        // initialisation, so it is seeded here and written back on every change.
+        .task { filter = Filter(rawValue: settings.layout.libraryFilter) ?? .all }
+        .onChange(of: filter) { _, selection in
+            settings.layout.libraryFilter = selection.rawValue
+        }
     }
 
     @ViewBuilder

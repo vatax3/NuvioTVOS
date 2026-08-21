@@ -2,6 +2,17 @@ import AVFoundation
 import OSLog
 import UIKit
 
+/// A transport instruction from the host to whichever engine is mounted.
+///
+/// It carries the state that is wanted rather than meaning "pause", so the same channel can
+/// resume — the Still Watching prompt pauses through it, and an audio route change resumes
+/// through it. The id makes each instruction distinct, so pausing, resuming and pausing again
+/// are three deliveries rather than one that appears not to change.
+struct PlaybackTransportRequest: Equatable {
+    let id = UUID()
+    let paused: Bool
+}
+
 /// `AVAudioSession` category and activation changes can block while the system reconfigures
 /// audio routes, so they are kept off the main actor: a player start must never stall SwiftUI
 /// focus and animation work. The failure string comes back on the main actor for the caller to
@@ -21,6 +32,45 @@ enum PlaybackAudioSession {
                 Task { @MainActor in onFailure(message) }
             }
         }
+    }
+
+    /// Calls back whenever the audio route changes under playback, with the session already
+    /// re-activated.
+    ///
+    /// AirPods connecting or disconnecting mid-film tears the session down, and the player is
+    /// left paused with no indication why. On iOS the convention is to stay paused — unplugging
+    /// headphones there means "do not play this out loud in public". An Apple TV has no such
+    /// case: the audio simply moves back to the television, in the viewer's own living room,
+    /// with the film still on screen. So the route change is reported and playback resumes.
+    ///
+    /// The caller decides whether to act on it. A viewer who paused deliberately must stay
+    /// paused, and only the player knows that.
+    static func observeRouteChanges(onChange: @escaping @MainActor () -> Void) -> NSObjectProtocol {
+        NotificationCenter.default.addObserver(
+            forName: AVAudioSession.routeChangeNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: .main
+        ) { notification in
+            let raw = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt
+            let reason = raw.flatMap(AVAudioSession.RouteChangeReason.init(rawValue:))
+            switch reason {
+            case .newDeviceAvailable, .oldDeviceUnavailable, .override,
+                 .routeConfigurationChange, .categoryChange:
+                break
+            default:
+                // `.unknown`, `.wakeFromSleep` and `.noSuitableRouteForCategory` are not a
+                // device change under the viewer's hands; resuming on them would be guessing.
+                return
+            }
+            // The session is deactivated as part of the change, so it has to be taken back
+            // before anything can be played through the new route.
+            activateMoviePlayback()
+            Task { @MainActor in onChange() }
+        }
+    }
+
+    static func endObserving(_ token: NSObjectProtocol) {
+        NotificationCenter.default.removeObserver(token)
     }
 }
 

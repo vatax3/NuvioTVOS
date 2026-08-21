@@ -155,8 +155,13 @@ struct CloudLibrarySection: View {
         }
         .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)
         .task {
+            // Restored before the fetch, so the list never renders under the wrong filter.
+            selectedType = CloudLibraryItemType(rawValue: settings.layout.cloudLibraryTypeFilter)
             guard !model.hasLoaded else { return }
             await model.refresh(debrid: settings.debrid)
+        }
+        .onChange(of: selectedType) { _, selection in
+            settings.layout.cloudLibraryTypeFilter = selection?.rawValue ?? ""
         }
         .sheet(item: $selectedItem) { item in
             CloudFilePicker(

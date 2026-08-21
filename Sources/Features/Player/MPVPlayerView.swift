@@ -25,7 +25,7 @@ struct MPVPlayerView: View {
     let subtitleStyle: SubtitleStyle
     let seekTarget: Double?
     let onSeekApplied: () -> Void
-    let pauseRequest: UUID?
+    let pauseRequest: PlaybackTransportRequest?
     let onPauseApplied: () -> Void
     let onChooseEpisode: ((StreamRequest) -> Void)?
     /// Present only when the episode after this one has aired — Android hides the button
@@ -175,6 +175,18 @@ struct MPVPlayerView: View {
         .onExitCommand {
             handleExitCommand()
         }
+        // Escape from a keyboard is not the same event as Menu from a remote.  It never reaches
+        // the press recognizer above — that one filters on `UIPress.PressType.menu`, and a key
+        // is not a button — so it travelled on up and was read as a request to dismiss the
+        // presentation, which from inside a track panel took the whole player down with it and
+        // dropped the viewer back on the stream list.  Claiming it here puts the keyboard on the
+        // same ordered chain as the remote, and returning `.handled` stops it going further.  A
+        // press that arrives twice, once as a key and once as Menu, is absorbed by the echo
+        // window in `PlayerExitPolicy` exactly as any other double delivery is.
+        .onKeyPress(.escape) {
+            handleExitCommand()
+            return .handled
+        }
         // Every other press is read here rather than inside the transport, for the same reason
         // Menu is: while the transport is down its buttons are out of the focus graph, so a
         // handler attached to them cannot be reached.  The sink holds focus instead, and these
@@ -253,8 +265,8 @@ struct MPVPlayerView: View {
             onSeekApplied()
         }
         .onChange(of: pauseRequest) { _, request in
-            guard request != nil else { return }
-            engine.setPaused(true)
+            guard let request else { return }
+            engine.setPaused(request.paused)
             onPauseApplied()
         }
         .onAppear {

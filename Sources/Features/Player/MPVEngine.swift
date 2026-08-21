@@ -190,6 +190,9 @@ final class MPVEngine {
         // Let libass detect BOM/declared encodings. Forcing UTF-8 corrupts valid UTF-16 and
         // Windows-1252 releases into replacement squares.
         setOption("sub-codepage", "auto")
+        // mpv's own filter, for the tracks muxed into the file. Sidecar subtitles never reach it
+        // — Nuvio draws those itself — so `SubtitleSDHFilter` covers them separately.
+        setOption("sub-filter-sdh", subtitleStyle.stripsSDH ? "yes" : "no")
         // Register and select the bundled Noto CJK face. System font names alone are not
         // sufficient: libass loads them through FreeType, which cannot read some sandboxed
         // tvOS system font files even though CoreText can display them.

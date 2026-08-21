@@ -118,6 +118,22 @@ final class LayoutSettingsStore: PreferenceStore {
         set { setOption("focused_poster_backdrop_trailer_playback_target", newValue) }
     }
 
+    // MARK: - Library
+
+    /// The library's type tab, kept across launches. Picking "Series" every single time you open
+    /// the library is the kind of small tax that only shows up in use, never in a screenshot.
+    /// Stored as the raw tab name so the view owns the list of tabs, not the settings layer.
+    var libraryFilter: String {
+        get { string("library_filter", default: "all") }
+        set { setString("library_filter", newValue) }
+    }
+
+    /// Same, for the debrid cloud list. Empty means "every type".
+    var cloudLibraryTypeFilter: String {
+        get { string("cloud_library_type_filter", default: "") }
+        set { setString("cloud_library_type_filter", newValue) }
+    }
+
     // MARK: - Card depth
 
     var cardDepthEnabled: Bool {

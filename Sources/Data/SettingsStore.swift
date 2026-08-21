@@ -149,7 +149,8 @@ final class AppSettings {
             outlineColor: Color(argbHex: player.subtitleOutlineColor),
             outlineWidth: player.subtitleOutlineWidth,
             verticalOffset: player.subtitleVerticalOffset,
-            assOverride: player.subtitleStyleOverride.mpvValue
+            assOverride: player.subtitleStyleOverride.mpvValue,
+            stripsSDH: player.subtitleStripSDH
         )
     }
 

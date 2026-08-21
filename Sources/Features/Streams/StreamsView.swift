@@ -57,15 +57,30 @@ final class StreamsViewModel {
     /// Flat list in display order — used for auto-play selection.
     var orderedStreams: [Stream] { groups.flatMap(\.streams) }
 
-    func load(request: StreamRequest, addonStore: AddonStore, settings: AppSettings) async {
+    /// `retainingResults` keeps what is already on screen while a refresh runs.
+    ///
+    /// Blanking the list first is the obvious way to write this and it is the wrong one: a
+    /// refresh is asked for *because* the viewer is comparing sources, and emptying the list
+    /// throws away both the comparison and whatever the remote had focused. The new set replaces
+    /// the old one when it arrives, in a single assignment. A first load has nothing to keep.
+    func load(
+        request: StreamRequest,
+        addonStore: AddonStore,
+        settings: AppSettings,
+        retainingResults: Bool = false
+    ) async {
         isLoading = true
-        groups = []
+        if !retainingResults {
+            groups = []
+            cacheStates = [:]
+            attributes = [:]
+        }
+        // These are appended to as the load runs, so they are cleared either way — otherwise a
+        // refresh reports every failure twice.
         failedAddons = []
-        cacheStates = [:]
-        attributes = [:]
+        skippedForIdPrefix = []
         filteredOutCount = 0
         queriedAddonCount = 0
-        skippedForIdPrefix = []
         defer { isLoading = false }
 
         // Subtitles come from a different resource and different addons, so they load in
@@ -605,8 +620,14 @@ struct StreamsView: View {
     }
 
     private func reload() async {
-        selectedAddon = nil
-        await model.load(request: request, addonStore: addons, settings: settings)
+        let previousAddon = selectedAddon
+        await model.load(
+            request: request, addonStore: addons, settings: settings, retainingResults: true
+        )
+        // The chosen addon tab survives the refresh, unless that addon returned nothing this
+        // time — a tab with no results behind it would show an empty list and look like a
+        // failure rather than a filter.
+        selectedAddon = model.groups.contains { $0.addonName == previousAddon } ? previousAddon : nil
         await autoPlayIfConfigured()
     }
 

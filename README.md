@@ -42,6 +42,14 @@ func dp(_ value: CGFloat) -> CGFloat { value * NuvioScale.dp }
 Every token in `Sources/DesignSystem/Tokens.swift` goes through that bridge, so a 126 dp poster
 card is 252 pt here and occupies the identical fraction of the screen.
 
+## Upstream parity
+
+Reconciled through NuvioTV **`0.8.7-beta`** (2026-08-20). That means every upstream release up to
+that tag has been read and each change ported, judged not applicable, or declined with a reason —
+not that the two apps have the same feature set, which they cannot. The version lines are
+independent on purpose: see [docs/UPSTREAM-PARITY.md](docs/UPSTREAM-PARITY.md) for the table and
+for how to move the marker forward.
+
 ## What is ported
 
 **Design system** — a 1:1 port of `ui/theme/`:

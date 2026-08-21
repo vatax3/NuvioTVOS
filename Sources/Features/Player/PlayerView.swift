@@ -33,7 +33,7 @@ struct PlayerView: View {
     @State private var requestedSeek: Double?
     /// A one-shot pause command shared by AVPlayer and MPV. The still-watching prompt must
     /// freeze the episode; otherwise it can expire underneath the viewer while they decide.
-    @State private var requestedPause: UUID?
+    @State private var requestedPause: PlaybackTransportRequest?
     @State private var nextEpisodeCountdown: Int?
     @State private var didDeclineNextEpisode = false
     @State private var postPlayTask: Task<Void, Never>?
@@ -59,6 +59,12 @@ struct PlayerView: View {
     /// AVPlayer's transport menu can request a source change.  Keep the picker above the player
     /// instead of navigating back to the Sources route, just like the Android/iOS side panel.
     @State private var showsSourcePanel = false
+
+    /// When the audio route last changed under playback, and the observer that reports it.
+    /// A pause that lands right after a route change was the route change's doing, not the
+    /// viewer's — see `observePlaybackState`.
+    @State private var routeChangedAt: Date?
+    @State private var routeObserver: NSObjectProtocol?
 
     /// MKV and friends have no AVFoundation demuxer, so those files are routed to MPV even when
     /// the viewer left the engine on Default — an unplayable file is worse than a slower decode.
@@ -96,15 +102,26 @@ struct PlayerView: View {
         .ignoresSafeArea()
         .task {
             consecutiveAutoAdvances = PlaybackSessionStore.shared.consumeAutoAdvance(for: request.videoId)
+            // Set before the track loads, so cues are never drawn unfiltered for a frame first.
+            subtitles.stripsSDH = settings.subtitleStyle.stripsSDH
             await loadSubtitles()
             await loadParentalGuide()
+        }
+        // Changing the setting mid-film re-filters what is loaded rather than refetching it.
+        .onChange(of: settings.subtitleStyle.stripsSDH) { _, strips in
+            subtitles.stripsSDH = strips
         }
         // Held for the whole presentation. tvOS keeps itself awake for a system video
         // controller, but the MPV surface is a Metal layer it knows nothing about: without
         // this, Settings -> General -> Sleep After applies during a film exactly as it would to
         // a menu left on screen, and the television sleeps mid-episode.
-        .onAppear { PlaybackWakeLock.acquire() }
+        .onAppear {
+            PlaybackWakeLock.acquire()
+            routeObserver = PlaybackAudioSession.observeRouteChanges { routeChangedAt = Date() }
+        }
         .onDisappear {
+            if let routeObserver { PlaybackAudioSession.endObserving(routeObserver) }
+            routeObserver = nil
             PlaybackWakeLock.release()
             postPlayTask?.cancel()
             parentalGuideTask?.cancel()
@@ -230,7 +247,7 @@ struct PlayerView: View {
                 }
             )
 
-            SubtitleOverlay(cue: subtitles.activeCue, style: settings.subtitleStyle)
+            SubtitleOverlay(cues: subtitles.activeCues, style: settings.subtitleStyle)
 
             if let segment = activeSkipSegment {
                 SkipSegmentButton(segment: segment, action: { skip(segment) })
@@ -334,6 +351,26 @@ struct PlayerView: View {
             showParentalGuideIfReady()
         }
         if paused != wasPaused { schedulePauseOverlay(paused: paused) }
+        if paused, !wasPaused, isRouteChangePause { resumeAfterRouteChange() }
+    }
+
+    /// AirPods connecting or disconnecting deactivates the audio session, and the engine stops
+    /// with it. On an Apple TV that is never the viewer asking to stop — the sound has simply
+    /// moved back to the television — so playback is taken up again.
+    ///
+    /// The window is what keeps this off a deliberate pause: a route change stops playback
+    /// within a frame or two of the notification, and nothing else does. A pause that arrives
+    /// later than this is the viewer's, and is left alone.
+    private var isRouteChangePause: Bool {
+        guard let routeChangedAt else { return false }
+        return Date().timeIntervalSince(routeChangedAt) < 2
+    }
+
+    private func resumeAfterRouteChange() {
+        routeChangedAt = nil
+        // Not while something is deliberately holding playback stopped and waiting on an answer.
+        guard !showsStillWatchingPrompt, nextEpisodeCountdown == nil else { return }
+        requestedPause = PlaybackTransportRequest(paused: false)
     }
 
     /// Android's five seconds: long enough that pausing to read a subtitle or answer the door
@@ -559,7 +596,7 @@ struct PlayerView: View {
            !handledStillWatchingPrompt {
             handledStillWatchingPrompt = true
             showsStillWatchingPrompt = true
-            requestedPause = UUID()
+            requestedPause = PlaybackTransportRequest(paused: true)
             return
         }
         beginPostPlayCountdown()
@@ -717,7 +754,7 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
     let onSelectSubtitle: (Subtitle?) -> Void
     let seekTarget: Double?
     let onSeekApplied: () -> Void
-    let pauseRequest: UUID?
+    let pauseRequest: PlaybackTransportRequest?
     let onPauseApplied: () -> Void
     let onChooseSource: (() -> Void)?
     /// Mirrors the MPV transport's engine button so the switch works in both directions.
@@ -918,7 +955,7 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
         private var endObserver: NSObjectProtocol?
         private var failureObserver: NSObjectProtocol?
         private var timeControlObserver: NSKeyValueObservation?
-        private var lastPauseRequest: UUID?
+        private var lastPauseRequest: PlaybackTransportRequest?
         var appliedSubtitleStyle: SubtitleStyle?
         var appliedMenuSignature: String?
 
@@ -1014,10 +1051,10 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
             return player != nil
         }
 
-        func applyPause(_ request: UUID) -> Bool {
+        func applyPause(_ request: PlaybackTransportRequest) -> Bool {
             guard lastPauseRequest != request else { return false }
             lastPauseRequest = request
-            player?.pause()
+            if request.paused { player?.pause() } else { player?.play() }
             return player != nil
         }
 
