@@ -429,28 +429,39 @@ final class SkipIntroSettingsStore: PreferenceStore {
         set { setString("animeskip_client_id", newValue) }
     }
 
-    /// AniSkip needs no key, so it is the default provider for anime segments.
-    var aniSkipEnabled: Bool {
-        get { bool("aniskip_enabled", default: true) }
-        set { setBool("aniskip_enabled", newValue) }
-    }
-
     /// Overrides IntroDB's endpoint. Empty means the public one — see
     /// `SkipIntroClient.introDbDefaultBaseURL`. Kept so a self-hosted instance can be pointed at,
     /// not because anything has to be configured for skip marks to work.
+    ///
+    /// There is deliberately no "AniSkip on/off" here. The official app has no such setting —
+    /// AniSkip needs no account and always runs — and an inert toggle that suggests otherwise is
+    /// worse than none.
     var introDbApiUrl: String {
         get { string("introdb_api_url", default: "") }
         set { setString("introdb_api_url", newValue) }
     }
 
-    var autoSkipIntro: Bool {
-        get { bool("auto_skip_intro", default: false) }
-        set { setBool("auto_skip_intro", newValue) }
+    /// Which kinds of segment are jumped without waiting for the button.
+    ///
+    /// A set rather than a pair of booleans, because the three kinds are genuinely independent:
+    /// skipping the outro automatically ejects you from the end of an episode, which is a very
+    /// different appetite from skipping an opening. Empty by default, as upstream.
+    ///
+    /// The `auto_skip_intro` and `auto_skip_outro` keys this replaces were never read by
+    /// anything, so nothing is migrated — there is no setting to carry over.
+    var autoSkipSegmentKinds: Set<SkipSegment.Kind> {
+        get { Set(stringList("auto_skip_segment_kinds").compactMap(SkipSegment.Kind.init(rawValue:))) }
+        set { setStringList("auto_skip_segment_kinds", newValue.map(\.rawValue).sorted()) }
     }
 
-    var autoSkipOutro: Bool {
-        get { bool("auto_skip_outro", default: false) }
-        set { setBool("auto_skip_outro", newValue) }
+    func autoSkips(_ kind: SkipSegment.Kind) -> Bool {
+        autoSkipSegmentKinds.contains(kind)
+    }
+
+    func setAutoSkip(_ kind: SkipSegment.Kind, _ enabled: Bool) {
+        var kinds = autoSkipSegmentKinds
+        if enabled { kinds.insert(kind) } else { kinds.remove(kind) }
+        autoSkipSegmentKinds = kinds
     }
 }
 

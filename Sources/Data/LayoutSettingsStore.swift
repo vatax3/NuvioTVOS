@@ -118,6 +118,14 @@ final class LayoutSettingsStore: PreferenceStore {
         set { setOption("focused_poster_backdrop_trailer_playback_target", newValue) }
     }
 
+    /// Collections as rails on Home, after the addon catalogues — where Android puts them by
+    /// default. Without this they existed only inside the Library's Collections tab, which is
+    /// somewhere you have to already know to look.
+    var collectionsOnHomeEnabled: Bool {
+        get { bool("collections_on_home_enabled", default: true) }
+        set { setBool("collections_on_home_enabled", newValue) }
+    }
+
     // MARK: - Library
 
     /// The library's type tab, kept across launches. Picking "Series" every single time you open

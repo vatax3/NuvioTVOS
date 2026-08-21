@@ -326,6 +326,19 @@ struct PlayerView: View {
         }
     }
 
+    /// "Skip automatically" for the kinds the viewer opted into — a setting that existed in the
+    /// UI and was read by nothing until now.
+    ///
+    /// `skip(_:)` records the segment in `dismissedSkipSegments`, which is also what stops the
+    /// button re-appearing, so a segment can only be auto-skipped once. Seeking backwards over an
+    /// opening you have already passed therefore does not jump you forward again.
+    private func autoSkipIfEnabled() {
+        guard let segment = activeSkipSegment,
+              settings.skipIntro.autoSkips(segment.kind)
+        else { return }
+        skip(segment)
+    }
+
     @ViewBuilder
     private var playerStatusOverlay: some View {
         if isLoading, !hasStartedPlayback, settings.player.loadingOverlayEnabled {
@@ -423,6 +436,7 @@ struct PlayerView: View {
         if duration.isFinite, duration > 0 {
             loadSkipSegmentsIfNeeded(duration: duration)
         }
+        autoSkipIfEnabled()
     }
 
     private func loadSkipSegmentsIfNeeded(duration: Double) {
@@ -446,46 +460,101 @@ struct PlayerView: View {
         skipLookupKey = key
 
         let introDbUrl = settings.skipIntro.introDbApiUrl
-        Task {
-            // IntroDB first: it is the only provider that knows about ordinary series, and its
-            // answer is keyed by the IMDb id directly rather than through an anime id mapping.
-            // An empty setting means "use the public endpoint", not "skip this provider".
-            if let imdbId = ids.lazy.first(where: { $0.hasPrefix("tt") }),
-               let season = request.season, let episode = request.episode {
-                let found = await SkipIntroClient.shared.introDbSegments(
-                    baseURL: introDbUrl,
-                    imdbId: String(imdbId.split(separator: ":")[0]),
-                    season: season,
-                    episode: episode
-                )
-                if !found.isEmpty {
-                    guard skipLookupKey == key else { return }
-                    skipSegments = found
-                    return
-                }
-            }
+        let animeSkipClientId = settings.skipIntro.animeSkipEnabled
+            ? settings.skipIntro.animeSkipClientId
+            : ""
+        let imdbId = ids.lazy.first(where: { $0.hasPrefix("tt") })
+            .map { String($0.split(separator: ":")[0]) }
+        let season = request.season
+        let episode = request.episode
 
-            let segments: [SkipSegment]
-            if let directMAL {
-                segments = await SkipIntroClient.shared.segments(
-                    malId: directMAL.id, episode: directMAL.episode, episodeLength: duration
+        Task {
+            // All three at once, then merged category by category. Asking them in turn and taking
+            // the first non-empty answer loses segments whenever a provider is partly populated,
+            // which is normal: IntroDB has an intro but no outro for some titles, and the outro
+            // AniSkip holds would never have been asked for.
+            async let introDb: [SkipSegment] = {
+                guard let imdbId, let season, let episode else { return [] }
+                // An empty setting means "use the public endpoint", not "skip this provider".
+                return await SkipIntroClient.shared.introDbSegments(
+                    baseURL: introDbUrl, imdbId: imdbId, season: season, episode: episode
                 )
-            } else if let imdbId = ids.lazy.first(where: { $0.hasPrefix("tt") }),
-                      let episode = request.episode,
-                      let malId = await SkipIntroClient.shared.malId(
-                        imdbId: String(imdbId.split(separator: ":")[0]),
-                        // MAL splits an anime into one title per season, and so does the mapping.
-                        season: request.season ?? 1
-                      ) {
-                segments = await SkipIntroClient.shared.segments(
-                    malId: malId, episode: episode, episodeLength: duration
+            }()
+
+            async let anime: (aniSkip: [SkipSegment], animeSkip: [SkipSegment]) = {
+                if let directMAL {
+                    // A `mal:` id names the title outright, so no mapping is needed and there is
+                    // no AniList id to reach Anime-Skip with.
+                    let segments = await SkipIntroClient.shared.segments(
+                        malId: directMAL.id, episode: directMAL.episode, episodeLength: duration
+                    )
+                    return (segments, [])
+                }
+                guard let imdbId, let episode else { return ([], []) }
+                let entries = await SkipIntroClient.shared.armEntries(imdbId: imdbId)
+                guard !entries.isEmpty else { return ([], []) }
+
+                let aniSkip: [SkipSegment]
+                if let malId = SkipIntroClient.malId(
+                    fromSeasonEntries: entries.map(\.myanimelist), season: season ?? 1
+                ) {
+                    aniSkip = await SkipIntroClient.shared.segments(
+                        malId: malId, episode: episode, episodeLength: duration
+                    )
+                } else {
+                    aniSkip = []
+                }
+
+                let animeSkip = await Self.animeSkipSegments(
+                    entries: entries,
+                    season: season,
+                    episode: episode,
+                    episodeLength: duration,
+                    clientId: animeSkipClientId
                 )
-            } else {
-                segments = []
-            }
+                return (aniSkip, animeSkip)
+            }()
+
+            let (aniSkip, animeSkip) = await anime
+            // Priority order, as upstream: AniSkip knows anime natively, Anime-Skip second,
+            // IntroDB last because it is the broadest and the least specific.
+            let merged = SkipIntroClient.merge([aniSkip, animeSkip, await introDb])
+
             guard skipLookupKey == key else { return }
-            skipSegments = segments
+            skipSegments = merged
         }
+    }
+
+    /// Anime-Skip is keyed by AniList id, per season. Upstream tries the season's own id first
+    /// with no season filter, then falls back to the first season's id *with* one — a show whose
+    /// seasons are separate AniList entries and one whose seasons live under a single entry are
+    /// both common, and the two attempts cover each case.
+    private static func animeSkipSegments(
+        entries: [SkipIntroClient.ArmEntry],
+        season: Int?,
+        episode: Int,
+        episodeLength: Double,
+        clientId: String
+    ) async -> [SkipSegment] {
+        guard !clientId.isEmpty else { return [] }
+        let anilistIds = entries.map(\.anilist)
+        let seasonSpecific = SkipIntroClient.anilistId(
+            fromSeasonEntries: anilistIds, season: season ?? 1
+        )
+        let first = anilistIds.compactMap { $0 }.first
+
+        if let seasonSpecific {
+            let found = await SkipIntroClient.shared.animeSkipSegments(
+                anilistId: seasonSpecific, episode: episode, season: nil,
+                episodeLength: episodeLength, clientId: clientId
+            )
+            if !found.isEmpty { return found }
+        }
+        guard let first, first != seasonSpecific else { return [] }
+        return await SkipIntroClient.shared.animeSkipSegments(
+            anilistId: first, episode: episode, season: season,
+            episodeLength: episodeLength, clientId: clientId
+        )
     }
 
     private func skip(_ segment: SkipSegment) {

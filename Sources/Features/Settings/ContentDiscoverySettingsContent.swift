@@ -192,8 +192,10 @@ struct IntegrationsHubContent: View {
         case .tmdb: return settings.tmdb.enabled && !settings.tmdb.apiKey.isEmpty ? "On" : "Off"
         case .mdblist: return settings.mdblist.enabled && !settings.mdblist.apiKey.isEmpty ? "On" : "Off"
         case .animeSkip:
+            // IntroDB and AniSkip always run, so the card is never truly "off" — what this
+            // reports is whether the viewer added anything to them.
             let skip = settings.skipIntro
-            return skip.aniSkipEnabled || skip.animeSkipEnabled ? "On" : "Off"
+            return skip.animeSkipEnabled || !skip.autoSkipSegmentKinds.isEmpty ? "On" : "Off"
         }
     }
 }

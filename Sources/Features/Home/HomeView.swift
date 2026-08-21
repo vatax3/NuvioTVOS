@@ -62,6 +62,7 @@ struct HomeView: View {
 /// The rail stack shared by all three home layouts.
 struct HomeRailList: View {
     @Environment(LibraryStore.self) private var library
+    @Environment(CollectionStore.self) private var collections
     @Environment(AppSettings.self) private var settings
     @Environment(Router.self) private var router
 
@@ -83,6 +84,19 @@ struct HomeRailList: View {
     private var firstCardKey: String? {
         continueWatching.first?.preview.rowKey
             ?? model.rows.first(where: { !$0.items.isEmpty })?.items.first?.rowKey
+            ?? homeCollections.first.flatMap {
+                collections.items(in: $0.id, library: library).first?.rowKey
+            }
+    }
+
+    /// Collections worth a rail: an empty one is a heading over nothing, and Home is not where
+    /// you go to fill it. They sit after the addon catalogues, which is where Android puts them
+    /// when the viewer has not reordered anything.
+    private var homeCollections: [MediaCollection] {
+        guard settings.layout.collectionsOnHomeEnabled else { return [] }
+        return collections.collections.filter {
+            !collections.items(in: $0.id, library: library).isEmpty
+        }
     }
 
     var body: some View {
@@ -116,6 +130,11 @@ struct HomeRailList: View {
                         cardFocus: $focusedCardKey
                     )
                 }
+            }
+
+            ForEach(homeCollections) { collection in
+                // Browsing, not managing: the tail edit button belongs to the Library tab.
+                CollectionRail(collection: collection, showsEditAffordance: false)
             }
         }
         // Claim focus for the content the moment there is a card to hold it. Without this the

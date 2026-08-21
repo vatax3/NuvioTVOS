@@ -390,9 +390,10 @@ struct AnimeSkipSettingsCard: View {
             SettingsCard(
                 title: "Skip segments",
                 footnote: """
-                Nothing here needs configuring. Ordinary series come from IntroDB and anime from \
-                AniSkip, both of which answer without an account. Anime-Skip is an optional third \
-                source and is the only one that needs a client id, from anime-skip.com.
+                Nothing here needs configuring. IntroDB and AniSkip are queried together for \
+                every episode and neither wants an account — each kind of segment is taken from \
+                whichever knows it. Anime-Skip is an optional third source, and the only one that \
+                needs a client id, from anime-skip.com.
                 """
             ) {
                 SettingsTextFieldRow(
@@ -401,13 +402,8 @@ struct AnimeSkipSettingsCard: View {
                     text: $skip.introDbApiUrl
                 )
                 SettingsToggle(
-                    title: "AniSkip",
-                    subtitle: "Community intro/outro timings",
-                    systemImage: "forward.fill",
-                    isOn: $skip.aniSkipEnabled
-                )
-                SettingsToggle(
                     title: "Anime-Skip",
+                    subtitle: "A third source for anime; needs a client id",
                     systemImage: "forward.frame",
                     isOn: $skip.animeSkipEnabled
                 )
@@ -418,18 +414,36 @@ struct AnimeSkipSettingsCard: View {
                         text: $skip.animeSkipClientId
                     )
                 }
-                SettingsToggle(
-                    title: "Skip intros automatically",
-                    subtitle: "Jump without waiting for the button",
-                    isOn: $skip.autoSkipIntro
+                autoSkipToggle(
+                    .intro, title: "Skip intros automatically",
+                    subtitle: "Jump without waiting for the button"
                 )
-                SettingsToggle(
-                    title: "Skip outros automatically",
-                    isOn: $skip.autoSkipOutro
+                autoSkipToggle(
+                    .recap, title: "Skip recaps automatically",
+                    subtitle: "Jump past the previously-on"
+                )
+                autoSkipToggle(
+                    .outro, title: "Skip outros automatically",
+                    subtitle: "Jumps to the end of the episode as the credits begin"
                 )
             }
 
         }
+    }
+
+    /// The store keeps a set rather than a toggle per kind, so each row binds through it.
+    private func autoSkipToggle(
+        _ kind: SkipSegment.Kind, title: String, subtitle: String
+    ) -> some View {
+        let skip = settings.skipIntro
+        return SettingsToggle(
+            title: title,
+            subtitle: subtitle,
+            isOn: Binding(
+                get: { skip.autoSkips(kind) },
+                set: { skip.setAutoSkip(kind, $0) }
+            )
+        )
     }
 }
 

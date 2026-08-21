@@ -845,7 +845,16 @@ actor SkipIntroClient {
     static let shared = SkipIntroClient()
     private var cache: [String: [SkipSegment]] = [:]
     /// One id mapping serves every episode of a series, so it is kept for the session.
-    private var armCache: [String: [Int?]] = [:]
+    private var armCache: [String: [ArmEntry]] = [:]
+    /// Anime-Skip's own show ids, per AniList id. Misses are cached too, so a title it has never
+    /// heard of is asked about once rather than on every episode.
+    private var animeSkipShowCache: [String: [String]] = [:]
+
+    /// One season's worth of the anime id mappings, as ARM returns them.
+    struct ArmEntry: Decodable, Sendable {
+        let myanimelist: Int?
+        let anilist: Int?
+    }
 
     /// AniSkip is keyed by MyAnimeList id; the ARM service maps IMDb ids across to MAL.
     func segments(malId: Int, episode: Int, episodeLength: Double) async -> [SkipSegment] {
@@ -905,6 +914,34 @@ actor SkipIntroClient {
         return entries.compactMap { $0 }.first
     }
 
+    /// The same indexing for AniList, which is what Anime-Skip is keyed by.
+    nonisolated static func anilistId(fromSeasonEntries entries: [Int?], season: Int) -> Int? {
+        malId(fromSeasonEntries: entries, season: season)
+    }
+
+    // MARK: Merging providers
+
+    /// Fills each category — opening, ending, recap — from the first provider that has it.
+    ///
+    /// The alternative, and what this replaces, is to take whichever provider answers first and
+    /// stop. That loses segments the moment a provider is partially populated, which is common:
+    /// IntroDB has an intro but no outro for *One Piece*, so an early return meant AniSkip was
+    /// never asked and the outro simply did not exist as far as the player was concerned.
+    ///
+    /// `results` must be given in priority order. `.mixed` belongs to no category and is dropped,
+    /// as upstream drops it — it is the fallback for a skip type nobody recognises, and an
+    /// unrecognised type has no reliable meaning to offer a viewer.
+    nonisolated static func merge(_ results: [[SkipSegment]]) -> [SkipSegment] {
+        var chosen: [SkipSegment.Kind: SkipSegment] = [:]
+        for provider in results {
+            for segment in provider where segment.kind != .mixed {
+                if chosen[segment.kind] == nil { chosen[segment.kind] = segment }
+            }
+        }
+        // Chronological, so the button appears in the order the segments play.
+        return chosen.values.sorted { $0.start < $1.start }
+    }
+
     /// IntroDB covers everything AniSkip does not — ordinary series rather than anime — and is
     /// where the Android app gets intro, recap and outro marks for the rest of the catalogue.
     ///
@@ -959,31 +996,151 @@ actor SkipIntroClient {
         return segments
     }
 
-    /// Maps an IMDb id to a MyAnimeList id so AniSkip can be queried at all.
+    // MARK: Anime-Skip
+
+    /// The third provider, and the only one that needs anything of the viewer: a client id from
+    /// anime-skip.com. Upstream gates it the same way, so with no id this is simply absent and
+    /// the other two carry the feature.
+    ///
+    /// Two GraphQL round trips — the show, then its episodes — because Anime-Skip is keyed by its
+    /// own show ids and only maps in from AniList.
+    func animeSkipSegments(
+        anilistId: Int,
+        episode: Int,
+        season: Int?,
+        episodeLength: Double,
+        clientId: String
+    ) async -> [SkipSegment] {
+        let trimmed = clientId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+
+        for showId in await animeSkipShowIds(anilistId: anilistId, clientId: trimmed) {
+            let query = "{ findEpisodesByShowId(showId: \"\(showId)\") "
+                + "{ season number timestamps { at type { name } } } }"
+            guard let response = try? await HTTP.post(
+                Self.animeSkipEndpoint,
+                headers: ["X-Client-ID": trimmed],
+                json: AnimeSkipRequest(query: query),
+                as: AnimeSkipResponse.self
+            ) else { continue }
+
+            let segments = Self.segments(
+                from: response.data?.findEpisodesByShowId ?? [],
+                episode: episode,
+                season: season,
+                episodeLength: episodeLength
+            )
+            if !segments.isEmpty { return segments }
+        }
+        return []
+    }
+
+    static let animeSkipEndpoint = "https://api.anime-skip.com/graphql"
+
+    struct AnimeSkipRequest: Encodable, Sendable {
+        let query: String
+    }
+
+    struct AnimeSkipResponse: Decodable, Sendable {
+        struct Show: Decodable, Sendable { let id: String }
+        struct TimestampType: Decodable, Sendable { let name: String }
+        struct Timestamp: Decodable, Sendable {
+            let at: Double
+            let type: TimestampType
+        }
+        struct Episode: Decodable, Sendable {
+            /// Strings on the wire, not numbers — GraphQL ids rather than integers.
+            let season: String?
+            let number: String?
+            let timestamps: [Timestamp]?
+        }
+        struct DataBlock: Decodable, Sendable {
+            let findShowsByExternalId: [Show]?
+            let findEpisodesByShowId: [Episode]?
+        }
+        let data: DataBlock?
+    }
+
+    /// Anime-Skip publishes **points in time, not ranges**: a timestamp marks where a section
+    /// begins, and it runs until the next one. The final timestamp has no successor, so it is
+    /// closed with the episode's own duration — upstream uses `Double.MAX_VALUE` there, which
+    /// would offer to skip the entire remainder of the file.
+    nonisolated static func segments(
+        from episodes: [AnimeSkipResponse.Episode],
+        episode: Int,
+        season: Int?,
+        episodeLength: Double
+    ) -> [SkipSegment] {
+        guard let match = episodes.first(where: { candidate in
+            candidate.number.flatMap(Int.init) == episode
+                && (season == nil || candidate.season.flatMap(Int.init) == season)
+        }), let timestamps = match.timestamps else { return [] }
+
+        let sorted = timestamps.sorted { $0.at < $1.at }
+        return sorted.enumerated().compactMap { index, timestamp in
+            guard let kind = animeSkipKind(timestamp.type.name) else { return nil }
+            let end = index + 1 < sorted.count ? sorted[index + 1].at : episodeLength
+            guard end > timestamp.at else { return nil }
+            return SkipSegment(kind: kind, start: timestamp.at, end: end)
+        }
+    }
+
+    /// Anime-Skip names its section types in prose, and the names carry the "new"/"mixed"
+    /// qualifiers that AniSkip encodes in its skip type. Anything unrecognised is dropped rather
+    /// than guessed at.
+    nonisolated static func animeSkipKind(_ name: String) -> SkipSegment.Kind? {
+        switch name.lowercased() {
+        case "intro", "new intro", "mixed intro": return .intro
+        case "credits", "new credits", "mixed credits": return .outro
+        case "recap": return .recap
+        default: return nil
+        }
+    }
+
+    private func animeSkipShowIds(anilistId: Int, clientId: String) async -> [String] {
+        let key = String(anilistId)
+        if let hit = animeSkipShowCache[key] { return hit }
+
+        let query = "{ findShowsByExternalId(service: ANILIST, serviceId: \"\(anilistId)\") { id } }"
+        let response = try? await HTTP.post(
+            Self.animeSkipEndpoint,
+            headers: ["X-Client-ID": clientId],
+            json: AnimeSkipRequest(query: query),
+            as: AnimeSkipResponse.self
+        )
+        let ids = response?.data?.findShowsByExternalId?.map(\.id) ?? []
+        // A miss is worth remembering: without this, a title Anime-Skip has never heard of costs
+        // a round trip on every single episode.
+        animeSkipShowCache[key] = ids
+        return ids
+    }
+
+    // MARK: ARM id mapping
+
+    /// Maps an IMDb id to the anime ids the two anime providers are keyed by.
     ///
     /// The route matters and the shape matters. `/ids?source=imdb` — which this used to call —
     /// answers 400 for every IMDb id; the mapping lives at `/imdb?id=`, and it answers with an
     /// **array, one entry per season**, because a single IMDb entry covers an anime that MAL
     /// splits into a separate title per season. Taking element zero would give season one's
     /// opening for every season of a long-running show.
-    func malId(imdbId: String, season: Int) async -> Int? {
+    func armEntries(imdbId: String) async -> [ArmEntry] {
         let key = "arm-\(imdbId)"
-        struct Entry: Decodable { let myanimelist: Int? }
+        if let hit = armCache[key] { return hit }
 
-        let entries: [Int?]
-        if let hit = armCache[key] {
-            entries = hit
-        } else {
-            guard let encoded = imdbId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-                  let fetched = try? await HTTP.get(
-                    "https://arm.haglund.dev/api/v2/imdb?id=\(encoded)&include=myanimelist",
-                    as: [Entry].self
-                  )
-            else { return nil }
-            entries = fetched.map(\.myanimelist)
-            armCache[key] = entries
-        }
-        return Self.malId(fromSeasonEntries: entries, season: season)
+        guard let encoded = imdbId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let fetched = try? await HTTP.get(
+                "https://arm.haglund.dev/api/v2/imdb?id=\(encoded)&include=myanimelist,anilist",
+                as: [ArmEntry].self
+              )
+        else { return [] }
+        armCache[key] = fetched
+        return fetched
+    }
+
+    func malId(imdbId: String, season: Int) async -> Int? {
+        let entries = await armEntries(imdbId: imdbId)
+        return Self.malId(fromSeasonEntries: entries.map(\.myanimelist), season: season)
     }
 }
 

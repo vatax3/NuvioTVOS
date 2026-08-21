@@ -11,6 +11,9 @@ struct CollectionRail: View {
     @Environment(Router.self) private var router
 
     let collection: MediaCollection
+    /// Home browses, the Library manages. The tail button is the whole of a collection's
+    /// management surface, so it belongs where a viewer went looking for it.
+    var showsEditAffordance = true
 
     @State private var isEditing = false
 
@@ -44,18 +47,20 @@ struct CollectionRail: View {
                         )
                     }
 
-                    Button(action: { isEditing = true }) {
-                        VStack(spacing: NuvioTheme.spacing.sm) {
-                            Image(systemName: "slider.horizontal.3")
-                                .font(.system(size: NuvioTheme.sizes.icons.lg))
-                            Text("Edit")
-                                .nuvioText(NuvioTextStyles.button)
+                    if showsEditAffordance {
+                        Button(action: { isEditing = true }) {
+                            VStack(spacing: NuvioTheme.spacing.sm) {
+                                Image(systemName: "slider.horizontal.3")
+                                    .font(.system(size: NuvioTheme.sizes.icons.lg))
+                                Text("Edit")
+                                    .nuvioText(NuvioTextStyles.button)
+                            }
+                            .foregroundStyle(colors.textSecondary)
+                            .frame(width: metrics.width, height: metrics.height)
+                            .background(colors.backgroundCard)
                         }
-                        .foregroundStyle(colors.textSecondary)
-                        .frame(width: metrics.width, height: metrics.height)
-                        .background(colors.backgroundCard)
+                        .buttonStyle(NuvioCardButtonStyle(cornerRadius: metrics.cornerRadius))
                     }
-                    .buttonStyle(NuvioCardButtonStyle(cornerRadius: metrics.cornerRadius))
                 }
                 .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)
                 .padding(.vertical, NuvioTheme.spacing.sm)
@@ -100,6 +105,24 @@ struct CollectionEditorView: View {
                             text: $name
                         )
                         symbolPicker
+                    }
+
+                    if let collection, collections.collections.count > 1 {
+                        SettingsCard(
+                            title: "Order",
+                            footnote: "Collections appear on Home in this order, after your catalogs."
+                        ) {
+                            SettingsRow(
+                                title: "Move up",
+                                systemImage: "arrow.up",
+                                action: { collections.move(collection.id, by: -1) }
+                            )
+                            SettingsRow(
+                                title: "Move down",
+                                systemImage: "arrow.down",
+                                action: { collections.move(collection.id, by: 1) }
+                            )
+                        }
                     }
 
                     if let collection, !collection.itemKeys.isEmpty {

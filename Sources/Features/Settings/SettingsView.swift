@@ -552,6 +552,17 @@ struct LayoutSettingsContent: View {
                 SettingsToggle(title: "Show unaired next up", isOn: $layout.showUnairedNextUp)
             }
 
+            SettingsCard(
+                title: "Collections",
+                footnote: "Your own folders of titles, built from the Library tab."
+            ) {
+                SettingsToggle(
+                    title: "Show on Home",
+                    subtitle: "One rail per collection, after your catalogs",
+                    isOn: $layout.collectionsOnHomeEnabled
+                )
+            }
+
             SettingsCard(title: "Catalogs") {
                 SettingsToggle(title: "Show addon name", subtitle: "Next to each rail title", isOn: $layout.catalogAddonNameEnabled)
                 SettingsToggle(title: "Show type suffix", subtitle: "Append Movies / Series to rail titles", isOn: $layout.catalogTypeSuffixEnabled)
