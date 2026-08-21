@@ -26,6 +26,9 @@ a week of being set, and would force empty releases to keep it true.
 A line that is genuinely hard to classify usually belongs in **declined** with the doubt written
 down, not in **ported** with an optimistic guess.
 
+See also [FEATURE-AUDIT.md](FEATURE-AUDIT.md), which asks the complementary question: not "have
+we kept up with their releases" but "does what we already shipped actually work".
+
 ## Ported
 
 | Upstream | Release | Here |

@@ -146,6 +146,10 @@ app worse:
 
 ## Not implemented
 
+A mechanical audit of what is missing, and of the settings that exist without a consumer, is in
+[docs/FEATURE-AUDIT.md](docs/FEATURE-AUDIT.md) — including the fact that "collections" here and
+"collections" upstream are different features that share a name.
+
 Four things from the Android surface are missing, and each for a concrete reason:
 
 1. **Torrent streaming without a debrid service.** Android streams a torrent directly through a
