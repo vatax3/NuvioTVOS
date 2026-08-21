@@ -844,28 +844,50 @@ struct SkipSegment: Hashable, Sendable {
 actor SkipIntroClient {
     static let shared = SkipIntroClient()
     private var cache: [String: [SkipSegment]] = [:]
+    /// One id mapping serves every episode of a series, so it is kept for the session.
+    private var armCache: [String: [Int?]] = [:]
 
-    /// AniSkip is keyed by MyAnimeList id; the ARM service maps IMDb/TVDB ids across to MAL.
+    /// AniSkip is keyed by MyAnimeList id; the ARM service maps IMDb ids across to MAL.
     func segments(malId: Int, episode: Int, episodeLength: Double) async -> [SkipSegment] {
         let key = "\(malId)-\(episode)"
         if let hit = cache[key] { return hit }
 
-        struct Interval: Decodable { let start_time: Double?; let end_time: Double? }
-        struct Result: Decodable { let interval: Interval?; let skip_type: String? }
-        struct Response: Decodable { let found: Bool?; let results: [Result]? }
-
+        let types = ["op", "ed", "recap", "mixed-op", "mixed-ed"]
+            .map { "types[]=\($0)" }
+            .joined(separator: "&")
         let url = "https://api.aniskip.com/v2/skip-times/\(malId)/\(episode)"
-            + "?types=op&types=ed&types=recap&types=mixed-op&types=mixed-ed"
-            + "&episodeLength=\(Int(episodeLength))"
+            + "?\(types)&episodeLength=\(Int(episodeLength))"
 
-        guard let response = try? await HTTP.get(url, as: Response.self),
-              response.found == true, let results = response.results else { return [] }
+        guard let response = try? await HTTP.get(url, as: AniSkipResponse.self) else { return [] }
+        let segments = Self.segments(from: response)
+        cache[key] = segments
+        return segments
+    }
 
-        let segments = results.compactMap { result -> SkipSegment? in
-            guard let start = result.interval?.start_time,
-                  let end = result.interval?.end_time else { return nil }
+    /// AniSkip answers in camelCase. Decoded as snake_case it did not fail — the fields simply
+    /// came back nil, every result was dropped, and a title with marks looked exactly like a
+    /// title without any. Which is why the shape is now pinned by a test against a real payload.
+    struct AniSkipResponse: Decodable, Sendable {
+        struct Interval: Decodable, Sendable {
+            let startTime: Double?
+            let endTime: Double?
+        }
+        struct Result: Decodable, Sendable {
+            let interval: Interval?
+            let skipType: String?
+        }
+        let found: Bool?
+        let results: [Result]?
+    }
+
+    nonisolated static func segments(from response: AniSkipResponse) -> [SkipSegment] {
+        guard response.found == true, let results = response.results else { return [] }
+        return results.compactMap { result -> SkipSegment? in
+            guard let start = result.interval?.startTime,
+                  let end = result.interval?.endTime,
+                  end > start else { return nil }
             let kind: SkipSegment.Kind
-            switch result.skip_type {
+            switch result.skipType {
             case "op", "mixed-op": kind = .intro
             case "ed", "mixed-ed": kind = .outro
             case "recap": kind = .recap
@@ -873,15 +895,26 @@ actor SkipIntroClient {
             }
             return SkipSegment(kind: kind, start: start, end: end)
         }
-        cache[key] = segments
-        return segments
+    }
+
+    /// Picks the MAL id for a season out of ARM's per-season array. Separated from the request
+    /// so the indexing — one-based seasons against a zero-based dense array, with nulls for
+    /// seasons MAL has no title for — can be checked without a network.
+    nonisolated static func malId(fromSeasonEntries entries: [Int?], season: Int) -> Int? {
+        if season >= 1, season <= entries.count, let mal = entries[season - 1] { return mal }
+        return entries.compactMap { $0 }.first
     }
 
     /// IntroDB covers everything AniSkip does not — ordinary series rather than anime — and is
     /// where the Android app gets intro, recap and outro marks for the rest of the catalogue.
-    /// Its base URL is a build-time secret in the official app, absent from its public source,
-    /// so it is asked for rather than hard-coded; with no URL configured this simply returns
-    /// nothing and the AniSkip path is unaffected.
+    ///
+    /// The Android build reads its base URL from a private `local.properties`, which is why this
+    /// used to ask the viewer for it and did nothing until they supplied one. That was a wrong
+    /// reading of a build convention: the service publishes an OpenAPI document at
+    /// `api.introdb.app/openapi.json` describing this very route, and it answers without a key.
+    /// `SkipIntroSettingsStore.introDbApiUrl` now only overrides the default.
+    static let introDbDefaultBaseURL = "https://api.introdb.app"
+
     func introDbSegments(baseURL: String, imdbId: String, season: Int, episode: Int) async -> [SkipSegment] {
         let key = "introdb-\(imdbId)-\(season)-\(episode)"
         if let hit = cache[key] { return hit }
@@ -905,10 +938,10 @@ actor SkipIntroClient {
             let outro: Segment?
         }
 
-        let base = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let override = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        guard !base.isEmpty,
-              let encoded = imdbId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
+        let base = override.isEmpty ? Self.introDbDefaultBaseURL : override
+        guard let encoded = imdbId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
         else { return [] }
 
         let url = "\(base)/segments?imdb_id=\(encoded)&season=\(season)&episode=\(episode)"
@@ -926,18 +959,31 @@ actor SkipIntroClient {
         return segments
     }
 
-    /// Maps an IMDb/TVDB id to a MAL id so AniSkip can be queried at all.
-    func malId(imdbId: String?, tvdbId: Int?) async -> Int? {
-        struct Response: Decodable { let myanimelist: Int? }
-        var query: String?
-        if let tvdbId { query = "thetvdb=\(tvdbId)" }
-        else if let imdbId { query = "imdb=\(imdbId)" }
-        guard let query else { return nil }
-        let response = try? await HTTP.get(
-            "https://arm.haglund.dev/api/v2/ids?source=\(query.split(separator: "=")[0])&id=\(query.split(separator: "=")[1])",
-            as: Response.self
-        )
-        return response?.myanimelist
+    /// Maps an IMDb id to a MyAnimeList id so AniSkip can be queried at all.
+    ///
+    /// The route matters and the shape matters. `/ids?source=imdb` — which this used to call —
+    /// answers 400 for every IMDb id; the mapping lives at `/imdb?id=`, and it answers with an
+    /// **array, one entry per season**, because a single IMDb entry covers an anime that MAL
+    /// splits into a separate title per season. Taking element zero would give season one's
+    /// opening for every season of a long-running show.
+    func malId(imdbId: String, season: Int) async -> Int? {
+        let key = "arm-\(imdbId)"
+        struct Entry: Decodable { let myanimelist: Int? }
+
+        let entries: [Int?]
+        if let hit = armCache[key] {
+            entries = hit
+        } else {
+            guard let encoded = imdbId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+                  let fetched = try? await HTTP.get(
+                    "https://arm.haglund.dev/api/v2/imdb?id=\(encoded)&include=myanimelist",
+                    as: [Entry].self
+                  )
+            else { return nil }
+            entries = fetched.map(\.myanimelist)
+            armCache[key] = entries
+        }
+        return Self.malId(fromSeasonEntries: entries, season: season)
     }
 }
 

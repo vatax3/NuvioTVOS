@@ -431,14 +431,14 @@ struct MPVPlayerView: View {
     /// returns the value just written rather than what the focus engine did with it, which is
     /// exactly when the answer matters: a retry loop asking the binding whether its own write
     /// landed always hears yes, stops, and leaves the transport on screen with the remote dead.
-    /// `PlayerFocusSystem` asks UIKit instead.
+    /// `FocusSystemProbe` asks UIKit instead.
     private var focusNeedsRepair: Bool {
         switch PlayerRemotePolicy.focusOwner(remoteState) {
         // A panel or one of the host's cards owns focus; the player is not entitled to an
         // opinion about where it sits.
         case .unmanaged: return false
-        case .sink: return !PlayerFocusSystem.hasFocusedItem || controlFocus != .sink
-        case .transport, .progress: return !PlayerFocusSystem.hasFocusedItem || controlFocus == .sink
+        case .sink: return !FocusSystemProbe.hasFocusedItem || controlFocus != .sink
+        case .transport, .progress: return !FocusSystemProbe.hasFocusedItem || controlFocus == .sink
         }
     }
 

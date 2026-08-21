@@ -449,8 +449,8 @@ struct PlayerView: View {
         Task {
             // IntroDB first: it is the only provider that knows about ordinary series, and its
             // answer is keyed by the IMDb id directly rather than through an anime id mapping.
-            if !introDbUrl.isEmpty,
-               let imdbId = ids.lazy.first(where: { $0.hasPrefix("tt") }),
+            // An empty setting means "use the public endpoint", not "skip this provider".
+            if let imdbId = ids.lazy.first(where: { $0.hasPrefix("tt") }),
                let season = request.season, let episode = request.episode {
                 let found = await SkipIntroClient.shared.introDbSegments(
                     baseURL: introDbUrl,
@@ -473,7 +473,9 @@ struct PlayerView: View {
             } else if let imdbId = ids.lazy.first(where: { $0.hasPrefix("tt") }),
                       let episode = request.episode,
                       let malId = await SkipIntroClient.shared.malId(
-                        imdbId: String(imdbId.split(separator: ":")[0]), tvdbId: nil
+                        imdbId: String(imdbId.split(separator: ":")[0]),
+                        // MAL splits an anime into one title per season, and so does the mapping.
+                        season: request.season ?? 1
                       ) {
                 segments = await SkipIntroClient.shared.segments(
                     malId: malId, episode: episode, episodeLength: duration

@@ -390,15 +390,14 @@ struct AnimeSkipSettingsCard: View {
             SettingsCard(
                 title: "Skip segments",
                 footnote: """
-                AniSkip covers anime and needs no account; Anime-Skip needs a client id from \
-                anime-skip.com. Ordinary series come from IntroDB, whose endpoint the official \
-                app compiles in as a private build value — without it, skip marks appear on \
-                anime only.
+                Nothing here needs configuring. Ordinary series come from IntroDB and anime from \
+                AniSkip, both of which answer without an account. Anime-Skip is an optional third \
+                source and is the only one that needs a client id, from anime-skip.com.
                 """
             ) {
                 SettingsTextFieldRow(
                     title: "IntroDB endpoint",
-                    subtitle: "Base URL, e.g. https://…  — leave empty to disable",
+                    subtitle: "Leave empty for the public endpoint; set one to use your own instance",
                     text: $skip.introDbApiUrl
                 )
                 SettingsToggle(

@@ -296,6 +296,10 @@ struct SettingsView: View {
             }
             .padding(.bottom, NuvioTheme.spacing.rail.tailPadding)
         }
+        // One scroll view served every section, and SwiftUI keeps a scroll offset for as long as
+        // the view keeps its identity — so arriving at a section you had never opened could land
+        // you halfway down it. Tying the identity to the section makes each one a fresh page.
+        .id(section)
         .scrollClipDisabled()
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .focusSection()

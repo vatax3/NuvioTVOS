@@ -25,6 +25,9 @@ struct SidebarScaffold<Content: View>: View {
     /// Held between "panel closed" and "focus released" so the focus observer cannot re-open it.
     @State private var isDismissing = false
     @State private var focusReclaim: Task<Void, Never>?
+    /// Set by any directional press, cleared when a destination is opened. While the reclaim
+    /// loop below is running, a move means the viewer has taken over and it must stand down.
+    @State private var hasMovedSinceTabChange = false
     @Namespace private var shellFocus
 
     private var tokens: NuvioSidebarComponentTokens { NuvioTheme.components.sidebar }
@@ -114,7 +117,10 @@ struct SidebarScaffold<Content: View>: View {
         }
         .background(colors.background)
         .focusScope(shellFocus)
-        .onMoveCommand { _ in hasUserNavigated = true }
+        .onMoveCommand { _ in
+            hasUserNavigated = true
+            hasMovedSinceTabChange = true
+        }
         // Android's `BackHandler` on the root routes: back opens the drawer and puts focus on
         // the current destination rather than leaving the screen. Without it the panel is only
         // reachable by a directional move, which the Home hero can swallow.
@@ -136,6 +142,7 @@ struct SidebarScaffold<Content: View>: View {
         // engine to redo its default-focus pass, a few times while the screen fills in, is what
         // makes a destination usable the moment it is chosen.
         .onChange(of: router.selectedTab, initial: true) { _, _ in
+            hasMovedSinceTabChange = false
             reclaimContentFocus()
         }
     }
@@ -149,14 +156,26 @@ struct SidebarScaffold<Content: View>: View {
     }
 
     /// The engine only picks a default when the scope has a candidate, so this retries across
-    /// the first second of a screen's life and stops as soon as the sidebar has focus — which
-    /// means the viewer got there first.
+    /// the first second of a screen's life.
+    ///
+    /// It has to stop the moment it is no longer needed, and for a long time it did not. Each
+    /// pass calls `resetFocus`, which sends focus back to the scope's default item — so a viewer
+    /// who started moving around within that first second had the screen snatched back under
+    /// them, at 200ms, at 500ms, at 900ms. That is the "sometimes the focus jumps back" this
+    /// guards: two stop conditions, either of which means the job is done.
     private func reclaimContentFocus() {
         focusReclaim?.cancel()
         focusReclaim = Task { @MainActor in
             for delay in [120, 200, 500, 900] {
                 try? await Task.sleep(for: .milliseconds(delay))
                 guard !Task.isCancelled, !isExpanded, focusedTab == nil else { return }
+                // The viewer is driving. Anywhere they have moved to is a better answer than
+                // the default, and overriding it is what made the remote feel unreliable.
+                guard !hasMovedSinceTabChange else { return }
+                // Something in the new screen has taken focus, which is the whole objective.
+                // Asked of UIKit rather than of `@FocusState`, which would only report back
+                // what was last requested — see `FocusSystemProbe`.
+                guard !FocusSystemProbe.hasFocusedItem else { return }
                 resetFocus(in: shellFocus)
             }
         }
