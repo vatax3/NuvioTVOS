@@ -283,14 +283,43 @@ enum SubtitleSelector {
             .map(\.element)
     }
 
+    /// A forced track carries only the lines a viewer needs when they already understand the
+    /// dialogue: foreign phrases, on-screen signs. Addons do not flag them, so — as upstream
+    /// does — the word is looked for in the id, the URL and the addon name.
+    nonisolated static func isForced(_ subtitle: Subtitle) -> Bool {
+        [subtitle.id, subtitle.url, subtitle.addonName ?? ""]
+            .contains { $0.range(of: "forced", options: .caseInsensitive) != nil }
+    }
+
     /// The track to enable without asking, or nil to start with subtitles off.
+    ///
+    /// `useForced` is the reader for `subtitle_use_forced_subtitles`, a switch that sat in
+    /// Playback settings doing nothing. What it means is narrower than its label suggests, and
+    /// worth stating: when the audio is **already in the language you read subtitles in**, a full
+    /// subtitle track is duplicating the dialogue you can hear, so only a forced track should come
+    /// on — and if there is no forced track, nothing should. When the audio is in some other
+    /// language the rule inverts: a forced track alone would leave the dialogue untranslated, so
+    /// forced tracks are the ones excluded.
     static func autoSelection(
         _ ordered: [Subtitle],
-        preferred: String
+        preferred: String,
+        audioLanguage: String? = nil,
+        useForced: Bool = false
     ) -> Subtitle? {
         let code = preferred.trimmingCharacters(in: .whitespaces).lowercased()
         guard !code.isEmpty else { return nil }
-        return ordered.first { $0.lang.lowercased().hasPrefix(code) }
+        let matching = ordered.filter { $0.lang.lowercased().hasPrefix(code) }
+
+        guard useForced else { return matching.first }
+
+        let audio = (audioLanguage ?? "").trimmingCharacters(in: .whitespaces).lowercased()
+        let audioIsPreferredLanguage = !audio.isEmpty
+            && (audio.hasPrefix(code) || code.hasPrefix(audio))
+
+        if audioIsPreferredLanguage {
+            return matching.first(where: isForced)
+        }
+        return matching.first { !isForced($0) } ?? matching.first
     }
 
     /// Groups tracks for the picker, per `subtitle_organization_mode`.

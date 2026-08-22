@@ -1,36 +1,103 @@
 import SwiftUI
 
-// MARK: - Rail
+// MARK: - Folder card
 
-/// One collection as a rail, with its own edit affordance at the tail.
-struct CollectionRail: View {
+/// One folder of a collection, as a tile.
+///
+/// A folder is a saved question rather than a saved answer, so the tile shows what the viewer
+/// named it and not what happens to be inside today. Artwork, when there is any, is the cover
+/// they chose; otherwise the emoji; otherwise the title carries it alone.
+struct CollectionFolderCard: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(\.posterMetrics) private var metrics
-    @Environment(CollectionStore.self) private var collections
-    @Environment(LibraryStore.self) private var library
+
+    let folder: CollectionFolder
+    var focusBinding: FocusState<String?>.Binding?
+    let action: () -> Void
+
+    @State private var isFocused = false
+
+    private var size: CGSize { metrics.size(for: folder.tileShape) }
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                if let cover = folder.coverImageUrl?.nilIfBlank {
+                    RemoteImage(url: cover, contentMode: .fill) { placeholder }
+                } else {
+                    placeholder
+                }
+
+                if !folder.hideTitle {
+                    LinearGradient(
+                        colors: [.clear, .black.opacity(0.72)],
+                        startPoint: .center,
+                        endPoint: .bottom
+                    )
+                    Text(folder.title)
+                        .nuvioText(NuvioTextStyles.cardTitle)
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .padding(NuvioTheme.spacing.md)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                }
+            }
+            .frame(width: size.width, height: size.height)
+            .clipped()
+        }
+        .buttonStyle(NuvioCardButtonStyle(cornerRadius: metrics.cornerRadius))
+        .modifier(OptionalCardFocus(binding: focusBinding, key: folder.id))
+        .accessibilityLabel(folder.title)
+    }
+
+    /// The emoji, or the folder icon, on the card surface.
+    private var placeholder: some View {
+        ZStack {
+            colors.backgroundCard
+            if let emoji = folder.coverEmoji?.nilIfBlank {
+                Text(emoji).font(.system(size: size.height * 0.34))
+            } else {
+                Image(systemName: "folder.fill")
+                    .font(.system(size: NuvioTheme.sizes.icons.lg))
+                    .foregroundStyle(colors.textTertiary)
+            }
+        }
+    }
+}
+
+/// `.focused()` only binds on the focusable view itself, and the binding is optional here, so
+/// applying it conditionally needs a modifier rather than an `if` inside the body.
+private struct OptionalCardFocus: ViewModifier {
+    let binding: FocusState<String?>.Binding?
+    let key: String
+
+    func body(content: Content) -> some View {
+        if let binding {
+            content.focused(binding, equals: key)
+        } else {
+            content
+        }
+    }
+}
+
+// MARK: - Rail
+
+/// One collection as a rail of its folders.
+struct CollectionRail: View {
+    @Environment(\.nuvioColors) private var colors
     @Environment(Router.self) private var router
 
     let collection: MediaCollection
-    /// Home browses, the Library manages. The tail button is the whole of a collection's
-    /// management surface, so it belongs where a viewer went looking for it.
-    var showsEditAffordance = true
-
-    @State private var isEditing = false
-
-    private var items: [MetaPreview] {
-        collections.items(in: collection.id, library: library)
-    }
+    var focusBinding: FocusState<String?>.Binding?
 
     var body: some View {
         VStack(alignment: .leading, spacing: NuvioTheme.components.row.titleBottomSpacing) {
             HStack(spacing: NuvioTheme.spacing.md) {
-                Image(systemName: collection.symbol)
-                    .font(.system(size: NuvioTheme.sizes.icons.sm))
-                    .foregroundStyle(colors.secondary)
-                Text(collection.name)
+                Text(collection.title)
                     .nuvioText(NuvioTextStyles.sectionTitle)
                     .foregroundStyle(colors.textPrimary)
-                Text("\(collection.count) title\(collection.count == 1 ? "" : "s")")
+                Text("\(collection.folders.count) folder\(collection.folders.count == 1 ? "" : "s")")
                     .nuvioText(NuvioTextStyles.metadata)
                     .foregroundStyle(colors.textSecondary)
                 Spacer(minLength: 0)
@@ -39,27 +106,12 @@ struct CollectionRail: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: NuvioTheme.components.row.itemSpacing) {
-                    ForEach(items, id: \.rowKey) { item in
-                        ContentCard(
-                            item: item,
-                            allowsBackdropExpand: false,
-                            action: { router.openDetail(item) }
-                        )
-                    }
-
-                    if showsEditAffordance {
-                        Button(action: { isEditing = true }) {
-                            VStack(spacing: NuvioTheme.spacing.sm) {
-                                Image(systemName: "slider.horizontal.3")
-                                    .font(.system(size: NuvioTheme.sizes.icons.lg))
-                                Text("Edit")
-                                    .nuvioText(NuvioTextStyles.button)
-                            }
-                            .foregroundStyle(colors.textSecondary)
-                            .frame(width: metrics.width, height: metrics.height)
-                            .background(colors.backgroundCard)
+                    ForEach(collection.folders) { folder in
+                        CollectionFolderCard(folder: folder, focusBinding: focusBinding) {
+                            router.push(.collectionFolder(
+                                CollectionFolderRequest(collectionId: collection.id, folderId: folder.id)
+                            ))
                         }
-                        .buttonStyle(NuvioCardButtonStyle(cornerRadius: metrics.cornerRadius))
                     }
                 }
                 .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)
@@ -68,253 +120,5 @@ struct CollectionRail: View {
             .scrollClipDisabled()
         }
         .focusSection()
-        .sheet(isPresented: $isEditing) { CollectionEditorView(collection: collection) }
-    }
-}
-
-// MARK: - Editor
-
-/// Create or edit a collection. A nil `collection` means "create".
-struct CollectionEditorView: View {
-    @Environment(\.nuvioColors) private var colors
-    @Environment(CollectionStore.self) private var collections
-    @Environment(LibraryStore.self) private var library
-    @Environment(\.dismiss) private var dismiss
-
-    let collection: MediaCollection?
-
-    @State private var name = ""
-    @State private var symbol = MediaCollection.availableSymbols[0]
-    @State private var didLoad = false
-    @State private var isConfirmingDelete = false
-
-    private var isEditing: Bool { collection != nil }
-
-    var body: some View {
-        NuvioScreenBackground {
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
-                    Text(isEditing ? "Edit collection" : "New collection")
-                        .nuvioText(NuvioTextStyles.display)
-                        .foregroundStyle(colors.textPrimary)
-
-                    SettingsCard(title: "Details") {
-                        SettingsTextFieldRow(
-                            title: "Name",
-                            placeholder: "Collection name",
-                            text: $name
-                        )
-                        symbolPicker
-                    }
-
-                    if let collection, collections.collections.count > 1 {
-                        SettingsCard(
-                            title: "Order",
-                            footnote: "Collections appear on Home in this order, after your catalogs."
-                        ) {
-                            SettingsRow(
-                                title: "Move up",
-                                systemImage: "arrow.up",
-                                action: { collections.move(collection.id, by: -1) }
-                            )
-                            SettingsRow(
-                                title: "Move down",
-                                systemImage: "arrow.down",
-                                action: { collections.move(collection.id, by: 1) }
-                            )
-                        }
-                    }
-
-                    if let collection, !collection.itemKeys.isEmpty {
-                        SettingsCard(
-                            title: "Titles",
-                            footnote: "Select a title to take it out of this collection."
-                        ) {
-                            ForEach(collections.items(in: collection.id, library: library), id: \.rowKey) { item in
-                                SettingsRow(
-                                    title: item.name,
-                                    subtitle: item.releaseInfo,
-                                    systemImage: "minus.circle",
-                                    action: { collections.remove(item, from: collection.id) }
-                                )
-                            }
-                        }
-                    }
-
-                    actions
-                }
-                .padding(.bottom, NuvioTheme.spacing.xxxl)
-            }
-            .scrollClipDisabled()
-        }
-        .onAppear(perform: loadOnce)
-        .alert("Delete this collection?", isPresented: $isConfirmingDelete) {
-            Button("Delete", role: .destructive) {
-                if let collection { collections.delete(collection.id) }
-                dismiss()
-            }
-            Button("Keep", role: .cancel) {}
-        } message: {
-            Text("The titles themselves stay in your library.")
-        }
-    }
-
-    private var symbolPicker: some View {
-        VStack(alignment: .leading, spacing: NuvioTheme.spacing.sm) {
-            Text("Icon")
-                .nuvioText(NuvioTextStyles.cardTitle)
-                .foregroundStyle(colors.textPrimary)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: NuvioTheme.spacing.md) {
-                    ForEach(MediaCollection.availableSymbols, id: \.self) { candidate in
-                        Button(action: { symbol = candidate }) {
-                            Image(systemName: candidate)
-                                .font(.system(size: NuvioTheme.sizes.icons.md))
-                                .foregroundStyle(candidate == symbol ? colors.textInverse : colors.textSecondary)
-                                .frame(width: dp(64), height: dp(64))
-                                .background {
-                                    Circle().fill(
-                                        candidate == symbol ? colors.secondary : colors.surfaceVariant
-                                    )
-                                }
-                        }
-                        .buttonStyle(NuvioCardButtonStyle(cornerRadius: dp(32), showsRing: true, elevated: false))
-                    }
-                }
-                .padding(.vertical, NuvioTheme.spacing.xs)
-            }
-            .scrollClipDisabled()
-        }
-        .padding(.horizontal, NuvioTheme.spacing.lg)
-        .padding(.vertical, NuvioTheme.spacing.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .focusSection()
-    }
-
-    private var actions: some View {
-        HStack(spacing: NuvioTheme.spacing.md) {
-            Button(action: save) {
-                Text(isEditing ? "Save" : "Create")
-                    .nuvioText(NuvioTextStyles.button)
-                    .padding(.horizontal, NuvioTheme.spacing.xl)
-                    .frame(height: NuvioTheme.components.buttonHeight)
-            }
-            .buttonStyle(NuvioPillButtonStyle(emphasis: .primary))
-            .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
-
-            Button(action: { dismiss() }) {
-                Text("Cancel")
-                    .nuvioText(NuvioTextStyles.button)
-                    .padding(.horizontal, NuvioTheme.spacing.xl)
-                    .frame(height: NuvioTheme.components.buttonHeight)
-            }
-            .buttonStyle(NuvioPillButtonStyle(emphasis: .secondary))
-
-            if isEditing {
-                Button(action: { isConfirmingDelete = true }) {
-                    Text("Delete")
-                        .nuvioText(NuvioTextStyles.button)
-                        .padding(.horizontal, NuvioTheme.spacing.xl)
-                        .frame(height: NuvioTheme.components.buttonHeight)
-                }
-                .buttonStyle(NuvioPillButtonStyle(emphasis: .ghost))
-            }
-        }
-        .focusSection()
-    }
-
-    private func loadOnce() {
-        guard !didLoad else { return }
-        didLoad = true
-        guard let collection else { return }
-        name = collection.name
-        symbol = collection.symbol
-    }
-
-    private func save() {
-        if let collection {
-            collections.rename(collection.id, to: name)
-            collections.setSymbol(symbol, for: collection.id)
-        } else {
-            collections.create(name: name, symbol: symbol)
-        }
-        dismiss()
-    }
-}
-
-// MARK: - Membership picker
-
-/// "Add to collection" sheet, opened from the detail screen.
-struct CollectionPickerView: View {
-    @Environment(\.nuvioColors) private var colors
-    @Environment(CollectionStore.self) private var collections
-    @Environment(LibraryStore.self) private var library
-    @Environment(\.dismiss) private var dismiss
-
-    let preview: MetaPreview
-
-    @State private var newName = ""
-
-    var body: some View {
-        NuvioScreenBackground {
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
-                    Text("Add to collection")
-                        .nuvioText(NuvioTextStyles.display)
-                        .foregroundStyle(colors.textPrimary)
-
-                    Text(preview.name)
-                        .nuvioText(NuvioTextStyles.bodyCompact)
-                        .foregroundStyle(colors.textSecondary)
-
-                    if collections.collections.isEmpty {
-                        Text("You have no collections yet — name one below to start.")
-                            .nuvioText(NuvioTextStyles.bodyCompact)
-                            .foregroundStyle(colors.textTertiary)
-                    } else {
-                        SettingsCard(title: "Collections") {
-                            ForEach(collections.collections) { collection in
-                                SettingsToggle(
-                                    title: collection.name,
-                                    subtitle: "\(collection.count) title\(collection.count == 1 ? "" : "s")",
-                                    systemImage: collection.symbol,
-                                    isOn: Binding(
-                                        get: { collections.contains(preview, in: collection.id) },
-                                        set: { _ in
-                                            collections.toggle(preview, in: collection.id, library: library)
-                                        }
-                                    )
-                                )
-                            }
-                        }
-                    }
-
-                    SettingsCard(title: "New collection") {
-                        SettingsTextFieldRow(
-                            title: "Name",
-                            placeholder: "Collection name",
-                            text: $newName,
-                            trailingAction: (label: "Create & add", action: createAndAdd)
-                        )
-                    }
-
-                    Button(action: { dismiss() }) {
-                        Text("Done")
-                            .nuvioText(NuvioTextStyles.button)
-                            .padding(.horizontal, NuvioTheme.spacing.xl)
-                            .frame(height: NuvioTheme.components.buttonHeight)
-                    }
-                    .buttonStyle(NuvioPillButtonStyle(emphasis: .primary))
-                }
-                .padding(.bottom, NuvioTheme.spacing.xxxl)
-            }
-            .scrollClipDisabled()
-        }
-    }
-
-    private func createAndAdd() {
-        guard let created = collections.create(name: newName) else { return }
-        collections.add(preview, to: created.id, library: library)
-        newName = ""
     }
 }

@@ -68,6 +68,7 @@ private struct ProfileScopedRoot: View {
     @State private var collections = CollectionStore()
     @State private var plugins = PluginStore()
     @State private var router = Router()
+    @State private var remoteProgress = RemoteProgressService()
 
     var body: some View {
         RootView()
@@ -77,6 +78,7 @@ private struct ProfileScopedRoot: View {
             .environment(collections)
             .environment(plugins)
             .environment(router)
+            .environment(remoteProgress)
             .environment(\.nuvioColors, settings.app.colors)
             .environment(\.nuvioFont, settings.app.font)
     }

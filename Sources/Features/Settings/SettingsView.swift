@@ -220,10 +220,21 @@ struct SettingsView: View {
         }
     }
 
+    /// Two-pane rail, or a single column you drill into — the reader for `settings_ui_style`,
+    /// which had a picker in Advanced and changed nothing. The rail is right for a remote most of
+    /// the time; the single list is the one that works when the section names are long, and it is
+    /// what Android offers as the alternative.
     var body: some View {
-        HStack(alignment: .top, spacing: NuvioTheme.spacing.xxl) {
-            rail
-            workspace
+        Group {
+            switch settings.app.settingsUIStyle {
+            case .rail:
+                HStack(alignment: .top, spacing: NuvioTheme.spacing.xxl) {
+                    rail
+                    workspace
+                }
+            case .list:
+                singleColumn
+            }
         }
         .padding(.horizontal, NuvioTheme.layout.tvSafeHorizontal)
         .padding(.vertical, NuvioTheme.layout.tvSafeVertical)
@@ -273,26 +284,75 @@ struct SettingsView: View {
         .focusSection()
     }
 
+    @ViewBuilder
+    private var sectionContent: some View {
+        switch section {
+        case .account: AccountSettingsContent()
+        case .profiles: ProfilesSettingsContent()
+        case .appearance: ThemeSettingsContent()
+        case .layout: LayoutSettingsContent()
+        case .contentDiscovery: ContentDiscoverySettingsContent()
+        case .integrations: IntegrationsHubContent()
+        case .playback:
+            if settings.app.showsAdvancedSettings {
+                PlaybackSettingsContent()
+            } else {
+                EssentialPlaybackSettingsContent()
+            }
+        case .advanced: AdvancedSettingsContent()
+        case .tracking: TrackingSettingsContent()
+        case .about: AboutContent()
+        }
+    }
+
+    /// The single-list style: an index you drill into, and a way back out. `listSection` being
+    /// nil *is* the index — there is no separate mode flag to keep in step with it.
+    @State private var listSection: Section?
+
+    private var singleColumn: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
+                if listSection == nil {
+                    Text(L10n.text("navigation.settings"))
+                        .nuvioText(NuvioTextStyles.headline)
+                        .foregroundStyle(colors.textPrimary)
+                    SettingsCard {
+                        ForEach(sections) { item in
+                            SettingsRow(
+                                title: item.title,
+                                systemImage: item.systemImage,
+                                trailing: { SettingsValueLabel(value: "") },
+                                action: {
+                                    section = item
+                                    listSection = item
+                                }
+                            )
+                        }
+                    }
+                } else {
+                    SettingsRow(
+                        title: L10n.text("navigation.settings"),
+                        systemImage: "chevron.left",
+                        action: { listSection = nil }
+                    )
+                    Text(section.title)
+                        .nuvioText(NuvioTextStyles.headline)
+                        .foregroundStyle(colors.textPrimary)
+                    sectionContent
+                }
+            }
+            .padding(.bottom, NuvioTheme.spacing.rail.tailPadding)
+        }
+        .id(listSection)
+        .scrollClipDisabled()
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .focusSection()
+    }
+
     private var workspace: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
-                switch section {
-                case .account: AccountSettingsContent()
-                case .profiles: ProfilesSettingsContent()
-                case .appearance: ThemeSettingsContent()
-                case .layout: LayoutSettingsContent()
-                case .contentDiscovery: ContentDiscoverySettingsContent()
-                case .integrations: IntegrationsHubContent()
-                case .playback:
-                    if settings.app.showsAdvancedSettings {
-                        PlaybackSettingsContent()
-                    } else {
-                        EssentialPlaybackSettingsContent()
-                    }
-                case .advanced: AdvancedSettingsContent()
-                case .tracking: TrackingSettingsContent()
-                case .about: AboutContent()
-                }
+                sectionContent
             }
             .padding(.bottom, NuvioTheme.spacing.rail.tailPadding)
         }
@@ -507,8 +567,6 @@ struct LayoutSettingsContent: View {
                 SettingsToggle(title: "Landscape posters in Modern view", isOn: $layout.modernLandscapePostersEnabled)
             }
 
-            TrailerSettingsCard()
-
             SettingsCard(
                 title: "Focused poster",
                 footnote: "Holding focus on a card widens it into its backdrop — a Nuvio signature."
@@ -516,15 +574,6 @@ struct LayoutSettingsContent: View {
                 SettingsToggle(title: "Expand to backdrop", systemImage: "rectangle.expand.vertical", isOn: $layout.focusedPosterBackdropExpandEnabled)
                 if layout.focusedPosterBackdropExpandEnabled {
                     SettingsStepperRow(title: "Expand after", value: $layout.focusedPosterBackdropExpandDelaySeconds, range: 0...10, format: { "\($0)s" })
-                    // Android plays the TMDB trailer inline, which is a YouTube stream. tvOS has
-                    // no WKWebView and AVPlayer cannot resolve a YouTube watch URL, so there is
-                    // no way to honour this here — saying so beats an inert switch.
-                    SettingsToggle(
-                        title: "Play a trailer when expanded",
-                        subtitle: "Unavailable on Apple TV — trailers are YouTube-only and tvOS cannot play them in-app",
-                        isOn: $layout.focusedPosterBackdropTrailerEnabled
-                    )
-                    .disabled(true)
                 }
             }
 

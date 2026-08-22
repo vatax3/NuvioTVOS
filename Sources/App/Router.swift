@@ -143,6 +143,10 @@ struct PlaybackRequest: Hashable, Identifiable {
     /// providers publish identically named releases; matching a current source by label makes
     /// the wrong row look selected and can focus the wrong replacement stream.
     var sourceStableKey: String? = nil
+    /// `behaviorHints.bingeGroup`: the addon's own marker for "same release, same encode, next
+    /// episode". Carried into playback so auto-advance can pick the matching source next time
+    /// instead of starting the choice over.
+    var sourceBingeGroup: String? = nil
 
     var id: String { "\(videoId)|\(streamURL)" }
 }
@@ -167,6 +171,15 @@ struct CastRequest: Hashable, Identifiable {
 }
 
 /// A TMDB network / studio / genre listing.
+/// Which folder of which collection to open. Identified rather than passed whole so a folder
+/// edited while its screen is open reads the current version from the store.
+struct CollectionFolderRequest: Hashable, Identifiable {
+    var collectionId: String
+    var folderId: String
+
+    var id: String { "\(collectionId)#\(folderId)" }
+}
+
 struct TMDBBrowseRequest: Hashable, Identifiable {
     enum Entity: Hashable {
         case network(Int)
@@ -196,10 +209,12 @@ enum Route: Hashable {
     case catalogSeeAll(CatalogRequest)
     case castMember(CastRequest)
     case tmdbBrowse(TMDBBrowseRequest)
+    case collectionFolder(CollectionFolderRequest)
     case comments(CommentsRequest)
     case qrSignIn
     case addonManager
     case pluginManager
+    case collectionManager
     case catalogOrder
     case themeSettings
     case layoutSettings
@@ -273,6 +288,18 @@ enum LaunchArguments {
         value(for: "-settingsSection")
         #else
         nil
+        #endif
+    }
+
+    /// True while an XCUITest drives the app. Set by the player harness flag, and by an explicit
+    /// one for tests that do not use the harness — a fresh test container is indistinguishable
+    /// from a first install, so anything gated on "first install" has to know.
+    static var isUITesting: Bool {
+        #if DEBUG
+        let arguments = ProcessInfo.processInfo.arguments
+        return arguments.contains("-nuvioPlayerHarness") || arguments.contains("-nuvioUITesting")
+        #else
+        false
         #endif
     }
 

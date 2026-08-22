@@ -20,11 +20,6 @@ final class PlayerSettingsStore: PreferenceStore {
         set { setOption("player_preference", newValue) }
     }
 
-    var decoderPriority: DecoderPriority {
-        get { option("decoder_priority", default: .preferHardware) }
-        set { setOption("decoder_priority", newValue) }
-    }
-
     var mpvHardwareDecodeMode: MpvHardwareDecodeMode {
         get { option("mpv_hardware_decode_mode", default: .hardwareDirect) }
         set { setOption("mpv_hardware_decode_mode", newValue) }
@@ -35,26 +30,11 @@ final class PlayerSettingsStore: PreferenceStore {
         set { setBool("auto_switch_internal_player_on_error", newValue) }
     }
 
-    var tunnelingEnabled: Bool {
-        get { bool("tunneling_enabled", default: false) }
-        set { setBool("tunneling_enabled", newValue) }
-    }
-
-    var performanceModeEnabled: Bool {
-        get { bool("nuvio_performance_mode_enabled", default: false) }
-        set { setBool("nuvio_performance_mode_enabled", newValue) }
-    }
-
     // MARK: - Video output
 
     var resizeMode: ResizeMode {
         get { option("resize_mode", default: .fit) }
         set { setOption("resize_mode", newValue) }
-    }
-
-    var frameRateMatching: Bool {
-        get { bool("frame_rate_matching", default: false) }
-        set { frameRateMatchingMode = newValue ? .startStop : .off }
     }
 
     /// Android stores the mode alongside the older boolean and derives one from the other, so a
@@ -73,37 +53,7 @@ final class PlayerSettingsStore: PreferenceStore {
         }
     }
 
-    var resolutionMatchingEnabled: Bool {
-        get { bool("resolution_matching_enabled", default: false) }
-        set { setBool("resolution_matching_enabled", newValue) }
-    }
-
     // MARK: - Dolby Vision / HDR
-
-    var dolbyVision7HandlingMode: DolbyVision7HandlingMode {
-        get { option("dv7_handling_mode", default: .auto) }
-        set { setOption("dv7_handling_mode", newValue) }
-    }
-
-    var mapDolbyVision7ToHevc: Bool {
-        get { bool("map_dv7_to_hevc", default: true) }
-        set { setBool("map_dv7_to_hevc", newValue) }
-    }
-
-    var experimentalDv5ToDv81: Bool {
-        get { bool("experimental_dv5_to_dv81_enabled", default: false) }
-        set { setBool("experimental_dv5_to_dv81_enabled", newValue) }
-    }
-
-    var experimentalDv7ToDv81PreserveMapping: Bool {
-        get { bool("experimental_dv7_to_dv81_preserve_mapping_enabled", default: false) }
-        set { setBool("experimental_dv7_to_dv81_preserve_mapping_enabled", newValue) }
-    }
-
-    var stripHdr10PlusSei: Bool {
-        get { bool("strip_hdr10plus_sei", default: false) }
-        set { setBool("strip_hdr10plus_sei", newValue) }
-    }
 
     // MARK: - Audio
 
@@ -129,51 +79,6 @@ final class PlayerSettingsStore: PreferenceStore {
     var audioOutputChannels: AudioOutputChannels {
         get { option("audio_output_channels", default: .auto) }
         set { setOption("audio_output_channels", newValue) }
-    }
-
-    var forceOpticalPassthrough: Bool {
-        get { bool("force_optical_passthrough", default: false) }
-        set { setBool("force_optical_passthrough", newValue) }
-    }
-
-    var downmixEnabled: Bool {
-        get { bool("downmix_enabled", default: false) }
-        set { setBool("downmix_enabled", newValue) }
-    }
-
-    var downmixNormalizationEnabled: Bool {
-        get { bool("downmix_normalization_enabled", default: true) }
-        set { setBool("downmix_normalization_enabled", newValue) }
-    }
-
-    var maintainOriginalAudioOnDownmix: Bool {
-        get { bool("maintain_original_audio_on_downmix", default: false) }
-        set { setBool("maintain_original_audio_on_downmix", newValue) }
-    }
-
-    var centerMixLevelDb: Double {
-        get { double("center_mix_level_db", default: 0) }
-        set { setDouble("center_mix_level_db", newValue) }
-    }
-
-    var audioAmplificationDb: Double {
-        get { double("audio_amplification_db", default: 0) }
-        set { setDouble("audio_amplification_db", newValue) }
-    }
-
-    var persistAudioAmplification: Bool {
-        get { bool("persist_audio_amplification", default: false) }
-        set { setBool("persist_audio_amplification", newValue) }
-    }
-
-    var skipSilence: Bool {
-        get { bool("skip_silence", default: false) }
-        set { setBool("skip_silence", newValue) }
-    }
-
-    var rememberAudioDelayPerDevice: Bool {
-        get { bool("remember_audio_delay_per_device", default: true) }
-        set { setBool("remember_audio_delay_per_device", newValue) }
     }
 
     // MARK: - Subtitles
@@ -270,16 +175,6 @@ final class PlayerSettingsStore: PreferenceStore {
         set { setOption("subtitle_organization_mode", newValue) }
     }
 
-    var useLibass: Bool {
-        get { bool("use_libass", default: true) }
-        set { setBool("use_libass", newValue) }
-    }
-
-    var libassRenderType: LibassRenderType {
-        get { option("libass_render_type", default: .native) }
-        set { setOption("libass_render_type", newValue) }
-    }
-
     // MARK: - Auto-play & next episode
 
     var streamAutoPlayMode: StreamAutoPlayMode {
@@ -345,16 +240,6 @@ final class PlayerSettingsStore: PreferenceStore {
 
     // MARK: - Link reuse
 
-    var reuseLastLinkEnabled: Bool {
-        get { bool("stream_reuse_last_link_enabled", default: true) }
-        set { setBool("stream_reuse_last_link_enabled", newValue) }
-    }
-
-    var reuseLastLinkCacheHours: Int {
-        get { int("stream_reuse_last_link_cache_hours", default: 6) }
-        set { setInt("stream_reuse_last_link_cache_hours", newValue) }
-    }
-
     // MARK: - Overlays
 
     var skipIntroEnabled: Bool {
@@ -399,102 +284,7 @@ final class PlayerSettingsStore: PreferenceStore {
 
     // MARK: - Buffering
 
-    var bufferEngineEnabled: Bool {
-        get { bool("buffer_engine_enabled", default: true) }
-        set { setBool("buffer_engine_enabled", newValue) }
-    }
-
-    var bufferBudgetManaged: Bool {
-        get { bool("buffer_budget_managed", default: true) }
-        set { setBool("buffer_budget_managed", newValue) }
-    }
-
-    var minBufferMs: Int {
-        get { int("min_buffer_ms", default: 15_000) }
-        set { setInt("min_buffer_ms", newValue) }
-    }
-
-    var maxBufferMs: Int {
-        get { int("max_buffer_ms", default: 60_000) }
-        set { setInt("max_buffer_ms", newValue) }
-    }
-
-    var bufferForPlaybackMs: Int {
-        get { int("buffer_for_playback_ms", default: 2_500) }
-        set { setInt("buffer_for_playback_ms", newValue) }
-    }
-
-    var bufferForPlaybackAfterRebufferMs: Int {
-        get { int("buffer_for_playback_after_rebuffer_ms", default: 5_000) }
-        set { setInt("buffer_for_playback_after_rebuffer_ms", newValue) }
-    }
-
-    var backBufferDurationMs: Int {
-        get { int("back_buffer_duration_ms", default: 30_000) }
-        set { setInt("back_buffer_duration_ms", newValue) }
-    }
-
-    var retainBackBufferFromKeyframe: Bool {
-        get { bool("retain_back_buffer_from_keyframe", default: true) }
-        set { setBool("retain_back_buffer_from_keyframe", newValue) }
-    }
-
-    var targetBufferSizeMb: Int {
-        get { int("target_buffer_size_mb", default: 64) }
-        set { setInt("target_buffer_size_mb", newValue) }
-    }
-
-    var allowLargeTargetBuffer: Bool {
-        get { bool("allow_large_target_buffer", default: false) }
-        set { setBool("allow_large_target_buffer", newValue) }
-    }
-
-    var enableBufferLogs: Bool {
-        get { bool("enable_buffer_logs", default: false) }
-        set { setBool("enable_buffer_logs", newValue) }
-    }
-
     // MARK: - Network
-
-    var enableHttp2: Bool {
-        get { bool("enable_http2", default: true) }
-        set { setBool("enable_http2", newValue) }
-    }
-
-    var useParallelConnections: Bool {
-        get { bool("use_parallel_connections", default: false) }
-        set { setBool("use_parallel_connections", newValue) }
-    }
-
-    var parallelNetworkEnabled: Bool {
-        get { bool("parallel_network_enabled", default: false) }
-        set { setBool("parallel_network_enabled", newValue) }
-    }
-
-    var parallelConnectionCount: Int {
-        get { int("parallel_connection_count", default: 4) }
-        set { setInt("parallel_connection_count", newValue) }
-    }
-
-    var parallelChunkSizeMb: Int {
-        get { int("parallel_chunk_size_mb", default: 4) }
-        set { setInt("parallel_chunk_size_mb", newValue) }
-    }
-
-    var vodCacheEnabled: Bool {
-        get { bool("vod_cache_enabled", default: true) }
-        set { setBool("vod_cache_enabled", newValue) }
-    }
-
-    var vodCacheSizeMode: VodCacheSizeMode {
-        get { option("vod_cache_size_mode", default: .automatic) }
-        set { setOption("vod_cache_size_mode", newValue) }
-    }
-
-    var vodCacheSizeMb: Int {
-        get { int("vod_cache_size_mb", default: 512) }
-        set { setInt("vod_cache_size_mb", newValue) }
-    }
 
     // MARK: - External player
 
@@ -509,17 +299,7 @@ final class PlayerSettingsStore: PreferenceStore {
         set { setBool("external_player_forward_subtitles", newValue) }
     }
 
-    var externalPlayerSendSkipSegments: Bool {
-        get { bool("external_player_send_skip_segments", default: false) }
-        set { setBool("external_player_send_skip_segments", newValue) }
-    }
-
     // MARK: - Diagnostics
-
-    var playbackIssueReportsEnabled: Bool {
-        get { bool("playback_issue_reports_enabled", default: false) }
-        set { setBool("playback_issue_reports_enabled", newValue) }
-    }
 
     var verboseLoggingEnabled: Bool {
         get { bool("verbose_logging_enabled", default: false) }

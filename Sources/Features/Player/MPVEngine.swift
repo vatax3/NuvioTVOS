@@ -43,6 +43,21 @@ final class MPVEngine {
             let index = all.firstIndex(of: self) ?? 0
             return all[(index + 1) % all.count]
         }
+
+        /// The mode playback starts in, from the viewer's `resize_mode` preference.
+        ///
+        /// Android's five values do not map one to one onto the seven offered in the player —
+        /// `slightZoom` and `cinemaZoom` are steps the viewer reaches by cycling, not defaults —
+        /// so the two zoom cases both land on `crop`, which is what "zoom to fill" means.
+        init(resizeMode: ResizeMode) {
+            switch resizeMode {
+            case .fit: self = .fit
+            case .fill: self = .stretch
+            case .zoom: self = .crop
+            case .fixedWidth: self = .fitWidth
+            case .fixedHeight: self = .fitHeight
+            }
+        }
     }
 
     struct StreamInfo: Hashable {

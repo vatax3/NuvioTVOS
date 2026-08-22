@@ -46,12 +46,28 @@ enum ExternalPlayer: String, CaseIterable, Identifiable, Codable, Sendable {
         }
     }
 
+    /// Whether this player accepts a sidecar subtitle URL on its callback. nPlayer and Outplayer
+    /// take a bare stream URL and nothing else, so a track cannot travel with the hand-off.
+    var acceptsSubtitleURL: Bool {
+        switch self {
+        case .infuse, .vlc: return true
+        case .nplayer, .outplayer: return false
+        }
+    }
+
     /// Builds the hand-off URL. Infuse and VLC take an x-callback-url with the stream as a query
     /// parameter; nPlayer and Outplayer concatenate the stream onto their scheme directly.
-    func playbackURL(for stream: String, title: String?) -> URL? {
+    ///
+    /// `subtitleURL` is the addon track the viewer had selected, forwarded when
+    /// `external_player_forward_subtitles` is on. Without it the hand-off silently drops the
+    /// subtitles — the external player only sees the video URL and has no idea a track was chosen.
+    func playbackURL(for stream: String, title: String?, subtitleURL: String? = nil) -> URL? {
         guard let encoded = stream.addingPercentEncoding(
             withAllowedCharacters: .externalPlayerArgument
         ) else { return nil }
+        let encodedSubtitle = subtitleURL?.nilIfBlank?.addingPercentEncoding(
+            withAllowedCharacters: .externalPlayerArgument
+        )
 
         switch self {
         case .infuse:
@@ -61,9 +77,12 @@ enum ExternalPlayer: String, CaseIterable, Identifiable, Codable, Sendable {
             ) {
                 string += "&name=\(encodedTitle)"
             }
+            if let encodedSubtitle { string += "&sub=\(encodedSubtitle)" }
             return URL(string: string)
         case .vlc:
-            return URL(string: "vlc-x-callback://x-callback-url/stream?url=\(encoded)")
+            var string = "vlc-x-callback://x-callback-url/stream?url=\(encoded)"
+            if let encodedSubtitle { string += "&sub=\(encodedSubtitle)" }
+            return URL(string: string)
         case .nplayer:
             // nPlayer takes the raw URL appended to its scheme, not percent-encoded.
             return URL(string: "nplayer-\(stream)")
@@ -97,8 +116,13 @@ enum ExternalPlayerLauncher {
     }
 
     @discardableResult
-    static func open(_ player: ExternalPlayer, stream: String, title: String?) -> Bool {
-        guard let url = player.playbackURL(for: stream, title: title),
+    static func open(
+        _ player: ExternalPlayer,
+        stream: String,
+        title: String?,
+        subtitleURL: String? = nil
+    ) -> Bool {
+        guard let url = player.playbackURL(for: stream, title: title, subtitleURL: subtitleURL),
               UIApplication.shared.canOpenURL(url) else { return false }
         UIApplication.shared.open(url)
         return true

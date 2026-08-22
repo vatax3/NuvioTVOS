@@ -414,6 +414,17 @@ enum StreamFilterEngine {
     // MARK: Auto-play selection
 
     /// Port of the auto-play rules: picks the source to start without showing the list.
+    /// The source belonging to the same release as the one that was just playing.
+    ///
+    /// `bingeGroup` is the addon's own equality marker — same provider, same encode, same file
+    /// naming — so matching on it exactly is right, and matching on anything looser would be
+    /// guessing at what "the same" means on the viewer's behalf.
+    static func bingeGroupMatch(in streams: [Stream], group: String) -> Stream? {
+        let target = group.trimmingCharacters(in: .whitespaces)
+        guard !target.isEmpty else { return nil }
+        return streams.first { $0.behaviorHints?.bingeGroup?.trimmingCharacters(in: .whitespaces) == target }
+    }
+
     static func autoPlayCandidate(
         from streams: [Stream],
         attributes: [String: ParsedStreamAttributes],

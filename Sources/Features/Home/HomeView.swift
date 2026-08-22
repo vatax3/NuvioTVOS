@@ -6,6 +6,7 @@ struct HomeView: View {
     @Environment(LibraryStore.self) private var library
     @Environment(AppSettings.self) private var settings
     @Environment(Router.self) private var router
+    @Environment(RemoteProgressService.self) private var remoteProgress
 
     @State private var model = HomeViewModel()
 
@@ -34,6 +35,19 @@ struct HomeView: View {
         .background(colors.background)
         .task(id: addons.catalogSignature) {
             await model.load(addonStore: addons, presentation: settings.catalogPresentation)
+        }
+        // Continue Watching from a tracking account rather than this device, when that is what
+        // the viewer asked for. A no-op on the local setting, which is the default.
+        .task(id: settings.effectiveWatchProgressSource) {
+            await remoteProgress.refreshIfNeeded(settings: settings, library: library, addons: addons)
+            await remoteProgress.enrichContinueWatching(
+                library.continueWatching(
+                    threshold: settings.watchedThreshold,
+                    withinDays: settings.tracking.continueWatchingDaysCap
+                ),
+                settings: settings,
+                library: library
+            )
         }
         .onChange(of: settings.catalogPresentation) { _, presentation in
             model.apply(presentation: presentation)
@@ -75,7 +89,8 @@ struct HomeRailList: View {
     private var continueWatching: [ContinueWatchingEntry] {
         library.continueWatching(
             threshold: settings.watchedThreshold,
-            sort: settings.layout.continueWatchingSortMode
+            sort: settings.layout.continueWatchingSortMode,
+            withinDays: settings.tracking.continueWatchingDaysCap
         )
     }
 
@@ -84,19 +99,15 @@ struct HomeRailList: View {
     private var firstCardKey: String? {
         continueWatching.first?.preview.rowKey
             ?? model.rows.first(where: { !$0.items.isEmpty })?.items.first?.rowKey
-            ?? homeCollections.first.flatMap {
-                collections.items(in: $0.id, library: library).first?.rowKey
-            }
+            ?? homeCollections.first?.folders.first?.id
     }
 
-    /// Collections worth a rail: an empty one is a heading over nothing, and Home is not where
-    /// you go to fill it. They sit after the addon catalogues, which is where Android puts them
-    /// when the viewer has not reordered anything.
+    /// Collections worth a rail: one with no folders is a heading over nothing. Pinned ones
+    /// come first, and the rest sit after the addon catalogues — where Android puts them when
+    /// the viewer has not reordered anything.
     private var homeCollections: [MediaCollection] {
         guard settings.layout.collectionsOnHomeEnabled else { return [] }
-        return collections.collections.filter {
-            !collections.items(in: $0.id, library: library).isEmpty
-        }
+        return collections.ordered.filter { !$0.folders.isEmpty }
     }
 
     var body: some View {
@@ -133,8 +144,7 @@ struct HomeRailList: View {
             }
 
             ForEach(homeCollections) { collection in
-                // Browsing, not managing: the tail edit button belongs to the Library tab.
-                CollectionRail(collection: collection, showsEditAffordance: false)
+                CollectionRail(collection: collection, focusBinding: $focusedCardKey)
             }
         }
         // Claim focus for the content the moment there is a card to hold it. Without this the

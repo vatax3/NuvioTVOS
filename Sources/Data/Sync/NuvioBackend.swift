@@ -563,6 +563,19 @@ enum AnyJSONValue: Codable, Hashable {
         }
     }
 
+    /// Bridges a `Codable` model straight into the parameter tree.
+    ///
+    /// Hand-building `.object([…])` is fine for a flat row and unworkable for a nested one —
+    /// collections are three levels deep with a custom source encoding, and rewriting that by
+    /// hand here would be a second implementation of the wire format to keep in step with the
+    /// first. Round-tripping through `JSONEncoder` means there is only ever one.
+    static func encoding<T: Encodable>(_ value: T) -> AnyJSONValue? {
+        guard let data = try? JSONEncoder().encode(value),
+              let bridged = try? JSONDecoder().decode(AnyJSONValue.self, from: data)
+        else { return nil }
+        return bridged
+    }
+
     /// Convenience for optional fields: absent rather than explicitly null where that matters.
     static func optionalString(_ value: String?) -> AnyJSONValue {
         value?.nilIfBlank.map { .string($0) } ?? .null

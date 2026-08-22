@@ -6,7 +6,6 @@ struct MetaDetailsView: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(AddonStore.self) private var addons
     @Environment(LibraryStore.self) private var library
-    @Environment(CollectionStore.self) private var collections
     @Environment(AppSettings.self) private var settings
     @Environment(Router.self) private var router
 
@@ -14,11 +13,6 @@ struct MetaDetailsView: View {
 
     @State private var model = MetaDetailsViewModel()
     @State private var logoFailed = false
-    @State private var collectionTarget: MetaPreview?
-
-    private func collectionCount(_ meta: Meta) -> Int {
-        collections.collections(containing: meta.preview()).count
-    }
 
     var body: some View {
         GeometryReader { proxy in
@@ -39,9 +33,6 @@ struct MetaDetailsView: View {
         .ignoresSafeArea()
         .background(colors.background)
         .task { await model.load(request: request, addonStore: addons, settings: settings) }
-        .sheet(item: $collectionTarget) { preview in
-            CollectionPickerView(preview: preview)
-        }
     }
 
     // MARK: Backdrop
@@ -220,20 +211,6 @@ struct MetaDetailsView: View {
                 .frame(height: NuvioTheme.components.buttonHeight)
             }
             .buttonStyle(NuvioPillButtonStyle(emphasis: .secondary, selected: library.isInLibrary(meta.preview())))
-
-            Button(action: { collectionTarget = meta.preview() }) {
-                HStack(spacing: NuvioTheme.spacing.sm) {
-                    Image(systemName: collectionCount(meta) > 0 ? "folder.fill" : "folder.badge.plus")
-                    Text(collectionCount(meta) > 0 ? "In \(collectionCount(meta)) collection\(collectionCount(meta) == 1 ? "" : "s")" : "Collections")
-                }
-                .nuvioText(NuvioTextStyles.button)
-                .padding(.horizontal, NuvioTheme.spacing.xl)
-                .frame(height: NuvioTheme.components.buttonHeight)
-            }
-            .buttonStyle(NuvioPillButtonStyle(
-                emphasis: .secondary,
-                selected: collectionCount(meta) > 0
-            ))
 
             if settings.tracking.showMetaComments,
                !settings.tracking.traktClientId.isEmpty,
@@ -425,6 +402,12 @@ struct EpisodesSection: View {
             for episode in episodes {
                 library.cacheEpisodeThumbnail(episode.thumbnail, forVideoId: episode.id)
             }
+        }
+        // TMDB carries episode titles and stills for the seasons whose addon returned neither.
+        // Fetched per season on selection rather than all at once: a long-running series would
+        // otherwise mean twenty requests to fill a rail the viewer never scrolls to.
+        .task(id: model.selectedSeason) {
+            await model.enrichEpisodes(season: model.selectedSeason, settings: settings)
         }
     }
 }

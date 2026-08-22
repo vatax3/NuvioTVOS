@@ -326,6 +326,9 @@ struct MPVPlayerView: View {
     /// mpv is started by `MPVMetalSurface`, which owns the layer it has to be handed. All that
     /// is left here is the addon subtitle tracks and the auto-hide timer.
     private func start() {
+        // The viewer's default picture shape. `resize_mode` had been stored and synced since the
+        // port began and applied nowhere, so every playback started in Fit whatever they chose.
+        engine.setAspectMode(MPVEngine.AspectMode(resizeMode: settings.player.resizeMode))
         for subtitle in request.subtitles.prefix(8) {
             engine.addSubtitle(url: subtitle.url, title: subtitle.displayLanguage)
         }
@@ -684,7 +687,13 @@ struct MPVPlayerView: View {
     private func handOffToExternalPlayer() {
         guard let target = externalPlayerTarget else { return }
         persist(completed: false)
-        if ExternalPlayerLauncher.open(target, stream: request.streamURL, title: request.title) {
+        if ExternalPlayerLauncher.open(
+            target,
+            stream: request.streamURL,
+            title: request.title,
+            subtitleURL: settings.player.externalPlayerForwardSubtitles
+                ? request.subtitles.first?.url : nil
+        ) {
             dismiss()
         }
     }

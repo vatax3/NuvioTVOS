@@ -6,6 +6,7 @@ struct ContentDiscoverySettingsContent: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(AddonStore.self) private var addons
     @Environment(PluginStore.self) private var plugins
+    @Environment(CollectionStore.self) private var collections
     @Environment(AppSettings.self) private var settings
     @Environment(Router.self) private var router
 
@@ -32,6 +33,13 @@ struct ContentDiscoverySettingsContent: View {
                     trailing: { SettingsValueLabel(value: "") },
                     action: { router.push(.catalogOrder) }
                 )
+                SettingsRow(
+                    title: "Collections",
+                    subtitle: collectionSubtitle,
+                    systemImage: "folder",
+                    trailing: { SettingsValueLabel(value: "") },
+                    action: { router.push(.collectionManager) }
+                )
                 if showsPlugins {
                     SettingsRow(
                         title: "Plugins",
@@ -45,6 +53,13 @@ struct ContentDiscoverySettingsContent: View {
 
             DiscoverySettingsCard()
         }
+    }
+
+    private var collectionSubtitle: String {
+        let count = collections.collections.count
+        guard count > 0 else { return "Folders of catalogs, TMDB searches and Trakt lists" }
+        let folders = collections.collections.reduce(0) { $0 + $1.folders.count }
+        return "\(count) collection\(count == 1 ? "" : "s") · \(folders) folder\(folders == 1 ? "" : "s")"
     }
 
     private var pluginSubtitle: String {

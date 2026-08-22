@@ -23,6 +23,8 @@ final class StreamsViewModel {
     private(set) var skippedForIdPrefix: [String] = []
     /// External subtitle tracks, fetched alongside the streams and handed to the player.
     private(set) var subtitles: [Subtitle] = []
+    /// Debrid links resolved ahead of the viewer choosing, keyed by `Stream.stableKey`.
+    private(set) var preparedURLs: [String: String] = [:]
 
     private let client: StremioClient
 
@@ -283,10 +285,58 @@ final class StreamsViewModel {
         return cacheStates[hash]
     }
 
+    /// Resolves the first few cached torrents through debrid before the viewer picks one, so the
+    /// gap between pressing Play and the picture starting is spent here instead.
+    ///
+    /// The reader for `instant_playback_preparation_limit`, a stepper in Debrid settings that
+    /// nothing consumed. Only **cached** sources are prepared: asking debrid for an uncached
+    /// torrent starts a download on the account, which is not something to do speculatively on
+    /// the viewer's behalf.
+    func prepareInstantPlayback(settings: AppSettings) async {
+        let limit = settings.debrid.instantPlaybackPreparationLimit
+        guard limit > 0, settings.debrid.enabled,
+              let credential = settings.debrid.activeResolver
+        else { return }
+
+        let candidates = orderedStreams
+            .filter { $0.streamURL() == nil && $0.isTorrent }
+            .filter { cacheState(for: $0)?.state == .cached }
+            .filter { preparedURLs[$0.stableKey] == nil }
+            .prefix(limit)
+        guard !candidates.isEmpty else { return }
+
+        await withTaskGroup(of: (String, String?).self) { group in
+            for stream in candidates {
+                guard let infoHash = stream.effectiveInfoHash else { continue }
+                let key = stream.stableKey
+                let magnet = stream.torrentMagnetURI()
+                let fileIndex = stream.fileIdx
+                let filename = stream.behaviorHints?.filename
+                group.addTask {
+                    let url = try? await DebridClient.shared.resolvePlayableLink(
+                        infoHash: infoHash,
+                        magnetURI: magnet,
+                        fileIndex: fileIndex,
+                        preferredFileName: filename,
+                        credential: credential
+                    )
+                    return (key, url)
+                }
+            }
+            for await (key, url) in group {
+                guard let url else { continue }
+                preparedURLs[key] = url
+            }
+        }
+    }
+
     /// Returns a directly playable URL, resolving through debrid when the source is a torrent.
     func playableURL(for stream: Stream, settings: AppSettings) async -> Result<String, Error> {
         if let direct = stream.streamURL() {
             return .success(direct)
+        }
+        if let prepared = preparedURLs[stream.stableKey] {
+            return .success(prepared)
         }
         guard settings.debrid.enabled, let credential = settings.debrid.activeResolver else {
             return .failure(DebridError.notConfigured)
@@ -375,6 +425,9 @@ struct StreamsView: View {
             }
             await model.load(request: request, addonStore: addons, settings: settings)
             await autoPlayIfConfigured()
+            // Auto-play gets first refusal; whatever it did not take is prepared behind the
+            // list, so the source the viewer picks by hand is likely to start immediately too.
+            await model.prepareInstantPlayback(settings: settings)
         }
     }
 
@@ -605,7 +658,29 @@ struct StreamsView: View {
     // MARK: Actions
 
     private func autoPlayIfConfigured() async {
-        guard !didAutoPlay, settings.player.streamAutoPlayMode != .off else { return }
+        guard !didAutoPlay else { return }
+
+        // Read once — it is consumed on read, and both branches below need to know whether the
+        // screen was reached by auto-advance.
+        let bingeGroup = PlaybackSessionStore.shared.consumeBingeGroup(for: request.videoId)
+
+        // Arrived here by auto-advance: the release that was playing is almost always the right
+        // one for the next episode — same encode, same audio, same subtitle timing. Trying it
+        // first is what `stream_auto_play_prefer_bingegroup_next_episode` asks for, and it
+        // applies even when general auto-play is off, which is the point of the pair.
+        if settings.player.reuseBingeGroup, let bingeGroup,
+           let match = StreamFilterEngine.bingeGroupMatch(in: model.orderedStreams, group: bingeGroup) {
+            didAutoPlay = true
+            await play(match)
+            return
+        }
+
+        guard settings.player.streamAutoPlayMode != .off else { return }
+        // The chain reached an episode that release does not cover. Falling back to the ordinary
+        // auto-play choice is a preference, because the alternative — stopping on the picker —
+        // is what some viewers want rather than a different encode mid-season.
+        guard bingeGroup == nil || settings.player.autoPlayNextEpisodeFallbackEnabled else { return }
+
         guard let candidate = StreamFilterEngine.autoPlayCandidate(
             from: model.orderedStreams,
             attributes: model.attributes,
@@ -615,6 +690,16 @@ struct StreamsView: View {
             preferredQuality: settings.player.autoPlayPreferredQuality,
             cacheStates: model.cacheStates
         ) else { return }
+
+        // `stream_auto_play_timeout_seconds`: the grace period between the list appearing and a
+        // source being chosen for you. Upstream spends it waiting for slower addons to answer;
+        // ours have all answered by now, so here it is what it looks like from the sofa either
+        // way — a moment to see the list and press something else.
+        let grace = settings.player.streamAutoPlayTimeoutSeconds
+        if grace > 0 {
+            try? await Task.sleep(for: .seconds(min(grace, 30)))
+            guard !Task.isCancelled, !didAutoPlay else { return }
+        }
         didAutoPlay = true
         await play(candidate)
     }
@@ -662,7 +747,10 @@ struct StreamsView: View {
         case .externalPlayer:
             let preferred = ExternalPlayer(rawValue: settings.player.preferredExternalPlayer)
             if let preferred, installed.contains(preferred) {
-                ExternalPlayerLauncher.open(preferred, stream: url, title: request.title)
+                ExternalPlayerLauncher.open(
+                    preferred, stream: url, title: request.title,
+                    subtitleURL: forwardedSubtitleURL
+                )
             } else if !installed.isEmpty {
                 // Set to external but no usable choice recorded — ask rather than guess.
                 handOff = HandOffRequest(playback: playback)
@@ -678,6 +766,22 @@ struct StreamsView: View {
                 handOff = HandOffRequest(playback: playback)
             }
         }
+    }
+
+    /// The addon subtitle track to hand to an external player, when the viewer asked for that.
+    ///
+    /// Their preferred language if one of the tracks matches it, otherwise the first — the same
+    /// order the internal player auto-selects in. A hand-off carries one track, so this picks it
+    /// rather than leaving the external player with none.
+    private var forwardedSubtitleURL: String? {
+        guard settings.player.externalPlayerForwardSubtitles else { return nil }
+        let ordered = SubtitleSelector.order(
+            model.subtitles,
+            preferred: settings.player.subtitlePreferredLanguage,
+            secondary: settings.player.subtitleSecondaryLanguage,
+            onlyPreferred: false
+        )
+        return ordered.first?.url.nilIfBlank
     }
 
     private func makePlaybackRequest(stream: Stream, url: String) -> PlaybackRequest {
@@ -708,7 +812,8 @@ struct StreamsView: View {
             sourceAddonLogo: stream.addonLogo,
             sourceDescription: stream.displayDescription,
             sourceHints: stream.sources ?? [],
-            sourceStableKey: stream.stableKey
+            sourceStableKey: stream.stableKey,
+            sourceBingeGroup: stream.behaviorHints?.bingeGroup
         )
     }
 }
@@ -1042,11 +1147,13 @@ struct HandOffRequest: Identifiable {
 struct ExternalPlayerPicker: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppSettings.self) private var settings
 
     let playback: PlaybackRequest
     let onInternal: () -> Void
 
     private var installed: [ExternalPlayer] { ExternalPlayerLauncher.installed }
+    private var forwardsSubtitles: Bool { settings.player.externalPlayerForwardSubtitles }
     private var losesHeaders: Bool { !playback.headers.isEmpty }
 
     var body: some View {
@@ -1085,7 +1192,10 @@ struct ExternalPlayerPicker: View {
                             systemImage: "arrow.up.forward.app",
                             action: {
                                 ExternalPlayerLauncher.open(
-                                    player, stream: playback.streamURL, title: playback.title
+                                    player,
+                                    stream: playback.streamURL,
+                                    title: playback.title,
+                                    subtitleURL: forwardsSubtitles ? playback.subtitles.first?.url : nil
                                 )
                                 dismiss()
                             }

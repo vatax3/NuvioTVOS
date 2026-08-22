@@ -24,14 +24,14 @@ struct LibraryView: View {
     }
 
     @State private var filter: Filter = .all
-    @State private var isCreatingCollection = false
 
     private var columns: [GridItem] { metrics.gridColumns() }
 
     private var continueWatching: [ContinueWatchingEntry] {
         library.continueWatching(
             threshold: settings.watchedThreshold,
-            sort: settings.layout.continueWatchingSortMode
+            sort: settings.layout.continueWatchingSortMode,
+            withinDays: settings.tracking.continueWatchingDaysCap
         )
     }
 
@@ -79,7 +79,6 @@ struct LibraryView: View {
         }
         .scrollClipDisabled()
         .background(colors.background)
-        .sheet(isPresented: $isCreatingCollection) { CollectionEditorView(collection: nil) }
         // The tab is restored rather than reset. `@State` cannot read the environment at
         // initialisation, so it is seeded here and written back on every change.
         .task { filter = Filter(rawValue: settings.layout.libraryFilter) ?? .all }
@@ -104,9 +103,9 @@ struct LibraryView: View {
                     onSelect: { router.openDetail($0.preview) }
                 )
             }
-        } else if settings.tracking.librarySourceMode == .trakt {
+        } else if settings.effectiveLibrarySourceMode == .trakt {
             TraktLibraryContent(typeFilter: remoteTypeFilter)
-        } else if settings.tracking.librarySourceMode == .simkl {
+        } else if settings.effectiveLibrarySourceMode == .simkl {
             EmptyStateView(
                 systemImage: "checklist",
                 title: "Simkl library is not available yet",
@@ -135,35 +134,27 @@ struct LibraryView: View {
         }
     }
 
-    /// One rail per collection, plus the create affordance.
+    /// One rail per collection, each rail a row of its folders.
+    ///
+    /// Browsing only. Building a collection means choosing catalogues, TMDB queries and Trakt
+    /// lists, which is a settings job rather than something to do over a grid of posters — the
+    /// editor lives next to Add-ons and Plugins.
     @ViewBuilder
     private var collectionsContent: some View {
         if collections.collections.isEmpty {
             EmptyStateView(
                 systemImage: "folder",
                 title: "No collections yet",
-                message: "Group titles into folders — a watchlist for tonight, a series to rewatch, anything.",
-                actionTitle: "New collection",
-                action: { isCreatingCollection = true }
+                message: "A collection is a set of folders, and a folder is a live query — an addon catalog, a TMDB search, a Trakt list. Build one in Settings → Sources → Collections.",
+                actionTitle: "Open Collections",
+                action: { router.push(.collectionManager) }
             )
             .frame(height: dp(340))
         } else {
             VStack(alignment: .leading, spacing: NuvioTheme.spacing.rail.rowGap) {
-                ForEach(collections.collections) { collection in
+                ForEach(collections.ordered) { collection in
                     CollectionRail(collection: collection)
                 }
-
-                Button(action: { isCreatingCollection = true }) {
-                    HStack(spacing: NuvioTheme.spacing.sm) {
-                        Image(systemName: "plus")
-                        Text("New collection")
-                    }
-                    .nuvioText(NuvioTextStyles.button)
-                    .padding(.horizontal, NuvioTheme.spacing.xl)
-                    .frame(height: NuvioTheme.components.buttonHeight)
-                }
-                .buttonStyle(NuvioPillButtonStyle(emphasis: .secondary))
-                .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)
             }
         }
     }

@@ -44,6 +44,12 @@ Found on the way, in no upstream changelog: the byte order mark was never stripp
 subtitle file, so it became a real `U+FEFF` in front of the first cue number and **the first cue
 of every BOM-marked track failed to parse**. Windows editors write one by default.
 
+| Collections: folders of live sources | pre-0.8.4 | The whole feature, ported to upstream's model — [`CollectionModel.swift`](../Sources/Data/CollectionModel.swift), [`CollectionSourceResolver.swift`](../Sources/Data/CollectionSourceResolver.swift), the folder screen and the editor. The shared `collections_json` shape is matched field for field, which also ends the two apps overwriting each other's collections on one account. **Not rendered on tvOS**: `focusGifUrl` and `heroVideoUrl` — a video layer per tile — though both survive a round trip untouched. |
+| First-run setup: experience mode, layout, essential add-ons | pre-0.8.4 | [`FirstRunView`](../Sources/Features/Onboarding/FirstRunView.swift). Upstream's three screens as one screen with three steps, so Back returns to the previous step rather than leaving a half-configured app. |
+| Watch progress and library sourced from a tracking account | pre-0.8.4 | [`TrackingSources`](../Sources/Data/TrackingSources.swift) and [`RemoteProgressService`](../Sources/Data/RemoteProgressService.swift), including upstream's *effective source* rule: a preference pointing at an account nobody signed into falls back to this device rather than rendering an empty screen. |
+| Next episode from the same release (`bingeGroup`) | pre-0.8.4 | [`StreamFilterEngine.bingeGroupMatch`](../Sources/Data/StreamFilterEngine.swift). Same encode, same audio, same subtitle timing, without reopening the source list. |
+| TMDB episode metadata, forced-subtitle selection, instant playback preparation, subtitle picker grouping, default aspect, external-player subtitle hand-off | pre-0.8.4 | Settings that existed here from the start and were read by nothing. See [FEATURE-AUDIT.md](FEATURE-AUDIT.md) §1. |
+
 ## Not applicable
 
 Android platform internals with nothing to port. Listed so the next pass does not re-examine them.
@@ -78,6 +84,8 @@ Not ported, on purpose.
 | V1 for supporter perks | 0.8.7 | A product and monetisation decision that belongs to the upstream project, not to a port of it. |
 | Support for discovery endpoint | 0.8.5 | Depends on their backend contract. Porting it from a changelog line alone would mean guessing at the protocol, and a wrong guess here fails silently. Revisit with the endpoint documented. |
 | Configurable rating visibility | 0.8.7 | Deferred, not refused — a preference with no bug behind it. |
+| Hero trailers and focused-poster trailers | pre-0.8.4 | Cannot exist on this platform. Stremio trailers are YouTube ids; tvOS has no WKWebView and AVPlayer cannot resolve a YouTube watch page, which is why the trailer button hands off to the YouTube app. The settings were removed rather than left inert; the `trailer` sync namespace is still round-tripped. |
+| Playback issue reports | pre-0.8.4 | The report uploads to Nuvio's own backend, whose contract belongs to the Android project. Same reasoning as the discovery endpoint above. |
 | Keep poster art when episode thumbnails are off | 0.8.5 | Same. |
 | Redesign episode options overlay | 0.8.7 | Our in-player panels were designed against the iOS and macOS apps and already diverge deliberately. |
 | Localization updates | 0.8.5, 0.8.7 | Our strings are our own; `Resources/*.lproj` is not generated from theirs. |

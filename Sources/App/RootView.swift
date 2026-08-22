@@ -13,6 +13,10 @@ struct RootView: View {
     @Environment(NuvioSyncService.self) private var sync
     @Environment(\.scenePhase) private var scenePhase
 
+    /// Latched once at appearance rather than recomputed: the walk-through must not vanish
+    /// under the viewer the moment they install their first add-on in step three.
+    @State private var showsFirstRun: Bool?
+
     var body: some View {
         @Bindable var router = router
 
@@ -25,6 +29,16 @@ struct RootView: View {
             }
         }
         .background(colors.background)
+        .fullScreenCover(isPresented: Binding(
+            get: { showsFirstRun == true },
+            set: { if !$0 { showsFirstRun = false } }
+        )) {
+            FirstRunView { showsFirstRun = false }
+        }
+        .onAppear {
+            guard showsFirstRun == nil else { return }
+            showsFirstRun = FirstRunView.shouldPresent(settings: settings, addons: addons)
+        }
         .environment(\.posterMetrics, settings.posterMetrics)
         .environment(\.cardDepth, settings.cardDepthStyle)
         .environment(\.navigationFeel, settings.navigationFeel)
@@ -120,6 +134,8 @@ struct RootView: View {
             CastDetailView(request: request)
         case .tmdbBrowse(let request):
             TMDBBrowseView(request: request)
+        case .collectionFolder(let request):
+            CollectionFolderView(request: request)
         case .comments(let request):
             CommentsView(
                 imdbId: request.imdbId,
@@ -132,6 +148,8 @@ struct RootView: View {
             AddonManagerView()
         case .pluginManager:
             PluginManagerView()
+        case .collectionManager:
+            CollectionManagerView()
         case .catalogOrder:
             CatalogOrderView()
         case .themeSettings:

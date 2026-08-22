@@ -92,6 +92,17 @@ struct PlaybackSettingsContent: View {
             StreamBadgeSettingsCard()
 
             SettingsCard(
+                title: "Picture",
+                footnote: "The shape playback starts in. The player's Display button still cycles through every mode for the title you are watching."
+            ) {
+                SettingsOptionRow(
+                    title: "Default aspect",
+                    systemImage: "aspectratio",
+                    selection: $player.resizeMode
+                )
+            }
+
+            SettingsCard(
                 title: "TV player experience",
                 footnote: "Nuvio layers these optional status views above the native tvOS transport controls."
             ) {
@@ -285,6 +296,12 @@ struct PlaybackSettingsContent: View {
                     subtitle: "Hide every other language in the picker",
                     isOn: $player.subtitleShowOnlyPreferredLanguages
                 )
+                SettingsOptionRow(
+                    title: "Group the picker",
+                    subtitle: "How addon tracks are arranged in the player's subtitle menu",
+                    systemImage: "list.bullet.indent",
+                    selection: $player.subtitleOrganizationMode
+                )
             }
 
             SettingsCard(title: "Appearance") {
@@ -377,6 +394,15 @@ struct PlaybackSettingsContent: View {
                         text: $player.autoPlayPreferredQuality
                     )
                 }
+                if player.streamAutoPlayMode != .off {
+                    SettingsStepperRow(
+                        title: "Wait before starting",
+                        subtitle: "Your chance to pick a different source before one is chosen",
+                        value: $player.streamAutoPlayTimeoutSeconds,
+                        range: 0...30,
+                        format: { $0 == 0 ? "Immediately" : "\($0)s" }
+                    )
+                }
             }
 
             SettingsCard(title: "Next episode") {
@@ -407,6 +433,24 @@ struct PlaybackSettingsContent: View {
                             format: { "\($0) min" }
                         )
                     }
+                    SettingsToggle(
+                        title: "Keep the same release",
+                        subtitle: "Play the next episode from the source you were already watching",
+                        systemImage: "square.stack.3d.down.right",
+                        isOn: $player.reuseBingeGroup
+                    )
+                    if player.reuseBingeGroup {
+                        SettingsToggle(
+                            title: "Fall back to auto-play",
+                            subtitle: "When that release has no source for the next episode",
+                            isOn: $player.autoPlayNextEpisodeFallbackEnabled
+                        )
+                    }
+                    SettingsToggle(
+                        title: "Remember the release across episodes",
+                        subtitle: "Carry the source you chose into the rest of the run",
+                        isOn: $player.preferBingeGroupNextEpisode
+                    )
                 }
             }
 
@@ -568,6 +612,14 @@ struct ExternalPlayerSettingsCard: View {
                     tint: colors.textSecondary
                 )
             } else {
+                SettingsToggle(
+                    title: "Send the subtitle track",
+                    subtitle: installed.contains(where: \.acceptsSubtitleURL)
+                        ? "Infuse and VLC accept one; nPlayer and Outplayer take the video URL only"
+                        : "Neither installed player accepts a subtitle URL",
+                    systemImage: "captions.bubble",
+                    isOn: $player.externalPlayerForwardSubtitles
+                )
                 SettingsRow(
                     title: "Ask each time",
                     subtitle: "Choose at the moment of playback",

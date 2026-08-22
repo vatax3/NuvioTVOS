@@ -14,6 +14,7 @@ struct TrackingSettingsContent: View {
     @State private var simklStatus: String?
 
     private var tracking: TrackingSettingsStore { settings.tracking }
+    private var connectedProviders: Set<TrackingProviderId> { settings.connectedTrackingProviders }
 
     var body: some View {
         @Bindable var tracking = tracking
@@ -150,14 +151,23 @@ struct TrackingSettingsContent: View {
                 title: "Sources",
                 footnote: "Where Nuvio reads watch state and your library from."
             ) {
+                // Only the accounts actually signed in are offered. Listing Trakt to someone who
+                // never connected it is offering a choice that silently does nothing — and the
+                // preference can also arrive from another device through account sync, which is
+                // why the readers use `settings.effective…` rather than the raw value.
                 SettingsOptionRow(
                     title: "Watch progress",
+                    subtitle: connectedProviders.isEmpty
+                        ? "Connect Trakt or Simkl above to read progress from an account"
+                        : nil,
                     systemImage: "clock.arrow.circlepath",
+                    options: TrackingSources.availableWatchProgressSources(connected: connectedProviders),
                     selection: $tracking.watchProgressSource
                 )
                 SettingsOptionRow(
                     title: "Library",
                     systemImage: "bookmark",
+                    options: TrackingSources.availableLibrarySourceModes(connected: connectedProviders),
                     selection: $tracking.librarySourceMode
                 )
                 SettingsOptionRow(
@@ -444,37 +454,6 @@ struct AnimeSkipSettingsCard: View {
                 set: { skip.setAutoSkip(kind, $0) }
             )
         )
-    }
-}
-
-/// Hero trailers — grouped with the rest of the hero options in Layout.
-struct TrailerSettingsCard: View {
-    @Environment(AppSettings.self) private var settings
-
-    var body: some View {
-        @Bindable var trailers = settings.trailers
-
-        Group {
-            SettingsCard(
-                title: "Trailers",
-                footnote: "Plays a trailer behind the hero after the card stays focused."
-            ) {
-                SettingsToggle(
-                    title: "Hero trailers",
-                    systemImage: "play.tv",
-                    isOn: $trailers.enabled
-                )
-                if trailers.enabled {
-                    SettingsStepperRow(
-                        title: "Start after",
-                        value: $trailers.delaySeconds,
-                        range: 0...15,
-                        format: { "\($0)s" }
-                    )
-                }
-            }
-
-        }
     }
 }
 

@@ -122,6 +122,31 @@ final class AppSettings {
     /// Fraction of a video that counts as watched — used by Continue Watching and episode ticks.
     var watchedThreshold: Double { player.watchedThresholdFraction }
 
+    // MARK: Tracking sources
+
+    /// The tracking accounts actually signed in, which is what decides whether a source
+    /// preference can be honoured.
+    var connectedTrackingProviders: Set<TrackingProviderId> {
+        var out: Set<TrackingProviderId> = []
+        if tracking.isTraktAuthenticated { out.insert(.trakt) }
+        if tracking.isSimklAuthenticated { out.insert(.simkl) }
+        return out
+    }
+
+    /// Always read these rather than the raw preference: a preference pointing at a provider the
+    /// viewer is not signed into falls back to this device instead of showing nothing.
+    var effectiveWatchProgressSource: WatchProgressSource {
+        TrackingSources.effectiveWatchProgressSource(
+            tracking.watchProgressSource, connected: connectedTrackingProviders
+        )
+    }
+
+    var effectiveLibrarySourceMode: LibrarySourceMode {
+        TrackingSources.effectiveLibrarySourceMode(
+            tracking.librarySourceMode, connected: connectedTrackingProviders
+        )
+    }
+
     /// Resolved poster geometry, injected into the environment so every rail and grid picks up
     /// the viewer's Layout settings instead of the static tokens.
     var posterMetrics: PosterMetrics {

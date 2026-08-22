@@ -214,6 +214,7 @@ struct PlayerView: View {
                 resumeAt: resumePosition,
                 subtitleStyle: settings.subtitleStyle,
                 subtitleTracks: subtitles.available,
+                subtitleOrganization: settings.player.subtitleOrganizationMode,
                 selectedSubtitle: subtitles.selected,
                 onSelectSubtitle: { subtitles.select($0) },
                 seekTarget: requestedSeek,
@@ -310,7 +311,12 @@ struct PlayerView: View {
 
         if subtitles.selected == nil,
            let automatic = SubtitleSelector.autoSelection(
-               ordered, preferred: settings.player.subtitlePreferredLanguage
+               ordered,
+               preferred: settings.player.subtitlePreferredLanguage,
+               // The track mpv will pick, which is what decides whether a full subtitle track
+               // would be repeating dialogue the viewer can already understand.
+               audioLanguage: settings.audioTrackLanguages.first,
+               useForced: settings.player.subtitleUseForcedSubtitles
            ) {
             subtitles.select(automatic)
         }
@@ -750,7 +756,12 @@ struct PlayerView: View {
         didDeclineNextEpisode = false
         scrobbleStop()
         guard let next = request.nextUp else { return }
-        PlaybackSessionStore.shared.markAutoAdvance(to: next.videoId)
+        PlaybackSessionStore.shared.markAutoAdvance(
+            to: next.videoId,
+            // Only offered when the viewer asked for it; the stream screen decides what to do
+            // with it, and ignores it entirely when the preference is off.
+            bingeGroup: settings.player.preferBingeGroupNextEpisode ? request.sourceBingeGroup : nil
+        )
         router.openStreams(next)
         dismiss()
     }
@@ -774,7 +785,12 @@ struct PlayerView: View {
     private func advanceToNextEpisode() {
         guard settings.player.autoPlayNextEpisodeEnabled, !didDeclineNextEpisode,
               let next = request.nextUp else { return }
-        PlaybackSessionStore.shared.markAutoAdvance(to: next.videoId)
+        PlaybackSessionStore.shared.markAutoAdvance(
+            to: next.videoId,
+            // Only offered when the viewer asked for it; the stream screen decides what to do
+            // with it, and ignores it entirely when the preference is off.
+            bingeGroup: settings.player.preferBingeGroupNextEpisode ? request.sourceBingeGroup : nil
+        )
         router.openStreams(next)
     }
 
@@ -821,6 +837,10 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
     /// Applied to tracks the container itself carries; addon tracks are drawn by the overlay.
     let subtitleStyle: SubtitleStyle
     let subtitleTracks: [Subtitle]
+    /// How the addon-track menu is grouped — `subtitle_organization_mode`. The engine that
+    /// groups them has existed since the port began; nothing was telling it which mode to use,
+    /// so every viewer got "by language" whatever they had chosen.
+    let subtitleOrganization: SubtitleOrganizationMode
     let selectedSubtitle: Subtitle?
     let onSelectSubtitle: (Subtitle?) -> Void
     let seekTarget: Double?
@@ -935,7 +955,7 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
             onSelectSubtitle(nil)
         }
 
-        let groups = SubtitleSelector.group(subtitleTracks, mode: .byLanguage)
+        let groups = SubtitleSelector.group(subtitleTracks, mode: subtitleOrganization)
         let children: [UIMenuElement] = groups.map { group in
             let actions = group.items.map { subtitle in
                 UIAction(

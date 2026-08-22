@@ -82,16 +82,6 @@ final class DebridSettingsStore: PreferenceStore {
         set { setCodable("stream_preferences", newValue) }
     }
 
-    var streamNameTemplate: String {
-        get { string("debrid_stream_name_template", default: "{provider} {resolution}") }
-        set { setString("debrid_stream_name_template", newValue) }
-    }
-
-    var streamDescriptionTemplate: String {
-        get { string("debrid_stream_description_template", default: "{quality} • {size} • {group}") }
-        set { setString("debrid_stream_description_template", newValue) }
-    }
-
     // MARK: Derived
 
     func apiKey(for provider: DebridProvider) -> String {
@@ -179,11 +169,6 @@ final class TrackingSettingsStore: PreferenceStore {
     var nextUpFromFurthestEpisode: Bool {
         get { bool("next_up_from_furthest_episode", default: true) }
         set { setBool("next_up_from_furthest_episode", newValue) }
-    }
-
-    var simklAnimeIdPreference: String {
-        get { string("simkl_anime_id_preference", default: "auto") }
-        set { setString("simkl_anime_id_preference", newValue) }
     }
 
     // Trakt credentials. The Android build bakes Nuvio's own client ID into BuildConfig; a
@@ -312,11 +297,6 @@ final class TmdbSettingsStore: PreferenceStore {
         set { setBool("tmdb_use_trailers", newValue) }
     }
 
-    var useCollections: Bool {
-        get { bool("tmdb_use_collections", default: true) }
-        set { setBool("tmdb_use_collections", newValue) }
-    }
-
     var useNetworks: Bool {
         get { bool("tmdb_use_networks", default: true) }
         set { setBool("tmdb_use_networks", newValue) }
@@ -340,11 +320,6 @@ final class TmdbSettingsStore: PreferenceStore {
     var enrichContinueWatching: Bool {
         get { bool("tmdb_enrich_continue_watching", default: true) }
         set { setBool("tmdb_enrich_continue_watching", newValue) }
-    }
-
-    var modernHomeEnabled: Bool {
-        get { bool("tmdb_modern_home_enabled", default: false) }
-        set { setBool("tmdb_modern_home_enabled", newValue) }
     }
 
     var isUsable: Bool { enabled && !apiKey.trimmingCharacters(in: .whitespaces).isEmpty }
@@ -502,16 +477,17 @@ final class StreamBadgeSettingsStore: PreferenceStore {
 
 @Observable
 @MainActor
+/// Kept, deliberately empty, so the account keeps round-tripping Android's `trailer` namespace.
+///
+/// Hero trailers cannot exist on this platform: Stremio trailers are YouTube ids, tvOS has no
+/// WKWebView, and AVPlayer cannot resolve a YouTube watch page — the same reason
+/// `TrailerLauncher` hands off to the YouTube app instead of playing anything itself. So there
+/// are no properties here and no settings rows: an inert switch would have been a promise this
+/// client cannot keep.
+///
+/// The store still exists because `PreferenceStore.importFromSync` persists whatever keys arrive
+/// and `exportForSync` writes them back out, declared or not. Dropping the namespace from
+/// `syncedStores` is what would lose Android's values, not dropping the properties.
 final class TrailerSettingsStore: PreferenceStore {
     init() { super.init(namespace: "trailer") }
-
-    var enabled: Bool {
-        get { bool("trailer_enabled", default: false) }
-        set { setBool("trailer_enabled", newValue) }
-    }
-
-    var delaySeconds: Int {
-        get { int("trailer_delay_seconds", default: 3) }
-        set { setInt("trailer_delay_seconds", newValue) }
-    }
 }

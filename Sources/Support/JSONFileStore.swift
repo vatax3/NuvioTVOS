@@ -133,5 +133,36 @@ struct JSONFileStore<Value: Codable> {
         if let url { try? FileManager.default.removeItem(at: url) }
     }
 
+    /// The stored bytes, undecoded.
+    ///
+    /// For a migration that has to recognise an old shape before it can decide what to do with
+    /// it — `load()` cannot help there, because the old shape is precisely what `Value` no
+    /// longer describes.
+    func rawData() -> Data? {
+        if let defaultsKey { return UserDefaults.standard.data(forKey: defaultsKey) }
+        guard let url, FileManager.default.fileExists(atPath: url.path) else { return nil }
+        return try? Data(contentsOf: url)
+    }
+
+    /// Renames the store out of the way instead of deleting it.
+    ///
+    /// Used when a format change leaves data this build can no longer read. Dropping it would be
+    /// simpler and would silently destroy something a viewer made; this keeps it in the
+    /// container, under a name that says what it is.
+    func moveAside(to filename: String) {
+        guard let data = rawData() else { return }
+        if let defaultsKey {
+            let destination = "\(defaultsKey).retired.\(filename)"
+            UserDefaults.standard.set(data, forKey: destination)
+            UserDefaults.standard.removeObject(forKey: defaultsKey)
+            return
+        }
+        guard let url else { return }
+        let destination = url.deletingLastPathComponent().appendingPathComponent(filename)
+        try? FileManager.default.removeItem(at: destination)
+        try? FileManager.default.moveItem(at: url, to: destination)
+        log.notice("\(name, privacy: .public) set aside as \(filename, privacy: .public)")
+    }
+
     private var name: String { defaultsKey ?? url?.lastPathComponent ?? "store" }
 }

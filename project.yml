@@ -120,6 +120,14 @@ targets:
       # the bundle layout and refuse to sign.
       - path: Resources
       - path: Assets.xcassets
+    # Fails the build when a declared setting has no reader. This is the guard against the
+    # mechanism that produced the 1.0.4 audit's finding: stores ported ahead of the features
+    # meant to read them, and settings screens generated from the stores, so an inert control
+    # was the default outcome rather than a mistake. See docs/FEATURE-AUDIT.md.
+    preBuildScripts:
+      - script: "\"$SRCROOT/Scripts/check-settings-wiring.sh\""
+        name: Check settings wiring
+        basedOnDependencyAnalysis: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.nuvio.tvos
@@ -127,8 +135,8 @@ targets:
         PRODUCT_NAME: Nuvio
         INFOPLIST_KEY_CFBundleDisplayName: Nuvio
         INFOPLIST_KEY_UIUserInterfaceStyle: Dark
-        MARKETING_VERSION: "1.0.4"
-        CURRENT_PROJECT_VERSION: "6"
+        MARKETING_VERSION: "1.0.5"
+        CURRENT_PROJECT_VERSION: "7"
         TARGETED_DEVICE_FAMILY: "3"
         # MoltenVK and shaderc inside the mpv stack are C++, so the C++ runtime and the system
         # libraries they call into have to be linked explicitly.
@@ -180,8 +188,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.nuvio.tvos.topshelf
         PRODUCT_NAME: NuvioTopShelf
         CODE_SIGN_ENTITLEMENTS: TopShelf/NuvioTopShelf.entitlements
-        MARKETING_VERSION: "1.0.4"
-        CURRENT_PROJECT_VERSION: "6"
+        MARKETING_VERSION: "1.0.5"
+        CURRENT_PROJECT_VERSION: "7"
         GENERATE_INFOPLIST_FILE: YES
     info:
       path: TopShelf/Info.plist

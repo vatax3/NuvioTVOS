@@ -1,34 +1,29 @@
 import Foundation
 import Observation
 
-/// A user-made folder of titles — Nuvio's collections. Membership is by `rowKey` so an entry
-/// survives artwork or metadata changes, and the artwork itself comes from the library's preview
-/// cache rather than being duplicated here.
-struct MediaCollection: Codable, Hashable, Identifiable {
-    var id: String
-    var name: String
-    var symbol: String
-    var itemKeys: [String]
-    var createdAt: Date
-    var updatedAt: Date
-
-    var count: Int { itemKeys.count }
-
-    static let availableSymbols = [
-        "folder.fill", "star.fill", "heart.fill", "bookmark.fill",
-        "film.stack", "sparkles", "flame.fill", "moon.stars.fill"
-    ]
-}
-
 @Observable
 @MainActor
 final class CollectionStore {
     private(set) var collections: [MediaCollection] = []
 
+    /// When this device last changed its collections, which is what decides a sync conflict.
+    ///
+    /// The model carries no timestamps — upstream's does not either — so the previous
+    /// per-collection `updatedAt` is gone. This is local bookkeeping and is deliberately not part
+    /// of the synced payload: putting it there would change the shared shape.
+    private(set) var updatedAt: Date = .distantPast
+
     private let file = JSONFileStore<[MediaCollection]>(filename: "collections.json")
+    private let stamp = JSONFileStore<Date>(filename: "collections-updated-at.json")
+    /// Where the manual collections this replaced were left. They are not readable by anything
+    /// any more — the model has no notion of a hand-picked list — but deleting a viewer's folders
+    /// as a side effect of a format change is not ours to do. See `retireManualCollections`.
+    private static let retiredFilename = "collections-manual-retired.json"
 
     init() {
+        Self.retireManualCollections()
         collections = file.load() ?? []
+        updatedAt = stamp.load() ?? .distantPast
     }
 
     // MARK: Queries
@@ -37,89 +32,48 @@ final class CollectionStore {
         collections.first { $0.id == id }
     }
 
-    func contains(_ preview: MetaPreview, in collectionId: String) -> Bool {
-        collection(id: collectionId)?.itemKeys.contains(preview.rowKey) ?? false
-    }
-
-    /// Every collection the title belongs to — drives the checkmarks in the picker.
-    func collections(containing preview: MetaPreview) -> [MediaCollection] {
-        collections.filter { $0.itemKeys.contains(preview.rowKey) }
-    }
-
-    /// Resolves membership into previews, dropping keys whose artwork is no longer cached.
-    func items(in collectionId: String, library: LibraryStore) -> [MetaPreview] {
-        guard let collection = collection(id: collectionId) else { return [] }
-        let saved = Dictionary(
-            library.library.map { ($0.preview.rowKey, $0.preview) },
-            uniquingKeysWith: { first, _ in first }
-        )
-        return collection.itemKeys.compactMap { key in
-            saved[key] ?? library.previewCache[key]
+    func folder(id: String) -> (collection: MediaCollection, folder: CollectionFolder)? {
+        for collection in collections {
+            if let folder = collection.folders.first(where: { $0.id == id }) {
+                return (collection, folder)
+            }
         }
+        return nil
     }
 
-    // MARK: Mutations
+    /// Pinned collections first, insertion order otherwise — the order the home rails follow.
+    var ordered: [MediaCollection] {
+        collections.filter(\.pinToTop) + collections.filter { !$0.pinToTop }
+    }
+
+    // MARK: Collection mutations
 
     @discardableResult
-    func create(name: String, symbol: String = "folder.fill") -> MediaCollection? {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+    func create(title: String) -> MediaCollection? {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        let collection = MediaCollection(
-            id: UUID().uuidString,
-            name: trimmed,
-            symbol: symbol,
-            itemKeys: [],
-            createdAt: Date(),
-            updatedAt: Date()
-        )
+        let collection = MediaCollection(title: trimmed)
         collections.append(collection)
         persist()
         return collection
     }
 
-    func rename(_ collectionId: String, to name: String) {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+    func rename(_ collectionId: String, to title: String) {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, let index = index(of: collectionId) else { return }
-        collections[index].name = trimmed
-        collections[index].updatedAt = Date()
+        collections[index].title = trimmed
         persist()
     }
 
-    func setSymbol(_ symbol: String, for collectionId: String) {
+    func update(_ collectionId: String, _ mutate: (inout MediaCollection) -> Void) {
         guard let index = index(of: collectionId) else { return }
-        collections[index].symbol = symbol
+        mutate(&collections[index])
         persist()
     }
 
     func delete(_ collectionId: String) {
         collections.removeAll { $0.id == collectionId }
         persist()
-    }
-
-    /// Newest additions sit at the top, which is how the folder reads on Android.
-    func add(_ preview: MetaPreview, to collectionId: String, library: LibraryStore) {
-        guard let index = index(of: collectionId) else { return }
-        guard !collections[index].itemKeys.contains(preview.rowKey) else { return }
-        collections[index].itemKeys.insert(preview.rowKey, at: 0)
-        collections[index].updatedAt = Date()
-        // Cache the artwork, otherwise the folder cannot draw an item the viewer never saved.
-        library.cache(preview)
-        persist()
-    }
-
-    func remove(_ preview: MetaPreview, from collectionId: String) {
-        guard let index = index(of: collectionId) else { return }
-        collections[index].itemKeys.removeAll { $0 == preview.rowKey }
-        collections[index].updatedAt = Date()
-        persist()
-    }
-
-    func toggle(_ preview: MetaPreview, in collectionId: String, library: LibraryStore) {
-        if contains(preview, in: collectionId) {
-            remove(preview, from: collectionId)
-        } else {
-            add(preview, to: collectionId, library: library)
-        }
     }
 
     func move(_ collectionId: String, by offset: Int) {
@@ -130,16 +84,109 @@ final class CollectionStore {
         persist()
     }
 
+    // MARK: Folder mutations
+
+    @discardableResult
+    func addFolder(title: String, to collectionId: String) -> CollectionFolder? {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let index = index(of: collectionId) else { return nil }
+        let folder = CollectionFolder(title: trimmed)
+        collections[index].folders.append(folder)
+        persist()
+        return folder
+    }
+
+    func updateFolder(_ folderId: String, in collectionId: String, _ mutate: (inout CollectionFolder) -> Void) {
+        guard let index = index(of: collectionId),
+              let folderIndex = collections[index].folders.firstIndex(where: { $0.id == folderId })
+        else { return }
+        mutate(&collections[index].folders[folderIndex])
+        persist()
+    }
+
+    func deleteFolder(_ folderId: String, from collectionId: String) {
+        guard let index = index(of: collectionId) else { return }
+        collections[index].folders.removeAll { $0.id == folderId }
+        persist()
+    }
+
+    func moveFolder(_ folderId: String, in collectionId: String, by offset: Int) {
+        guard let index = index(of: collectionId),
+              let folderIndex = collections[index].folders.firstIndex(where: { $0.id == folderId })
+        else { return }
+        let target = folderIndex + offset
+        guard collections[index].folders.indices.contains(target) else { return }
+        collections[index].folders.swapAt(folderIndex, target)
+        persist()
+    }
+
+    // MARK: Source mutations
+
+    func addSource(_ source: CollectionSource, toFolder folderId: String, in collectionId: String) {
+        updateFolder(folderId, in: collectionId) { folder in
+            guard !folder.sources.contains(source) else { return }
+            folder.sources.append(source)
+        }
+    }
+
+    func removeSource(_ source: CollectionSource, fromFolder folderId: String, in collectionId: String) {
+        updateFolder(folderId, in: collectionId) { folder in
+            folder.sources.removeAll { $0 == source }
+        }
+    }
+
+    // MARK: Sync and transfer
+
     /// Replaces every collection with the account's copy — collections sync as one blob, so a
     /// newer remote snapshot supersedes the local list wholesale.
-    func replaceAll(with incoming: [MediaCollection]) {
+    ///
+    /// `markChanged` is false when the incoming list *is* the remote one: accepting a pull is not
+    /// a local edit, and stamping it as one would make this device look newer than the server on
+    /// the next pass and push the same data straight back.
+    func replaceAll(with incoming: [MediaCollection], markChanged: Bool = true) {
         collections = incoming
-        persist()
+        persist(markChanged: markChanged)
+    }
+
+    /// The interchange format, and the same bytes that go to the account. This is how a
+    /// collection built on Android arrives, so it is a plain array with no envelope.
+    func exportJSON() -> String? {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        guard let data = try? encoder.encode(collections) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    /// Returns the collections rather than applying them, so the caller can show what is about
+    /// to be imported before it replaces anything.
+    nonisolated static func decode(_ json: String) throws -> [MediaCollection] {
+        try JSONDecoder().decode([MediaCollection].self, from: Data(json.utf8))
     }
 
     private func index(of collectionId: String) -> Int? {
         collections.firstIndex { $0.id == collectionId }
     }
 
-    private func persist() { file.save(collections) }
+    private func persist(markChanged: Bool = true) {
+        file.save(collections)
+        guard markChanged else { return }
+        updatedAt = Date()
+        stamp.save(updatedAt)
+    }
+
+    /// Moves a pre-parity `collections.json` aside on first launch after the upgrade.
+    ///
+    /// The old file held hand-picked lists of titles, a shape this model cannot express and
+    /// upstream never had. Decoding it now yields collections with an empty title and no folders,
+    /// which would then be pushed to the account and land on Android as empty rows. Recognising
+    /// it by its `itemKeys` key and setting it aside is what stops that, and leaves the data
+    /// somewhere a viewer could still get at it.
+    private static func retireManualCollections() {
+        let store = JSONFileStore<[MediaCollection]>(filename: "collections.json")
+        guard let raw = store.rawData(),
+              let array = try? JSONSerialization.jsonObject(with: raw) as? [[String: Any]],
+              array.contains(where: { $0["itemKeys"] != nil })
+        else { return }
+        store.moveAside(to: retiredFilename)
+    }
 }

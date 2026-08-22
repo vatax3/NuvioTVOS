@@ -44,14 +44,8 @@ struct AdvancedSettingsContent: View {
 
             SettingsCard(
                 title: "Diagnostics",
-                footnote: "Nuvio's crash reporting is not wired up in this client — there is no Sentry project to report to, so the option is omitted rather than shown doing nothing."
+                footnote: "Neither crash reporting nor playback issue reports are wired up in this client — both upload to Nuvio's own backend, whose contract belongs to the Android project. Verbose logging writes to the system log on this device instead."
             ) {
-                SettingsToggle(
-                    title: "Playback issue reports",
-                    subtitle: "Offer a report action during long loads and playback errors",
-                    systemImage: "exclamationmark.bubble",
-                    isOn: $player.playbackIssueReportsEnabled
-                )
                 SettingsToggle(
                     title: "Verbose playback logging",
                     subtitle: "Write player state changes to the system log",

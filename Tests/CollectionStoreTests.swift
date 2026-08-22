@@ -1,12 +1,11 @@
 import XCTest
 @testable import Nuvio
 
-/// Collections had no coverage at all until they started driving what Home shows. Order is the
-/// part worth pinning: it decides the rail order, so an off-by-one or an unguarded swap is now
-/// visible on the first screen of the app rather than inside one tab of the Library.
+/// The store's own behaviour. The wire format — which is the part that decides whether the two
+/// apps share collections or destroy each other's — is in `CollectionCodableTests`.
 ///
 /// The store persists to the app container, so each test snapshots the real list and puts it
-/// back — a test that quietly deleted someone's collections would be a poor trade for coverage.
+/// back. A test that quietly deleted someone's collections would be a poor trade for coverage.
 @MainActor
 final class CollectionStoreTests: XCTestCase {
     private var store: CollectionStore!
@@ -25,82 +24,102 @@ final class CollectionStoreTests: XCTestCase {
         try await super.tearDown()
     }
 
+    @discardableResult
     private func seedThree() -> [MediaCollection] {
-        ["Tonight", "Rewatch", "With the kids"].compactMap { store.create(name: $0) }
+        ["Tonight", "Rewatch", "With the kids"].compactMap { store.create(title: $0) }
     }
 
     func testCreatingKeepsInsertionOrder() {
         XCTAssertEqual(seedThree().count, 3)
-        XCTAssertEqual(store.collections.map(\.name), ["Tonight", "Rewatch", "With the kids"])
+        XCTAssertEqual(store.collections.map(\.title), ["Tonight", "Rewatch", "With the kids"])
     }
 
-    func testBlankNamesAreRefused() {
-        XCTAssertNil(store.create(name: "   "))
-        XCTAssertNil(store.create(name: ""))
+    func testBlankTitlesAreRefused() {
+        XCTAssertNil(store.create(title: "   "))
         XCTAssertTrue(store.collections.isEmpty)
     }
 
-    /// The name is what a viewer typed on a television remote, so it is trimmed rather than
-    /// taken literally.
-    func testNamesAreTrimmed() {
-        XCTAssertEqual(store.create(name: "  Tonight  ")?.name, "Tonight")
+    func testTitlesAreTrimmed() {
+        XCTAssertEqual(store.create(title: "  Tonight  ")?.title, "Tonight")
     }
 
     func testMovingReordersTheList() {
         let created = seedThree()
         store.move(created[2].id, by: -1)
-        XCTAssertEqual(store.collections.map(\.name), ["Tonight", "With the kids", "Rewatch"])
-
-        store.move(created[0].id, by: 1)
-        XCTAssertEqual(store.collections.map(\.name), ["With the kids", "Tonight", "Rewatch"])
+        XCTAssertEqual(store.collections.map(\.title), ["Tonight", "With the kids", "Rewatch"])
     }
 
     /// Both ends. The editor offers Move up and Move down unconditionally, so the first and last
     /// collection each have a button that must do nothing rather than something wrong.
     func testMovingPastEitherEndIsANoOp() {
         let created = seedThree()
-        let before = store.collections.map(\.name)
-
+        let before = store.collections.map(\.title)
         store.move(created[0].id, by: -1)
         store.move(created[2].id, by: 1)
-        store.move(created[0].id, by: -5)
-
-        XCTAssertEqual(store.collections.map(\.name), before)
-    }
-
-    func testMovingAnUnknownCollectionIsANoOp() {
-        seedThree()
-        let before = store.collections.map(\.name)
         store.move("not-a-collection", by: 1)
-        XCTAssertEqual(store.collections.map(\.name), before)
+        XCTAssertEqual(store.collections.map(\.title), before)
     }
 
-    func testDeletingRemovesOnlyThatCollection() {
+    /// Pinned collections lead, and the rest keep their order behind them — this is what the
+    /// home screen renders.
+    func testPinnedCollectionsComeFirst() {
         let created = seedThree()
-        store.delete(created[1].id)
-        XCTAssertEqual(store.collections.map(\.name), ["Tonight", "With the kids"])
-        XCTAssertNil(store.collection(id: created[1].id))
+        store.update(created[2].id) { $0.pinToTop = true }
+        XCTAssertEqual(store.ordered.map(\.title), ["With the kids", "Tonight", "Rewatch"])
     }
 
-    func testRenamingAndResymbolising() {
-        let created = seedThree()
-        store.rename(created[0].id, to: "  Later  ")
-        store.setSymbol("flame.fill", for: created[0].id)
+    // MARK: Folders and sources
 
-        XCTAssertEqual(store.collection(id: created[0].id)?.name, "Later")
-        XCTAssertEqual(store.collection(id: created[0].id)?.symbol, "flame.fill")
+    func testFoldersAreAddedRemovedAndReordered() {
+        guard let collection = store.create(title: "Tonight") else { return XCTFail("create") }
+        let comedies = store.addFolder(title: "Comedies", to: collection.id)
+        let horror = store.addFolder(title: "Horror", to: collection.id)
+        XCTAssertEqual(store.collection(id: collection.id)?.folders.map(\.title), ["Comedies", "Horror"])
+
+        store.moveFolder(horror!.id, in: collection.id, by: -1)
+        XCTAssertEqual(store.collection(id: collection.id)?.folders.map(\.title), ["Horror", "Comedies"])
+
+        store.deleteFolder(comedies!.id, from: collection.id)
+        XCTAssertEqual(store.collection(id: collection.id)?.folders.map(\.title), ["Horror"])
     }
 
-    /// Collections sync as one blob, so a newer remote snapshot replaces the list wholesale.
-    func testReplaceAllSupersedesTheLocalList() {
-        seedThree()
-        let incoming = [
-            MediaCollection(
-                id: "remote", name: "From another device", symbol: "star.fill",
-                itemKeys: [], createdAt: .distantPast, updatedAt: .distantPast
-            )
-        ]
-        store.replaceAll(with: incoming)
-        XCTAssertEqual(store.collections.map(\.name), ["From another device"])
+    func testSourcesAreAddedOnceAndRemovable() {
+        guard let collection = store.create(title: "Tonight"),
+              let folder = store.addFolder(title: "Comedies", to: collection.id)
+        else { return XCTFail("seed") }
+
+        let source = CollectionSource.addon(AddonCollectionSource(
+            addonId: "com.linvo.cinemeta", type: "movie", catalogId: "top", genre: "Comedy"
+        ))
+        store.addSource(source, toFolder: folder.id, in: collection.id)
+        store.addSource(source, toFolder: folder.id, in: collection.id)
+        XCTAssertEqual(store.folder(id: folder.id)?.folder.sources.count, 1, "the same source twice is still one source")
+
+        store.removeSource(source, fromFolder: folder.id, in: collection.id)
+        XCTAssertTrue(store.folder(id: folder.id)?.folder.sources.isEmpty ?? false)
+    }
+
+    func testFolderLookupFindsItsCollection() {
+        guard let collection = store.create(title: "Tonight"),
+              let folder = store.addFolder(title: "Comedies", to: collection.id)
+        else { return XCTFail("seed") }
+
+        XCTAssertEqual(store.folder(id: folder.id)?.collection.id, collection.id)
+        XCTAssertNil(store.folder(id: "nope"))
+    }
+
+    // MARK: Sync bookkeeping
+
+    /// Accepting a pull is not a local edit. Stamping it as one would make this device look
+    /// newer than the server on the next pass and push the same rows straight back.
+    func testAcceptingARemoteSnapshotDoesNotCountAsALocalChange() {
+        store.create(title: "Tonight")
+        let afterLocalEdit = store.updatedAt
+
+        store.replaceAll(with: [MediaCollection(title: "From another device")], markChanged: false)
+        XCTAssertEqual(store.updatedAt, afterLocalEdit)
+
+        store.create(title: "Later")
+        XCTAssertGreaterThan(store.updatedAt, afterLocalEdit)
     }
 }

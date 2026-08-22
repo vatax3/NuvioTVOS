@@ -103,21 +103,6 @@ final class LayoutSettingsStore: PreferenceStore {
         set { setInt("focused_poster_backdrop_expand_delay_seconds", newValue) }
     }
 
-    var focusedPosterBackdropTrailerEnabled: Bool {
-        get { bool("focused_poster_backdrop_trailer_enabled", default: false) }
-        set { setBool("focused_poster_backdrop_trailer_enabled", newValue) }
-    }
-
-    var focusedPosterBackdropTrailerMuted: Bool {
-        get { bool("focused_poster_backdrop_trailer_muted", default: true) }
-        set { setBool("focused_poster_backdrop_trailer_muted", newValue) }
-    }
-
-    var focusedPosterTrailerTarget: FocusedPosterTrailerTarget {
-        get { option("focused_poster_backdrop_trailer_playback_target", default: .heroOnly) }
-        set { setOption("focused_poster_backdrop_trailer_playback_target", newValue) }
-    }
-
     /// Collections as rails on Home, after the addon catalogues — where Android puts them by
     /// default. Without this they existed only inside the Library's Collections tab, which is
     /// somewhere you have to already know to look.

@@ -130,12 +130,19 @@ final class LibraryStore {
 
     /// Continue Watching rail contents: in-flight items, finished ones dropped, ordered by the
     /// viewer's `continue_watching_sort_mode`.
+    ///
+    /// `withinDays` is the viewer's cap from Tracking settings. A row you abandoned eight months
+    /// ago is not something you are in the middle of, and leaving it there pushes what you *are*
+    /// watching off the end of the rail. Zero or less means no cap.
     func continueWatching(
         threshold: Double,
-        sort: ContinueWatchingSortMode = .recentlyWatched
+        sort: ContinueWatchingSortMode = .recentlyWatched,
+        withinDays: Int = 0
     ) -> [ContinueWatchingEntry] {
+        let cutoff = Self.cutoffDate(withinDays: withinDays)
         let unfinished = progress.values
             .filter { $0.fraction > 0.01 && !$0.isFinished(threshold: threshold) }
+            .filter { item in cutoff.map { item.updatedAt >= $0 } ?? true }
             .sorted { $0.updatedAt > $1.updatedAt }
 
         // One row per title — the most recent episode represents the whole series.
@@ -161,6 +168,13 @@ final class LibraryStore {
             ))
         }
         return sorted(entries, by: sort)
+    }
+
+    /// Split out so the cap can be tested without building a store, and so "no cap" has exactly
+    /// one definition rather than one per caller.
+    nonisolated static func cutoffDate(withinDays days: Int, now: Date = Date()) -> Date? {
+        guard days > 0 else { return nil }
+        return now.addingTimeInterval(-Double(days) * 86_400)
     }
 
     private func sorted(

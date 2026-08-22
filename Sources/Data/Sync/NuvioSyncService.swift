@@ -280,27 +280,24 @@ final class NuvioSyncService {
         ).compactMap(\.value).first
 
         let remoteUpdatedAt = remote?.updated_at.flatMap { VideoDateParser.parse($0) }
-        let localUpdatedAt = collections.collections.map(\.updatedAt).max()
 
         if let remote, let payload = remote.collections_json,
-           remoteUpdatedAt ?? .distantPast > (localUpdatedAt ?? .distantPast) {
-            collections.replaceAll(with: payload)
+           remoteUpdatedAt ?? .distantPast > collections.updatedAt {
+            // Not marked as a local change: accepting a pull is not an edit, and stamping it as
+            // one would make this device look newer next time and push the same rows back.
+            collections.replaceAll(with: payload, markChanged: false)
             return
         }
 
         guard !collections.collections.isEmpty else { return }
+        // Encoded through the model rather than rebuilt by hand. Collections are three levels
+        // deep and their sources use a flat, provider-discriminated encoding that Android's
+        // importer validates field by field — a second hand-written copy of that shape here is a
+        // second thing to get wrong.
+        guard let payload = AnyJSONValue.encoding(collections.collections) else { return }
         var parameters = originParameters
         parameters["p_profile_id"] = .int(profileId)
-        parameters["p_collections_json"] = .array(collections.collections.map { collection in
-            .object([
-                "id": .string(collection.id),
-                "name": .string(collection.name),
-                "symbol": .string(collection.symbol),
-                "itemKeys": .array(collection.itemKeys.map { .string($0) }),
-                "createdAt": .double(collection.createdAt.timeIntervalSince1970),
-                "updatedAt": .double(collection.updatedAt.timeIntervalSince1970)
-            ])
-        })
+        parameters["p_collections_json"] = payload
         try await NuvioBackend.shared.rpcVoid("sync_push_collections", parameters: parameters)
     }
 

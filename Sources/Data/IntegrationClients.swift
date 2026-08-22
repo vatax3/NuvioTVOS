@@ -113,6 +113,57 @@ private struct ParentalGuideSeverity: Decodable {
     let voteCount: Int
 }
 
+/// Every filter a collection's TMDB source can carry, rendered as query items.
+///
+/// Kept apart from `TMDBClient.BrowseFilter`, which answers a narrower question — one entity,
+/// fixed sort — and is used by screens that do not want any of this.
+struct TMDBDiscoverQuery: Sendable {
+    var sortBy: String
+    var filters: TmdbCollectionFilters
+
+    /// `original` means "whatever TMDB considers the natural order", which discover has no term
+    /// for, so it becomes popularity. The date filters are named per media type: a film has a
+    /// primary release date, a series a first air date.
+    func queryString(for type: ContentType) -> String {
+        var items: [String] = []
+        let sort = sortBy == TmdbCollectionSort.original.rawValue
+            ? TmdbCollectionSort.popularityDesc.rawValue
+            : sortBy
+        items.append("sort_by=\(sort)")
+
+        let datePrefix = type == .series ? "first_air_date" : "primary_release_date"
+        func add(_ name: String, _ value: String?) {
+            guard let value = value?.nilIfBlank,
+                  let escaped = value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
+            else { return }
+            items.append("\(name)=\(escaped)")
+        }
+
+        add("with_genres", filters.withGenres)
+        add("without_genres", filters.withoutGenres)
+        add("\(datePrefix).gte", filters.releaseDateGte)
+        add("\(datePrefix).lte", filters.releaseDateLte)
+        add("with_original_language", filters.withOriginalLanguage)
+        add("with_origin_country", filters.withOriginCountry)
+        add("with_keywords", filters.withKeywords)
+        add("without_keywords", filters.withoutKeywords)
+        add("with_companies", filters.withCompanies)
+        add("without_companies", filters.withoutCompanies)
+        add("with_networks", filters.withNetworks)
+        add("watch_region", filters.watchRegion)
+        add("with_watch_providers", filters.withWatchProviders)
+        add("without_watch_providers", filters.withoutWatchProviders)
+
+        if let value = filters.voteAverageGte { items.append("vote_average.gte=\(value)") }
+        if let value = filters.voteAverageLte { items.append("vote_average.lte=\(value)") }
+        if let value = filters.voteCountGte { items.append("vote_count.gte=\(value)") }
+        if let year = filters.year {
+            items.append(type == .series ? "first_air_date_year=\(year)" : "primary_release_year=\(year)")
+        }
+        return items.joined(separator: "&")
+    }
+}
+
 // MARK: - TMDB (port of TmdbApi usage)
 
 /// Metadata enrichment: better artwork, logos, cast photos, episode stills and recommendations
@@ -336,6 +387,163 @@ actor TMDBClient {
             as: TMDBDiscoverResponse.self
         ) else { return [] }
         return (response.results ?? []).compactMap { $0.preview(type: type) }
+    }
+
+    // MARK: Collections
+
+    /// A discover call with every filter Android's collection editor exposes.
+    ///
+    /// `BrowseFilter` above stays as it is — it serves the "more from this network" screens and
+    /// carries exactly one filter with a fixed sort. A collection source can combine eighteen of
+    /// them and choose the sort, which is a different question with the same endpoint.
+    func discover(
+        type: ContentType,
+        query: TMDBDiscoverQuery,
+        page: Int,
+        apiKey: String,
+        language: String
+    ) async -> [MetaPreview] {
+        guard !apiKey.isEmpty else { return [] }
+        let mediaType = type == .series ? "tv" : "movie"
+        let url = "\(base)/discover/\(mediaType)?api_key=\(apiKey)&language=\(language)"
+            + "&page=\(max(1, page))&\(query.queryString(for: type))"
+        guard let response = try? await HTTP.get(url, as: TMDBDiscoverResponse.self) else { return [] }
+        return (response.results ?? []).compactMap { $0.preview(type: type) }
+    }
+
+    /// The source kinds that name a specific TMDB entity rather than describing a query.
+    ///
+    /// Four of them are discover calls under a different name — a company, a network and a
+    /// director are all "discover, filtered by this id" — while a list and a collection have
+    /// endpoints of their own that answer with their members directly.
+    func collectionItems(
+        kind: TmdbSourceKind,
+        tmdbId: Int,
+        type: ContentType,
+        sortBy: String,
+        page: Int,
+        apiKey: String,
+        language: String
+    ) async -> [MetaPreview] {
+        guard !apiKey.isEmpty else { return [] }
+        let mediaType = type == .series ? "tv" : "movie"
+
+        switch kind {
+        case .list:
+            struct Response: Decodable { let items: [TMDBMediaItem]? }
+            guard let response = try? await HTTP.get(
+                "\(base)/list/\(tmdbId)?api_key=\(apiKey)&language=\(language)&page=\(max(1, page))",
+                as: Response.self
+            ) else { return [] }
+            // A list mixes films and series, so each row names its own type.
+            return (response.items ?? []).compactMap { $0.preview(type: type) }
+
+        case .collection:
+            struct Response: Decodable { let parts: [TMDBMediaItem]? }
+            guard let response = try? await HTTP.get(
+                "\(base)/collection/\(tmdbId)?api_key=\(apiKey)&language=\(language)",
+                as: Response.self
+            ) else { return [] }
+            // A collection is served whole; asking for a second page would repeat it.
+            guard page <= 1 else { return [] }
+            return (response.parts ?? []).compactMap { $0.preview(type: type) }
+
+        case .person, .director:
+            struct Response: Decodable {
+                let cast: [TMDBMediaItem]?
+                let crew: [TMDBMediaItem]?
+            }
+            guard page <= 1, let response = try? await HTTP.get(
+                "\(base)/person/\(tmdbId)/combined_credits?api_key=\(apiKey)&language=\(language)",
+                as: Response.self
+            ) else { return [] }
+            // A director is credited in crew, an actor in cast — the same person endpoint,
+            // read from the other side.
+            let rows = kind == .director ? (response.crew ?? []) : (response.cast ?? [])
+            return rows.compactMap { $0.preview(type: type) }
+
+        case .company, .network, .discover:
+            let filter: String
+            switch kind {
+            case .network: filter = "with_networks=\(tmdbId)"
+            case .company: filter = "with_companies=\(tmdbId)"
+            default: filter = "with_genres=\(tmdbId)"
+            }
+            let sort = sortBy == TmdbCollectionSort.original.rawValue
+                ? TmdbCollectionSort.popularityDesc.rawValue
+                : sortBy
+            guard let response = try? await HTTP.get(
+                "\(base)/discover/\(mediaType)?api_key=\(apiKey)&language=\(language)"
+                    + "&page=\(max(1, page))&sort_by=\(sort)&\(filter)",
+                as: TMDBDiscoverResponse.self
+            ) else { return [] }
+            return (response.results ?? []).compactMap { $0.preview(type: type) }
+        }
+    }
+
+    // MARK: Episodes
+
+    /// One season's episodes: names, overviews, air dates and stills.
+    ///
+    /// This is what `tmdb_use_episodes` turns on. Plenty of addons return an episode list with
+    /// nothing but numbers, and a rail of "Episode 4" cards with no image is the result; TMDB
+    /// fills those gaps without displacing anything the addon did supply.
+    struct EpisodeDetail: Sendable, Hashable {
+        var season: Int
+        var episode: Int
+        var name: String?
+        var overview: String?
+        var still: String?
+        var airDate: String?
+        var runtimeMinutes: Int?
+    }
+
+    func seasonEpisodes(
+        tmdbId: Int,
+        season: Int,
+        apiKey: String,
+        language: String
+    ) async -> [EpisodeDetail] {
+        guard !apiKey.isEmpty else { return [] }
+        struct Episode: Decodable {
+            let episode_number: Int?
+            let season_number: Int?
+            let name: String?
+            let overview: String?
+            let still_path: String?
+            let air_date: String?
+            let runtime: Int?
+        }
+        struct Season: Decodable { let episodes: [Episode]? }
+
+        guard let response = try? await HTTP.get(
+            "\(base)/tv/\(tmdbId)/season/\(season)?api_key=\(apiKey)&language=\(language)",
+            as: Season.self
+        ) else { return [] }
+
+        return (response.episodes ?? []).compactMap { episode in
+            guard let number = episode.episode_number else { return nil }
+            return EpisodeDetail(
+                season: episode.season_number ?? season,
+                episode: number,
+                name: episode.name?.nilIfBlank,
+                overview: episode.overview?.nilIfBlank,
+                still: episode.still_path.map { "\(Self.imageBase)/w780\($0)" },
+                airDate: episode.air_date?.nilIfBlank,
+                runtimeMinutes: episode.runtime
+            )
+        }
+    }
+
+    /// The TMDB id behind an IMDb id, without pulling the whole detail payload with it. Used by
+    /// the Continue Watching enrichment, which needs an id and one still, nothing more.
+    func tmdbId(imdbId: String, type: ContentType, apiKey: String) async -> Int? {
+        guard !apiKey.isEmpty else { return nil }
+        guard let found = try? await HTTP.get(
+            "\(base)/find/\(imdbId)?api_key=\(apiKey)&external_source=imdb_id",
+            as: TMDBFindResponse.self
+        ) else { return nil }
+        return (type == .series ? found.tv_results?.first : found.movie_results?.first)?.id
     }
 
     /// Resolves a TMDB id to an IMDb id so an addon can serve the detail page. Nuvio's own
@@ -728,6 +936,73 @@ actor TraktClient {
             LibraryList(id: "collection", title: "Collection", items: collection),
             LibraryList(id: "watchlist", title: "Watchlist", items: watchlist)
         ].filter { !$0.items.isEmpty }
+    }
+
+    /// One Trakt list by id, which is what a collection source names.
+    ///
+    /// Distinct from `collection` and `watchlist` above: those are the signed-in viewer's own two
+    /// fixed lists, this is any list on Trakt. A public list needs no token, so one is optional —
+    /// a collection built on another device should still resolve before you sign in here.
+    func listItems(
+        listId: Int,
+        type: ContentType,
+        sortBy: String,
+        sortHow: String,
+        clientId: String,
+        token: String? = nil
+    ) async -> [MetaPreview] {
+        struct Ids: Decodable { let imdb: String?; let trakt: Int? }
+        struct Entry: Decodable { let title: String?; let year: Int?; let ids: Ids? }
+        struct Item: Decodable { let movie: Entry?; let show: Entry? }
+
+        let path = type == .series ? "shows" : "movies"
+        let sort = "\(TraktListSort.normalize(sortBy))/\(TraktSortHow.normalize(sortHow))"
+        guard let items = try? await HTTP.get(
+            "\(base)/lists/\(listId)/items/\(path)/\(sort)",
+            headers: headers(clientId: clientId, token: token),
+            as: [Item].self
+        ) else { return [] }
+
+        return items.compactMap { item in
+            let entry = type == .series ? item.show : item.movie
+            guard let entry, let title = entry.title, let imdb = entry.ids?.imdb else { return nil }
+            return MetaPreview(
+                id: imdb,
+                type: type,
+                rawType: type.apiString(),
+                name: title,
+                releaseInfo: entry.year.map(String.init),
+                imdbId: imdb
+            )
+        }
+    }
+
+    /// Trakt's own "related" titles, for the More like this row when the viewer sources it here.
+    ///
+    /// Public data: the client id is enough, no token. Trakt accepts an IMDb id wherever it takes
+    /// a slug, so nothing has to be resolved first.
+    func related(imdbId: String, type: ContentType, clientId: String) async -> [MetaPreview] {
+        struct Ids: Decodable { let imdb: String? }
+        struct Entry: Decodable { let title: String?; let year: Int?; let ids: Ids? }
+
+        let path = type == .series ? "shows" : "movies"
+        guard let items = try? await HTTP.get(
+            "\(base)/\(path)/\(imdbId)/related",
+            headers: headers(clientId: clientId, token: nil),
+            as: [Entry].self
+        ) else { return [] }
+
+        return items.compactMap { entry in
+            guard let title = entry.title, let imdb = entry.ids?.imdb else { return nil }
+            return MetaPreview(
+                id: imdb,
+                type: type,
+                rawType: type.apiString(),
+                name: title,
+                releaseInfo: entry.year.map(String.init),
+                imdbId: imdb
+            )
+        }
     }
 
     private func libraryEntries(path prefix: String, type: ContentType, clientId: String, token: String) async -> [MetaPreview] {

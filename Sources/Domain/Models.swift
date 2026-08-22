@@ -38,7 +38,7 @@ enum ContentType: String, Codable, Hashable, Sendable {
     }
 }
 
-enum PosterShape: String, Codable, Hashable, Sendable {
+enum PosterShape: String, Codable, Hashable, Sendable, CaseIterable {
     case poster, landscape, square
 
     static func from(_ value: String?) -> PosterShape {

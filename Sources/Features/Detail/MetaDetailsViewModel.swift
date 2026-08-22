@@ -15,6 +15,9 @@ final class MetaDetailsViewModel {
 
     var selectedSeason: Int = 1
 
+    /// Seasons already filled in from TMDB, so switching back and forth does not refetch.
+    private var episodeEnrichedSeasons: Set<Int> = []
+
     private let client: StremioClient
 
     init(client: StremioClient = .shared) {
@@ -129,7 +132,9 @@ final class MetaDetailsViewModel {
                 // Enrichment runs after the meta is on screen so the hero never waits on it.
                 await withTaskGroup(of: Void.self) { group in
                     group.addTask { @MainActor in
-                        await self.loadMoreLikeThis(addonStore: addonStore, meta: resolved)
+                        await self.loadMoreLikeThis(
+                            addonStore: addonStore, meta: resolved, settings: settings
+                        )
                     }
                     group.addTask { @MainActor in await self.enrich(meta: resolved, settings: settings) }
                     group.addTask { @MainActor in await self.loadRatings(meta: resolved, settings: settings) }
@@ -180,8 +185,64 @@ final class MetaDetailsViewModel {
         }
         self.meta = merged
 
+        // TMDB recommendations fill the row when it is the chosen source, and otherwise only
+        // when the chosen source came back with nothing.
         if settings.tmdb.useMoreLikeThis, moreLikeThis.isEmpty {
             moreLikeThis = result.recommendations
+        }
+
+        await enrichEpisodes(season: selectedSeason, settings: settings)
+    }
+
+    /// Fills episode names, overviews and stills from TMDB — the reader for `tmdb_use_episodes`,
+    /// which had a switch in Integrations and no effect anywhere.
+    ///
+    /// Only blanks are filled. An addon that already returned a title and a still keeps both:
+    /// it knows which cut of the episode it is serving and TMDB does not.
+    func enrichEpisodes(season: Int, settings: AppSettings) async {
+        guard settings.tmdb.useEpisodes, settings.tmdb.isUsable,
+              let tmdbId = enrichment?.tmdbId,
+              let current = meta, current.type == .series,
+              !episodeEnrichedSeasons.contains(season)
+        else { return }
+        episodeEnrichedSeasons.insert(season)
+
+        let details = await TMDBClient.shared.seasonEpisodes(
+            tmdbId: tmdbId,
+            season: season,
+            apiKey: settings.tmdb.apiKey,
+            language: settings.tmdb.language
+        )
+        guard !details.isEmpty, var updated = meta else { return }
+        updated.videos = Self.merging(details, into: updated.videos, season: season)
+        meta = updated
+    }
+
+    /// Pure so the merge rule — fill blanks, never overwrite — is testable on its own.
+    nonisolated static func merging(
+        _ details: [TMDBClient.EpisodeDetail],
+        into videos: [Video],
+        season: Int
+    ) -> [Video] {
+        let byNumber = Dictionary(
+            details.map { ($0.episode, $0) }, uniquingKeysWith: { first, _ in first }
+        )
+        return videos.map { video in
+            guard video.season == season,
+                  let number = video.episode,
+                  let detail = byNumber[number]
+            else { return video }
+            var merged = video
+            if merged.name?.nilIfBlank == nil, merged.title?.nilIfBlank == nil { merged.name = detail.name }
+            if merged.overview?.nilIfBlank == nil, merged.description?.nilIfBlank == nil {
+                merged.overview = detail.overview
+            }
+            if merged.thumbnail?.nilIfBlank == nil { merged.thumbnail = detail.still }
+            if merged.released?.nilIfBlank == nil { merged.released = detail.airDate }
+            if merged.runtime?.nilIfBlank == nil, let minutes = detail.runtimeMinutes {
+                merged.runtime = "\(minutes) min"
+            }
+            return merged
         }
     }
 
@@ -195,9 +256,38 @@ final class MetaDetailsViewModel {
         id.hasPrefix("tt") ? id.split(separator: ":").first.map(String.init) : nil
     }
 
-    /// Port of `MoreLikeThisSection`: genre-matched items from the first catalog that
-    /// supports a genre filter for this content type.
-    private func loadMoreLikeThis(addonStore: AddonStore, meta: Meta) async {
+    /// Port of `MoreLikeThisSection`, now honouring `more_like_this_source`.
+    ///
+    /// The preference had a picker in Tracking settings and no reader: every viewer got the
+    /// addon-catalog behaviour whichever of the three they chose. TMDB and Trakt fall back to
+    /// the catalog rather than leaving the row empty, because an empty row reads as "nothing is
+    /// like this" rather than "that account is not connected".
+    private func loadMoreLikeThis(addonStore: AddonStore, meta: Meta, settings: AppSettings) async {
+        switch settings.tracking.moreLikeThisSource {
+        case .tmdb:
+            // Filled from the TMDB enrichment that runs alongside this one, so there is nothing
+            // to fetch twice — unless TMDB is not configured, in which case fall through.
+            guard !settings.tmdb.isUsable else { return }
+            await loadMoreLikeThisFromCatalog(addonStore: addonStore, meta: meta)
+        case .trakt:
+            let clientId = settings.tracking.traktClientId
+            if !clientId.isEmpty, let imdbId = meta.imdbId ?? idIfImdb(meta.id) {
+                let items = await TraktClient.shared.related(
+                    imdbId: imdbId, type: meta.type, clientId: clientId
+                )
+                if !items.isEmpty {
+                    moreLikeThis = items.filter { $0.id != meta.id }
+                    return
+                }
+            }
+            await loadMoreLikeThisFromCatalog(addonStore: addonStore, meta: meta)
+        case .addonCatalog:
+            await loadMoreLikeThisFromCatalog(addonStore: addonStore, meta: meta)
+        }
+    }
+
+    /// Genre-matched items from the first catalog that supports a genre filter for this type.
+    private func loadMoreLikeThisFromCatalog(addonStore: AddonStore, meta: Meta) async {
         guard let genre = meta.genres.first else { return }
         let candidates = addonStore.allCatalogs.filter {
             $0.catalog.apiType == meta.apiType && !$0.catalog.genreOptions.isEmpty
