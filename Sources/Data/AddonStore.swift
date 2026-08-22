@@ -31,11 +31,35 @@ struct InstalledAddon: Codable, Hashable, Identifiable {
 }
 
 /// Ordering entry for the "Catalog Order" screen — mirrors `CatalogOrderViewModel`.
+/// One row of the home order, which is a catalogue *or* a collection.
+///
+/// Upstream keeps a single list of keys where the two kinds are equals, so a collection can sit
+/// between two catalogues rather than only at one end. `collectionId` is what makes this entry
+/// the second kind; an older `catalog-order.json` decodes with it absent, which is correct.
 struct CatalogOrderEntry: Codable, Hashable, Identifiable {
     var addonBaseUrl: String
     var catalogKey: String
     var enabled: Bool = true
-    var id: String { "\(addonBaseUrl)#\(catalogKey)" }
+    var collectionId: String?
+
+    var id: String {
+        collectionId.map { "collection_\($0)" } ?? "\(addonBaseUrl)#\(catalogKey)"
+    }
+
+    var rowKey: HomeRowKey {
+        collectionId.map(HomeRowKey.collection) ?? .catalog("\(addonBaseUrl)#\(catalogKey)")
+    }
+
+    init(addonBaseUrl: String, catalogKey: String, enabled: Bool = true, collectionId: String? = nil) {
+        self.addonBaseUrl = addonBaseUrl
+        self.catalogKey = catalogKey
+        self.enabled = enabled
+        self.collectionId = collectionId
+    }
+
+    init(collectionId: String, enabled: Bool = true) {
+        self.init(addonBaseUrl: "", catalogKey: "", enabled: enabled, collectionId: collectionId)
+    }
 }
 
 @Observable
@@ -100,47 +124,17 @@ final class AddonStore {
     var followsAddonOrder = false
 
     /// All home-eligible catalogs across enabled addons, honouring the saved ordering.
+    ///
+    /// Derived from `orderedHomeRows` rather than ordering separately: two implementations of the
+    /// same rule drift, and the one thing that must not drift is which rail comes first.
     var orderedHomeCatalogs: [(addon: Addon, catalog: CatalogDescriptor)] {
-        let available = enabledAddons.flatMap { addon in
-            addon.catalogs.map { (addon: addon, catalog: $0) }
-        }
-        guard !catalogOrder.isEmpty else {
-            return available.filter { $0.catalog.showInHome }
-        }
-        if followsAddonOrder {
-            let disabled = Set(catalogOrder.filter { !$0.enabled }.map {
-                "\(StremioURL.canonicalize($0.addonBaseUrl))#\($0.catalogKey)"
-            })
-            return available.filter { entry in
-                entry.catalog.showInHome
-                    && !disabled.contains("\(entry.addon.baseUrl)#\(entry.catalog.descriptorKey)")
-            }
-        }
-
         var byKey: [String: (addon: Addon, catalog: CatalogDescriptor)] = [:]
-        for entry in available {
-            byKey["\(entry.addon.baseUrl)#\(entry.catalog.descriptorKey)"] = entry
-        }
-
-        var ordered: [(addon: Addon, catalog: CatalogDescriptor)] = []
-        var consumed = Set<String>()
-        for entry in catalogOrder where entry.enabled {
-            let key = "\(StremioURL.canonicalize(entry.addonBaseUrl))#\(entry.catalogKey)"
-            if let match = byKey[key] {
-                ordered.append(match)
-                consumed.insert(key)
+        for addon in enabledAddons {
+            for catalog in addon.catalogs where catalog.showInHome {
+                byKey["\(addon.baseUrl)#\(catalog.descriptorKey)"] = (addon: addon, catalog: catalog)
             }
         }
-        // Newly discovered catalogs land at the end rather than disappearing.
-        let disabled = Set(catalogOrder.filter { !$0.enabled }.map {
-            "\(StremioURL.canonicalize($0.addonBaseUrl))#\($0.catalogKey)"
-        })
-        for entry in available {
-            let key = "\(entry.addon.baseUrl)#\(entry.catalog.descriptorKey)"
-            guard !consumed.contains(key), !disabled.contains(key), entry.catalog.showInHome else { continue }
-            ordered.append(entry)
-        }
-        return ordered
+        return orderedHomeRows(collectionIds: []).compactMap { $0.catalogKey.flatMap { byKey[$0] } }
     }
 
     /// Changes whenever the set of home catalogs changes — including when a manifest finishes
@@ -260,49 +254,102 @@ final class AddonStore {
 
     // MARK: - Catalog ordering
 
-    func setCatalogEnabled(_ enabled: Bool, addonBaseUrl: String, catalogKey: String) {
-        if let index = catalogOrder.firstIndex(where: {
-            $0.addonBaseUrl == addonBaseUrl && $0.catalogKey == catalogKey
-        }) {
+    func setRowEnabled(_ enabled: Bool, key: HomeRowKey) {
+        if let index = catalogOrder.firstIndex(where: { $0.rowKey == key }) {
             catalogOrder[index].enabled = enabled
         } else {
-            catalogOrder.append(CatalogOrderEntry(
-                addonBaseUrl: addonBaseUrl, catalogKey: catalogKey, enabled: enabled
-            ))
+            catalogOrder.append(entry(for: key, enabled: enabled))
         }
         persistOrder()
     }
 
-    func moveCatalog(addonBaseUrl: String, catalogKey: String, by offset: Int) {
-        syncCatalogOrder()
-        guard let index = catalogOrder.firstIndex(where: {
-            $0.addonBaseUrl == addonBaseUrl && $0.catalogKey == catalogKey
-        }) else { return }
+    /// Moves one home row past its neighbour, catalogue or collection alike.
+    ///
+    /// `collectionIds` has to be handed in because the order is a single list and this store does
+    /// not own collections — without it the sync below would prune every collection row as
+    /// unknown the first time a catalogue moved.
+    func moveRow(_ key: HomeRowKey, by offset: Int, collectionIds: [String]) {
+        syncCatalogOrder(collectionIds: collectionIds)
+        guard let index = catalogOrder.firstIndex(where: { $0.rowKey == key }) else { return }
         let target = index + offset
         guard catalogOrder.indices.contains(target) else { return }
         catalogOrder.swapAt(index, target)
         persistOrder()
     }
 
-    func isCatalogEnabled(addonBaseUrl: String, catalogKey: String) -> Bool {
-        catalogOrder.first {
-            $0.addonBaseUrl == addonBaseUrl && $0.catalogKey == catalogKey
-        }?.enabled ?? true
+    func isRowEnabled(_ key: HomeRowKey) -> Bool {
+        catalogOrder.first { $0.rowKey == key }?.enabled ?? true
     }
 
-    /// Keeps the persisted ordering in step with whatever the manifests currently expose.
-    private func syncCatalogOrder() {
-        let available = allCatalogs.map {
+    /// Brings the persisted order in step with the catalogues and collections that exist now.
+    ///
+    /// Called when the ordering screen appears, never from a view body: it writes to the store
+    /// and to disk, and doing that while SwiftUI is evaluating a body invalidates the view that
+    /// asked, which invalidates it again.
+    func syncHomeOrder(collectionIds: [String]) {
+        syncCatalogOrder(collectionIds: collectionIds)
+    }
+
+    /// Home's actual row order: catalogues and unpinned collections merged, honouring what the
+    /// viewer arranged and the `follow_addons_order` preference.
+    ///
+    /// Pinned collections are excluded — they are rendered ahead of this list and would otherwise
+    /// appear twice, which is how upstream does it too.
+    func orderedHomeRows(collectionIds: [String]) -> [HomeRowKey] {
+        let disabled = Set(catalogOrder.filter { !$0.enabled }.map(\.rowKey))
+        let catalogs = enabledAddons.flatMap { addon in
+            addon.catalogs
+                .filter(\.showInHome)
+                .map { HomeRowOrder.Catalog(key: "\(addon.baseUrl)#\($0.descriptorKey)", owner: addon.baseUrl) }
+        }
+        return HomeRowOrder.merge(
+            saved: catalogOrder.map(\.rowKey),
+            catalogs: catalogs.filter { !disabled.contains(.catalog($0.key)) },
+            collections: collectionIds.filter { !disabled.contains(.collection($0)) },
+            followsAddonOrder: followsAddonOrder
+        )
+    }
+
+    private func entry(for key: HomeRowKey, enabled: Bool) -> CatalogOrderEntry {
+        switch key {
+        case .collection(let id):
+            return CatalogOrderEntry(collectionId: id, enabled: enabled)
+        case .catalog(let composite):
+            // `#` cannot appear in a descriptor key, so the last one splits base URL from key.
+            guard let separator = composite.lastIndex(of: "#") else {
+                return CatalogOrderEntry(addonBaseUrl: composite, catalogKey: "", enabled: enabled)
+            }
+            return CatalogOrderEntry(
+                addonBaseUrl: String(composite[composite.startIndex..<separator]),
+                catalogKey: String(composite[composite.index(after: separator)...]),
+                enabled: enabled
+            )
+        }
+    }
+
+    /// Keeps the persisted ordering in step with whatever the manifests and collections expose.
+    ///
+    /// `collectionIds` is optional and `nil` means "this caller does not know about collections":
+    /// an addon refresh must not prune the collection rows out of the order simply because it has
+    /// no list of them to check against. Only a caller holding the real list may drop them.
+    private func syncCatalogOrder(collectionIds: [String]? = nil) {
+        let availableCatalogs = allCatalogs.map {
             CatalogOrderEntry(
                 addonBaseUrl: $0.addon.baseUrl,
                 catalogKey: $0.catalog.descriptorKey,
                 enabled: $0.catalog.showInHome
             )
         }
+        let availableCollections = (collectionIds ?? []).map { CatalogOrderEntry(collectionId: $0) }
+        let available = availableCatalogs + availableCollections
+
         let existingKeys = Set(catalogOrder.map(\.id))
         let additions = available.filter { !existingKeys.contains($0.id) }
         let availableKeys = Set(available.map(\.id))
-        catalogOrder = catalogOrder.filter { availableKeys.contains($0.id) } + additions
+        catalogOrder = catalogOrder.filter { entry in
+            if entry.collectionId != nil, collectionIds == nil { return true }
+            return availableKeys.contains(entry.id)
+        } + additions
         persistOrder()
     }
 

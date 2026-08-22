@@ -77,6 +77,7 @@ struct HomeView: View {
 struct HomeRailList: View {
     @Environment(LibraryStore.self) private var library
     @Environment(CollectionStore.self) private var collections
+    @Environment(AddonStore.self) private var addons
     @Environment(AppSettings.self) private var settings
     @Environment(Router.self) private var router
 
@@ -99,8 +100,12 @@ struct HomeRailList: View {
     private var firstCardKey: String? {
         continueWatching.first?.preview.rowKey
             ?? pinnedCollections.first?.folders.first?.id
-            ?? model.rows.first(where: { !$0.items.isEmpty })?.items.first?.rowKey
-            ?? trailingCollections.first?.folders.first?.id
+            ?? displayRows.compactMap { row -> String? in
+                switch row {
+                case .catalog(let catalog): return catalog.items.first?.rowKey
+                case .collection(let collection): return collection.folders.first?.id
+                }
+            }.first
     }
 
     /// Pinned collections lead the screen, ahead of every catalogue; the rest follow them.
@@ -112,6 +117,37 @@ struct HomeRailList: View {
 
     private var pinnedCollections: [MediaCollection] { homeCollections.leading }
     private var trailingCollections: [MediaCollection] { homeCollections.trailing }
+
+    /// One rail, of either kind.
+    private enum DisplayRow: Identifiable {
+        case catalog(CatalogRowState)
+        case collection(MediaCollection)
+
+        var id: String {
+            switch self {
+            case .catalog(let row): return row.id
+            case .collection(let collection): return collection.homeRowKey
+            }
+        }
+    }
+
+    /// Catalogues and unpinned collections in the single order the viewer arranged, which is how
+    /// upstream builds its home rows — a collection is an equal in that list, not something
+    /// appended after it.
+    private var displayRows: [DisplayRow] {
+        let unpinned = trailingCollections
+        guard !unpinned.isEmpty else { return model.rows.map(DisplayRow.catalog) }
+
+        let rowsByKey = Dictionary(model.rows.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let collectionsById = Dictionary(unpinned.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+
+        return addons.orderedHomeRows(collectionIds: unpinned.map(\.id)).compactMap { key in
+            switch key {
+            case .catalog(let catalogKey): return rowsByKey[catalogKey].map(DisplayRow.catalog)
+            case .collection(let id): return collectionsById[id].map(DisplayRow.collection)
+            }
+        }
+    }
 
     var body: some View {
         LazyVStack(alignment: .leading, spacing: NuvioTheme.spacing.rail.rowGap) {
@@ -131,27 +167,28 @@ struct HomeRailList: View {
                 CollectionRail(collection: collection, focusBinding: $focusedCardKey)
             }
 
-            ForEach(model.rows) { row in
-                if !row.items.isEmpty || row.isLoading {
-                    CatalogRowView(
-                        title: row.title,
-                        subtitle: row.subtitle,
-                        items: row.items,
-                        isLoading: row.isLoading || row.isLoadingMore,
-                        backdropExpandEnabled: allowsBackdropExpand,
-                        onFocusItem: { model.focusedItem = $0 },
-                        onSelect: { router.openDetail($0) },
-                        onSeeAll: { router.push(.catalogSeeAll(row.request)) },
-                        onReachEnd: {
-                            Task { await model.loadMore(row) }
-                        },
-                        cardFocus: $focusedCardKey
-                    )
+            ForEach(displayRows) { entry in
+                switch entry {
+                case .catalog(let row):
+                    if !row.items.isEmpty || row.isLoading {
+                        CatalogRowView(
+                            title: row.title,
+                            subtitle: row.subtitle,
+                            items: row.items,
+                            isLoading: row.isLoading || row.isLoadingMore,
+                            backdropExpandEnabled: allowsBackdropExpand,
+                            onFocusItem: { model.focusedItem = $0 },
+                            onSelect: { router.openDetail($0) },
+                            onSeeAll: { router.push(.catalogSeeAll(row.request)) },
+                            onReachEnd: {
+                                Task { await model.loadMore(row) }
+                            },
+                            cardFocus: $focusedCardKey
+                        )
+                    }
+                case .collection(let collection):
+                    CollectionRail(collection: collection, focusBinding: $focusedCardKey)
                 }
-            }
-
-            ForEach(trailingCollections) { collection in
-                CollectionRail(collection: collection, focusBinding: $focusedCardKey)
             }
         }
         // Claim focus for the content the moment there is a card to hold it. Without this the

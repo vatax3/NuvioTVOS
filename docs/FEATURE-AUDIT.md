@@ -84,6 +84,15 @@ that older Android builds still read. Manual collections are gone, and the old f
 aside rather than deleted. The TMDB source editor exposes all eighteen filters as of 2026-08-22;
 it had exposed three.
 
+**And the ordering, which was a third thing wrong with them.** A collection was not a home row
+that could be placed — every collection rendered after every catalogue, so the "pin above
+catalogs" switch reordered collections among themselves and moved nothing past a catalogue.
+[`HomeRowOrder`](../Sources/Data/HomeRowOrder.swift) is upstream's `rebuildCatalogOrder` and
+`normalizeCollectionBoundaries`: one list where a collection is an equal of a catalogue, pinned
+ones ahead of everything, and — under *follow addons order* — a collection pushed out of the
+middle of one addon's run of catalogues, because splitting a block is the one thing that mode
+exists to prevent.
+
 Deliberately not rendered: `focusGifUrl` and `heroVideoUrl`. An animated cover per card would
 need a video layer per tile on tvOS. Both are parsed, kept, and written back, so a round trip
 through this app does not strip them from the others.

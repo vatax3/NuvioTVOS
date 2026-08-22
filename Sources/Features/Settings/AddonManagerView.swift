@@ -260,6 +260,16 @@ private struct IconAction: View {
 struct CatalogOrderView: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(AddonStore.self) private var addons
+    @Environment(CollectionStore.self) private var collections
+
+    /// Only unpinned collections are orderable here. A pinned one is above every catalogue by
+    /// definition, so a position among them would be a control with nothing behind it — the
+    /// row says so instead of pretending.
+    private var orderableCollectionIds: [String] {
+        CollectionStore.homePlacement(collections.collections).trailing.map(\.id)
+    }
+
+    private var rows: [CatalogOrderEntry] { addons.catalogOrder }
 
     var body: some View {
         NuvioScreenBackground {
@@ -270,21 +280,28 @@ struct CatalogOrderView: View {
                         .foregroundStyle(colors.textPrimary)
 
                     SettingsCard(
-                        title: "Home catalogs",
-                        footnote: "Disabled catalogs stay available in Discover."
+                        title: "Home rows",
+                        footnote: """
+                        Collections sit in this list alongside catalogs, so one can go anywhere \
+                        between them. Disabled catalogs stay available in Discover. A collection \
+                        pinned above the catalogs is not listed here — pinning already decides \
+                        where it goes.
+                        """
                     ) {
-                        if addons.catalogOrder.isEmpty {
-                            Text("No catalogs available yet — install an addon that provides one.")
+                        let entries = rows
+                        if entries.isEmpty {
+                            Text("Nothing to order yet — install an addon that provides a catalog.")
                                 .nuvioText(NuvioTextStyles.bodyCompact)
                                 .foregroundStyle(colors.textSecondary)
                                 .padding(NuvioTheme.spacing.lg)
                         } else {
-                            ForEach(Array(addons.catalogOrder.enumerated()), id: \.element.id) { index, entry in
+                            ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
                                 CatalogOrderRow(
                                     entry: entry,
                                     label: label(for: entry),
                                     isFirst: index == 0,
-                                    isLast: index == addons.catalogOrder.count - 1
+                                    isLast: index == entries.count - 1,
+                                    collectionIds: orderableCollectionIds
                                 )
                             }
                         }
@@ -294,9 +311,20 @@ struct CatalogOrderView: View {
             }
             .scrollClipDisabled()
         }
+        // A collection created since the last visit has no row yet, and one that was deleted
+        // still has a stale one. Reconciled here rather than in the body, which would write to
+        // the store while SwiftUI is evaluating it.
+        .onAppear { addons.syncHomeOrder(collectionIds: orderableCollectionIds) }
     }
 
     private func label(for entry: CatalogOrderEntry) -> (title: String, subtitle: String) {
+        if let collectionId = entry.collectionId {
+            guard let collection = collections.collection(id: collectionId) else {
+                return ("Collection", "No longer exists")
+            }
+            let count = collection.folders.count
+            return (collection.title, "Collection · \(count) folder\(count == 1 ? "" : "s")")
+        }
         guard let addon = addons.addon(withBaseUrl: entry.addonBaseUrl) else {
             return (entry.catalogKey, entry.addonBaseUrl)
         }
@@ -314,9 +342,15 @@ private struct CatalogOrderRow: View {
     let label: (title: String, subtitle: String)
     let isFirst: Bool
     let isLast: Bool
+    let collectionIds: [String]
 
     @State private var isRenaming = false
     @State private var draftTitle = ""
+
+    /// Renaming and hero nomination are catalogue ideas. A collection is named in its own editor
+    /// and cannot be a hero source, so those two actions are not drawn for one rather than drawn
+    /// and refused.
+    private var isCollection: Bool { entry.collectionId != nil }
 
     /// Key shared with `CatalogPresentation` and `CatalogRowState.id`, so a rename or a hero
     /// nomination made here lands on the right rail.
@@ -349,33 +383,33 @@ private struct CatalogOrderRow: View {
             Spacer(minLength: NuvioTheme.spacing.lg)
 
             HStack(spacing: NuvioTheme.spacing.sm) {
-                IconAction(
-                    systemImage: isHeroSource ? "star.fill" : "star",
-                    tint: isHeroSource ? colors.rating : colors.textTertiary,
-                    action: toggleHero
-                )
-                IconAction(
-                    systemImage: "pencil",
-                    tint: colors.textSecondary,
-                    action: {
-                        draftTitle = customTitle ?? label.title
-                        isRenaming = true
-                    }
-                )
+                if !isCollection {
+                    IconAction(
+                        systemImage: isHeroSource ? "star.fill" : "star",
+                        tint: isHeroSource ? colors.rating : colors.textTertiary,
+                        action: toggleHero
+                    )
+                    IconAction(
+                        systemImage: "pencil",
+                        tint: colors.textSecondary,
+                        action: {
+                            draftTitle = customTitle ?? label.title
+                            isRenaming = true
+                        }
+                    )
+                }
                 IconAction(
                     systemImage: entry.enabled ? "eye.fill" : "eye.slash",
                     tint: entry.enabled ? colors.success : colors.textTertiary,
-                    action: {
-                        addons.setCatalogEnabled(!entry.enabled, addonBaseUrl: entry.addonBaseUrl, catalogKey: entry.catalogKey)
-                    }
+                    action: { addons.setRowEnabled(!entry.enabled, key: entry.rowKey) }
                 )
                 IconAction(systemImage: "arrow.up", tint: colors.textSecondary, action: {
-                    addons.moveCatalog(addonBaseUrl: entry.addonBaseUrl, catalogKey: entry.catalogKey, by: -1)
+                    addons.moveRow(entry.rowKey, by: -1, collectionIds: collectionIds)
                 })
                 .disabled(isFirst)
                 .opacity(isFirst ? NuvioTheme.effects.disabledAlpha : 1)
                 IconAction(systemImage: "arrow.down", tint: colors.textSecondary, action: {
-                    addons.moveCatalog(addonBaseUrl: entry.addonBaseUrl, catalogKey: entry.catalogKey, by: 1)
+                    addons.moveRow(entry.rowKey, by: 1, collectionIds: collectionIds)
                 })
                 .disabled(isLast)
                 .opacity(isLast ? NuvioTheme.effects.disabledAlpha : 1)
