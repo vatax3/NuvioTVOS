@@ -377,6 +377,23 @@ struct Video: Codable, Hashable, Identifiable, Sendable {
         guard let releaseDate else { return nil }
         return releaseDate <= Date()
     }
+
+    /// The air date as an episode card shows it — a long date in the viewer's own locale, the
+    /// same shape `formatEpisodeCardDate` produces on Android.
+    ///
+    /// Nil rather than an empty string when the addon supplied no date or a date this cannot
+    /// parse, so the caller draws nothing instead of an empty slot.
+    var releaseLabel: String? {
+        guard let releaseDate else { return nil }
+        return Video.releaseLabelFormatter.string(from: releaseDate)
+    }
+
+    private static let releaseLabelFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .long
+        formatter.timeStyle = .none
+        return formatter
+    }()
 }
 
 enum VideoDateParser {

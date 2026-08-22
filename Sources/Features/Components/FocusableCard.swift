@@ -134,14 +134,30 @@ struct NuvioPillButtonStyle: ButtonStyle {
 
 // MARK: - Focus observation
 
-/// Reports focus changes of the wrapped subtree — used to drive hero backdrops and
-/// row anchoring, which on Android come from `onFocusChanged`.
+/// Reports focus changes of the view it is applied to — used to drive hero backdrops, spoiler
+/// blurs and marquee titles, which on Android come from `onFocusChanged`.
+///
+/// This used to read `\.isFocused` from the environment, and could not work. A `ViewModifier`
+/// wraps its content, so the environment it reads is the **parent's** — the button being
+/// modified is a descendant, and `isFocused` is published downwards into the focused view's own
+/// subtree, never upwards to the modifier that sits outside it. The value was therefore whatever
+/// the ancestor's was, which on Home is nothing at all.
+///
+/// `@FocusState` with `.focused()` is the supported way to ask "is *this* view focused", and the
+/// focus engine writes to it directly. Every caller applies this to a `Button`, which is already
+/// focusable, so the extra binding changes nothing about what can take focus.
+///
+/// Four features depended on this and none of them worked: the home hero following the cursor,
+/// a poster expanding into its backdrop on focus, the spoiler blur lifting off an unwatched
+/// episode still, and titles marqueeing. Confirmed by building both versions and screenshotting
+/// the simulator — with the environment read, the focused card stays a flat poster.
 struct FocusReporter: ViewModifier {
-    @Environment(\.isFocused) private var isFocused
+    @FocusState private var isFocused: Bool
     let onChange: (Bool) -> Void
 
     func body(content: Content) -> some View {
         content
+            .focused($isFocused)
             .onChange(of: isFocused, initial: true) { _, focused in
                 onChange(focused)
             }

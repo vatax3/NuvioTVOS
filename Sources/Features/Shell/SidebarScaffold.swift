@@ -79,7 +79,7 @@ struct SidebarScaffold<Content: View>: View {
                 .padding(.top, NuvioTheme.spacing.lg)
                 .padding(.bottom, NuvioTheme.spacing.md)
                 .padding(.trailing, NuvioTheme.spacing.sm)
-                .frame(width: railColumnWidth, alignment: .topLeading)
+                .frame(width: railColumnWidth, alignment: isExpanded ? .topLeading : .leading)
                 // Full height *before* the focus section, which is the whole trick. A
                 // directional move only considers candidates whose frame overlaps the band it
                 // projects, and the pill sits at the very top — from a row further down the
@@ -237,7 +237,6 @@ struct SidebarScaffold<Content: View>: View {
                         tab: tab,
                         isSelected: router.selectedTab == tab,
                         showsLabel: isExpanded,
-                        stretchesVertically: !isExpanded,
                         action: { select(tab) }
                     )
                     .focused($focusedTab, equals: tab)
@@ -249,10 +248,16 @@ struct SidebarScaffold<Content: View>: View {
                     profileRow(active)
                 }
             }
+            // Centred while collapsed, as Android centres its icon column. It is also what keeps
+            // a leftward move resolving from a row halfway down the screen: the column's focus
+            // section spans the full height, and the engine redirects into it to the nearest
+            // focusable item — which is much nearer from the middle than from the top corner.
+            .frame(maxHeight: .infinity, alignment: isExpanded ? .top : .center)
         }
         .padding(.horizontal, isExpanded ? NuvioTheme.spacing.sm : 0)
         .padding(.vertical, isExpanded ? NuvioTheme.spacing.sm : 0)
         .frame(width: isExpanded ? tokens.expandedWidth : nil, alignment: .leading)
+        .frame(maxHeight: .infinity, alignment: isExpanded ? .top : .center)
         .background {
             if isExpanded {
                 panelBackground
@@ -288,10 +293,14 @@ struct SidebarScaffold<Content: View>: View {
         .padding(.top, NuvioTheme.spacing.sm)
     }
 
-    /// Collapsed, the panel shows only the current destination — that is the floating pill.
-    private var visibleTabs: [RootTab] {
-        isExpanded ? tabs : [router.selectedTab]
-    }
+    /// Every destination, collapsed or not.
+    ///
+    /// Collapsed used to mean *one* item — the current destination as a floating pill — and that
+    /// left the rail column reading as empty space with a lozenge in it. Android's closed drawer
+    /// is a strip of icons, one per destination: `drawerItems.forEach { LegacySidebarButton(…) }`
+    /// runs in both states, and only `expanded` changes, which is what fills the band and lets a
+    /// viewer see where they can go without opening anything.
+    private var visibleTabs: [RootTab] { tabs }
 
     /// `glass_sidepanel_enabled` chooses the gradient-over-material glass; with it off the
     /// panel is a plain surface fill. `modern_sidebar_blur_enabled` controls the blur pass
@@ -367,17 +376,12 @@ private struct SidebarItemView: View {
     let tab: RootTab
     let isSelected: Bool
     let showsLabel: Bool
-    /// Collapsed, the pill's focus frame spans the whole column even though it draws at the
-    /// top. A leftward move only considers candidates level with the focused row, so a pill
-    /// pinned to the top corner is unreachable from anywhere below it.
-    var stretchesVertically: Bool = false
     let action: () -> Void
 
     private var tokens: NuvioSidebarComponentTokens { NuvioTheme.components.sidebar }
 
     var body: some View {
         styledButton
-            .frame(maxHeight: stretchesVertically ? .infinity : nil, alignment: .top)
             .contentShape(Rectangle())
     }
 

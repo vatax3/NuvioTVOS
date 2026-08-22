@@ -387,6 +387,28 @@ struct EpisodeCard: View {
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                 }
+
+                // Runtime on the leading edge, air date on the trailing one — the same metadata
+                // row Android draws under an episode. The date was the piece missing entirely:
+                // `released` was parsed, used to decide whether an episode had aired, and never
+                // shown, so a season of unaired episodes looked no different from an aired one.
+                if video.runtime?.nilIfBlank != nil || video.releaseLabel != nil {
+                    HStack(spacing: NuvioTheme.spacing.md) {
+                        if let runtime = video.runtime?.nilIfBlank {
+                            Label(runtime, systemImage: "clock")
+                                .labelStyle(.titleAndIcon)
+                                .nuvioText(NuvioTypography.bodySmall)
+                                .foregroundStyle(colors.textTertiary)
+                        }
+                        Spacer(minLength: NuvioTheme.spacing.sm)
+                        if let released = video.releaseLabel {
+                            Text(released)
+                                .nuvioText(NuvioTypography.bodySmall)
+                                .foregroundStyle(colors.textTertiary)
+                                .lineLimit(1)
+                        }
+                    }
+                }
             }
             .frame(width: tokens.width, alignment: .leading)
         }
