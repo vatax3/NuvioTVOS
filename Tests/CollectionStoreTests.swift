@@ -60,12 +60,51 @@ final class CollectionStoreTests: XCTestCase {
         XCTAssertEqual(store.collections.map(\.title), before)
     }
 
-    /// Pinned collections lead, and the rest keep their order behind them — this is what the
-    /// home screen renders.
+    /// Pinned collections lead, and the rest keep their order behind them — this is the order
+    /// the collection manager lists them in.
     func testPinnedCollectionsComeFirst() {
         let created = seedThree()
         store.update(created[2].id) { $0.pinToTop = true }
         XCTAssertEqual(store.ordered.map(\.title), ["With the kids", "Tonight", "Rewatch"])
+    }
+
+    // MARK: Home placement
+
+    /// Pinning does not mean "first among the collections", it means **first on the screen**,
+    /// ahead of every addon catalogue. Upstream adds the pinned ones before the ordered catalogue
+    /// keys and lets the rest fall where the saved order puts them, which with no saved order is
+    /// the end.
+    ///
+    /// We had every collection after every catalogue, so pinning reordered collections among
+    /// themselves and moved nothing past a catalogue — invisible until somebody pinned one.
+    func testPinnedCollectionsLeadTheHomeScreenAndTheRestTrailTheCatalogues() {
+        let pinned = MediaCollection(title: "Tonight", pinToTop: true, folders: [CollectionFolder(title: "f")])
+        let plain = MediaCollection(title: "Rewatch", folders: [CollectionFolder(title: "f")])
+        let alsoPinned = MediaCollection(title: "Kids", pinToTop: true, folders: [CollectionFolder(title: "f")])
+
+        let placement = CollectionStore.homePlacement([pinned, plain, alsoPinned])
+        XCTAssertEqual(placement.leading.map(\.title), ["Tonight", "Kids"])
+        XCTAssertEqual(placement.trailing.map(\.title), ["Rewatch"])
+    }
+
+    /// A heading over nothing is not an invitation to fill it, and Home is not where you would.
+    func testACollectionWithNoFoldersGetsNoRailOnEitherSide() {
+        let empty = MediaCollection(title: "Empty", pinToTop: true)
+        let alsoEmpty = MediaCollection(title: "Also empty")
+        let real = MediaCollection(title: "Real", folders: [CollectionFolder(title: "f")])
+
+        let placement = CollectionStore.homePlacement([empty, alsoEmpty, real])
+        XCTAssertTrue(placement.leading.isEmpty, "an empty pinned collection is still empty")
+        XCTAssertEqual(placement.trailing.map(\.title), ["Real"])
+    }
+
+    func testWithNothingPinnedEveryCollectionFollowsTheCatalogues() {
+        let placement = CollectionStore.homePlacement([
+            MediaCollection(title: "A", folders: [CollectionFolder(title: "f")]),
+            MediaCollection(title: "B", folders: [CollectionFolder(title: "f")])
+        ])
+        XCTAssertTrue(placement.leading.isEmpty)
+        XCTAssertEqual(placement.trailing.map(\.title), ["A", "B"])
     }
 
     // MARK: Folders and sources

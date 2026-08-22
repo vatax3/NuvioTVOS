@@ -41,9 +41,36 @@ final class CollectionStore {
         return nil
     }
 
-    /// Pinned collections first, insertion order otherwise — the order the home rails follow.
+    /// Pinned collections first, insertion order otherwise — the order the manager lists them in.
     var ordered: [MediaCollection] {
         collections.filter(\.pinToTop) + collections.filter { !$0.pinToTop }
+    }
+
+    /// How Home splits collections around the addon catalogues.
+    ///
+    /// Upstream builds its home rows by adding every `pinToTop` collection **first**, before the
+    /// ordered catalogue keys, and letting the unpinned ones fall wherever the saved catalogue
+    /// order puts them — which, with no saved order, is the end. So "pinned" does not mean
+    /// "first among collections", it means first on the screen, ahead of every catalogue.
+    ///
+    /// Getting this wrong is invisible until someone pins one: we had all collections after all
+    /// catalogues, so pinning changed the order collections appeared in among themselves and
+    /// nothing else.
+    ///
+    /// A collection with no folders is dropped from both halves: a heading over nothing is not an
+    /// invitation to fill it, and Home is not where you would.
+    nonisolated static func homePlacement(
+        _ collections: [MediaCollection]
+    ) -> (leading: [MediaCollection], trailing: [MediaCollection]) {
+        let worthARail = collections.filter { !$0.folders.isEmpty }
+        return (
+            leading: worthARail.filter(\.pinToTop),
+            trailing: worthARail.filter { !$0.pinToTop }
+        )
+    }
+
+    var homePlacement: (leading: [MediaCollection], trailing: [MediaCollection]) {
+        Self.homePlacement(collections)
     }
 
     // MARK: Collection mutations

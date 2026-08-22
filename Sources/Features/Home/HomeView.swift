@@ -95,20 +95,23 @@ struct HomeRailList: View {
     }
 
     /// The card that should own focus when Home first has something to show — Continue
-    /// Watching wins when present, otherwise the first poster of the first rail.
+    /// Watching wins when present, then whatever leads the rails.
     private var firstCardKey: String? {
         continueWatching.first?.preview.rowKey
+            ?? pinnedCollections.first?.folders.first?.id
             ?? model.rows.first(where: { !$0.items.isEmpty })?.items.first?.rowKey
-            ?? homeCollections.first?.folders.first?.id
+            ?? trailingCollections.first?.folders.first?.id
     }
 
-    /// Collections worth a rail: one with no folders is a heading over nothing. Pinned ones
-    /// come first, and the rest sit after the addon catalogues — where Android puts them when
-    /// the viewer has not reordered anything.
-    private var homeCollections: [MediaCollection] {
-        guard settings.layout.collectionsOnHomeEnabled else { return [] }
-        return collections.ordered.filter { !$0.folders.isEmpty }
+    /// Pinned collections lead the screen, ahead of every catalogue; the rest follow them.
+    /// `CollectionStore.homePlacement` carries the rule and the reasoning.
+    private var homeCollections: (leading: [MediaCollection], trailing: [MediaCollection]) {
+        guard settings.layout.collectionsOnHomeEnabled else { return ([], []) }
+        return collections.homePlacement
     }
+
+    private var pinnedCollections: [MediaCollection] { homeCollections.leading }
+    private var trailingCollections: [MediaCollection] { homeCollections.trailing }
 
     var body: some View {
         LazyVStack(alignment: .leading, spacing: NuvioTheme.spacing.rail.rowGap) {
@@ -122,6 +125,10 @@ struct HomeRailList: View {
                     },
                     cardFocus: $focusedCardKey
                 )
+            }
+
+            ForEach(pinnedCollections) { collection in
+                CollectionRail(collection: collection, focusBinding: $focusedCardKey)
             }
 
             ForEach(model.rows) { row in
@@ -143,7 +150,7 @@ struct HomeRailList: View {
                 }
             }
 
-            ForEach(homeCollections) { collection in
+            ForEach(trailingCollections) { collection in
                 CollectionRail(collection: collection, focusBinding: $focusedCardKey)
             }
         }

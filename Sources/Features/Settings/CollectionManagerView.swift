@@ -144,8 +144,8 @@ struct CollectionEditorView: View {
                         )
                     )
                     SettingsToggle(
-                        title: "Pin to top",
-                        subtitle: "Above your catalogs on Home",
+                        title: "Pin above catalogs",
+                        subtitle: "Show this collection above every home catalog. Several pinned collections keep the order you created them in.",
                         isOn: binding(\.pinToTop)
                     )
                     SettingsToggle(
