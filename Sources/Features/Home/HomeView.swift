@@ -198,14 +198,22 @@ struct HomeRailList: View {
             guard !didClaimInitialFocus, let key else { return }
             didClaimInitialFocus = true
             Task { @MainActor in
-                // The card is not registered with the focus engine on the first runloop pass,
-                // so a single assignment is silently dropped and the engine then parks focus on
-                // the sidebar. Retry until it sticks, then stop.
-                for _ in 0..<12 {
-                    try? await Task.sleep(for: .milliseconds(250))
+                // The card is not registered with the focus engine on the first runloop pass, so
+                // a single assignment is silently dropped and the engine parks focus on the
+                // sidebar instead. Retry until it sticks.
+                //
+                // The check has to happen *after* a sleep, never straight after the write:
+                // `@FocusState` read back immediately returns what was just written, whether or
+                // not the engine accepted it. The old loop asked "did that work?" one line after
+                // asking for it, always got yes, and gave up after a single attempt — so whether
+                // the content or the menu held focus at launch came down to whether the catalogue
+                // had painted within 250ms.
+                for delay in [150, 250, 400, 600, 900, 1400] {
+                    try? await Task.sleep(for: .milliseconds(delay))
+                    // Non-nil here means something in the content has focus — the card we asked
+                    // for, or one the viewer has since moved to. Either way, leave it alone.
                     guard focusedCardKey == nil else { return }
                     focusedCardKey = key
-                    if focusedCardKey != nil { return }
                 }
             }
         }
@@ -224,30 +232,60 @@ struct ModernHomeContent: View {
     /// gradient reaches further right, instead of being confined to the hero band.
     private var fullScreenBackdrop: Bool { settings.layout.modernHeroFullScreenBackdrop }
 
+    /// The height the rails scroll inside. The hero takes the rest and **does not scroll**.
+    ///
+    /// That is the whole point of the Modern layout: the details at the top describe the card you
+    /// are on, so they cannot slide away the moment you touch a rail. Ours had the hero and the
+    /// rails in one scroll view, so focusing the first poster pushed the hero half off the top.
+    ///
+    /// Android hard-codes this at 0.52 of the screen (0.49 with landscape posters). That works
+    /// there because its poster size is fixed; here it is a setting — Layout → Poster cards lets
+    /// a viewer ask for 330dp-tall posters — so a fixed fraction would clip the row labels for
+    /// anyone who changed it, which is exactly what 0.52 did at the default size. Derived from
+    /// the row's own parts instead, and clamped so the hero cannot be squeezed out.
+    private func rowsViewportHeight(in total: CGFloat) -> CGFloat {
+        let metrics = settings.posterMetrics
+        let rowTitle = dp(26) + NuvioTheme.components.row.titleBottomSpacing
+        // Reserved for the tallest state the row can reach, not the one it starts in: a card
+        // expanded into its backdrop grows a metadata line and two lines of synopsis under it,
+        // and sizing for the collapsed label alone cut the synopsis off at the screen edge.
+        let labels: CGFloat
+        if metrics.showsLabels {
+            labels = metrics.backdropExpandEnabled ? dp(76) : dp(52)
+        } else {
+            labels = 0
+        }
+        let oneRow = rowTitle + NuvioTheme.components.row.verticalPadding * 2 + metrics.height + labels
+        return min(max(oneRow, total * 0.42), total * 0.62)
+    }
+
     var body: some View {
         GeometryReader { proxy in
+            let rowsHeight = showsHero ? rowsViewportHeight(in: proxy.size.height) : proxy.size.height
+
             ZStack(alignment: .topLeading) {
                 if showsHero {
                     heroBackdrop(size: proxy.size)
                 }
 
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        if showsHero {
-                            ModernHeroInfo(item: model.heroItem)
-                                .frame(
-                                    height: proxy.size.height * NuvioTheme.layout.detailsHeroHeightFraction,
-                                    alignment: .bottomLeading
-                                )
-                                .padding(.horizontal, NuvioTheme.layout.tvSafeHorizontal)
-                        }
+                VStack(alignment: .leading, spacing: 0) {
+                    if showsHero {
+                        ModernHeroInfo(item: model.heroItem)
+                            .frame(
+                                height: proxy.size.height - rowsHeight,
+                                alignment: .bottomLeading
+                            )
+                            .padding(.horizontal, NuvioTheme.layout.tvSafeHorizontal)
+                    }
 
+                    ScrollView(.vertical, showsIndicators: false) {
+                        // The viewport clips, as Android's does: rows scrolled past the top
+                        // would otherwise paint over the hero they are meant to describe.
                         HomeRailList(model: model)
-                            .padding(.top, showsHero ? NuvioTheme.spacing.xl : NuvioTheme.layout.tvSafeVertical)
                             .padding(.bottom, NuvioTheme.spacing.rail.tailPadding)
                     }
+                    .frame(height: rowsHeight)
                 }
-                .scrollClipDisabled()
             }
         }
         .ignoresSafeArea()

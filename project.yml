@@ -135,8 +135,8 @@ targets:
         PRODUCT_NAME: Nuvio
         INFOPLIST_KEY_CFBundleDisplayName: Nuvio
         INFOPLIST_KEY_UIUserInterfaceStyle: Dark
-        MARKETING_VERSION: "1.0.7"
-        CURRENT_PROJECT_VERSION: "9"
+        MARKETING_VERSION: "1.0.8"
+        CURRENT_PROJECT_VERSION: "10"
         TARGETED_DEVICE_FAMILY: "3"
         # MoltenVK and shaderc inside the mpv stack are C++, so the C++ runtime and the system
         # libraries they call into have to be linked explicitly.
@@ -188,8 +188,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.nuvio.tvos.topshelf
         PRODUCT_NAME: NuvioTopShelf
         CODE_SIGN_ENTITLEMENTS: TopShelf/NuvioTopShelf.entitlements
-        MARKETING_VERSION: "1.0.7"
-        CURRENT_PROJECT_VERSION: "9"
+        MARKETING_VERSION: "1.0.8"
+        CURRENT_PROJECT_VERSION: "10"
         GENERATE_INFOPLIST_FILE: YES
     info:
       path: TopShelf/Info.plist

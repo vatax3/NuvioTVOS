@@ -168,14 +168,22 @@ struct SidebarScaffold<Content: View>: View {
         focusReclaim = Task { @MainActor in
             for delay in [120, 200, 500, 900] {
                 try? await Task.sleep(for: .milliseconds(delay))
-                guard !Task.isCancelled, !isExpanded, focusedTab == nil else { return }
+                guard !Task.isCancelled, !isExpanded else { return }
                 // The viewer is driving. Anywhere they have moved to is a better answer than
-                // the default, and overriding it is what made the remote feel unreliable.
+                // the default, and overriding it is what made the remote feel unreliable. This
+                // is the only reason to stand down.
                 guard !hasMovedSinceTabChange else { return }
-                // Something in the new screen has taken focus, which is the whole objective.
-                // Asked of UIKit rather than of `@FocusState`, which would only report back
-                // what was last requested — see `FocusSystemProbe`.
-                guard !FocusSystemProbe.hasFocusedItem else { return }
+                // Focus parked on the menu is not "done": it is the exact failure this exists to
+                // repair. A screen still fetching its first catalogue has nothing focusable, the
+                // engine takes the nearest thing that is — the rail — and stays there once the
+                // posters arrive. Used to be a reason to give up, which is why the app could open
+                // with the menu lit and the content dead.
+                if focusedTab == nil {
+                    // Something in the content has taken focus, which is the whole objective.
+                    // Asked of UIKit rather than of `@FocusState`, which reports back only what
+                    // was last requested — see `FocusSystemProbe`.
+                    guard !FocusSystemProbe.hasFocusedItem else { return }
+                }
                 resetFocus(in: shellFocus)
             }
         }
