@@ -60,15 +60,22 @@ struct SidebarScaffold<Content: View>: View {
         return max(NuvioTheme.layout.sidebarContentOffset, railColumnWidth)
     }
 
-    /// How far the pills sit from the physical left edge of the screen.
+    /// How far the pills sit from the physical left edge of the screen, and the only thing that
+    /// decides it — see `body`, where the shell takes the horizontal safe area over itself.
     ///
-    /// tvOS already insets the whole scene by 80pt horizontally — the title-safe margin every
-    /// television is guaranteed to show — so this is what gets added on top of it, and it used to
-    /// be another 28. Measured on a panel that was showing the result, the menu began a tenth of
-    /// the way across the screen with nothing in front of it, which is the "wasted space" that
-    /// was reported. A small gap on top of the safe margin is the tightest the pills can sit
-    /// without gambling on a set with overscan.
-    private var railLeadingPadding: CGFloat { NuvioTheme.spacing.xs }
+    /// The margin was being paid for twice. tvOS insets the whole scene by 80pt horizontally, the
+    /// app then adds its own `tvSafeHorizontal` on top of that inside every screen, and both of
+    /// them exist for the same reason: overscan on a television that crops the picture. Stacked,
+    /// they put the first poster 285pt into a 1920pt screen — nearly three times the 96pt margin
+    /// the Android app uses for the same job — with the menu floating in the middle of it. That
+    /// is the "espace perdu pour rien" that got reported twice, and moving the pills a few points
+    /// was never going to answer it, because the pills were not where the space was going.
+    ///
+    /// 60pt is a deliberate step inside Apple's 80pt horizontal recommendation: it is the number
+    /// Apple itself uses for the top and bottom edges, and it clears the 2.5% overscan a set that
+    /// still crops would take. If anything is ever reported clipped on an older television, this
+    /// is the one number to raise.
+    private var railLeadingPadding: CGFloat { dp(30) }
 
     /// Width reserved for the sidebar column: the collapsed pill and its own padding, nothing
     /// more. The expanded panel deliberately overflows this rather than widening it.
@@ -87,6 +94,16 @@ struct SidebarScaffold<Content: View>: View {
         //
         // The column stays at the collapsed width. The expanded panel is wider and simply
         // overflows it, so blooming open never reflows the content behind it.
+        shellBody
+            // The shell owns the horizontal margin, so it has to own the safe area too.
+            // Otherwise the platform's 80pt and the app's own overscan allowance are both
+            // applied to the same edge, which is what put the content a seventh of the way
+            // across the screen. Vertical is left alone: the top title and the bottom rail both
+            // want it, and nothing was stacking there.
+            .ignoresSafeArea(edges: .horizontal)
+    }
+
+    private var shellBody: some View {
         HStack(spacing: 0) {
             sidebar
                 .padding(.leading, railLeadingPadding)

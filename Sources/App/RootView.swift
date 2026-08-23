@@ -180,5 +180,11 @@ struct NuvioScreenBackground<Content: View>: View {
                 .padding(.vertical, verticalPadding)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
+        // `horizontalPadding` *is* the overscan allowance — it is `tvSafeHorizontal`. Laying it
+        // out inside the platform's own 80pt margin charged for the same thing twice and put a
+        // pushed screen's content 176pt into a 1920pt one. `SidebarScaffold` takes the same
+        // ownership for the screens that live inside it; this keeps a pushed screen in step with
+        // them. Vertical is left alone.
+        .ignoresSafeArea(edges: .horizontal)
     }
 }
