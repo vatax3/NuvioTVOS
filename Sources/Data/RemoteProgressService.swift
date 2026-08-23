@@ -39,7 +39,8 @@ final class RemoteProgressService {
         addons: AddonStore,
         force: Bool = false
     ) async {
-        guard settings.effectiveWatchProgressSource == .trakt else { return }
+        let source = settings.effectiveWatchProgressSource
+        guard source == .trakt || source == .simkl else { return }
         if !force, let last = lastRefresh, Date().timeIntervalSince(last) < Self.minimumInterval {
             return
         }
@@ -47,31 +48,54 @@ final class RemoteProgressService {
         isRefreshing = true
         defer { isRefreshing = false }
 
-        let clientId = settings.tracking.traktClientId
-        let token = settings.tracking.traktAccessToken
-        guard !clientId.isEmpty, !token.isEmpty else { return }
-
-        let items = await TraktClient.shared.playbackProgress(clientId: clientId, token: token)
-        lastRefresh = Date()
-        guard !items.isEmpty else { return }
-
         var adopted: Set<String> = []
-        for item in items {
-            guard let entry = Self.progress(from: item) else { continue }
-            // A position recorded on this device is the better one: it is in seconds and it is
-            // what the player will resume from. Trakt only fills the gaps.
-            if let local = library.progress(forVideoId: entry.videoId), local.updatedAt >= entry.updatedAt {
-                continue
+        if source == .trakt {
+            let clientId = settings.tracking.traktClientId
+            let token = settings.tracking.traktAccessToken
+            guard !clientId.isEmpty, !token.isEmpty else { return }
+            let items = await TraktClient.shared.playbackProgress(clientId: clientId, token: token)
+            for item in items {
+                guard let entry = Self.progress(from: item) else { continue }
+                if adopt(entry, into: library) { adopted.insert(entry.videoId) }
+                if library.cachedPreview(contentType: entry.contentType, contentId: entry.contentId) == nil,
+                   let preview = await preview(for: item, addons: addons) {
+                    library.cache(preview)
+                }
             }
-            library.adoptProgress(entry)
-            adopted.insert(entry.videoId)
-
-            if library.cachedPreview(contentType: entry.contentType, contentId: entry.contentId) == nil,
-               let preview = await preview(for: item, addons: addons) {
-                library.cache(preview)
+        } else {
+            let clientId = settings.tracking.simklClientId
+            let token = settings.tracking.simklAccessToken
+            guard !clientId.isEmpty, !token.isEmpty else { return }
+            let items = (try? await SimklClient.shared.playbackProgress(
+                clientId: clientId, token: token
+            )) ?? []
+            for item in items {
+                guard let entry = Self.progress(from: item) else { continue }
+                if adopt(entry, into: library) { adopted.insert(entry.videoId) }
+                if library.cachedPreview(contentType: entry.contentType, contentId: entry.contentId) == nil {
+                    library.cache(MetaPreview(
+                        id: item.contentId,
+                        type: item.type,
+                        rawType: item.type.apiString(),
+                        name: item.title,
+                        poster: item.poster,
+                        imdbId: Self.imdbId(fromContentId: item.contentId)
+                    ))
+                }
             }
         }
+        lastRefresh = Date()
         adoptedVideoIds = adopted
+    }
+
+    private func adopt(_ entry: WatchProgress, into library: LibraryStore) -> Bool {
+        // A position recorded on this device is the better one: it has a real duration and is
+        // the exact point the engine can seek to. Remote percentages only fill gaps/newer rows.
+        if let local = library.progress(forVideoId: entry.videoId), local.updatedAt >= entry.updatedAt {
+            return false
+        }
+        library.adoptProgress(entry)
+        return true
     }
 
     /// Maps one Trakt resume point onto our record.
@@ -97,6 +121,27 @@ final class RemoteProgressService {
             // from whatever this device recorded, never from here.
             positionSeconds: min(100, max(0, item.progress)),
             durationSeconds: 100,
+            updatedAt: item.pausedAt ?? Date()
+        )
+    }
+
+    nonisolated static func progress(from item: SimklClient.PlaybackItem) -> WatchProgress? {
+        guard item.progress > 0 else { return nil }
+        let videoId: String
+        if item.type == .series, let episode = item.episode {
+            videoId = "\(item.contentId):\(item.season ?? 0):\(episode)"
+        } else {
+            videoId = item.contentId
+        }
+        let duration = item.durationSeconds > 0 ? item.durationSeconds : 100
+        return WatchProgress(
+            contentId: item.contentId,
+            contentType: item.type.rawValue,
+            videoId: videoId,
+            season: item.season,
+            episode: item.episode,
+            positionSeconds: duration * item.progress / 100,
+            durationSeconds: duration,
             updatedAt: item.pausedAt ?? Date()
         )
     }

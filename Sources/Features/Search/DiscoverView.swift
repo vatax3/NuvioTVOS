@@ -15,11 +15,14 @@ final class DiscoverViewModel {
     private(set) var rawItems: [MetaPreview] = []
     private(set) var items: [MetaPreview] = []
     private(set) var isLoading = false
+    private(set) var isLoadingMore = false
+    private(set) var reachedEnd = false
     private(set) var error: String?
     private(set) var selection: (addon: Addon, catalog: CatalogDescriptor)?
 
     private let client: StremioClient
     private var loadTask: Task<Void, Never>?
+    private var pageTask: Task<Void, Never>?
 
     init(client: StremioClient = .shared) {
         self.client = client
@@ -57,8 +60,11 @@ final class DiscoverViewModel {
     func load() {
         guard let selection else { return }
         loadTask?.cancel()
+        pageTask?.cancel()
+        isLoadingMore = false
         loadTask = Task {
             isLoading = true
+            reachedEnd = false
             defer { isLoading = false }
             var extras: [(String, String)] = []
             if let genre = selectedGenre { extras.append(("genre", genre)) }
@@ -80,6 +86,46 @@ final class DiscoverViewModel {
                 guard !Task.isCancelled else { return }
                 rawItems = []
                 items = []
+                self.error = error.localizedDescription
+            }
+        }
+    }
+
+    func loadMore() {
+        guard !isLoading, !isLoadingMore, !reachedEnd, let selection else { return }
+        let selectionKey = "\(selection.addon.baseUrl)#\(selection.catalog.descriptorKey)#\(selectedGenre ?? "")"
+        isLoadingMore = true
+        pageTask = Task {
+            defer {
+                if !Task.isCancelled { isLoadingMore = false }
+            }
+            var extras: [(String, String)] = []
+            if let genre = selectedGenre { extras.append(("genre", genre)) }
+            else if selection.catalog.requiresGenre, let first = selection.catalog.genreOptions.first {
+                extras.append(("genre", first))
+            }
+            do {
+                let page = try await client.fetchCatalog(
+                    addon: selection.addon,
+                    type: selection.catalog.apiType,
+                    catalogId: selection.catalog.id,
+                    skip: rawItems.count,
+                    extraArgs: extras
+                )
+                let currentKey = self.selection.map {
+                    "\($0.addon.baseUrl)#\($0.catalog.descriptorKey)#\(self.selectedGenre ?? "")"
+                }
+                guard !Task.isCancelled, currentKey == selectionKey else { return }
+                let existing = Set(rawItems.map(\.rowKey))
+                let additions = page.filter { !existing.contains($0.rowKey) }
+                if additions.isEmpty {
+                    reachedEnd = true
+                } else {
+                    rawItems.append(contentsOf: additions)
+                    items = presentation.filter(rawItems)
+                }
+            } catch {
+                guard !Task.isCancelled else { return }
                 self.error = error.localizedDescription
             }
         }
@@ -200,15 +246,24 @@ struct DiscoverBrowser: View {
             .frame(height: dp(300))
         } else {
             LazyVGrid(columns: columns, alignment: .leading, spacing: NuvioTheme.spacing.xl) {
-                ForEach(model.items, id: \.rowKey) { item in
+                ForEach(Array(model.items.enumerated()), id: \.element.rowKey) { index, item in
                     ContentCard(
                         item: item,
                         allowsBackdropExpand: false,
+                        onFocus: { _ in
+                            if index >= model.items.count - 14 { model.loadMore() }
+                        },
                         action: { router.openDetail(item) }
                     )
                 }
             }
             .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)
+
+            if model.isLoadingMore {
+                ProgressView()
+                    .tint(colors.secondary)
+                    .frame(maxWidth: .infinity)
+            }
         }
     }
 }

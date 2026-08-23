@@ -57,6 +57,7 @@ struct MPVPlayerView: View {
     let onChromeChange: (PlayerChromeState) -> Void
     let onPlaybackTime: (Double, Double) -> Void
     let onPlaybackState: (Bool, Bool) -> Void
+    let onPlaybackFailure: (String) -> Void
     let onProgress: (Double, Double, Bool) -> Void
     let onFinished: () -> Void
 
@@ -147,7 +148,7 @@ struct MPVPlayerView: View {
             }
 
             if let error = engine.errorMessage {
-                ErrorStateView(message: error) { dismiss() }
+                ErrorStateView(message: error) { onPlaybackFailure(error) }
                     .background(.black.opacity(0.75))
             }
 

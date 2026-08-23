@@ -6,11 +6,13 @@ import Observation
 final class SearchViewModel {
     var query: String = ""
     private(set) var results: [SearchSection] = []
+    private(set) var recentSearches: [String] = SearchHistoryStore.load()
     private(set) var isSearching = false
     private(set) var hasSearched = false
 
     private let client: StremioClient
     private var searchTask: Task<Void, Never>?
+    private var searchGeneration = 0
 
     struct SearchSection: Identifiable {
         let addonName: String
@@ -45,6 +47,8 @@ final class SearchViewModel {
     /// Debounced so each remote keystroke does not fan out to every addon.
     func scheduleSearch(addonStore: AddonStore) {
         searchTask?.cancel()
+        searchGeneration += 1
+        let generation = searchGeneration
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 2 else {
             results = []
@@ -55,21 +59,33 @@ final class SearchViewModel {
         searchTask = Task {
             try? await Task.sleep(for: .milliseconds(450))
             guard !Task.isCancelled else { return }
-            await search(addonStore: addonStore, term: trimmed)
+            await search(addonStore: addonStore, term: trimmed, generation: generation)
         }
     }
 
     func search(addonStore: AddonStore, term: String) async {
+        searchTask?.cancel()
+        searchGeneration += 1
+        await search(addonStore: addonStore, term: term, generation: searchGeneration)
+    }
+
+    private func search(addonStore: AddonStore, term: String, generation: Int) async {
         let catalogs = addonStore.searchableCatalogs()
         guard !catalogs.isEmpty else {
-            results = []
-            hasSearched = true
+            if generation == searchGeneration {
+                results = []
+                hasSearched = true
+                isSearching = false
+            }
             return
         }
 
         isSearching = true
         hasSearched = true
-        defer { isSearching = false }
+        results = []
+        defer {
+            if generation == searchGeneration { isSearching = false }
+        }
 
         var collected: [SearchSection] = []
         await withTaskGroup(of: SearchSection?.self) { group in
@@ -93,12 +109,64 @@ final class SearchViewModel {
                 }
             }
             for await section in group {
-                if let section { collected.append(section) }
+                guard !Task.isCancelled, generation == searchGeneration else {
+                    group.cancelAll()
+                    return
+                }
+                if let section {
+                    collected.append(section)
+                    // Results appear as addons answer rather than waiting for the slowest one.
+                    results = collected.sorted { $0.items.count > $1.items.count }
+                }
             }
         }
 
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled, generation == searchGeneration else { return }
         results = collected.sorted { $0.items.count > $1.items.count }
+        if !results.isEmpty {
+            recentSearches = SearchHistoryStore.record(term)
+        }
+    }
+
+    var suggestions: [String] {
+        let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !term.isEmpty else { return recentSearches }
+        return recentSearches.filter { $0.localizedCaseInsensitiveContains(term) }
+    }
+
+    func useSuggestion(_ value: String, addonStore: AddonStore) {
+        query = value
+        scheduleSearch(addonStore: addonStore)
+    }
+
+    func clearHistory() {
+        SearchHistoryStore.clear()
+        recentSearches = []
+    }
+}
+
+enum SearchHistoryStore {
+    private static let key = "search_recent_queries_v1"
+    static let maximumCount = 8
+
+    static func load(defaults: UserDefaults = .standard) -> [String] {
+        Array((defaults.stringArray(forKey: key) ?? []).prefix(maximumCount))
+    }
+
+    @discardableResult
+    static func record(_ raw: String, defaults: UserDefaults = .standard) -> [String] {
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard value.count >= 2 else { return load(defaults: defaults) }
+        var values = load(defaults: defaults)
+        values.removeAll { $0.caseInsensitiveCompare(value) == .orderedSame }
+        values.insert(value, at: 0)
+        values = Array(values.prefix(maximumCount))
+        defaults.set(values, forKey: key)
+        return values
+    }
+
+    static func clear(defaults: UserDefaults = .standard) {
+        defaults.removeObject(forKey: key)
     }
 }
 
@@ -138,6 +206,10 @@ struct SearchView: View {
                         model.scheduleSearch(addonStore: addons)
                     }
 
+                if !model.suggestions.isEmpty {
+                    suggestions
+                }
+
                 content
             }
             .padding(.top, NuvioTheme.layout.tvSafeVertical)
@@ -145,6 +217,22 @@ struct SearchView: View {
         }
         .scrollClipDisabled()
         .background(colors.background)
+    }
+
+    private var suggestions: some View {
+        ChipRow(title: model.query.isEmpty ? "Recent searches" : "Suggestions") {
+            ForEach(model.suggestions, id: \.self) { suggestion in
+                NuvioChip(
+                    label: suggestion,
+                    isSelected: false,
+                    action: { model.useSuggestion(suggestion, addonStore: addons) }
+                )
+            }
+            if model.query.isEmpty {
+                Button("Clear", action: model.clearHistory)
+                    .buttonStyle(NuvioPillButtonStyle(emphasis: .ghost))
+            }
+        }
     }
 
     private var header: some View {
@@ -183,8 +271,17 @@ struct SearchView: View {
                         title: section.displayTitle,
                         subtitle: section.addonName,
                         items: section.items,
-                        showsSeeAll: false,
-                        onSelect: { router.openDetail($0) }
+                        showsSeeAll: true,
+                        onSelect: { router.openDetail($0) },
+                        onSeeAll: {
+                            router.push(.catalogSeeAll(CatalogRequest(
+                                addonBaseUrl: section.addonBaseUrl,
+                                catalogId: section.catalogId,
+                                type: section.contentType,
+                                title: section.displayTitle,
+                                search: model.query.trimmingCharacters(in: .whitespacesAndNewlines)
+                            )))
+                        }
                     )
                 }
             }

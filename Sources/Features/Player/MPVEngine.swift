@@ -281,7 +281,6 @@ final class MPVEngine {
 
         command(["loadfile", url])
         isReady = true
-        hasRenderedFrame = true
     }
 
     /// Retains a weak back-reference for the C callbacks, which cannot capture Swift context.
@@ -513,6 +512,12 @@ final class MPVEngine {
             activateAudioSession()
             refreshTracks()
             refreshStreamInfo()
+
+        case MPV_EVENT_VIDEO_RECONFIG:
+            // `loadfile` only means the demuxer accepted the URL. This is the first event that
+            // proves the decoder produced a video configuration for the renderer; setting the
+            // flag at load time made the first-frame watchdog permanently blind.
+            hasRenderedFrame = true
 
         case MPV_EVENT_END_FILE:
             guard let data = event.pointee.data else { return }

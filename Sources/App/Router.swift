@@ -156,8 +156,11 @@ struct CatalogRequest: Hashable, Identifiable {
     var catalogId: String
     var type: String
     var title: String
-    var genre: String?
-    var id: String { "\(addonBaseUrl)|\(type)|\(catalogId)|\(genre ?? "")" }
+    var genre: String? = nil
+    /// Search is an ordinary Stremio catalog extra. Carrying it into See All keeps a search row
+    /// pageable instead of silently turning it back into the addon's unfiltered catalog.
+    var search: String? = nil
+    var id: String { "\(addonBaseUrl)|\(type)|\(catalogId)|\(genre ?? "")|\(search ?? "")" }
 }
 
 // MARK: - Pushed routes

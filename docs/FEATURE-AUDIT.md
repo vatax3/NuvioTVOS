@@ -7,6 +7,12 @@ skip-intro complaint a day earlier.
 **Resolved 2026-08-22.** Everything below is kept rather than deleted, because the interesting
 part is not the list — it is why the list existed, and what now stops it coming back.
 
+**Rechecked for 1.0.12 (14) on 2026-08-23.** The follow-up closed three cross-cutting gaps that a
+screen inventory alone did not expose: Simkl had authentication but no complete library/progress
+projection, Search and Discover stopped at their first page, and player load success was declared
+before mpv produced a frame. Contract and state-machine coverage now lives in
+`SimklContractTests`, `SearchHistoryTests` and `PlayerRecoveryPolicyTests`.
+
 Two questions were asked of the tree, both mechanically rather than by reading:
 
 1. Which settings can a viewer change that change nothing?

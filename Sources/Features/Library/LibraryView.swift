@@ -106,12 +106,7 @@ struct LibraryView: View {
         } else if settings.effectiveLibrarySourceMode == .trakt {
             TraktLibraryContent(typeFilter: remoteTypeFilter)
         } else if settings.effectiveLibrarySourceMode == .simkl {
-            EmptyStateView(
-                systemImage: "checklist",
-                title: "Simkl library is not available yet",
-                message: "Choose This device or Trakt collection in Settings → Integrations → Sources."
-            )
-            .frame(height: dp(260))
+            SimklLibraryContent(typeFilter: remoteTypeFilter)
         } else if filter == .collections {
             collectionsContent
         } else if savedItems.isEmpty {
@@ -246,6 +241,7 @@ struct CatalogSeeAllView: View {
         do {
             var extras: [(String, String)] = []
             if let genre = request.genre { extras.append(("genre", genre)) }
+            if let search = request.search { extras.append(("search", search)) }
             items = try await StremioClient.shared.fetchCatalog(
                 addon: addon, type: request.type, catalogId: request.catalogId, extraArgs: extras
             )
@@ -261,6 +257,7 @@ struct CatalogSeeAllView: View {
         do {
             var extras: [(String, String)] = []
             if let genre = request.genre { extras.append(("genre", genre)) }
+            if let search = request.search { extras.append(("search", search)) }
             let page = try await StremioClient.shared.fetchCatalog(
                 addon: addon, type: request.type, catalogId: request.catalogId,
                 skip: items.count, extraArgs: extras

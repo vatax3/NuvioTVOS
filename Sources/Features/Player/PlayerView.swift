@@ -21,7 +21,8 @@ struct PlayerView: View {
 
     @State private var didScrobbleStart = false
     @State private var lastScrobbleProgress: Double = 0
-    @State private var didSimklCheckin = false
+    @State private var simklSessionActive = false
+    @State private var didSendTrackingStop = false
     @State private var subtitles = SubtitleTrackController()
     /// AniSkip intervals are deliberately owned by the player rather than the detail screen:
     /// an episode can be started from Continue Watching, a deep link, or the stream picker.
@@ -29,6 +30,7 @@ struct PlayerView: View {
     @State private var skipLookupKey: String?
     @State private var dismissedSkipSegments: Set<String> = []
     @State private var playbackPosition: Double = 0
+    @State private var playbackDuration: Double = 0
     /// Both player backends consume this one-shot seek request and acknowledge it by clearing it.
     @State private var requestedSeek: Double?
     /// A one-shot pause command shared by AVPlayer and MPV. The still-watching prompt must
@@ -104,6 +106,14 @@ struct PlayerView: View {
     @State private var engineOverride: InternalPlayerEngine?
     /// AVFoundation's refusal, once there is nowhere left to hand the stream to.
     @State private var avPlaybackError: String?
+    /// Recreating only the MPV subtree gives a failed demuxer/decoder one clean retry while the
+    /// full-screen player, its source request and its navigation context remain mounted.
+    @State private var mpvSessionGeneration = 0
+    @State private var automaticRecoveryAttempts = 0
+    /// A recovery remount must resume from the live playhead, not the older library checkpoint.
+    /// `requestedSeek` alone is too early for a newly-created MPV handle and can be consumed
+    /// before `loadfile` completes.
+    @State private var recoveryResumePosition: Double?
 
     var body: some View {
         Group {
@@ -141,6 +151,7 @@ struct PlayerView: View {
             routeObserver = PlaybackAudioSession.observeRouteChanges { routeChangedAt = Date() }
         }
         .onDisappear {
+            scrobbleStop()
             if let routeObserver { PlaybackAudioSession.endObserving(routeObserver) }
             routeObserver = nil
             PlaybackWakeLock.release()
@@ -162,6 +173,15 @@ struct PlayerView: View {
             try? await Task.sleep(for: .seconds(SkipSegmentVisibility.autoHideTimeout))
             guard !Task.isCancelled else { return }
             skipAutoHidden = true
+        }
+        .task(id: recoveryWatchdogKey) {
+            let state = recoveryState
+            guard let timeout = PlayerRecoveryPolicy.timeout(for: state) else { return }
+            try? await Task.sleep(for: .seconds(timeout))
+            guard !Task.isCancelled,
+                  PlayerRecoveryPolicy.timeout(for: recoveryState) != nil
+            else { return }
+            recoverPlayback(automatic: true)
         }
         // A new segment starts its own life: an outro should not arrive already spent because
         // the intro's countdown ran out an hour ago.
@@ -193,7 +213,7 @@ struct PlayerView: View {
         ZStack {
             MPVPlayerView(
                 request: request,
-                resumeAt: resumePosition,
+                resumeAt: recoveryResumePosition ?? resumePosition,
                 verboseLogging: settings.player.verboseLoggingEnabled,
                 hardwareDecoding: settings.player.mpvHardwareDecodeMode,
                 audioOutput: settings.player.mpvAudioOutput,
@@ -218,20 +238,22 @@ struct PlayerView: View {
                 onPlaybackState: { paused, loading in
                     observePlaybackState(paused: paused, loading: loading)
                 },
+                onPlaybackFailure: { _ in recoverPlayback(automatic: false) },
                 onProgress: { position, duration, completed in
                     observePlaybackTime(position, duration)
                     persist(position: position, duration: duration, completed: completed)
                     scrobble(position: position, duration: duration)
-                    simklCheckin()
+                    simklScrobble(position: position, duration: duration)
                     advanceIfDue(position: position, duration: duration)
                 },
                 onFinished: {
                     persist(position: 0, duration: 0, completed: true)
-                    scrobbleStop()
+                    scrobbleStop(progressPercent: 100)
                     advanceToNextEpisode()
                     dismiss()
                 }
             )
+            .id(mpvSessionGeneration)
 
             skipSegmentCard
 
@@ -253,7 +275,7 @@ struct PlayerView: View {
         ZStack {
             AVPlayerContainer(
                 request: request,
-                resumeAt: resumePosition,
+                resumeAt: recoveryResumePosition ?? resumePosition,
                 subtitleStyle: settings.subtitleStyle,
                 subtitleTracks: subtitles.available,
                 subtitleOrganization: settings.player.subtitleOrganizationMode,
@@ -278,14 +300,14 @@ struct PlayerView: View {
                     observePlaybackTime(position, duration)
                     persist(position: position, duration: duration, completed: completed)
                     scrobble(position: position, duration: duration)
-                    simklCheckin()
+                    simklScrobble(position: position, duration: duration)
                     advanceIfDue(position: position, duration: duration)
                 },
                 onFailed: handleAVFoundationFailure,
                 onChromeChange: { engineChrome = $0 },
                 onFinished: {
                     persist(position: 0, duration: 0, completed: true)
-                    scrobbleStop()
+                    scrobbleStop(progressPercent: 100)
                     advanceToNextEpisode()
                     dismiss()
                 }
@@ -329,6 +351,52 @@ struct PlayerView: View {
             return
         }
         engineOverride = .mpv
+    }
+
+    private var recoveryState: PlayerRecoveryPolicy.State {
+        PlayerRecoveryPolicy.State(
+            isLoading: isLoading,
+            hasStartedPlayback: hasStartedPlayback,
+            isPaused: isPaused,
+            panelOpen: engineChrome.panelOpen || showsSourcePanel,
+            promptOpen: nextEpisodeCountdown != nil || showsStillWatchingPrompt,
+            automaticAttempts: automaticRecoveryAttempts
+        )
+    }
+
+    private var recoveryWatchdogKey: String {
+        [
+            resolvedEngine.rawValue,
+            isLoading.description,
+            hasStartedPlayback.description,
+            isPaused.description,
+            recoveryState.panelOpen.description,
+            recoveryState.promptOpen.description,
+            String(automaticRecoveryAttempts),
+            String(mpvSessionGeneration)
+        ].joined(separator: "|")
+    }
+
+    private func recoverPlayback(automatic: Bool) {
+        if automatic {
+            guard automaticRecoveryAttempts < PlayerRecoveryPolicy.automaticAttemptLimit else { return }
+            automaticRecoveryAttempts += 1
+        }
+        recoveryResumePosition = playbackPosition > 1 ? playbackPosition : nil
+        avPlaybackError = nil
+
+        if resolvedEngine == .exoplayer, MPVEngineSupport.isAvailable {
+            // An explicit AVFoundation session override otherwise wins over `didFallBackToMPV`
+            // in `resolvedEngine` and makes the watchdog look as if it retried while doing
+            // nothing. Keep the override semantics, but point it at the recovery engine.
+            if engineOverride != nil {
+                engineOverride = .mpv
+            } else {
+                didFallBackToMPV = true
+            }
+        } else {
+            mpvSessionGeneration += 1
+        }
     }
 
     // MARK: External subtitles
@@ -491,7 +559,14 @@ struct PlayerView: View {
             hasStartedPlayback = true
             showParentalGuideIfReady()
         }
-        if paused != wasPaused { schedulePauseOverlay(paused: paused) }
+        if paused != wasPaused {
+            schedulePauseOverlay(paused: paused)
+            if paused, !isRouteChangePause {
+                simklPause()
+            } else if !paused {
+                simklScrobble(position: playbackPosition, duration: playbackDuration)
+            }
+        }
         if paused, !wasPaused, isRouteChangePause { resumeAfterRouteChange() }
     }
 
@@ -573,6 +648,7 @@ struct PlayerView: View {
     private func observePlaybackTime(_ position: Double, _ duration: Double) {
         playbackPosition = position
         if duration.isFinite, duration > 0 {
+            playbackDuration = duration
             loadSkipSegmentsIfNeeded(duration: duration)
         }
         autoSkipIfEnabled()
@@ -727,7 +803,7 @@ struct PlayerView: View {
     }
 
     private func scrobble(position: Double, duration: Double) {
-        guard let credentials = traktCredentials, let imdbId = request.imdbId,
+        guard !didSendTrackingStop, let credentials = traktCredentials, let imdbId = request.imdbId,
               duration > 0 else { return }
         let percent = min(max(position / duration * 100, 0), 100)
         // One `start`, then periodic updates only when the needle has actually moved.
@@ -746,27 +822,37 @@ struct PlayerView: View {
         }
     }
 
-    private func scrobbleStop() {
-        guard let imdbId = request.imdbId else { return }
-        if let credentials = traktCredentials {
+    private func scrobbleStop(progressPercent explicitPercent: Double? = nil) {
+        guard !didSendTrackingStop else { return }
+        let percent = explicitPercent ?? {
+            guard playbackDuration > 0 else { return 0 }
+            return min(100, max(0, playbackPosition / playbackDuration * 100))
+        }()
+        guard didScrobbleStart || simklSessionActive || percent >= 80 else { return }
+        didSendTrackingStop = true
+        if let credentials = traktCredentials, let imdbId = request.imdbId {
             Task {
                 await TraktClient.shared.scrobble(
                     action: .stop, imdbId: imdbId, type: ContentType.from(request.contentType),
                     season: request.season, episode: request.episode,
-                    progressPercent: 100,
+                    progressPercent: percent,
                     clientId: credentials.clientId, token: credentials.token
                 )
             }
         }
         if let credentials = simklCredentials {
             Task {
-                await SimklClient.shared.markWatched(
-                    imdbId: imdbId, type: ContentType.from(request.contentType),
+                await SimklClient.shared.scrobble(
+                    action: .stop,
+                    imdbId: request.imdbId, contentId: request.contentId,
+                    type: ContentType.from(request.contentType),
                     season: request.season, episode: request.episode,
+                    progressPercent: percent,
                     clientId: credentials.clientId, token: credentials.token
                 )
             }
         }
+        simklSessionActive = false
     }
 
     // MARK: Simkl
@@ -778,16 +864,38 @@ struct PlayerView: View {
         return (tracking.simklClientId, tracking.simklAccessToken)
     }
 
-    /// Simkl has no progress endpoint — one check-in at the start is the whole story until the
-    /// history write on completion.
-    private func simklCheckin() {
-        guard didSimklCheckin == false, let credentials = simklCredentials,
-              let imdbId = request.imdbId else { return }
-        didSimklCheckin = true
+    private func simklScrobble(position: Double, duration: Double) {
+        guard !didSendTrackingStop, !simklSessionActive, duration > 0, let credentials = simklCredentials,
+              !(request.imdbId ?? request.contentId).isEmpty else { return }
+        let percent = min(100, max(0, position / duration * 100))
+        // Matches Android: resuming something already beyond Simkl's completion threshold must
+        // not create another history entry.
+        guard percent < 80 else { return }
+        simklSessionActive = true
         Task {
-            await SimklClient.shared.checkin(
-                imdbId: imdbId, type: ContentType.from(request.contentType),
+            await SimklClient.shared.scrobble(
+                action: .start,
+                imdbId: request.imdbId, contentId: request.contentId,
+                type: ContentType.from(request.contentType),
                 season: request.season, episode: request.episode,
+                progressPercent: percent,
+                clientId: credentials.clientId, token: credentials.token
+            )
+        }
+    }
+
+    private func simklPause() {
+        guard simklSessionActive, playbackDuration > 0, let credentials = simklCredentials,
+              !(request.imdbId ?? request.contentId).isEmpty else { return }
+        simklSessionActive = false
+        let percent = min(100, max(0, playbackPosition / playbackDuration * 100))
+        Task {
+            await SimklClient.shared.scrobble(
+                action: .pause,
+                imdbId: request.imdbId, contentId: request.contentId,
+                type: ContentType.from(request.contentType),
+                season: request.season, episode: request.episode,
+                progressPercent: percent,
                 clientId: credentials.clientId, token: credentials.token
             )
         }

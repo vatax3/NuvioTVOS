@@ -1422,8 +1422,7 @@ actor SkipIntroClient {
 // MARK: - Simkl
 
 /// Second tracking service alongside Trakt. Simkl authenticates with a PIN the viewer types on
-/// simkl.com rather than a device code, and has no live scrobble endpoint — progress is reported
-/// as a check-in when playback starts and a history write when it finishes.
+/// simkl.com rather than a device code and uses its own start/pause/stop scrobble endpoints.
 actor SimklClient {
     static let shared = SimklClient()
     private let base = "https://api.simkl.com"
@@ -1436,6 +1435,109 @@ actor SimklClient {
         let interval: Int
     }
 
+    struct LibraryList: Sendable, Identifiable {
+        let id: String
+        let title: String
+        let items: [MetaPreview]
+    }
+
+    /// Simkl returns ids as either JSON strings or numbers depending on the source database.
+    /// Keeping that tolerance at the boundary prevents an otherwise valid list from being
+    /// discarded because one anime happened to carry a numeric MAL id.
+    private enum FlexibleID: Decodable, Sendable {
+        case string(String)
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            if let value = try? container.decode(String.self) { self = .string(value); return }
+            if let value = try? container.decode(Int64.self) { self = .string(String(value)); return }
+            if let value = try? container.decode(Double.self) {
+                self = .string(value.rounded() == value ? String(Int64(value)) : String(value))
+                return
+            }
+            throw DecodingError.typeMismatch(
+                String.self,
+                .init(codingPath: decoder.codingPath, debugDescription: "Unsupported Simkl id")
+            )
+        }
+
+        var value: String {
+            switch self { case .string(let value): return value }
+        }
+    }
+
+    private struct LibraryPayload: Decodable, Sendable {
+        struct Media: Decodable, Sendable {
+            let title: String?
+            let poster: String?
+            let year: Int?
+            let runtime: Int?
+            let ids: [String: FlexibleID]?
+        }
+
+        struct Entry: Decodable, Sendable {
+            let status: String?
+            let anime_type: String?
+            let added_to_watchlist_at: String?
+            let last_watched_at: String?
+            let show: Media?
+            let movie: Media?
+        }
+
+        let shows: [Entry]
+        let movies: [Entry]
+        let anime: [Entry]
+
+        private enum CodingKeys: String, CodingKey { case shows, movies, anime }
+
+        init(from decoder: Decoder) throws {
+            if let array = try? decoder.unkeyedContainer(), array.isAtEnd {
+                shows = []; movies = []; anime = []
+                return
+            }
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            shows = try container.decodeIfPresent([Entry].self, forKey: .shows) ?? []
+            movies = try container.decodeIfPresent([Entry].self, forKey: .movies) ?? []
+            anime = try container.decodeIfPresent([Entry].self, forKey: .anime) ?? []
+        }
+    }
+
+    struct PlaybackItem: Sendable {
+        let contentId: String
+        let type: ContentType
+        let title: String
+        let poster: String?
+        let season: Int?
+        let episode: Int?
+        let progress: Double
+        let durationSeconds: Double
+        let pausedAt: Date?
+    }
+
+    private struct PlaybackPayload: Decodable, Sendable {
+        struct Episode: Decodable, Sendable {
+            let season: Int?
+            let number: Int?
+            let tvdb_season: Int?
+            let tvdb_number: Int?
+        }
+        struct Entry: Decodable, Sendable {
+            let progress: Double?
+            let paused_at: String?
+            let watched_at: String?
+            let episode: Episode?
+            let show: LibraryPayload.Media?
+            let anime: LibraryPayload.Media?
+            let movie: LibraryPayload.Media?
+        }
+        let entries: [Entry]
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            entries = try container.decode([Entry].self)
+        }
+    }
+
     private func headers(clientId: String, token: String? = nil) -> [String: String] {
         var headers = [
             "Content-Type": "application/json",
@@ -1443,6 +1545,24 @@ actor SimklClient {
         ]
         if let token { headers["Authorization"] = "Bearer \(token)" }
         return headers
+    }
+
+    private static func canonicalContentId(_ ids: [String: FlexibleID]) -> String? {
+        if let imdb = ids["imdb"]?.value.nilIfBlank { return imdb }
+        for key in ["tmdb", "tvdb", "mal", "kitsu"] {
+            if let value = ids[key]?.value.nilIfBlank { return "\(key):\(value)" }
+        }
+        if let value = (ids["simkl"] ?? ids["simkl_id"])?.value.nilIfBlank {
+            return "simkl:\(value)"
+        }
+        return nil
+    }
+
+    private static func posterURL(_ path: String?) -> String? {
+        guard let normalized = path?
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            .nilIfBlank else { return nil }
+        return "https://wsrv.nl/?url=https://simkl.in/posters/\(normalized)_m.webp&q=90"
     }
 
     // MARK: Auth
@@ -1501,86 +1621,195 @@ actor SimklClient {
         return account?.user?.name?.nilIfBlank
     }
 
+    // MARK: Library
+
+    /// Mirrors Android's Simkl library projection. All statuses are fetched in one snapshot and
+    /// exposed as stable rows rather than pretending Simkl is merely a write-only scrobbler.
+    func libraryLists(clientId: String, token: String) async throws -> [LibraryList] {
+        guard !clientId.isEmpty, !token.isEmpty else { return [] }
+        var components = URLComponents(string: "\(base)/sync/all-items")!
+        components.queryItems = [
+            URLQueryItem(name: "extended", value: "full_anime_seasons"),
+            URLQueryItem(name: "episode_watched_at", value: "yes"),
+            URLQueryItem(name: "episode_tvdb_id", value: "yes"),
+            URLQueryItem(name: "include_all_episodes", value: "yes"),
+            URLQueryItem(name: "language", value: "en")
+        ]
+        let payload = try await HTTP.get(
+            components.url!.absoluteString,
+            headers: headers(clientId: clientId, token: token),
+            as: LibraryPayload.self
+        )
+
+        return Self.projectLibrary(payload)
+    }
+
+    /// Fixture entry point for the same tolerant decoder used by the live endpoint. Keeping the
+    /// projection testable matters here because Simkl mixes numeric and string ids and returns a
+    /// bare empty array for an account with no library.
+    nonisolated static func decodeLibrarySnapshot(_ data: Data) throws -> [LibraryList] {
+        projectLibrary(try JSONDecoder().decode(LibraryPayload.self, from: data))
+    }
+
+    private nonisolated static func projectLibrary(_ payload: LibraryPayload) -> [LibraryList] {
+        struct Status { let id: String; let title: String }
+        let statuses = [
+            Status(id: "watching", title: "Watching"),
+            Status(id: "plantowatch", title: "Plan to Watch"),
+            Status(id: "hold", title: "On Hold"),
+            Status(id: "completed", title: "Completed"),
+            Status(id: "dropped", title: "Dropped")
+        ]
+        let entries: [(LibraryPayload.Entry, ContentType)] =
+            payload.shows.map { ($0, .series) }
+            + payload.movies.map { ($0, .movie) }
+            + payload.anime.map { ($0, $0.anime_type == "movie" ? .movie : .series) }
+
+        return statuses.compactMap { status in
+            let matching = entries
+                .filter { $0.0.status == status.id }
+                .sorted { lhs, rhs in
+                    let left = (lhs.0.added_to_watchlist_at ?? lhs.0.last_watched_at)
+                        .flatMap(VideoDateParser.parse) ?? .distantPast
+                    let right = (rhs.0.added_to_watchlist_at ?? rhs.0.last_watched_at)
+                        .flatMap(VideoDateParser.parse) ?? .distantPast
+                    return left > right
+                }
+            var seen = Set<String>()
+            let items = matching.compactMap { entry, type -> MetaPreview? in
+                guard entry.status == status.id, let media = entry.movie ?? entry.show,
+                      let title = media.title?.nilIfBlank else { return nil }
+                let ids = media.ids ?? [:]
+                let imdb = ids["imdb"]?.value.nilIfBlank
+                let canonical = Self.canonicalContentId(ids)
+                guard let canonical else { return nil }
+                let rowKey = "\(type.apiString())|\(canonical)"
+                guard seen.insert(rowKey).inserted else { return nil }
+                return MetaPreview(
+                    id: canonical,
+                    type: type,
+                    rawType: type.apiString(),
+                    name: title,
+                    poster: Self.posterURL(media.poster),
+                    releaseInfo: media.year.map(String.init),
+                    status: status.title,
+                    imdbId: imdb
+                )
+            }
+            guard !items.isEmpty else { return nil }
+            return LibraryList(id: status.id, title: status.title, items: items)
+        }
+    }
+
+    /// Resume points used by Continue Watching when Simkl is the selected progress source.
+    func playbackProgress(clientId: String, token: String) async throws -> [PlaybackItem] {
+        let response = try await HTTP.get(
+            "\(base)/sync/playback",
+            headers: headers(clientId: clientId, token: token),
+            as: PlaybackPayload.self
+        )
+        return response.entries.compactMap { entry -> PlaybackItem? in
+            guard let media = entry.movie ?? entry.anime ?? entry.show,
+                  let title = media.title?.nilIfBlank else { return nil }
+            let ids = media.ids ?? [:]
+            let canonical = Self.canonicalContentId(ids)
+            guard let canonical else { return nil }
+            let isMovie = entry.movie != nil || (entry.anime != nil && entry.episode == nil)
+            let season = entry.episode?.tvdb_season ?? entry.episode?.season
+            let episode = entry.episode?.tvdb_number ?? entry.episode?.number
+            guard isMovie || episode != nil else { return nil }
+            return PlaybackItem(
+                contentId: canonical,
+                type: isMovie ? .movie : .series,
+                title: title,
+                poster: Self.posterURL(media.poster),
+                season: season,
+                episode: episode,
+                progress: min(100, max(0, entry.progress ?? 0)),
+                durationSeconds: Double(max(0, media.runtime ?? 0) * 60),
+                pausedAt: (entry.paused_at ?? entry.watched_at).flatMap(VideoDateParser.parse)
+            )
+        }
+    }
+
     // MARK: Progress
 
-    /// Announces what is playing now. Simkl expires a check-in on its own, so there is no
-    /// matching "stop" call to make.
-    func checkin(
-        imdbId: String,
-        type: ContentType,
-        season: Int?,
-        episode: Int?,
-        clientId: String,
-        token: String
-    ) async {
-        await send(path: "sync/checkin", imdbId: imdbId, type: type, season: season, episode: episode,
-                   clientId: clientId, token: token)
-    }
+    enum ScrobbleAction: String, Sendable { case start, pause, stop }
 
-    /// Writes the title (or single episode) into the watched history, which is what actually
-    /// marks it watched on the account.
-    func markWatched(
-        imdbId: String,
+    /// Same wire contract as Android's `buildSimklScrobbleBody`: a movie is flat, while a
+    /// series supplies the episode coordinates beside the parent show identity.
+    func scrobble(
+        action: ScrobbleAction,
+        imdbId: String?,
+        contentId: String,
         type: ContentType,
         season: Int?,
         episode: Int?,
-        clientId: String,
-        token: String
-    ) async {
-        await send(path: "sync/history", imdbId: imdbId, type: type, season: season, episode: episode,
-                   clientId: clientId, token: token)
-    }
-
-    private func send(
-        path: String,
-        imdbId: String,
-        type: ContentType,
-        season: Int?,
-        episode: Int?,
+        progressPercent: Double,
         clientId: String,
         token: String
     ) async {
         guard !clientId.isEmpty, !token.isEmpty else { return }
+        let ids = Self.trackingIds(imdbId: imdbId, contentId: contentId)
+        guard !ids.isEmpty else { return }
         do {
             _ = try await HTTP.post(
-                "\(base)/\(path)",
+                "\(base)/scrobble/\(action.rawValue)",
                 headers: headers(clientId: clientId, token: token),
-                json: SyncBody(imdbId: imdbId, type: type, season: season, episode: episode),
+                json: ScrobbleBody(
+                    ids: ids,
+                    type: type,
+                    season: season,
+                    episode: episode,
+                    progressPercent: progressPercent
+                ),
                 as: EmptyResponse.self
             )
         } catch {
-            log.error("Simkl \(path, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+            log.error("Simkl scrobble/\(action.rawValue, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 
     private struct EmptyBody: Encodable {}
 
-    /// Simkl's sync payload: movies as a flat list, shows as a nested season/episode tree.
-    private struct SyncBody: Encodable {
-        struct Ids: Encodable { let imdb: String }
-        struct Episode: Encodable { let number: Int }
-        struct Season: Encodable { let number: Int; let episodes: [Episode]? }
-        struct Show: Encodable { let ids: Ids; let seasons: [Season]? }
-        struct Movie: Encodable { let ids: Ids }
+    private struct ScrobbleBody: Encodable {
+        struct Media: Encodable { let ids: [String: String] }
+        struct Episode: Encodable { let season: Int?; let number: Int }
 
-        let movies: [Movie]?
-        let shows: [Show]?
+        let progress: Double
+        let movie: Media?
+        let show: Media?
+        let episode: Episode?
 
-        init(imdbId: String, type: ContentType, season: Int?, episode: Int?) {
-            let ids = Ids(imdb: imdbId)
-            if type == .series {
-                movies = nil
-                let seasons: [Season]? = season.map { seasonNumber in
-                    [Season(
-                        number: seasonNumber,
-                        episodes: episode.map { [Episode(number: $0)] }
-                    )]
-                }
-                shows = [Show(ids: ids, seasons: seasons)]
-            } else {
-                movies = [Movie(ids: ids)]
-                shows = nil
+        init(
+            ids: [String: String],
+            type: ContentType,
+            season: Int?,
+            episode: Int?,
+            progressPercent: Double
+        ) {
+            progress = min(100, max(0, (progressPercent * 100).rounded() / 100))
+            let media = Media(ids: ids)
+            movie = type == .movie ? media : nil
+            show = type == .movie ? nil : media
+            self.episode = type == .movie ? nil : episode.map {
+                Episode(season: season, number: $0)
             }
         }
     }
+
+    private nonisolated static func trackingIds(
+        imdbId: String?, contentId: String
+    ) -> [String: String] {
+        if let imdbId = imdbId?.nilIfBlank { return ["imdb": imdbId] }
+        let value = contentId.trimmingCharacters(in: .whitespacesAndNewlines)
+        if value.lowercased().hasPrefix("tt") { return ["imdb": value] }
+        let parts = value.split(separator: ":", maxSplits: 1).map(String.init)
+        guard parts.count == 2,
+              ["tmdb", "tvdb", "mal", "simkl", "kitsu", "anidb", "anilist"]
+                .contains(parts[0].lowercased()),
+              !parts[1].isEmpty else { return [:] }
+        return [parts[0].lowercased(): parts[1]]
+    }
+
 }

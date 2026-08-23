@@ -165,9 +165,10 @@ actor PluginRuntime {
         if (typeof globalThis.self === 'undefined') globalThis.self = globalThis;
         if (typeof globalThis.module === 'undefined') globalThis.module = { exports: {} };
         if (typeof globalThis.exports === 'undefined') globalThis.exports = globalThis.module.exports;
-        // Android bundles crypto-js. The native bridge supplies the safe, commonly-used subset:
-        // WordArray encoders, MD5/SHA hashes and HMACs. Cipher implementations are intentionally
-        // not emulated because their JavaScript implementation would be both large and slow here.
+        // Android bundles crypto-js. The native bridge supplies the commonly-used subset:
+        // WordArray encoders, MD5/SHA hashes and HMACs, PBKDF2, and AES CBC/ECB/GCM. Keeping the
+        // primitives native avoids shipping a large JavaScript cipher implementation on tvOS;
+        // uncommon legacy algorithms below fail explicitly instead of returning corrupt bytes.
         if (typeof globalThis.CryptoJS === 'undefined') {
             function NuvioWordArray(base64) {
                 this.__nuvio_base64 = base64 || '';

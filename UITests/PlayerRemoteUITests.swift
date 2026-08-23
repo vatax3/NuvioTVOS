@@ -71,7 +71,14 @@ final class PlayerRemoteUITests: XCTestCase {
 
     /// The reported bug, direction by direction.
     func testEveryDirectionBringsTheTransportBack() {
-        for button in [XCUIRemote.Button.down, .up, .left, .right] {
+        for (index, button) in [XCUIRemote.Button.down, .up, .left, .right].enumerated() {
+            // A direction can legitimately move focus into a different transport control.
+            // Relaunch between cases so every direction is measured from the same fresh player
+            // state instead of inheriting the focus graph left behind by the previous one.
+            if index > 0 {
+                app.terminate()
+                app.launch()
+            }
             hideTransport()
             XCUIRemote.shared.press(button)
             XCTAssertTrue(

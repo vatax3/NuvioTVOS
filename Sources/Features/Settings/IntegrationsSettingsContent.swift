@@ -89,9 +89,8 @@ struct TrackingSettingsContent: View {
             SettingsCard(
                 title: "Simkl",
                 footnote: """
-                Create an app at simkl.com/settings/developer and paste its client id. Simkl has \
-                no live scrobble endpoint, so Nuvio checks in when playback starts and writes to \
-                your history when a title finishes.
+                Create an app at simkl.com/settings/developer and paste its client id. Playback \
+                progress, pauses and completed titles can then be synchronised with Simkl.
                 """
             ) {
                 if tracking.isSimklAuthenticated {
@@ -102,7 +101,7 @@ struct TrackingSettingsContent: View {
                     )
                     SettingsToggle(
                         title: "Report watched",
-                        subtitle: "Check in on start, add to history when finished",
+                        subtitle: "Synchronise playback progress and history",
                         systemImage: "dot.radiowaves.up.forward",
                         isOn: $tracking.simklScrobbleEnabled
                     )

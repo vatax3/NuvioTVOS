@@ -105,7 +105,7 @@ metadata) and the marquee-on-focus card titles.
   quality, HDR/DV, audio format and channels, encode, language, release group, size and seeders,
   then applies the required/excluded/preferred matrix, per-bucket caps and ranked sorting.
 - **Tracking** — Trakt (device-code OAuth, scrobbling, progress and collection sources, comments)
-  and Simkl (PIN auth, check-in and history).
+  and Simkl (PIN auth, library lists, remote resume points and start/pause/stop scrobbling).
 - **Metadata** — TMDB enrichment (artwork, logos, cast, certifications, recommendations, networks,
   studios), MDBList aggregated ratings, AniSkip intro/outro segments.
 - **Subtitles** — external SubRip/WebVTT tracks from every `subtitles` addon, language-ordered and
@@ -150,7 +150,9 @@ A mechanical audit of what is missing, and of the settings that exist without a 
 [docs/FEATURE-AUDIT.md](docs/FEATURE-AUDIT.md) — including the fact that "collections" here and
 "collections" upstream are different features that share a name.
 
-Four things from the Android surface are missing, and each for a concrete reason:
+The remaining differences are tracked in
+[the 1.0.12 parity audit](docs/PARITY-AUDIT-1.0.12.md). The four platform or product-level ones
+that cannot be closed by simply porting another Swift view are:
 
 1. **Torrent streaming without a debrid service.** Android streams a torrent directly through a
    bundled client. There is no comparable torrent engine available here, so torrents are only
@@ -163,14 +165,16 @@ Four things from the Android surface are missing, and each for a concrete reason
    WKWebView and AVPlayer cannot resolve a YouTube watch page, so the detail-screen button hands
    off to the YouTube app instead, and the trailer-on-focus setting says it is unavailable rather
    than sitting inert.
-4. **crypto-js inside the plugin runtime.** Not bundled, so a scraper that depends on it throws a
-   descriptive error. The rest of the documented plugin surface is present.
+4. **The complete `crypto-js` API inside the plugin runtime.** A native compatibility layer
+   covers WordArray, the common hashes/HMACs, PBKDF2 and AES CBC/ECB/GCM. Less common algorithms
+   such as DES/TripleDES and unimplemented npm surface still fail explicitly.
 
 Smaller player gaps, all in the mpv transport: there is no seek overlay while the controls are
 hidden (scrubbing brings them back instead), no sync-by-line subtitle timing dialog, no playback
-issue reporting, and no torrent progress overlay. Frame-rate and dynamic-range matching is wired
-to `AVDisplayManager` on both engines but has only been exercised on the simulator, which has no
-display modes to switch between.
+issue reporting, and no torrent progress overlay. Startup and sustained-stall recovery now share
+one bounded retry policy and resume from the live playhead. Frame-rate and dynamic-range matching
+is wired to `AVDisplayManager` on both engines but has only been exercised on the simulator, which
+has no display modes to switch between.
 
 The **in-app addon configurator** is present but adapted: with no browser on tvOS, the addon's
 configure URL is rendered as a QR code to finish on a phone, and the resulting manifest URL is
