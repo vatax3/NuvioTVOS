@@ -189,7 +189,7 @@ struct ProfileEditorView: View {
                 }
                 .padding(.vertical, NuvioTheme.spacing.xs)
             }
-            .scrollClipDisabled()
+            .clippedHorizontalScroller()
         }
         .padding(.horizontal, NuvioTheme.spacing.lg)
         .padding(.vertical, NuvioTheme.spacing.md)
@@ -223,7 +223,7 @@ struct ProfileEditorView: View {
                 }
                 .padding(.vertical, NuvioTheme.spacing.xs)
             }
-            .scrollClipDisabled()
+            .clippedHorizontalScroller()
         }
         .padding(.horizontal, NuvioTheme.spacing.lg)
         .padding(.vertical, NuvioTheme.spacing.md)

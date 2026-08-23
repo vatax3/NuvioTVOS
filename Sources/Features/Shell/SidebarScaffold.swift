@@ -45,23 +45,37 @@ struct SidebarScaffold<Content: View>: View {
     /// the rail's own width — which is the point, not a detail of spacing.
     ///
     /// A leftward move only considers candidates whose frame lies to the left of the focused
-    /// item. Home used to pull its hero full-bleed with a negative inset, so the content sat on
-    /// top of the rail column: from any row below the first there was nothing to the left of it
-    /// and the menu could only be reached from the very top of the page. Keeping the content
-    /// clear of the column costs Home its full-bleed hero and buys the same gesture, from any
-    /// row, on every screen.
+    /// item. Home used to pull its whole hero full-bleed with a negative inset, so the content
+    /// sat on top of the rail column: from any row below the first there was nothing to the left
+    /// of it and the menu could only be reached from the very top of the page. Keeping the
+    /// content clear of the column is what buys the same gesture, from any row, on every screen.
+    ///
+    /// The artwork is not part of that bargain, and for a while it was: the backdrop stopped
+    /// where the column did, leaving a hard vertical seam and a tenth of the screen of flat grey
+    /// down the left-hand side, which somebody watching on a real television reported. The gap
+    /// is published as `\.shellLeadingInset` instead, and each screen's backdrop paints back
+    /// over the column without moving a single focusable frame. See `bleedingLeading`.
     private var contentLeadingOffset: CGFloat {
         guard isModernSidebar else { return NuvioTheme.components.sidebar.expandedWidth }
         return max(NuvioTheme.layout.sidebarContentOffset, railColumnWidth)
     }
 
+    /// How far the pills sit from the physical left edge of the screen.
+    ///
+    /// tvOS already insets the whole scene by 80pt horizontally — the title-safe margin every
+    /// television is guaranteed to show — so this is what gets added on top of it, and it used to
+    /// be another 28. Measured on a panel that was showing the result, the menu began a tenth of
+    /// the way across the screen with nothing in front of it, which is the "wasted space" that
+    /// was reported. A small gap on top of the safe margin is the tightest the pills can sit
+    /// without gambling on a set with overscan.
+    private var railLeadingPadding: CGFloat { NuvioTheme.spacing.xs }
+
     /// Width reserved for the sidebar column: the collapsed pill and its own padding, nothing
     /// more. The expanded panel deliberately overflows this rather than widening it.
     private var railColumnWidth: CGFloat {
         guard isModernSidebar else { return NuvioTheme.components.sidebar.expandedWidth }
-        let leading = NuvioTheme.spacing.lg - NuvioTheme.spacing.xxs
         // The pill is the leading visual plus the dp(5) it is padded by on each side.
-        return leading + NuvioTheme.components.sidebar.leadingVisual + dp(10)
+        return railLeadingPadding + NuvioTheme.components.sidebar.leadingVisual + dp(10)
             + NuvioTheme.spacing.sm
     }
 
@@ -75,7 +89,7 @@ struct SidebarScaffold<Content: View>: View {
         // overflows it, so blooming open never reflows the content behind it.
         HStack(spacing: 0) {
             sidebar
-                .padding(.leading, NuvioTheme.spacing.lg - NuvioTheme.spacing.xxs)
+                .padding(.leading, railLeadingPadding)
                 .padding(.top, NuvioTheme.spacing.lg)
                 .padding(.bottom, NuvioTheme.spacing.md)
                 .padding(.trailing, NuvioTheme.spacing.sm)
@@ -104,10 +118,11 @@ struct SidebarScaffold<Content: View>: View {
                 .prefersDefaultFocus(in: shellFocus)
                 // `NuvioLayout.sidebarContentOffset` on Android: screens that start with a
                 // top-left title are nudged clear of the floating pill. The column already
-                // supplies part of that gap, so only the remainder is padded here. The Modern
-                // and Classic home layouts opt out — their hero is deliberately full-bleed, so
-                // it is pulled back under the pill.
+                // supplies part of that gap, so only the remainder is padded here.
                 .padding(.leading, contentLeadingOffset - railColumnWidth)
+                // What the column took, so a screen's backdrop can give it back. Nothing about
+                // the layout changes — see `fullBleedLeading`, which paints rather than moves.
+                .environment(\.shellLeadingInset, contentLeadingOffset)
                 // Android's `sidebarBlocksContentKeys`: while the panel is open the content
                 // stops taking input entirely. Without it the panel — which overlays the
                 // content rather than displacing it — competes with whatever sits underneath,

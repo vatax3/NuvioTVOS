@@ -51,6 +51,11 @@ struct LicensesContent: View {
         .frame(maxWidth: dp(760), alignment: .leading)
         .padding(.horizontal, NuvioTheme.spacing.lg)
         .padding(.vertical, NuvioTheme.spacing.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // One stop per attribution, which is what lets the page scroll at all: tvOS moves a
+        // scroll view by moving focus, and there is not a single control on this screen.
+        // Walking it entry by entry is also how you would read it.
+        .readableBlock()
     }
 
     private struct Attribution {

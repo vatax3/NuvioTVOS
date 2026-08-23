@@ -11,13 +11,18 @@ struct MetaDetailsView: View {
 
     let request: DetailRequest
 
+    @Environment(\.shellLeadingInset) private var shellLeadingInset
+
     @State private var model = MetaDetailsViewModel()
     @State private var logoFailed = false
 
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .topLeading) {
-                backdrop(size: proxy.size)
+                backdrop(
+                    size: proxy.size,
+                    bleed: shellLeadingInset + proxy.safeAreaInsets.leading
+                )
 
                 if model.isLoading && model.meta == nil {
                     NuvioLoadingView(message: "Loading details…")
@@ -37,17 +42,23 @@ struct MetaDetailsView: View {
 
     // MARK: Backdrop
 
-    private func backdrop(size: CGSize) -> some View {
-        ZStack(alignment: .topLeading) {
+    /// Full-bleed for the same reason Home's is: the shell lays every destination out beside the
+    /// menu column, so a backdrop that stops at the column leaves a hard vertical seam and a
+    /// tenth of the screen of flat grey. `bleed` gives that back — see `bleedingLeading`.
+    private func backdrop(size: CGSize, bleed: CGFloat) -> some View {
+        let width = size.width + max(0, bleed)
+        return ZStack(alignment: .topLeading) {
             RemoteImage(url: model.meta?.backdropUrl ?? request.heroBackdropUrl, contentMode: .fill) {
                 colors.background
             }
-            .frame(width: size.width, height: size.height)
+            .frame(width: width, height: size.height)
             .clipped()
 
             ModernHeroGradient(background: colors.background, fullScreen: true)
+                .frame(width: width, height: size.height)
         }
-        .frame(width: size.width, height: size.height)
+        .frame(width: width, height: size.height)
+        .bleedingLeading(by: bleed)
     }
 
     // MARK: Content

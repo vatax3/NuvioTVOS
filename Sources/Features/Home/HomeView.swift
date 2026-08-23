@@ -233,6 +233,7 @@ struct HomeRailList: View {
 struct ModernHomeContent: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(AppSettings.self) private var settings
+    @Environment(\.shellLeadingInset) private var shellLeadingInset
     let model: HomeViewModel
 
     private var showsHero: Bool { settings.layout.heroSectionEnabled }
@@ -273,7 +274,12 @@ struct ModernHomeContent: View {
 
             ZStack(alignment: .topLeading) {
                 if showsHero {
-                    heroBackdrop(size: proxy.size)
+                    // Back under the menu column and out through the safe margin. The rest of
+                    // the stack does not move: see `bleedingLeading`.
+                    heroBackdrop(
+                        size: proxy.size,
+                        bleed: shellLeadingInset + proxy.safeAreaInsets.leading
+                    )
                 }
 
                 VStack(alignment: .leading, spacing: 0) {
@@ -299,23 +305,27 @@ struct ModernHomeContent: View {
         .ignoresSafeArea()
     }
 
-    private func heroBackdrop(size: CGSize) -> some View {
-        ZStack(alignment: .topLeading) {
+    /// `bleed` is how much of the screen the shell's menu column and the television's own safe
+    /// margin took off the left. Every frame here is widened by it and the whole layer slid back
+    /// over them, so the artwork — and the gradient that keeps the menu legible on top of it —
+    /// runs to the physical edge of the panel.
+    private func heroBackdrop(size: CGSize, bleed: CGFloat) -> some View {
+        let width = size.width + max(0, bleed)
+        let height = fullScreenBackdrop ? size.height : size.height * 0.82
+
+        return ZStack(alignment: .topLeading) {
             RemoteImage(url: model.heroItem?.backdropUrl, contentMode: .fill) {
                 colors.background
             }
-            .frame(
-                width: size.width,
-                height: fullScreenBackdrop ? size.height : size.height * 0.82,
-                alignment: .top
-            )
+            .frame(width: width, height: height, alignment: .top)
             .clipped()
             .animation(NuvioMotion.slowTween, value: model.heroItem?.rowKey)
 
             ModernHeroGradient(background: colors.background, fullScreen: fullScreenBackdrop)
-                .frame(width: size.width, height: fullScreenBackdrop ? size.height : size.height * 0.82)
+                .frame(width: width, height: height)
         }
-        .frame(width: size.width, height: size.height, alignment: .top)
+        .frame(width: width, height: size.height, alignment: .top)
+        .bleedingLeading(by: bleed)
     }
 }
 
@@ -457,6 +467,7 @@ struct ModernHeroInfo: View {
 struct ClassicHomeContent: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(AppSettings.self) private var settings
+    @Environment(\.shellLeadingInset) private var shellLeadingInset
     let model: HomeViewModel
 
     private var showsHero: Bool { settings.layout.heroSectionEnabled }
@@ -468,11 +479,13 @@ struct ClassicHomeContent: View {
         GeometryReader { proxy in
             ZStack(alignment: .topLeading) {
                 if showsFocusGradient {
-                    // Classic keeps the backdrop as a soft, heavily scrimmed wash behind the rails.
+                    // Classic keeps the backdrop as a soft, heavily scrimmed wash behind the
+                    // rails — reaching the same edge Modern's does.
+                    let bleed = shellLeadingInset + proxy.safeAreaInsets.leading
                     RemoteImage(url: model.heroItem?.backdropUrl, contentMode: .fill) {
                         colors.background
                     }
-                    .frame(width: proxy.size.width, height: proxy.size.height * 0.75)
+                    .frame(width: proxy.size.width + max(0, bleed), height: proxy.size.height * 0.75)
                     .clipped()
                     .overlay {
                         LinearGradient(
@@ -486,6 +499,7 @@ struct ClassicHomeContent: View {
                         )
                     }
                     .animation(NuvioMotion.slowTween, value: model.heroItem?.rowKey)
+                    .bleedingLeading(by: bleed)
                 }
 
                 ScrollView(.vertical, showsIndicators: false) {

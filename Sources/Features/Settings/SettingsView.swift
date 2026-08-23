@@ -424,7 +424,7 @@ struct ThemeSettingsContent: View {
                     }
                     .padding(.vertical, NuvioTheme.spacing.xs)
                 }
-                .scrollClipDisabled()
+                .clippedHorizontalScroller()
             }
 
             SettingsCard(title: "Typeface") {
@@ -713,6 +713,11 @@ struct AboutContent: View {
                 }
                 .padding(.horizontal, NuvioTheme.spacing.lg)
                 .padding(.vertical, NuvioTheme.spacing.sm)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                // About and Licences are the only screens made entirely of text. tvOS scrolls by
+                // moving focus into something below the fold, so with nothing focusable anywhere
+                // on the page it simply would not move — reported as About not scrolling.
+                .readableBlock()
             }
 
             LicensesContent()

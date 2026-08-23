@@ -49,7 +49,7 @@ struct SettingsOptionRow<T: SettingsOption>: View {
                 }
                 .padding(.vertical, NuvioTheme.spacing.xs)
             }
-            .scrollClipDisabled()
+            .clippedHorizontalScroller()
         }
         .padding(.horizontal, NuvioTheme.spacing.lg)
         .padding(.vertical, NuvioTheme.spacing.md)
@@ -94,7 +94,7 @@ struct SettingsMultiSelectRow<T: SettingsOption>: View {
                 }
                 .padding(.vertical, NuvioTheme.spacing.xs)
             }
-            .scrollClipDisabled()
+            .clippedHorizontalScroller()
         }
         .padding(.horizontal, NuvioTheme.spacing.lg)
         .padding(.vertical, NuvioTheme.spacing.md)
