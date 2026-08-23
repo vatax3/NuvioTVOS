@@ -13,9 +13,10 @@ struct CollectionFolderCard: View {
 
     let folder: CollectionFolder
     var focusBinding: FocusState<String?>.Binding?
+    /// Told when this card gains focus, so the screen around it can follow the cursor. Home
+    /// uses it to drive the hero; the library grid has nothing above the rail and passes nil.
+    var onFocus: (() -> Void)?
     let action: () -> Void
-
-    @State private var isFocused = false
 
     private var size: CGSize { metrics.size(for: folder.tileShape) }
 
@@ -48,6 +49,10 @@ struct CollectionFolderCard: View {
         }
         .buttonStyle(NuvioCardButtonStyle(cornerRadius: metrics.cornerRadius))
         .modifier(OptionalCardFocus(binding: focusBinding, key: folder.id))
+        .onFocusChange { focused in
+            guard focused else { return }
+            onFocus?()
+        }
         .accessibilityLabel(folder.title)
     }
 
@@ -90,6 +95,9 @@ struct CollectionRail: View {
 
     let collection: MediaCollection
     var focusBinding: FocusState<String?>.Binding?
+    /// Home's hero follows the cursor onto a folder card the same way it follows a poster —
+    /// see `CollectionFolder.heroPreview(in:)` for what a folder puts there.
+    var onFocusItem: ((MetaPreview) -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: NuvioTheme.components.row.titleBottomSpacing) {
@@ -107,7 +115,13 @@ struct CollectionRail: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: NuvioTheme.components.row.itemSpacing) {
                     ForEach(collection.folders) { folder in
-                        CollectionFolderCard(folder: folder, focusBinding: focusBinding) {
+                        CollectionFolderCard(
+                            folder: folder,
+                            focusBinding: focusBinding,
+                            onFocus: onFocusItem.map { report in
+                                { report(folder.heroPreview(in: collection)) }
+                            }
+                        ) {
                             router.push(.collectionFolder(
                                 CollectionFolderRequest(collectionId: collection.id, folderId: folder.id)
                             ))

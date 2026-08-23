@@ -27,6 +27,11 @@ struct MPVPlayerView: View {
     let onSeekApplied: () -> Void
     let pauseRequest: PlaybackTransportRequest?
     let onPauseApplied: () -> Void
+    /// Bumped when a layer the host drew over playback has handed the remote back and the
+    /// transport should come up in its place. Upstream's skip card moves focus onto the control
+    /// row on Down; ours cannot, because the row leaves the focus graph entirely while a card
+    /// owns the remote — so the card asks for it back instead.
+    let revealControlsRequest: Int
     let onChooseEpisode: ((StreamRequest) -> Void)?
     /// Present only when the episode after this one has aired — Android hides the button
     /// rather than showing one that cannot do anything.
@@ -46,6 +51,10 @@ struct MPVPlayerView: View {
     /// next-episode countdown, the still-watching check.  Each owns the remote while it is up,
     /// so the player must neither claim focus back nor read presses that were meant for it.
     let hasFocusableOverlay: Bool
+    /// What this engine is currently drawing over the picture.  The host's own layers are
+    /// placed against it: the pause card must not rise behind an open track panel, and the skip
+    /// card must not take the remote out of a transport the viewer is already using.
+    let onChromeChange: (PlayerChromeState) -> Void
     let onPlaybackTime: (Double, Double) -> Void
     let onPlaybackState: (Bool, Bool) -> Void
     let onProgress: (Double, Double, Bool) -> Void
@@ -75,6 +84,8 @@ struct MPVPlayerView: View {
     /// an absolute seek per frame of the hold.
     @State private var scrubTarget: Double?
     @State private var scrubCommit: Task<Void, Never>?
+    /// The ramp that runs while a direction is held down.  See `PlayerHoldSeekGate`.
+    @State private var holdSeek: Task<Void, Never>?
     /// Android flashes the new picture mode as a pill instead of opening a menu, so the aspect
     /// button can be pressed repeatedly while watching the picture change.
     @State private var aspectFlash: String?
@@ -172,6 +183,18 @@ struct MPVPlayerView: View {
         // request to leave; `onExitCommand` stays as the fallback if the recognizer cannot be
         // installed, and the timestamp above keeps the two from acting on one press twice.
         .background(MenuPressGate(action: handleExitCommand))
+        // Holding Left or Right runs a continuous seek.  A tap already stepped ten seconds and
+        // a fast series of taps accelerated, but a *held* direction did nothing beyond the
+        // first press — tvOS does not repeat a move command the way Android repeats a key
+        // event, so the acceleration this player was already written for was unreachable by the
+        // one gesture everybody tries first.
+        .background(
+            PlayerHoldSeekGate(
+                isEnabled: allowsHoldSeek,
+                onBegan: beginHoldSeek,
+                onEnded: endHoldSeek
+            )
+        )
         .onExitCommand {
             handleExitCommand()
         }
@@ -201,6 +224,7 @@ struct MPVPlayerView: View {
         .onDisappear {
             hideTask?.cancel()
             scrubCommit?.cancel()
+            holdSeek?.cancel()
             aspectFlashTask?.cancel()
             focusRetry?.cancel()
             persist(completed: false)
@@ -234,6 +258,7 @@ struct MPVPlayerView: View {
             if panel == nil { retargetFocus() } else { controlFocus = nil }
         }
         .onChange(of: showsPauseOverlay) { _, _ in retargetFocus() }
+        .onChange(of: chromeState, initial: true) { _, state in onChromeChange(state) }
         .onChange(of: hasFocusableOverlay) { _, _ in retargetFocus() }
         .onChange(of: engine.errorMessage) { _, message in
             retargetFocus()
@@ -269,6 +294,7 @@ struct MPVPlayerView: View {
             engine.setPaused(request.paused)
             onPauseApplied()
         }
+        .onChange(of: revealControlsRequest) { _, _ in wakeControls() }
         .onAppear {
             // One hop's grace so the buttons are in the focus system before it is aimed at them.
             retargetFocus()
@@ -340,6 +366,11 @@ struct MPVPlayerView: View {
     /// Nothing has been drawn yet, or the picture has stopped for want of data. Either way the
     /// host's loading cover belongs on screen and playback has not really begun.
     private var isStalled: Bool { engine.isBuffering || !engine.hasRenderedFrame }
+
+    /// What the host needs to know about this engine's own chrome.
+    private var chromeState: PlayerChromeState {
+        PlayerChromeState(controlsVisible: controlsInteractable, panelOpen: picker != nil)
+    }
 
     /// The player's current shape, as the input rules need to see it.
     private var remoteState: PlayerRemotePolicy.State {
@@ -658,6 +689,41 @@ struct MPVPlayerView: View {
             scrubTarget = nil
             scrubRepeatCount = 0
         }
+    }
+
+    /// Whether a held direction should seek.
+    ///
+    /// The same question `PlayerRemotePolicy` asks of a single press, minus the focus term: the
+    /// gate reads the remote below SwiftUI's focus graph, so it works whether the transport is
+    /// up or the picture is bare — which is the point of it. It stands down for anything that
+    /// owns the remote in its own right, because a hold there belongs to that layer.
+    private var allowsHoldSeek: Bool {
+        engine.errorMessage == nil && picker == nil && !hasFocusableOverlay && !showsPauseOverlay
+    }
+
+    /// Repeats `scrub` for as long as the direction is held, which is what turns the existing
+    /// acceleration table into a fast-forward: each tick counts as a repeat, so the step grows
+    /// 10 → 20 → 30 → 60 seconds the longer the hold lasts.
+    ///
+    /// The interval is inside `PlayerScrubRates.repeatWindow` by design — a tick slower than
+    /// that window reads as a fresh tap and resets the acceleration to its slowest step, so the
+    /// hold would never speed up at all.
+    private func beginHoldSeek(forward: Bool) {
+        guard allowsHoldSeek else { return }
+        holdSeek?.cancel()
+        holdSeek = Task { @MainActor in
+            while !Task.isCancelled {
+                scrub(forward: forward)
+                try? await Task.sleep(for: .milliseconds(180))
+            }
+        }
+    }
+
+    /// Stops the ramp and leaves the pending seek alone: `scrub` commits it 300 ms after the
+    /// last step, so letting go is what makes the picture move.
+    private func endHoldSeek() {
+        holdSeek?.cancel()
+        holdSeek = nil
     }
 
     private func cycleAspectMode() {
@@ -1321,6 +1387,143 @@ private struct MenuPressGate: UIViewRepresentable {
             // `deinit` can run off the main actor; the recognizer must be released on it.
             guard let recognizer, let host else { return }
             Task { @MainActor in host.removeGestureRecognizer(recognizer) }
+        }
+    }
+}
+
+// MARK: - Held-direction seeking
+
+/// Turns a held Left or Right on the remote into a continuous seek.
+///
+/// tvOS has no equivalent of Android's `KeyEvent.repeatCount`: a held direction produces one
+/// move command and then silence, so the acceleration table this player was written around
+/// could only be reached by tapping quickly, and holding — the gesture everyone reaches for —
+/// did nothing. Press gesture recognizers are the only place the platform exposes the button
+/// still being down, and they sit outside the focus graph, so this works whether the transport
+/// has focus or the picture is bare.
+///
+/// One recognizer per direction, because `allowedPressTypes` is a filter and not something the
+/// callback can read back. It attaches to the hosting controller's own view for the same reason
+/// `MenuPressGate` does, and leaves with it.
+private struct PlayerHoldSeekGate: UIViewRepresentable {
+    /// False while something else owns the remote — a panel, an error, a card drawn over
+    /// playback. The recognizers stay attached and stand down, rather than being torn off and
+    /// rebuilt every time a panel opens.
+    let isEnabled: Bool
+    let onBegan: (Bool) -> Void
+    let onEnded: () -> Void
+
+    func makeUIView(context: Context) -> UIView {
+        let view = GateView()
+        view.isUserInteractionEnabled = false
+        view.coordinator = context.coordinator
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        context.coordinator.isEnabled = isEnabled
+        context.coordinator.onBegan = onBegan
+        context.coordinator.onEnded = onEnded
+        // A gate that goes inert mid-hold has to end the ramp it started, or the seek runs on
+        // with nothing left to stop it.
+        if !isEnabled { context.coordinator.cancelIfHolding() }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(isEnabled: isEnabled, onBegan: onBegan, onEnded: onEnded)
+    }
+
+    @MainActor
+    final class Coordinator: NSObject {
+        var isEnabled: Bool
+        var onBegan: (Bool) -> Void
+        var onEnded: () -> Void
+        private var isHolding = false
+
+        init(isEnabled: Bool, onBegan: @escaping (Bool) -> Void, onEnded: @escaping () -> Void) {
+            self.isEnabled = isEnabled
+            self.onBegan = onBegan
+            self.onEnded = onEnded
+            super.init()
+        }
+
+        func cancelIfHolding() {
+            guard isHolding else { return }
+            isHolding = false
+            onEnded()
+        }
+
+        @objc func held(_ recognizer: UILongPressGestureRecognizer) {
+            let forward = recognizer.allowedPressTypes
+                .contains(NSNumber(value: UIPress.PressType.rightArrow.rawValue))
+            switch recognizer.state {
+            case .began:
+                guard isEnabled else { return }
+                isHolding = true
+                onBegan(forward)
+            case .ended, .cancelled, .failed:
+                cancelIfHolding()
+            default:
+                break
+            }
+        }
+    }
+
+    /// A zero-size view that finds the hosting controller and hangs the recognizers off it,
+    /// taking them with it on the way out — the same lifetime `MenuPressGate` uses.
+    private final class GateView: UIView {
+        weak var coordinator: Coordinator?
+        private weak var host: UIView?
+        private var recognizers: [UILongPressGestureRecognizer] = []
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if window == nil {
+                detach()
+                return
+            }
+            attach()
+        }
+
+        private func attach() {
+            guard recognizers.isEmpty, let host = hostingControllerView, let coordinator else { return }
+            for pressType in [UIPress.PressType.leftArrow, .rightArrow] {
+                let hold = UILongPressGestureRecognizer(
+                    target: coordinator, action: #selector(Coordinator.held(_:))
+                )
+                hold.allowedPressTypes = [NSNumber(value: pressType.rawValue)]
+                // Long enough that a single click still reads as one ten-second step and never
+                // as the start of a scan, short enough that a deliberate hold responds at once.
+                hold.minimumPressDuration = 0.4
+                host.addGestureRecognizer(hold)
+                recognizers.append(hold)
+            }
+            self.host = host
+        }
+
+        private func detach() {
+            coordinator?.cancelIfHolding()
+            for recognizer in recognizers { host?.removeGestureRecognizer(recognizer) }
+            recognizers = []
+            host = nil
+        }
+
+        private var hostingControllerView: UIView? {
+            var responder: UIResponder? = self
+            while let current = responder {
+                if let controller = current as? UIViewController { return controller.viewIfLoaded }
+                responder = current.next
+            }
+            return nil
+        }
+
+        deinit {
+            // `deinit` can run off the main actor; the recognizers must be released on it.
+            guard !recognizers.isEmpty, let host else { return }
+            let held = recognizers
+            Task { @MainActor in
+                for recognizer in held { host.removeGestureRecognizer(recognizer) }
+            }
         }
     }
 }

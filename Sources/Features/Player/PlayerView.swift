@@ -50,6 +50,20 @@ struct PlayerView: View {
     @State private var showsPauseOverlay = false
     @State private var pauseOverlayTask: Task<Void, Never>?
     @State private var isPaused = false
+    /// What the engine underneath is drawing: its transport, and whether a panel is over the
+    /// picture. Both host cards are placed against it — see `PlayerChromeState`.
+    @State private var engineChrome = PlayerChromeState()
+    /// The skip card's countdown has run out for the current segment. Reset when the segment
+    /// changes; see `SkipSegmentVisibility`.
+    @State private var skipAutoHidden = false
+    /// Consecutive seeks driven from the skip card, and when the last one landed — the same
+    /// reconstruction of Android's repeat count the transport's own scrubber does.
+    @State private var skipCardSeekCount = 0
+    @State private var skipCardSeekAt: Date = .distantPast
+    @State private var skipCardSeekTarget: Double?
+    /// Bumped when the skip card hands the remote back on a Up/Down press, so the transport
+    /// comes up where the card was rather than leaving the viewer on bare picture.
+    @State private var revealControlsRequest = 0
     @State private var parentalWarnings: [ParentalWarning] = []
     @State private var showsParentalGuide = false
     @State private var parentalGuideTask: Task<Void, Never>?
@@ -104,6 +118,13 @@ struct PlayerView: View {
             consecutiveAutoAdvances = PlaybackSessionStore.shared.consumeAutoAdvance(for: request.videoId)
             // Set before the track loads, so cues are never drawn unfiltered for a frame first.
             subtitles.stripsSDH = settings.subtitleStyle.stripsSDH
+            #if DEBUG
+            if let staged = PlayerHarness.skipSegments() { skipSegments = staged }
+            // Straight into the real state rather than a parallel branch, so what a screenshot
+            // shows is the card the viewer gets — focus handling included, which is the part
+            // that only exists at runtime.
+            if PlayerHarness.stagesUpNext { nextEpisodeCountdown = 5 }
+            #endif
             await loadSubtitles()
             await loadParentalGuide()
         }
@@ -131,13 +152,38 @@ struct PlayerView: View {
             // Coming back from the background can clear the flag underneath us.
             if phase == .active { PlaybackWakeLock.reassert() }
         }
+        // Ten seconds of the card being the only thing on screen, then it steps aside — Android's
+        // `SKIP_INTRO_AUTO_HIDE_TIMEOUT_MS`. The countdown is bound to a state that stops running
+        // whenever the transport is up, so time spent reading the controls never counts against
+        // it, and on the MPV engine a pause does not quietly burn it down (pausing raises the
+        // transport there and nothing lowers it again).
+        .task(id: skipCountdownKey) {
+            guard SkipSegmentVisibility.runsAutoHideCountdown(skipVisibility) else { return }
+            try? await Task.sleep(for: .seconds(SkipSegmentVisibility.autoHideTimeout))
+            guard !Task.isCancelled else { return }
+            skipAutoHidden = true
+        }
+        // A new segment starts its own life: an outro should not arrive already spent because
+        // the intro's countdown ran out an hour ago.
+        .onChange(of: activeSkipSegment?.id) { _, _ in skipAutoHidden = false }
+        // A panel covers the picture, so the pause card has nothing to say and nowhere to say
+        // it. Reported: pausing and then opening the subtitle chooser raised "You are watching"
+        // over the list a few seconds later, because the countdown only ever asked whether
+        // playback was stopped.
+        .onChange(of: engineChrome.panelOpen) { _, open in
+            if open {
+                dismissPauseOverlay()
+            } else {
+                schedulePauseOverlay(paused: isPaused)
+            }
+        }
     }
 
     /// The layers the host draws over playback that hold focus themselves. The player has to
     /// know: while one is up it must not claim the remote back, or the viewer cannot reach the
     /// Skip button, and the countdown card cannot be answered.
     private var hasFocusableOverlay: Bool {
-        activeSkipSegment != nil || nextEpisodeCountdown != nil
+        skipCardClaimsFocus || nextEpisodeCountdown != nil
             || showsStillWatchingPrompt || showsSourcePanel
     }
 
@@ -159,6 +205,7 @@ struct PlayerView: View {
                 onSeekApplied: { requestedSeek = nil },
                 pauseRequest: requestedPause,
                 onPauseApplied: { requestedPause = nil },
+                revealControlsRequest: revealControlsRequest,
                 onChooseEpisode: request.contentType == "series" ? chooseEpisode : nil,
                 onPlayNextEpisode: request.nextUp == nil ? nil : playNextEpisodeNow,
                 onSwitchEngine: { engineOverride = .exoplayer },
@@ -166,6 +213,7 @@ struct PlayerView: View {
                 hasOpenPrompt: showsPauseOverlay || nextEpisodeCountdown != nil || showsStillWatchingPrompt,
                 onDismissPrompt: dismissTransientPrompt,
                 hasFocusableOverlay: hasFocusableOverlay,
+                onChromeChange: { engineChrome = $0 },
                 onPlaybackTime: observePlaybackTime,
                 onPlaybackState: { paused, loading in
                     observePlaybackState(paused: paused, loading: loading)
@@ -185,13 +233,7 @@ struct PlayerView: View {
                 }
             )
 
-            if let segment = activeSkipSegment {
-                SkipSegmentButton(segment: segment, action: { skip(segment) })
-                    .padding(.leading, NuvioTheme.layout.tvSafeHorizontal)
-                    .padding(.bottom, dp(116))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-                    .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .bottomLeading)))
-            }
+            skipSegmentCard
 
             postPlayOverlay
             stillWatchingOverlay
@@ -201,7 +243,7 @@ struct PlayerView: View {
                 InPlayerSourcesPanel(request: request) { showsSourcePanel = false }
             }
         }
-        .animation(NuvioMotion.quickTween, value: activeSkipSegment?.id)
+        .animation(NuvioMotion.quickTween, value: visibleSkipSegment?.id)
         #else
         avPlayer
         #endif
@@ -240,6 +282,7 @@ struct PlayerView: View {
                     advanceIfDue(position: position, duration: duration)
                 },
                 onFailed: handleAVFoundationFailure,
+                onChromeChange: { engineChrome = $0 },
                 onFinished: {
                     persist(position: 0, duration: 0, completed: true)
                     scrobbleStop()
@@ -250,15 +293,7 @@ struct PlayerView: View {
 
             SubtitleOverlay(cues: subtitles.activeCues, style: settings.subtitleStyle)
 
-            if let segment = activeSkipSegment {
-                SkipSegmentButton(segment: segment, action: { skip(segment) })
-                    .padding(.leading, NuvioTheme.layout.tvSafeHorizontal)
-                    // Clear AVPlayerViewController's transport bar while remaining reachable
-                    // with the Siri Remote when the system controls are hidden.
-                    .padding(.bottom, dp(116))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-                    .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .bottomLeading)))
-            }
+            skipSegmentCard
 
             postPlayOverlay
             stillWatchingOverlay
@@ -269,7 +304,7 @@ struct PlayerView: View {
                     .background(.black.opacity(0.85))
             }
         }
-        .animation(NuvioMotion.quickTween, value: activeSkipSegment?.id)
+        .animation(NuvioMotion.quickTween, value: visibleSkipSegment?.id)
     }
 
     /// Android's `auto_switch_internal_player_on_error`: a debrid link usually carries no
@@ -332,6 +367,80 @@ struct PlayerView: View {
         }
     }
 
+    private var skipVisibility: SkipSegmentVisibility.State {
+        SkipSegmentVisibility.State(
+            hasActiveSegment: activeSkipSegment != nil,
+            autoHidden: skipAutoHidden,
+            controlsVisible: engineChrome.controlsVisible,
+            panelOpen: engineChrome.panelOpen || showsSourcePanel,
+            promptOpen: nextEpisodeCountdown != nil || showsStillWatchingPrompt
+        )
+    }
+
+    /// The segment the card is actually drawn for, which is not simply the one playback is
+    /// inside: it hides behind a panel, and it steps aside once its countdown has run.
+    private var visibleSkipSegment: SkipSegment? {
+        SkipSegmentVisibility.showsCard(skipVisibility) ? activeSkipSegment : nil
+    }
+
+    private var skipCardClaimsFocus: Bool {
+        SkipSegmentVisibility.claimsFocus(skipVisibility)
+    }
+
+    /// What restarts the auto-hide countdown: a different segment, or the card becoming the only
+    /// thing on screen again after the transport went down.
+    ///
+    /// Upstream resumes from the time that was left; this starts the ten seconds over. The
+    /// difference only shows after the viewer has raised and lowered the transport mid-segment,
+    /// and giving them the full countdown back is the friendlier of the two answers — it is also
+    /// what the strip along the card's bottom edge draws, so the two never disagree.
+    private var skipCountdownKey: String {
+        let running = SkipSegmentVisibility.runsAutoHideCountdown(skipVisibility)
+        return "\(activeSkipSegment?.id ?? "-")|\(running)"
+    }
+
+    @ViewBuilder
+    private var skipSegmentCard: some View {
+        if let segment = visibleSkipSegment {
+            SkipSegmentButton(
+                segment: segment,
+                claimsFocus: skipCardClaimsFocus,
+                showsCountdown: SkipSegmentVisibility.runsAutoHideCountdown(skipVisibility),
+                action: { skip(segment) },
+                onDismiss: {
+                    skipAutoHidden = true
+                    revealControlsRequest += 1
+                },
+                onSeek: seekFromSkipCard
+            )
+            .padding(.leading, NuvioTheme.layout.tvSafeHorizontal)
+            // Clear the transport bar while remaining reachable with the Siri Remote when the
+            // system controls are hidden.
+            .padding(.bottom, dp(116))
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+            .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .bottomLeading)))
+        }
+    }
+
+    /// Left and Right while the skip card holds the remote.
+    ///
+    /// The card is not modal — Android lets you keep steering while it is up — but on tvOS
+    /// whatever holds focus is the only thing that receives a press, and a card is not a
+    /// scrubber. So it forwards them here, through the same acceleration table the transport's
+    /// own progress bar uses, and a held direction crosses the opening rather than nudging it.
+    private func seekFromSkipCard(forward: Bool) {
+        let now = Date()
+        let isRepeat = now.timeIntervalSince(skipCardSeekAt) <= PlayerScrubRates.repeatWindow
+        skipCardSeekCount = isRepeat ? skipCardSeekCount + 1 : 0
+        skipCardSeekAt = now
+        // Chained off the last target while the presses keep coming: the engine's own clock has
+        // not caught up to the previous seek yet, so basing each press on it would stand still.
+        let base = isRepeat ? (skipCardSeekTarget ?? playbackPosition) : playbackPosition
+        let target = max(0, base + PlayerScrubRates.delta(forRepeatCount: skipCardSeekCount, forward: forward))
+        skipCardSeekTarget = target
+        requestedSeek = target
+    }
+
     /// "Skip automatically" for the kinds the viewer opted into — a setting that existed in the
     /// UI and was read by nothing until now.
     ///
@@ -345,9 +454,22 @@ struct PlayerView: View {
         skip(segment)
     }
 
+    /// The harness stages cards over a stream that deliberately never starts, and the loading
+    /// cover is drawn over everything until the first frame — so it would sit on top of the one
+    /// thing being looked at. False in any shipping build.
+    private var stagesHarnessOverlays: Bool {
+        #if DEBUG
+        return PlayerHarness.skipSegments() != nil || PlayerHarness.stagesUpNext
+        #else
+        return false
+        #endif
+    }
+
+
     @ViewBuilder
     private var playerStatusOverlay: some View {
-        if isLoading, !hasStartedPlayback, settings.player.loadingOverlayEnabled {
+        if isLoading, !hasStartedPlayback, settings.player.loadingOverlayEnabled,
+           !stagesHarnessOverlays {
             PlayerLoadingOverlay(request: request, showsDetail: settings.player.showPlayerLoadingStatus)
                 .transition(.opacity)
         } else if showsPauseOverlay {
@@ -392,20 +514,31 @@ struct PlayerView: View {
         requestedPause = PlaybackTransportRequest(paused: false)
     }
 
-    /// Android's five seconds: long enough that pausing to read a subtitle or answer the door
-    /// never swaps the screen out from under the viewer, short enough to settle into the card
-    /// when the pause is a real interruption.
+    /// What the pause card's rule sees. `paused` is passed in rather than read back, because the
+    /// state this schedules from is the transition being reported, not the one already stored.
+    private func pauseCardState(paused: Bool) -> PlayerPauseCardPolicy.State {
+        PlayerPauseCardPolicy.State(
+            isPaused: paused,
+            isEnabled: settings.player.pauseOverlayEnabled,
+            hasStartedPlayback: hasStartedPlayback,
+            panelOpen: engineChrome.panelOpen || showsSourcePanel,
+            promptOpen: nextEpisodeCountdown != nil || showsStillWatchingPrompt
+        )
+    }
+
     private func schedulePauseOverlay(paused: Bool) {
         pauseOverlayTask?.cancel()
         pauseOverlayTask = nil
-        guard paused, settings.player.pauseOverlayEnabled, hasStartedPlayback else {
+        guard PlayerPauseCardPolicy.shouldRaise(pauseCardState(paused: paused)) else {
             withAnimation(NuvioMotion.quickTween) { showsPauseOverlay = false }
             return
         }
         pauseOverlayTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(5))
-            guard !Task.isCancelled, isPaused,
-                  nextEpisodeCountdown == nil, !showsStillWatchingPrompt
+            try? await Task.sleep(for: .seconds(PlayerPauseCardPolicy.delay))
+            // Asked again on the way out: five seconds is long enough for the viewer to have
+            // opened a panel, and the card must not arrive on top of it.
+            guard !Task.isCancelled,
+                  PlayerPauseCardPolicy.shouldRaise(pauseCardState(paused: isPaused))
             else { return }
             withAnimation(NuvioMotion.quickTween) { showsPauseOverlay = true }
         }
@@ -859,17 +992,22 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
     /// caller can hand the stream to MPV or — when the viewer chose this engine deliberately —
     /// say what happened instead of leaving a black screen.
     let onFailed: (String?) -> Void
+    /// Whether the transport bar is on screen.  AVKit owns it and never volunteers the fact, so
+    /// the layers the host draws on top — the skip card above all — had no way to tell bare
+    /// picture from a control row the viewer was in the middle of using.
+    let onChromeChange: (PlayerChromeState) -> Void
     let onFinished: () -> Void
 
     func makeCoordinator() -> Coordinator {
         Coordinator(
             onProgress: onProgress, onFinished: onFinished, onTick: onTick, onFailed: onFailed,
-            onPlaybackState: onPlaybackState
+            onPlaybackState: onPlaybackState, onChromeChange: onChromeChange
         )
     }
 
     func makeUIViewController(context: Context) -> AVPlayerViewController {
         let controller = AVPlayerViewController()
+        controller.delegate = context.coordinator
         controller.showsPlaybackControls = true
         controller.allowsPictureInPicturePlayback = false
         // The system player will match the panel to the asset, but only when asked — the
@@ -1033,12 +1171,13 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
         return items
     }
 
-    final class Coordinator {
+    final class Coordinator: NSObject, AVPlayerViewControllerDelegate {
         private let onProgress: (Double, Double, Bool) -> Void
         private let onFinished: () -> Void
         private let onTick: (Double, Double) -> Void
         private let onFailed: (String?) -> Void
         private let onPlaybackState: (Bool, Bool) -> Void
+        private let onChromeChange: (PlayerChromeState) -> Void
         private var statusObserver: NSKeyValueObservation?
         private var timeObserver: Any?
         private var cueObserver: Any?
@@ -1055,13 +1194,27 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
             onFinished: @escaping () -> Void,
             onTick: @escaping (Double, Double) -> Void,
             onFailed: @escaping (String?) -> Void,
-            onPlaybackState: @escaping (Bool, Bool) -> Void
+            onPlaybackState: @escaping (Bool, Bool) -> Void,
+            onChromeChange: @escaping (PlayerChromeState) -> Void
         ) {
             self.onProgress = onProgress
             self.onFinished = onFinished
             self.onTick = onTick
             self.onFailed = onFailed
             self.onPlaybackState = onPlaybackState
+            self.onChromeChange = onChromeChange
+            super.init()
+        }
+
+        /// The one hook AVKit gives onto its transport bar.  It fires as the transition starts,
+        /// which is what the layers above want: the skip card should step out of the way of a
+        /// control row that is on its way in, not a frame after it has arrived.
+        func playerViewController(
+            _ playerViewController: AVPlayerViewController,
+            willTransitionToVisibilityOfTransportBar isVisible: Bool,
+            with coordinator: AVPlayerViewControllerAnimationCoordinator
+        ) {
+            onChromeChange(PlayerChromeState(controlsVisible: isVisible, panelOpen: false))
         }
 
         func attach(player: AVPlayer, item: AVPlayerItem, resumeAt: Double) {

@@ -430,7 +430,10 @@ struct TrailerItem: Identifiable, Hashable {
 
     /// YouTube serves a still for any video id at a stable path, so a trailer row needs no
     /// extra metadata request to have artwork.
-    var thumbnailURL: String { "https://img.youtube.com/vi/\(youTubeId)/hqdefault.jpg" }
+    var thumbnailURL: String {
+        let id = TrailerLauncher.videoId(from: youTubeId) ?? youTubeId
+        return "https://img.youtube.com/vi/\(id)/hqdefault.jpg"
+    }
 }
 
 /// The landscape trailer rail from the Android detail screen.

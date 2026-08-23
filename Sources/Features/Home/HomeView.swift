@@ -164,7 +164,11 @@ struct HomeRailList: View {
             }
 
             ForEach(pinnedCollections) { collection in
-                CollectionRail(collection: collection, focusBinding: $focusedCardKey)
+                CollectionRail(
+                    collection: collection,
+                    focusBinding: $focusedCardKey,
+                    onFocusItem: { model.focusedItem = $0 }
+                )
             }
 
             ForEach(displayRows) { entry in
@@ -187,7 +191,11 @@ struct HomeRailList: View {
                         )
                     }
                 case .collection(let collection):
-                    CollectionRail(collection: collection, focusBinding: $focusedCardKey)
+                    CollectionRail(
+                        collection: collection,
+                        focusBinding: $focusedCardKey,
+                        onFocusItem: { model.focusedItem = $0 }
+                    )
                 }
             }
         }

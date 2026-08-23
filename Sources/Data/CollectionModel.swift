@@ -435,3 +435,44 @@ struct MediaCollection: Codable, Hashable, Sendable, Identifiable {
     /// The key this collection is ordered by on the home screen, alongside addon catalogues.
     var homeRowKey: String { "collection_\(id)" }
 }
+
+// MARK: - Home hero
+
+extension CollectionFolder {
+    /// What the hero shows while this folder card holds focus.
+    ///
+    /// A folder is not a title, so there is no year, rating, runtime or synopsis to draw — and
+    /// leaving the previous title's up is worse than drawing nothing, because the hero then
+    /// describes something the cursor is no longer on. Upstream builds exactly this in
+    /// `buildCollectionFolderItem`: a `HeroPreview` carrying the folder's own name, logo and
+    /// backdrop, and null for every field a folder cannot have.
+    ///
+    /// The backdrop falls back the way upstream's does — the folder's hero image, then its
+    /// cover, then the collection's — so a folder with only a cover still changes the picture.
+    ///
+    /// `hideTitle` is honoured for the same reason it is on the card: a cover with the name
+    /// burned into the artwork should not have it written over the top a second time.
+    func heroPreview(in collection: MediaCollection) -> MetaPreview {
+        let displayName: String
+        if hideTitle {
+            displayName = ""
+        } else if let emoji = coverEmoji?.nilIfBlank {
+            displayName = "\(emoji)  \(title)"
+        } else {
+            displayName = title
+        }
+
+        return MetaPreview(
+            id: "collection:\(collection.id):\(id)",
+            type: .unknown,
+            rawType: "collection",
+            name: displayName,
+            poster: coverImageUrl?.nilIfBlank,
+            posterShape: tileShape,
+            background: heroBackdropUrl?.nilIfBlank
+                ?? coverImageUrl?.nilIfBlank
+                ?? collection.backdropImageUrl?.nilIfBlank,
+            logo: hideTitle ? nil : titleLogoUrl?.nilIfBlank
+        )
+    }
+}
