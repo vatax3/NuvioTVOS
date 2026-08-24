@@ -34,9 +34,9 @@ struct AccountSettingsContent: View {
                 DeviceLinkingCard()
             } else {
                 // Signing in comes first, because that is what someone opening this screen is
-                // here to do. The server fields exist only because Nuvio's publishable key is a
-                // build secret we cannot ship, and they belong under the thing they unblock —
-                // not in front of it.
+                // here to do. Nuvio's own backend is filled in and ready, so the server fields
+                // are for a self-hosted instance — under the thing they unblock, not in front
+                // of it.
                 signInCard
                 serverCard
             }
@@ -51,9 +51,8 @@ struct AccountSettingsContent: View {
         SettingsCard(
             title: "Server",
             footnote: """
-            Nuvio's backend URL is already right; its publishable key is a build-time secret in \
-            the official app, absent from its public source, so it has to be pasted in once. A \
-            self-hosted server can be found by address instead — Nuvio reads its \
+            Nuvio's own backend and key are already filled in — nothing to do here to use a \
+            Nuvio account. A self-hosted server can be found by address instead: Nuvio reads its \
             /.well-known/nuvio document for the rest, the same discovery the official app uses.
             """
         ) {
@@ -107,7 +106,7 @@ struct AccountSettingsContent: View {
             title: "Sign in",
             footnote: account.isConfigured
                 ? "Scan the code with a phone, sign in there, and this device is signed in too. Your library, progress, collections, addons and settings arrive straight away."
-                : "Add the publishable key below first — without it there is no server to sign in to."
+                : "This server has no publishable key, so there is nothing to sign in to. Fill it in below, or clear the backend URL to go back to Nuvio's."
         ) {
             // The code itself lives on its own screen. It has to be large enough to scan from a
             // sofa, and a settings column that also holds a section rail has neither the width

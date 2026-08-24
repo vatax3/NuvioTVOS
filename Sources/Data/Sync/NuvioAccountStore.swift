@@ -42,7 +42,11 @@ final class NuvioAccountStore {
     private var deviceNonce = UUID().uuidString
 
     init() {
-        configuration = configurationFile.load() ?? .nuvioDefault
+        let stored = configurationFile.load()
+        configuration = .restored(from: stored)
+        // Written back rather than only repaired in memory, so the file and the running
+        // configuration agree and the next launch has nothing left to migrate.
+        if configuration != stored { configurationFile.save(configuration) }
         session = secureSession.load()
         if session == nil, let legacySession = sessionFile.load() {
             session = legacySession
@@ -65,11 +69,14 @@ final class NuvioAccountStore {
 
     // MARK: Configuration
 
+    /// The same repair as at launch, so emptying the fields lands back on Nuvio's own backend
+    /// rather than on a configuration that cannot sign anyone in. The settings screen says so.
     func save(configuration new: NuvioServerConfiguration) {
-        configuration = new
-        configurationFile.save(new)
+        let repaired = NuvioServerConfiguration.restored(from: new)
+        configuration = repaired
+        configurationFile.save(repaired)
         let session = self.session
-        Task { await NuvioBackend.shared.configure(new, session: session) }
+        Task { await NuvioBackend.shared.configure(repaired, session: session) }
     }
 
     // MARK: TV login

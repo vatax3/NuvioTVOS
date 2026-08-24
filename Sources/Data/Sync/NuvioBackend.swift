@@ -3,12 +3,14 @@ import os
 
 /// Which Nuvio backend this install talks to.
 ///
-/// The official app reads its Supabase URL and publishable key from `local.properties` at build
-/// time, so they are not in the public source and cannot be redistributed by a third-party
-/// client — the same situation as the Trakt client id. The app also ships a first-class custom
-/// server path (`FEATURE_CUSTOM_SERVER_CONNECTIONS_ENABLED`), which is what this uses: the
-/// viewer supplies a backend URL and publishable key, either Nuvio's own or a self-hosted
-/// instance carrying the same schema.
+/// The publishable key below is not a secret and is deliberately not treated as one. Nuvio
+/// publishes it in their public API documentation, and a Supabase `sb_publishable_` key is
+/// designed to ship inside the client in the first place — row-level security is what protects
+/// the rows, not the obscurity of the key.
+///
+/// The custom server path upstream calls `FEATURE_CUSTOM_SERVER_CONNECTIONS_ENABLED` stays
+/// alongside it: a viewer can still point at a self-hosted instance carrying the same schema and
+/// supply its own key.
 struct NuvioServerConfiguration: Codable, Hashable, Sendable {
     var backendUrl: String
     var publishableKey: String
@@ -18,18 +20,49 @@ struct NuvioServerConfiguration: Codable, Hashable, Sendable {
     /// Overrides where the phone finishes a TV login. Left empty, `tvLoginWebBaseUrl` guesses.
     var tvLoginWebBaseUrlOverride: String = ""
 
-    /// Nuvio's own backend, pre-filled the way the official app ships pointing at it.
+    /// Nuvio's own backend, complete — host *and* key.
     ///
-    /// Only the host: the publishable key is a build-time secret in the official app and is not
-    /// in its public source, so it cannot be shipped here and still has to be pasted in. Having
-    /// the URL already right is what makes that one field instead of three.
+    /// This shipped with an empty key for several releases, on the reasoning that the official
+    /// app reads it from `local.properties` at build time and therefore could not be
+    /// redistributed. The reasoning was sound; the premise was wrong. The key is in Nuvio's
+    /// public API docs, and this app's own earlier tvOS build carried it in `AuthConfig.swift`
+    /// citing them.
+    ///
+    /// The cost of that mistake was not a missing convenience. An empty key makes `isConfigured`
+    /// false, and that refuses **both** the QR flow and email/password — so a viewer whose
+    /// stored configuration went away was locked out of their own account with no way back in.
     static let nuvioDefault = NuvioServerConfiguration(
         backendUrl: "https://api.nuvio.tv",
-        publishableKey: ""
+        publishableKey: "sb_publishable_1Clq8rlTVACkdcZuqr6_AD__xUUC_EN"
     )
 
     var isConfigured: Bool {
         !normalizedBackendUrl.isEmpty && !publishableKey.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    /// Repairs a stored configuration that lost the key it should never have been without.
+    ///
+    /// The session lives in the keychain and the configuration lives in a file in the container.
+    /// Deleting an app on Apple platforms clears the container and leaves the keychain behind, so
+    /// a reinstall produced an install that was still signed in but no longer configured. It kept
+    /// working on the stored token, and signing out then removed the only thing holding it
+    /// together — which is exactly how this was found.
+    ///
+    /// Only Nuvio's own backend is healed. A self-hosted instance with an empty key is left
+    /// exactly as it is: Nuvio's key would not authenticate against someone else's project, and
+    /// writing it there would trade a legible "not configured" for a baffling 401.
+    static func restored(from stored: NuvioServerConfiguration?) -> NuvioServerConfiguration {
+        guard var configuration = stored else { return .nuvioDefault }
+        guard configuration.publishableKey.trimmingCharacters(in: .whitespaces).isEmpty else {
+            return configuration
+        }
+        let backend = configuration.normalizedBackendUrl
+        guard backend.isEmpty || backend == nuvioDefault.normalizedBackendUrl else {
+            return configuration
+        }
+        configuration.backendUrl = nuvioDefault.backendUrl
+        configuration.publishableKey = nuvioDefault.publishableKey
+        return configuration
     }
 
     var normalizedBackendUrl: String {
