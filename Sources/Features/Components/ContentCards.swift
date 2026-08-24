@@ -392,10 +392,20 @@ struct EpisodeCard: View {
                 // row Android draws under an episode. The date was the piece missing entirely:
                 // `released` was parsed, used to decide whether an episode had aired, and never
                 // shown, so a season of unaired episodes looked no different from an aired one.
-                if video.runtime?.nilIfBlank != nil || video.releaseLabel != nil {
+                if video.runtime?.nilIfBlank != nil || video.releaseLabel != nil
+                    || video.tmdbRating != nil {
                     HStack(spacing: NuvioTheme.spacing.md) {
                         if let runtime = video.runtime?.nilIfBlank {
                             Label(runtime, systemImage: "clock")
+                                .labelStyle(.titleAndIcon)
+                                .nuvioText(NuvioTypography.bodySmall)
+                                .foregroundStyle(colors.textTertiary)
+                        }
+                        // TMDB's score, and the star says so by not being IMDb's yellow badge.
+                        // Android shows an IMDb figure here, from a service whose address is a
+                        // build secret in its public source; this is the one we can actually get.
+                        if let rating = video.tmdbRating {
+                            Label(String(format: "%.1f", rating), systemImage: "star.fill")
                                 .labelStyle(.titleAndIcon)
                                 .nuvioText(NuvioTypography.bodySmall)
                                 .foregroundStyle(colors.textTertiary)

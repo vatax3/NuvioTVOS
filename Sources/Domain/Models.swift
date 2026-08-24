@@ -361,6 +361,9 @@ struct Video: Codable, Hashable, Identifiable, Sendable {
     var description: String?
     var runtime: String?
     var available: Bool?
+    /// Filled from TMDB when episode metadata is enabled. Never decoded from an addon: no
+    /// Stremio addon publishes a per-episode score.
+    var tmdbRating: Double?
 
     var displayTitle: String {
         name ?? title ?? (episode.map { "Episode \($0)" } ?? id)

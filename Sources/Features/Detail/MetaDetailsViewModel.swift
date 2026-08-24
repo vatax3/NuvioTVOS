@@ -242,6 +242,7 @@ final class MetaDetailsViewModel {
             if merged.runtime?.nilIfBlank == nil, let minutes = detail.runtimeMinutes {
                 merged.runtime = "\(minutes) min"
             }
+            if merged.tmdbRating == nil { merged.tmdbRating = detail.rating }
             return merged
         }
     }

@@ -502,6 +502,11 @@ actor TMDBClient {
         var still: String?
         var airDate: String?
         var runtimeMinutes: Int?
+        /// TMDB's own score, not IMDb's. Upstream shows an IMDb figure per episode, fetched from
+        /// two services whose base URLs are build secrets pointing at `placeholder.nuvio.tv` in
+        /// the public source — so that number cannot be had here. This one arrives in the same
+        /// response the episode titles and stills already come from, and the UI says whose it is.
+        var rating: Double?
     }
 
     func seasonEpisodes(
@@ -519,6 +524,7 @@ actor TMDBClient {
             let still_path: String?
             let air_date: String?
             let runtime: Int?
+            let vote_average: Double?
         }
         struct Season: Decodable { let episodes: [Episode]? }
 
@@ -536,7 +542,9 @@ actor TMDBClient {
                 overview: episode.overview?.nilIfBlank,
                 still: episode.still_path.map { "\(Self.imageBase)/w780\($0)" },
                 airDate: episode.air_date?.nilIfBlank,
-                runtimeMinutes: episode.runtime
+                runtimeMinutes: episode.runtime,
+                // TMDB sends 0 for an episode nobody has scored. Zero is not a score.
+                rating: episode.vote_average.flatMap { $0 > 0 ? $0 : nil }
             )
         }
     }
