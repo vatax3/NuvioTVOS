@@ -13,6 +13,10 @@ struct MetaDetailsView: View {
 
     @Environment(\.shellLeadingInset) private var shellLeadingInset
 
+    /// Owned by the screen rather than the environment: its only state is the outcome of the
+    /// last write, which belongs to the title being looked at and should not outlive it.
+    @State private var trackingWrites = TrackingWriteService()
+
     @State private var model = MetaDetailsViewModel()
     @State private var logoFailed = false
 
@@ -200,6 +204,13 @@ struct MetaDetailsView: View {
     }
 
     private func actionRow(_ meta: Meta) -> some View {
+        VStack(alignment: .leading, spacing: NuvioTheme.spacing.sm) {
+            actionButtons(meta)
+            trackingWriteBanner
+        }
+    }
+
+    private func actionButtons(_ meta: Meta) -> some View {
         HStack(spacing: NuvioTheme.spacing.md) {
             Button(action: { play(meta: meta) }) {
                 HStack(spacing: NuvioTheme.spacing.sm) {
@@ -212,7 +223,7 @@ struct MetaDetailsView: View {
             }
             .buttonStyle(NuvioPillButtonStyle(emphasis: .primary))
 
-            Button(action: { library.toggleLibrary(meta.preview()) }) {
+            Button(action: { toggleLibrary(meta) }) {
                 HStack(spacing: NuvioTheme.spacing.sm) {
                     Image(systemName: library.isInLibrary(meta.preview()) ? "checkmark" : "plus")
                     Text(library.isInLibrary(meta.preview()) ? "In Library" : "Add to Library")
@@ -274,6 +285,33 @@ struct MetaDetailsView: View {
             items.append(TrailerItem(youTubeId: id, name: nil, kind: nil, language: nil))
         }
         return items
+    }
+
+    /// The local store is written immediately — the button must answer the press — and the
+    /// tracking account is written after, because a network round trip is not something to make
+    /// somebody watch. The banner below is what stops a failed remote write from passing for
+    /// success, which is the whole reason this path exists.
+    private func toggleLibrary(_ meta: Meta) {
+        let preview = meta.preview()
+        library.toggleLibrary(preview)
+        let added = library.isInLibrary(preview)
+        Task { await trackingWrites.library(preview, added: added, settings: settings) }
+    }
+
+    /// Only ever shown for a remote failure. A write that went exactly where it was asked to
+    /// needs no announcement.
+    @ViewBuilder
+    private var trackingWriteBanner: some View {
+        if case .remoteFailed(let provider, let reason) = trackingWrites.lastResult {
+            Label(
+                "Saved on this Apple TV only — \(provider.rawValue.capitalized) refused it: \(reason)",
+                systemImage: "exclamationmark.icloud"
+            )
+            .nuvioText(NuvioTextStyles.bodyCompact)
+            .foregroundStyle(colors.error)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: dp(620), alignment: .leading)
+        }
     }
 
     private func trailerYouTubeId(_ meta: Meta) -> String? {

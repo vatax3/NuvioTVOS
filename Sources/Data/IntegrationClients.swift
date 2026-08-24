@@ -3,13 +3,19 @@ import os
 
 // MARK: - Shared HTTP helper
 
-private enum HTTP {
-    static let session: URLSession = {
+/// Internal rather than private, and `session` a `var`, for exactly one reason: the write
+/// endpoints below mutate somebody's real Trakt or Simkl library. There is no way to develop
+/// them against a live account without adding and removing real titles from it, so the tests
+/// swap in a stubbed session instead. Nothing in the app ever assigns to it.
+enum IntegrationHTTP {
+    static var session: URLSession = makeSession()
+
+    static func makeSession() -> URLSession {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 20
         config.timeoutIntervalForResource = 40
         return URLSession(configuration: config)
-    }()
+    }
 
     static func get<T: Decodable>(
         _ url: String, headers: [String: String] = [:], as type: T.Type
@@ -66,7 +72,7 @@ actor ParentalGuideClient {
     func warnings(imdbId: String) async -> [ParentalWarning] {
         guard imdbId.hasPrefix("tt") else { return [] }
         if let cached = cache[imdbId] { return cached }
-        guard let response = try? await HTTP.get(
+        guard let response = try? await IntegrationHTTP.get(
             "\(base)/titles/\(imdbId)/parentsGuide", as: ParentalGuideResponse.self
         ) else { return [] }
 
@@ -201,7 +207,7 @@ actor TMDBClient {
         guard !apiKey.isEmpty else { return nil }
         let mediaType = type == .series ? "tv" : "movie"
 
-        guard let found = try? await HTTP.get(
+        guard let found = try? await IntegrationHTTP.get(
             "\(base)/find/\(imdbId)?api_key=\(apiKey)&external_source=imdb_id&language=\(language)",
             as: TMDBFindResponse.self
         ) else { return nil }
@@ -222,7 +228,7 @@ actor TMDBClient {
         // `include_image_language` keeps language-less logos, which are the clean ones.
         let imageQuery = options.useArtwork ? "&include_image_language=\(language.prefix(2)),en,null" : ""
 
-        guard let details = try? await HTTP.get(
+        guard let details = try? await IntegrationHTTP.get(
             "\(base)/\(mediaType)/\(tmdbId)?api_key=\(apiKey)&language=\(language)\(appendQuery)\(imageQuery)",
             as: TMDBDetails.self
         ) else { return enrichment }
@@ -329,7 +335,7 @@ actor TMDBClient {
     /// Cast detail: the person plus everything they appeared in, newest first.
     func person(id: Int, apiKey: String, language: String) async -> PersonProfile? {
         guard !apiKey.isEmpty else { return nil }
-        guard let details = try? await HTTP.get(
+        guard let details = try? await IntegrationHTTP.get(
             "\(base)/person/\(id)?api_key=\(apiKey)&language=\(language)&append_to_response=combined_credits",
             as: TMDBPerson.self
         ), let name = details.name?.nilIfBlank else { return nil }
@@ -381,7 +387,7 @@ actor TMDBClient {
     ) async -> [MetaPreview] {
         guard !apiKey.isEmpty else { return [] }
         let mediaType = type == .series ? "tv" : "movie"
-        guard let response = try? await HTTP.get(
+        guard let response = try? await IntegrationHTTP.get(
             "\(base)/discover/\(mediaType)?api_key=\(apiKey)&language=\(language)"
                 + "&sort_by=popularity.desc&page=\(max(1, page))&\(filter.queryItem)",
             as: TMDBDiscoverResponse.self
@@ -407,7 +413,7 @@ actor TMDBClient {
         let mediaType = type == .series ? "tv" : "movie"
         let url = "\(base)/discover/\(mediaType)?api_key=\(apiKey)&language=\(language)"
             + "&page=\(max(1, page))&\(query.queryString(for: type))"
-        guard let response = try? await HTTP.get(url, as: TMDBDiscoverResponse.self) else { return [] }
+        guard let response = try? await IntegrationHTTP.get(url, as: TMDBDiscoverResponse.self) else { return [] }
         return (response.results ?? []).compactMap { $0.preview(type: type) }
     }
 
@@ -431,7 +437,7 @@ actor TMDBClient {
         switch kind {
         case .list:
             struct Response: Decodable { let items: [TMDBMediaItem]? }
-            guard let response = try? await HTTP.get(
+            guard let response = try? await IntegrationHTTP.get(
                 "\(base)/list/\(tmdbId)?api_key=\(apiKey)&language=\(language)&page=\(max(1, page))",
                 as: Response.self
             ) else { return [] }
@@ -440,7 +446,7 @@ actor TMDBClient {
 
         case .collection:
             struct Response: Decodable { let parts: [TMDBMediaItem]? }
-            guard let response = try? await HTTP.get(
+            guard let response = try? await IntegrationHTTP.get(
                 "\(base)/collection/\(tmdbId)?api_key=\(apiKey)&language=\(language)",
                 as: Response.self
             ) else { return [] }
@@ -453,7 +459,7 @@ actor TMDBClient {
                 let cast: [TMDBMediaItem]?
                 let crew: [TMDBMediaItem]?
             }
-            guard page <= 1, let response = try? await HTTP.get(
+            guard page <= 1, let response = try? await IntegrationHTTP.get(
                 "\(base)/person/\(tmdbId)/combined_credits?api_key=\(apiKey)&language=\(language)",
                 as: Response.self
             ) else { return [] }
@@ -472,7 +478,7 @@ actor TMDBClient {
             let sort = sortBy == TmdbCollectionSort.original.rawValue
                 ? TmdbCollectionSort.popularityDesc.rawValue
                 : sortBy
-            guard let response = try? await HTTP.get(
+            guard let response = try? await IntegrationHTTP.get(
                 "\(base)/discover/\(mediaType)?api_key=\(apiKey)&language=\(language)"
                     + "&page=\(max(1, page))&sort_by=\(sort)&\(filter)",
                 as: TMDBDiscoverResponse.self
@@ -516,7 +522,7 @@ actor TMDBClient {
         }
         struct Season: Decodable { let episodes: [Episode]? }
 
-        guard let response = try? await HTTP.get(
+        guard let response = try? await IntegrationHTTP.get(
             "\(base)/tv/\(tmdbId)/season/\(season)?api_key=\(apiKey)&language=\(language)",
             as: Season.self
         ) else { return [] }
@@ -539,7 +545,7 @@ actor TMDBClient {
     /// the Continue Watching enrichment, which needs an id and one still, nothing more.
     func tmdbId(imdbId: String, type: ContentType, apiKey: String) async -> Int? {
         guard !apiKey.isEmpty else { return nil }
-        guard let found = try? await HTTP.get(
+        guard let found = try? await IntegrationHTTP.get(
             "\(base)/find/\(imdbId)?api_key=\(apiKey)&external_source=imdb_id",
             as: TMDBFindResponse.self
         ) else { return nil }
@@ -551,7 +557,7 @@ actor TMDBClient {
     func imdbId(tmdbId: Int, type: ContentType, apiKey: String) async -> String? {
         guard !apiKey.isEmpty else { return nil }
         let mediaType = type == .series ? "tv" : "movie"
-        let response = try? await HTTP.get(
+        let response = try? await IntegrationHTTP.get(
             "\(base)/\(mediaType)/\(tmdbId)/external_ids?api_key=\(apiKey)",
             as: TMDBExternalIds.self
         )
@@ -698,7 +704,7 @@ actor MDBListClient {
         guard !apiKey.isEmpty, !imdbId.isEmpty else { return nil }
         if let hit = cache[imdbId] { return hit }
 
-        guard let response = try? await HTTP.get(
+        guard let response = try? await IntegrationHTTP.get(
             "https://api.mdblist.com/?apikey=\(apiKey)&i=\(imdbId)",
             as: MDBListResponse.self
         ) else { return nil }
@@ -769,7 +775,7 @@ actor TraktClient {
             let device_code: String; let user_code: String; let verification_url: String
             let expires_in: Int; let interval: Int
         }
-        let response = try await HTTP.post(
+        let response = try await IntegrationHTTP.post(
             "\(base)/oauth/device/code",
             headers: headers(clientId: clientId),
             json: Request(client_id: clientId),
@@ -797,7 +803,7 @@ actor TraktClient {
         while Date() < deadline {
             try? await Task.sleep(for: .seconds(max(interval, 5)))
             if Task.isCancelled { return nil }
-            if let response = try? await HTTP.post(
+            if let response = try? await IntegrationHTTP.post(
                 "\(base)/oauth/device/token",
                 headers: headers(clientId: clientId),
                 json: Request(code: deviceCode, client_id: clientId, client_secret: clientSecret),
@@ -812,7 +818,7 @@ actor TraktClient {
     func username(clientId: String, token: String) async -> String? {
         struct User: Decodable { let username: String? }
         struct Settings: Decodable { let user: User? }
-        let settings = try? await HTTP.get(
+        let settings = try? await IntegrationHTTP.get(
             "\(base)/users/settings",
             headers: headers(clientId: clientId, token: token),
             as: Settings.self
@@ -855,12 +861,116 @@ actor TraktClient {
             payload.movie = MovieRef(ids: Ids(imdb: imdbId))
         }
 
-        _ = try? await HTTP.post(
+        _ = try? await IntegrationHTTP.post(
             "\(base)/scrobble/\(action.rawValue)",
             headers: headers(clientId: clientId, token: token),
             json: payload,
             as: EmptyResponse.self
         )
+    }
+
+
+    // MARK: Mutations
+
+    /// Endpoints ported from the Android client's `TraktApi`, not guessed: `sync/watchlist`,
+    /// `sync/history` and their `/remove` twins, with the DTO shapes from `TraktSyncDtos.kt`.
+    ///
+    /// Upstream has no `sync/collection` call at all, so neither does this — a collection write
+    /// would be a feature the app being ported does not have.
+    enum SyncList: Sendable {
+        case watchlist
+        case history
+
+        var path: String {
+            switch self {
+            case .watchlist: return "sync/watchlist"
+            case .history: return "sync/history"
+            }
+        }
+    }
+
+    /// Trakt answers a write with 201 whether or not it recognised the title, and reports the
+    /// misses in `not_found`. A caller that only checks the status code reports success for a
+    /// write that changed nothing, which is the failure this whole path exists to stop.
+    struct SyncOutcome: Sendable, Equatable {
+        var accepted: Int
+        var notFound: Int
+
+        var didChangeAnything: Bool { accepted > 0 }
+        var isClean: Bool { accepted > 0 && notFound == 0 }
+    }
+
+    func write(
+        _ list: SyncList,
+        removing: Bool,
+        imdbId: String,
+        type: ContentType,
+        season: Int? = nil,
+        episode: Int? = nil,
+        clientId: String,
+        token: String
+    ) async throws -> SyncOutcome {
+        struct Ids: Encodable { let imdb: String }
+        struct EpisodeRef: Encodable { let number: Int }
+        struct SeasonRef: Encodable { let number: Int; var episodes: [EpisodeRef]? }
+        struct MovieRef: Encodable { let ids: Ids }
+        struct ShowRef: Encodable { let ids: Ids; var seasons: [SeasonRef]? }
+        struct Payload: Encodable {
+            var movies: [MovieRef]?
+            var shows: [ShowRef]?
+        }
+
+        var payload = Payload()
+        if type == .series {
+            var show = ShowRef(ids: Ids(imdb: imdbId), seasons: nil)
+            // A season and episode narrow the write to that episode; without them the whole show
+            // is the subject, which is what "add this series to the watchlist" means.
+            if let season, let episode {
+                show.seasons = [SeasonRef(number: season, episodes: [EpisodeRef(number: episode)])]
+            }
+            payload.shows = [show]
+        } else {
+            payload.movies = [MovieRef(ids: Ids(imdb: imdbId))]
+        }
+
+        struct Counts: Decodable {
+            let movies: Int?
+            let shows: Int?
+            let seasons: Int?
+            let episodes: Int?
+            var total: Int { (movies ?? 0) + (shows ?? 0) + (seasons ?? 0) + (episodes ?? 0) }
+        }
+        struct Ignored: Decodable {}
+        struct NotFound: Decodable {
+            let movies: [Ignored]?
+            let shows: [Ignored]?
+            let seasons: [Ignored]?
+            let episodes: [Ignored]?
+            var total: Int {
+                (movies?.count ?? 0) + (shows?.count ?? 0)
+                    + (seasons?.count ?? 0) + (episodes?.count ?? 0)
+            }
+        }
+        struct Response: Decodable {
+            let added: Counts?
+            let deleted: Counts?
+            let existing: Counts?
+            let not_found: NotFound?
+        }
+
+        let path = removing ? "\(list.path)/remove" : list.path
+        let response = try await IntegrationHTTP.post(
+            "\(base)/\(path)",
+            headers: headers(clientId: clientId, token: token),
+            json: payload,
+            as: Response.self
+        )
+        // `existing` counts as accepted: asking Trakt to add something already on the list is
+        // the outcome the viewer wanted, not a failure to report to them.
+        let accepted = (response.added?.total ?? 0)
+            + (response.deleted?.total ?? 0)
+            + (response.existing?.total ?? 0)
+        return SyncOutcome(accepted: accepted, notFound: response.not_found?.total ?? 0)
     }
 
     // MARK: Sync
@@ -895,7 +1005,7 @@ actor TraktClient {
             let episode: Episode?
         }
 
-        guard let items = try? await HTTP.get(
+        guard let items = try? await IntegrationHTTP.get(
             "\(base)/sync/playback?limit=100",
             headers: headers(clientId: clientId, token: token),
             as: [Item].self
@@ -957,7 +1067,7 @@ actor TraktClient {
 
         let path = type == .series ? "shows" : "movies"
         let sort = "\(TraktListSort.normalize(sortBy))/\(TraktSortHow.normalize(sortHow))"
-        guard let items = try? await HTTP.get(
+        guard let items = try? await IntegrationHTTP.get(
             "\(base)/lists/\(listId)/items/\(path)/\(sort)",
             headers: headers(clientId: clientId, token: token),
             as: [Item].self
@@ -986,7 +1096,7 @@ actor TraktClient {
         struct Entry: Decodable { let title: String?; let year: Int?; let ids: Ids? }
 
         let path = type == .series ? "shows" : "movies"
-        guard let items = try? await HTTP.get(
+        guard let items = try? await IntegrationHTTP.get(
             "\(base)/\(path)/\(imdbId)/related",
             headers: headers(clientId: clientId, token: nil),
             as: [Entry].self
@@ -1011,7 +1121,7 @@ actor TraktClient {
         struct Item: Decodable { let movie: Entry?; let show: Entry? }
 
         let path = type == .series ? "shows" : "movies"
-        guard let items = try? await HTTP.get(
+        guard let items = try? await IntegrationHTTP.get(
             "\(base)/\(prefix)/\(path)",
             headers: headers(clientId: clientId, token: token),
             as: [Item].self
@@ -1078,7 +1188,7 @@ actor TraktClient {
 
         guard !clientId.isEmpty else { return [] }
         let path = type == .series ? "shows" : "movies"
-        guard let entries = try? await HTTP.get(
+        guard let entries = try? await IntegrationHTTP.get(
             "\(base)/\(path)/\(imdbId)/comments/\(sort)?page=\(max(1, page))&limit=25&extended=images",
             headers: headers(clientId: clientId),
             as: [Entry].self
@@ -1142,7 +1252,7 @@ actor SkipIntroClient {
         let url = "https://api.aniskip.com/v2/skip-times/\(malId)/\(episode)"
             + "?\(types)&episodeLength=\(Int(episodeLength))"
 
-        guard let response = try? await HTTP.get(url, as: AniSkipResponse.self) else { return [] }
+        guard let response = try? await IntegrationHTTP.get(url, as: AniSkipResponse.self) else { return [] }
         let segments = Self.segments(from: response)
         cache[key] = segments
         return segments
@@ -1257,7 +1367,7 @@ actor SkipIntroClient {
         else { return [] }
 
         let url = "\(base)/segments?imdb_id=\(encoded)&season=\(season)&episode=\(episode)"
-        guard let response = try? await HTTP.get(url, as: Response.self) else { return [] }
+        guard let response = try? await IntegrationHTTP.get(url, as: Response.self) else { return [] }
 
         let segments = [
             (response.intro, SkipSegment.Kind.intro),
@@ -1292,7 +1402,7 @@ actor SkipIntroClient {
         for showId in await animeSkipShowIds(anilistId: anilistId, clientId: trimmed) {
             let query = "{ findEpisodesByShowId(showId: \"\(showId)\") "
                 + "{ season number timestamps { at type { name } } } }"
-            guard let response = try? await HTTP.post(
+            guard let response = try? await IntegrationHTTP.post(
                 Self.animeSkipEndpoint,
                 headers: ["X-Client-ID": trimmed],
                 json: AnimeSkipRequest(query: query),
@@ -1377,7 +1487,7 @@ actor SkipIntroClient {
         if let hit = animeSkipShowCache[key] { return hit }
 
         let query = "{ findShowsByExternalId(service: ANILIST, serviceId: \"\(anilistId)\") { id } }"
-        let response = try? await HTTP.post(
+        let response = try? await IntegrationHTTP.post(
             Self.animeSkipEndpoint,
             headers: ["X-Client-ID": clientId],
             json: AnimeSkipRequest(query: query),
@@ -1404,7 +1514,7 @@ actor SkipIntroClient {
         if let hit = armCache[key] { return hit }
 
         guard let encoded = imdbId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let fetched = try? await HTTP.get(
+              let fetched = try? await IntegrationHTTP.get(
                 "https://arm.haglund.dev/api/v2/imdb?id=\(encoded)&include=myanimelist,anilist",
                 as: [ArmEntry].self
               )
@@ -1423,6 +1533,16 @@ actor SkipIntroClient {
 
 /// Second tracking service alongside Trakt. Simkl authenticates with a PIN the viewer types on
 /// simkl.com rather than a device code and uses its own start/pause/stop scrobble endpoints.
+/// The five list states Simkl keeps, in its own wire vocabulary. Same set the library
+/// projection already reads, named once so a read and a write cannot drift apart.
+enum SimklListStatus: String, Sendable, CaseIterable {
+    case watching
+    case planToWatch = "plantowatch"
+    case hold
+    case completed
+    case dropped
+}
+
 actor SimklClient {
     static let shared = SimklClient()
     private let base = "https://api.simkl.com"
@@ -1538,6 +1658,63 @@ actor SimklClient {
         }
     }
 
+
+    // MARK: Mutations
+
+    /// Ported from the Android client's `SimklMutationService`: `/sync/add-to-list` with a `to`
+    /// field per item, `/sync/history` and `/sync/history/remove`. Note upstream's own detail —
+    /// `removeFromList` is `removeFromHistory`; Simkl has no separate list-removal call.
+    ///
+    /// Simkl keys items by whatever id it recognises, so every id we hold is sent rather than
+    /// IMDb alone. A show with only a MAL id is exactly the anime case that would otherwise be
+    /// silently dropped.
+    func write(
+        list status: SimklListStatus?,
+        removing: Bool,
+        ids: [String: String],
+        title: String?,
+        year: Int?,
+        type: ContentType,
+        clientId: String,
+        token: String
+    ) async throws {
+        struct Item: Encodable {
+            var to: String?
+            var title: String?
+            var year: Int?
+            var ids: [String: String]?
+        }
+        struct Payload: Encodable {
+            var movies: [Item]?
+            var shows: [Item]?
+        }
+
+        let item = Item(
+            to: status?.rawValue,
+            title: title?.nilIfBlank,
+            year: year,
+            ids: ids.isEmpty ? nil : ids
+        )
+        var payload = Payload()
+        if type == .movie { payload.movies = [item] } else { payload.shows = [item] }
+
+        let path: String
+        if removing {
+            path = "sync/history/remove"
+        } else if status == nil {
+            path = "sync/history"
+        } else {
+            path = "sync/add-to-list"
+        }
+
+        _ = try await IntegrationHTTP.post(
+            "\(base)/\(path)",
+            headers: headers(clientId: clientId, token: token),
+            json: payload,
+            as: EmptyResponse.self
+        )
+    }
+
     private func headers(clientId: String, token: String? = nil) -> [String: String] {
         var headers = [
             "Content-Type": "application/json",
@@ -1574,7 +1751,7 @@ actor SimklClient {
             let expires_in: Int?
             let interval: Int?
         }
-        let response = try await HTTP.get(
+        let response = try await IntegrationHTTP.get(
             "\(base)/oauth/pin?client_id=\(clientId)",
             headers: headers(clientId: clientId),
             as: Response.self
@@ -1598,7 +1775,7 @@ actor SimklClient {
         while Date() < deadline {
             try? await Task.sleep(for: .seconds(max(interval, 5)))
             if Task.isCancelled { return nil }
-            if let response = try? await HTTP.get(
+            if let response = try? await IntegrationHTTP.get(
                 "\(base)/oauth/pin/\(userCode)?client_id=\(clientId)",
                 headers: headers(clientId: clientId),
                 as: Response.self
@@ -1612,7 +1789,7 @@ actor SimklClient {
     func username(clientId: String, token: String) async -> String? {
         struct User: Decodable { let name: String? }
         struct Account: Decodable { let user: User? }
-        let account = try? await HTTP.post(
+        let account = try? await IntegrationHTTP.post(
             "\(base)/users/settings",
             headers: headers(clientId: clientId, token: token),
             json: EmptyBody(),
@@ -1635,7 +1812,7 @@ actor SimklClient {
             URLQueryItem(name: "include_all_episodes", value: "yes"),
             URLQueryItem(name: "language", value: "en")
         ]
-        let payload = try await HTTP.get(
+        let payload = try await IntegrationHTTP.get(
             components.url!.absoluteString,
             headers: headers(clientId: clientId, token: token),
             as: LibraryPayload.self
@@ -1703,7 +1880,7 @@ actor SimklClient {
 
     /// Resume points used by Continue Watching when Simkl is the selected progress source.
     func playbackProgress(clientId: String, token: String) async throws -> [PlaybackItem] {
-        let response = try await HTTP.get(
+        let response = try await IntegrationHTTP.get(
             "\(base)/sync/playback",
             headers: headers(clientId: clientId, token: token),
             as: PlaybackPayload.self
@@ -1753,7 +1930,7 @@ actor SimklClient {
         let ids = Self.trackingIds(imdbId: imdbId, contentId: contentId)
         guard !ids.isEmpty else { return }
         do {
-            _ = try await HTTP.post(
+            _ = try await IntegrationHTTP.post(
                 "\(base)/scrobble/\(action.rawValue)",
                 headers: headers(clientId: clientId, token: token),
                 json: ScrobbleBody(
