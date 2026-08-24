@@ -14,6 +14,13 @@ struct MPVPlayerView: View {
     @Environment(\.resetFocus) private var resetFocus
     @Environment(AppSettings.self) private var settings
 
+    /// The viewer's stored picture shape, handed to mpv before it loads the file. `resize_mode`
+    /// had been stored and synced since the port began and applied nowhere, so every playback
+    /// started in Fit whatever they had chosen.
+    private var initialAspectMode: MPVEngine.AspectMode {
+        MPVEngine.AspectMode(resizeMode: settings.player.resizeMode)
+    }
+
     let request: PlaybackRequest
     let resumeAt: Double
     let verboseLogging: Bool
@@ -127,7 +134,7 @@ struct MPVPlayerView: View {
                             verboseLogging: verboseLogging, hardwareDecoding: hardwareDecoding,
                             audioOutput: audioOutput, audioChannels: audioChannels,
                             audioLanguages: audioLanguages, subtitleLanguages: subtitleLanguages,
-                            subtitleStyle: subtitleStyle)
+                            subtitleStyle: subtitleStyle, initialAspectMode: initialAspectMode)
                 .ignoresSafeArea()
 
             if engine.isBuffering {
@@ -353,9 +360,9 @@ struct MPVPlayerView: View {
     /// mpv is started by `MPVMetalSurface`, which owns the layer it has to be handed. All that
     /// is left here is the addon subtitle tracks and the auto-hide timer.
     private func start() {
-        // The viewer's default picture shape. `resize_mode` had been stored and synced since the
-        // port began and applied nowhere, so every playback started in Fit whatever they chose.
-        engine.setAspectMode(MPVEngine.AspectMode(resizeMode: settings.player.resizeMode))
+        // The viewer's default picture shape is applied inside `MPVEngine.start`, before
+        // `loadfile`, so the first frame already has it. Addon subtitles stay here: `sub-add`
+        // attaches to the file being played, so it has nothing to attach to any earlier.
         for subtitle in request.subtitles.prefix(8) {
             engine.addSubtitle(url: subtitle.url, title: subtitle.displayLanguage)
         }
@@ -1546,6 +1553,7 @@ private struct MPVMetalSurface: UIViewControllerRepresentable {
     let audioLanguages: [String]
     let subtitleLanguages: [String]
     let subtitleStyle: SubtitleStyle
+    let initialAspectMode: MPVEngine.AspectMode
 
     func makeUIViewController(context: Context) -> MPVMetalViewController {
         MPVMetalViewController(
@@ -1553,7 +1561,7 @@ private struct MPVMetalSurface: UIViewControllerRepresentable {
             verboseLogging: verboseLogging, hardwareDecoding: hardwareDecoding,
             audioOutput: audioOutput, audioChannels: audioChannels,
             audioLanguages: audioLanguages, subtitleLanguages: subtitleLanguages,
-            subtitleStyle: subtitleStyle
+            subtitleStyle: subtitleStyle, initialAspectMode: initialAspectMode
         )
     }
 
@@ -1573,6 +1581,7 @@ final class MPVMetalViewController: UIViewController {
     private let audioLanguages: [String]
     private let subtitleLanguages: [String]
     private let subtitleStyle: SubtitleStyle
+    private let initialAspectMode: MPVEngine.AspectMode
 
     private let metalLayer = MPVMetalLayer()
     private var lastDrawableSize: CGSize = .zero
@@ -1588,7 +1597,8 @@ final class MPVMetalViewController: UIViewController {
         audioChannels: AudioOutputChannels,
         audioLanguages: [String],
         subtitleLanguages: [String],
-        subtitleStyle: SubtitleStyle
+        subtitleStyle: SubtitleStyle,
+        initialAspectMode: MPVEngine.AspectMode
     ) {
         self.engine = engine
         self.request = request
@@ -1600,6 +1610,7 @@ final class MPVMetalViewController: UIViewController {
         self.audioLanguages = audioLanguages
         self.subtitleLanguages = subtitleLanguages
         self.subtitleStyle = subtitleStyle
+        self.initialAspectMode = initialAspectMode
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -1634,6 +1645,7 @@ final class MPVMetalViewController: UIViewController {
             audioLanguages: audioLanguages,
             subtitleLanguages: subtitleLanguages,
             subtitleStyle: subtitleStyle,
+            initialAspectMode: initialAspectMode,
             layer: metalLayer
         )
         appliedSubtitleStyle = subtitleStyle

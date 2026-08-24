@@ -170,6 +170,7 @@ final class MPVEngine {
         audioLanguages: [String] = [],
         subtitleLanguages: [String] = [],
         subtitleStyle: SubtitleStyle,
+        initialAspectMode: AspectMode = .fit,
         layer: MPVMetalLayer
     ) {
         guard handle == nil, let mpv = mpv_create() else { return }
@@ -251,6 +252,13 @@ final class MPVEngine {
         setOption("cache", "yes")
         setOption("demuxer-max-bytes", "96MiB")
         setOption("demuxer-readahead-secs", "30")
+        // Switching audio or subtitle track is not free: mpv only demuxes the streams that are
+        // selected, so picking a new one makes it seek back to the playhead to collect that
+        // stream's packets. With no backward buffer that seek goes to the network, which is the
+        // one-to-two second silence a viewer hears when they change track. Held in memory, the
+        // same seek is served from RAM and the switch happens under the picture.
+        setOption("demuxer-max-back-bytes", "32MiB")
+        setOption("demuxer-seekable-cache", "yes")
         if verboseLogging { setOption("msg-level", "all=v") }
 
         // The header set a debrid link needs — the reason this path exists at all.
@@ -270,6 +278,12 @@ final class MPVEngine {
             destroy()
             return
         }
+
+        // Before `loadfile`, so the first frame already has the viewer's shape. Applied from the
+        // SwiftUI `.task` it landed after playback had started, which is a visible snap out of
+        // Fit for anyone whose default is not Fit — and it relied on `.task` running after
+        // `makeUIViewController`, which SwiftUI happens to do but does not promise.
+        setAspectMode(initialAspectMode)
 
         for property in ["time-pos", "duration", "demuxer-cache-time", "pause", "eof-reached", "core-idle", "track-list", "current-tracks/sub/lang", "sub-text"] {
             let format: mpv_format = {
