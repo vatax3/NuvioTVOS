@@ -19,6 +19,8 @@ enum DebridError: LocalizedError {
     case transport(String)
     case noPlayableFile
     case notCached
+    /// The provider has no device-code flow to offer. TorBox is the only one that does.
+    case noDeviceFlow
 
     var errorDescription: String? {
         switch self {
@@ -27,6 +29,7 @@ enum DebridError: LocalizedError {
         case .transport(let detail): return detail
         case .noPlayableFile: return "The torrent contains no playable video file."
         case .notCached: return "This torrent is not in your debrid cache yet."
+        case .noDeviceFlow: return "This provider needs its API key typed in."
         }
     }
 }
@@ -483,4 +486,93 @@ private struct TorboxTorrentFile: Decodable {
 
 private struct TorboxTorrentData: Decodable {
     let files: [TorboxTorrentFile]?
+}
+
+// MARK: - Device authorization
+
+/// TorBox's device-code sign-in, so a viewer does not have to type a forty-character API key on
+/// a remote control. Ported from the Android client's `TorboxApi`: `user/auth/device/start` for
+/// the code, `user/auth/device/token` to redeem it once they have approved on a phone.
+///
+/// TorBox only. Upstream authorises Premiumize the same way but needs `PREMIUMIZE_CLIENT_ID`,
+/// which really is a build secret — it is blank in their `local.example.properties` — so it
+/// cannot be shipped from public source. Real-Debrid has no device flow upstream at all. Both
+/// keep the API-key field, which is why that field stays.
+struct DebridDeviceAuthorization: Sendable, Equatable {
+    let deviceCode: String
+    /// What the viewer types on the phone.
+    let userCode: String
+    /// Where they type it. `friendly` is the short form worth putting on a television.
+    let verificationURL: String
+    let friendlyVerificationURL: String
+    let intervalSeconds: Int
+}
+
+extension DebridClient {
+    /// Whether a provider can be signed into without typing its key.
+    static func supportsDeviceAuthorization(_ provider: DebridProvider) -> Bool {
+        provider == .torbox
+    }
+
+    func startDeviceAuthorization(
+        provider: DebridProvider, appName: String = "Nuvio"
+    ) async throws -> DebridDeviceAuthorization {
+        guard provider == .torbox else { throw DebridError.noDeviceFlow }
+        struct Payload: Decodable {
+            struct Data: Decodable {
+                let device_code: String?
+                let code: String?
+                let verification_url: String?
+                let friendly_verification_url: String?
+                let interval: Int?
+            }
+            let success: Bool?
+            let data: Data?
+        }
+        let encoded = appName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? appName
+        let payload = try await IntegrationHTTP.get(
+            "https://api.torbox.app/v1/api/user/auth/device/start?app=\(encoded)",
+            as: Payload.self
+        )
+        guard payload.success != false,
+              let data = payload.data,
+              let deviceCode = data.device_code?.nilIfBlank,
+              let userCode = data.code?.nilIfBlank,
+              let verification = data.verification_url?.nilIfBlank
+        else { throw DebridError.notConfigured }
+
+        return DebridDeviceAuthorization(
+            deviceCode: deviceCode,
+            userCode: userCode,
+            verificationURL: verification,
+            friendlyVerificationURL: data.friendly_verification_url?.nilIfBlank ?? verification,
+            // Upstream floors this at one second. A zero from the server would spin the poll.
+            intervalSeconds: max(1, data.interval ?? 5)
+        )
+    }
+
+    /// One redemption attempt. `nil` means "not approved yet, keep waiting" — distinct from a
+    /// throw, which means the attempt itself failed and polling should stop.
+    func redeemDeviceAuthorization(
+        provider: DebridProvider, deviceCode: String
+    ) async throws -> String? {
+        guard provider == .torbox else { throw DebridError.noDeviceFlow }
+        let trimmed = deviceCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw DebridError.notConfigured }
+
+        struct Request: Encodable { let device_code: String }
+        struct Payload: Decodable {
+            struct Data: Decodable { let token: String?; let api_key: String? }
+            let success: Bool?
+            let data: Data?
+        }
+        let payload = try await IntegrationHTTP.post(
+            "https://api.torbox.app/v1/api/user/auth/device/token",
+            json: Request(device_code: trimmed),
+            as: Payload.self
+        )
+        guard payload.success != false else { return nil }
+        // TorBox has answered with both spellings across versions; either is the key we store.
+        return (payload.data?.api_key?.nilIfBlank ?? payload.data?.token?.nilIfBlank)
+    }
 }

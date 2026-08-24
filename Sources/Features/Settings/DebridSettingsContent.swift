@@ -22,6 +22,11 @@ struct DebridSettingsContent: View {
     @State private var tab: Tab = .providers
     @State private var validationMessages: [DebridProvider: String] = [:]
     @State private var validating: DebridProvider?
+    /// The device-code sign-in in flight, if any. One at a time: two codes on screen would be
+    /// two things to type and only one of them right.
+    @State private var deviceAuth: (provider: DebridProvider, code: DebridDeviceAuthorization)?
+    @State private var deviceAuthMessage: String?
+    @State private var deviceAuthTask: Task<Void, Never>?
 
     private var debrid: DebridSettingsStore { settings.debrid }
 
@@ -87,6 +92,9 @@ struct DebridSettingsContent: View {
                             tint: message.hasPrefix("Connected") ? colors.success : colors.error
                         )
                     }
+                    if DebridClient.supportsDeviceAuthorization(provider) {
+                        deviceAuthRows(for: provider)
+                    }
                     SettingsInfoRow(
                         title: "Capabilities",
                         value: [
@@ -135,6 +143,84 @@ struct DebridSettingsContent: View {
                 )
             }
         }
+    }
+
+    /// Sign in by approving a code on a phone instead of typing a forty-character key with a
+    /// remote control. TorBox only — see `DebridClient.supportsDeviceAuthorization`.
+    @ViewBuilder
+    private func deviceAuthRows(for provider: DebridProvider) -> some View {
+        if let deviceAuth, deviceAuth.provider == provider {
+            SettingsInfoRow(title: "Code", value: deviceAuth.code.userCode, tint: colors.secondary)
+            SettingsInfoRow(
+                title: "Enter it at",
+                value: deviceAuth.code.friendlyVerificationURL,
+                tint: colors.textSecondary
+            )
+        }
+        SettingsRow(
+            title: deviceAuth?.provider == provider ? "Waiting for approval…" : "Sign in with a code",
+            subtitle: deviceAuth?.provider == provider
+                ? "Cancel"
+                : "Approve on your phone — nothing to type here",
+            systemImage: "qrcode",
+            action: {
+                if deviceAuth?.provider == provider {
+                    cancelDeviceAuth()
+                } else {
+                    startDeviceAuth(provider)
+                }
+            }
+        )
+        if let deviceAuthMessage, deviceAuth?.provider == provider || deviceAuth == nil {
+            SettingsInfoRow(
+                title: "Status",
+                value: deviceAuthMessage,
+                tint: deviceAuthMessage.hasPrefix("Connected") ? colors.success : colors.error
+            )
+        }
+    }
+
+    private func startDeviceAuth(_ provider: DebridProvider) {
+        cancelDeviceAuth()
+        deviceAuthMessage = nil
+        deviceAuthTask = Task {
+            do {
+                let code = try await DebridClient.shared.startDeviceAuthorization(provider: provider)
+                deviceAuth = (provider, code)
+                try await pollDeviceAuth(provider: provider, code: code)
+            } catch is CancellationError {
+            } catch {
+                deviceAuth = nil
+                deviceAuthMessage = error.localizedDescription
+            }
+        }
+    }
+
+    /// Polls at the interval the server asked for, for ten minutes. A `nil` redemption means the
+    /// viewer has not approved yet, which is the normal case for most of that time; only a throw
+    /// stops the loop.
+    private func pollDeviceAuth(provider: DebridProvider, code: DebridDeviceAuthorization) async throws {
+        let deadline = Date().addingTimeInterval(600)
+        while !Task.isCancelled, Date() < deadline {
+            try await Task.sleep(for: .seconds(code.intervalSeconds))
+            let key = try? await DebridClient.shared.redeemDeviceAuthorization(
+                provider: provider, deviceCode: code.deviceCode
+            )
+            guard let key, !key.isEmpty else { continue }
+            debrid.setApiKey(key, for: provider)
+            deviceAuth = nil
+            deviceAuthMessage = "Connected"
+            await validate(provider)
+            return
+        }
+        deviceAuth = nil
+        deviceAuthMessage = "The code expired before it was approved."
+    }
+
+    private func cancelDeviceAuth() {
+        deviceAuthTask?.cancel()
+        deviceAuthTask = nil
+        deviceAuth = nil
     }
 
     private func binding(for provider: DebridProvider) -> Binding<String> {

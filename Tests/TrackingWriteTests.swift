@@ -229,3 +229,92 @@ final class TrackingIdExtractionTests: XCTestCase {
         XCTAssertEqual(preview.year, 2008)
     }
 }
+
+/// TorBox's device-code sign-in, so a viewer does not type a forty-character key on a remote.
+final class DebridDeviceAuthTests: XCTestCase {
+    private var teardown: (() -> Void)?
+
+    override func tearDown() {
+        teardown?()
+        teardown = nil
+        super.tearDown()
+    }
+
+    func testOnlyTorboxOffersADeviceFlow() {
+        XCTAssertTrue(DebridClient.supportsDeviceAuthorization(.torbox))
+        // Upstream authorises Premiumize this way too, but needs a client id that really is a
+        // build secret — blank in their own local.example.properties. Real-Debrid has no device
+        // flow upstream at all. Offering either here would be a button that cannot work.
+        XCTAssertFalse(DebridClient.supportsDeviceAuthorization(.premiumize))
+        XCTAssertFalse(DebridClient.supportsDeviceAuthorization(.realDebrid))
+    }
+
+    func testStartAsksTorboxForACodeAndReadsItBack() async throws {
+        teardown = StubURLProtocol.install { _ in
+            .init(status: 200, body: Data(#"""
+            {"success":true,"data":{"device_code":"dc-1","code":"WXYZ-1234",
+             "verification_url":"https://torbox.app/device?code=WXYZ-1234",
+             "friendly_verification_url":"torbox.app/device","interval":3}}
+            """#.utf8))
+        }
+
+        let auth = try await DebridClient.shared.startDeviceAuthorization(provider: .torbox)
+
+        let request = try XCTUnwrap(StubURLProtocol.requests.first)
+        XCTAssertEqual(request.url.path, "/v1/api/user/auth/device/start")
+        XCTAssertEqual(request.url.query, "app=Nuvio")
+        XCTAssertEqual(auth.userCode, "WXYZ-1234")
+        XCTAssertEqual(auth.friendlyVerificationURL, "torbox.app/device")
+        XCTAssertEqual(auth.intervalSeconds, 3)
+    }
+
+    /// A zero from the server would spin the poll flat out, so it is floored the way upstream
+    /// floors it.
+    func testAZeroPollIntervalIsFlooredToOneSecond() async throws {
+        teardown = StubURLProtocol.install { _ in
+            .init(status: 200, body: Data(#"""
+            {"success":true,"data":{"device_code":"dc","code":"C","verification_url":"u","interval":0}}
+            """#.utf8))
+        }
+
+        let auth = try await DebridClient.shared.startDeviceAuthorization(provider: .torbox)
+
+        XCTAssertEqual(auth.intervalSeconds, 1)
+    }
+
+    /// Not yet approved is the normal answer for most of the ten minutes a code lives. It must
+    /// read as "keep waiting", not as a failure that stops the loop.
+    func testAnUnapprovedCodeYieldsNoKeyRatherThanThrowing() async throws {
+        teardown = StubURLProtocol.install { _ in
+            .init(status: 200, body: Data(#"{"success":false}"#.utf8))
+        }
+
+        let key = try await DebridClient.shared.redeemDeviceAuthorization(
+            provider: .torbox, deviceCode: "dc-1"
+        )
+
+        XCTAssertNil(key)
+        XCTAssertEqual(StubURLProtocol.requests.first?.url.path, "/v1/api/user/auth/device/token")
+        XCTAssertEqual(StubURLProtocol.requests.first?.json?["device_code"] as? String, "dc-1")
+    }
+
+    /// TorBox has answered with both spellings across versions; either is the key to store.
+    func testEitherSpellingOfTheKeyIsAccepted() async throws {
+        teardown = StubURLProtocol.install { _ in
+            .init(status: 200, body: Data(#"{"success":true,"data":{"token":"tb-secret"}}"#.utf8))
+        }
+
+        let key = try await DebridClient.shared.redeemDeviceAuthorization(
+            provider: .torbox, deviceCode: "dc-1"
+        )
+
+        XCTAssertEqual(key, "tb-secret")
+    }
+
+    func testAskingAProviderWithNoDeviceFlowThrows() async {
+        do {
+            _ = try await DebridClient.shared.startDeviceAuthorization(provider: .realDebrid)
+            XCTFail("Real-Debrid has no device flow")
+        } catch {}
+    }
+}
