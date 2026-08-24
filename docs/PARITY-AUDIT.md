@@ -1,4 +1,4 @@
-# Functional parity audit — tvOS 1.0.12 vs Android TV 0.8.7-beta
+# Functional parity audit — tvOS 1.0.15 vs Android TV 0.8.7-beta
 
 Audit date: 2026-08-23.
 
@@ -6,7 +6,7 @@ Audit date: 2026-08-23.
 
 The baseline revisions are exact rather than inferred from screenshots:
 
-- tvOS `v1.0.12`: the release state carrying this document;
+- tvOS `v1.0.15`: the release state carrying this document;
 - Android TV `0.8.7-beta`: commit `91c1355224edfbac796a6b63cb43a999d71d3ce3`.
 
 The comparison covered screen/routes, persisted preferences and their consumers, protocol and
@@ -14,9 +14,9 @@ API clients, tracking mutations, stream resolution, player state transitions, sy
 integrations and test coverage. It deliberately does not call a Compose component missing just
 because SwiftUI expresses the same screen differently.
 
-The second column preserves the published `1.0.11` baseline; the third records what `1.0.12`
-changes. This makes the release delta reviewable instead of silently replacing the earlier
-assessment.
+The second column preserves the published `1.0.11` baseline; the third tracks the current state
+and is updated as work lands, so the delta against that baseline stays reviewable instead of
+being silently replaced. The release it reflects is named in the heading above.
 
 Legend: **Parity** = same viewer outcome; **Adapted** = intentional tvOS implementation;
 **Partial** = meaningful behavior is missing; **Missing** = no implementation; **N/A** = Android
@@ -24,7 +24,7 @@ platform detail with no useful tvOS counterpart.
 
 ## Result by product area
 
-| Area | 1.0.11 baseline | 1.0.12 release | Remaining difference |
+| Area | 1.0.11 baseline | Now | Remaining difference |
 |---|---|---|---|
 | First run | Parity | Parity | Three Android screens are one three-step tvOS flow; Back remains inside setup. |
 | Profiles | Parity | Parity | Avatars/backgrounds, selection at launch, create/edit/delete, PIN and restricted profiles are present. |
@@ -37,10 +37,10 @@ platform detail with no useful tvOS counterpart.
 | Detail and metadata | Partial | Partial | Metadata, cast, companies, trailers, recommendations, comments and parental guidance exist. Episode IMDb ratings and the 0.8.7 home/detail rating-visibility controls do not. |
 | Collections | Parity | Parity | Data shape, live folder sources, ordering and sync match. Per-card `focusGifUrl` and `heroVideoUrl` are retained in data but intentionally not rendered. |
 | Local library/progress | Parity | Parity | Save/remove, Continue Watching, watched threshold, per-profile persistence and account sync exist. |
-| Trakt reads and scrobbling | Partial | Partial | OAuth, progress, collection/watchlist reads, comments, related titles and scrobbling exist. Remote collection/watchlist membership and watched-history writes are not routed from the detail/episode UI. |
-| Simkl | Minimal/Partial | Partial | Added all five list states, remote resume points and start/pause/stop scrobbling. Still missing remote list/history mutations, playback-session deletion, snapshot reconciliation and Android's complete anime identity/season mapping. |
+| Trakt | Partial | Parity | OAuth, progress, list reads, comments, related titles, scrobbling — and, since 1.0.15, `sync/watchlist` and `sync/history` writes routed from the detail screen. Upstream has no `sync/collection` call, so neither does this. Resume points cannot be deleted, but no affordance asks to: `LibraryStore.clearProgress` has no caller in the UI either. |
+| Simkl | Minimal/Partial | Partial | All five list states, remote resume points, start/pause/stop scrobbling, and `add-to-list`/`history` writes since 1.0.15 — Simkl has no list-removal call, so a removal is a history removal, as upstream does. Still missing playback-session deletion, snapshot reconciliation and Android's complete anime identity/season mapping. |
 | Next Up from trackers | Partial | Partial | Local and imported resume state can seed playback. Android's full watched-series projection, sibling-id reconciliation and Simkl Next Up model are not reproduced. |
-| Debrid providers | Partial | Partial | Real-Debrid, Premiumize and TorBox validation, cache checks, resolution, file choice and cloud libraries exist. Android's device-code authorization UX and QR debrid formatter/template editor are absent. |
+| Debrid providers | Partial | Partial | Validation, cache checks, resolution, file choice and cloud libraries for all three, plus TorBox device-code sign-in since 1.0.15. Premiumize's device flow needs `PREMIUMIZE_CLIENT_ID`, genuinely absent from upstream's public source; Real-Debrid has no device flow upstream. The QR formatter/template editor is absent. |
 | Stream filtering/ranking | Parity | Parity | Required/excluded/preferred resolution, quality, HDR/DV, codec, audio, channels, language, group, limits and sort matrix are consumed. |
 | Stream selection UI | Adapted | Adapted | Same information and refresh/filter/source grouping; card density, focus and overlay geometry follow tvOS. It is not pixel-identical to Compose. |
 | Direct torrent playback | Missing | Missing | Android bundles a torrent engine and progress overlay. tvOS currently requires an HTTP source or debrid resolution. |

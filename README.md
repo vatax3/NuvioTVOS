@@ -151,7 +151,7 @@ A mechanical audit of what is missing, and of the settings that exist without a 
 "collections" upstream are different features that share a name.
 
 The remaining differences are tracked in
-[the 1.0.12 parity audit](docs/PARITY-AUDIT-1.0.12.md). The four platform or product-level ones
+[the parity audit](docs/PARITY-AUDIT.md). The four platform or product-level ones
 that cannot be closed by simply porting another Swift view are:
 
 1. **Torrent streaming without a debrid service.** Android streams a torrent directly through a
