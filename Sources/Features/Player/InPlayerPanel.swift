@@ -234,6 +234,7 @@ struct InPlayerPanelRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(NuvioRowButtonStyle(cornerRadius: NuvioTheme.radii.md))
+        .focusEffectDisabled()
         .focused($rowFocused)
         .onAppear {
             guard requestsInitialFocus else { return }
@@ -317,6 +318,7 @@ private struct InPlayerSourceRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(NuvioRowButtonStyle(cornerRadius: NuvioTheme.radii.lg, scaleOnFocus: false))
+        .focusEffectDisabled()
         .background {
             RoundedRectangle(cornerRadius: NuvioTheme.radii.lg, style: .continuous)
                 .fill(isCurrent ? colors.secondary.opacity(0.18) : colors.backgroundCard.opacity(0.72))
@@ -461,6 +463,7 @@ struct InPlayerSourcesPanel: View {
                 .background(isSelected ? colors.secondary.opacity(0.28) : colors.surfaceVariant.opacity(0.50), in: Capsule())
         }
         .buttonStyle(NuvioRowButtonStyle(cornerRadius: NuvioTheme.radii.xl))
+        .focusEffectDisabled()
     }
 
     private func load() async {

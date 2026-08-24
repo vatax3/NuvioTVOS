@@ -215,6 +215,17 @@ final class MPVEngine {
             setOption("sub-font", family)
             appliedSubtitleFont = family
         }
+        // Registering the face with CoreText is not enough: libass loads fonts through FreeType
+        // and never consults the process registration, so a bundled CJK face could be visible to
+        // Swift and still render as tofu inside mpv. It needs the directory as a font source.
+        if let directory = subtitleFontResolver.bundledFontsDirectory {
+            setOption("sub-fonts-dir", directory)
+        }
+        setOption("sub-font-provider", "auto")
+        // A television crops the edge of the picture. Without margins mpv lays subtitles out
+        // against the frame rather than inside it, and the bottom line is the one that goes.
+        setOption("sub-use-margins", "yes")
+        setOption("sub-ass-force-margins", "yes")
         // The preferred-language settings were stored and read by nobody, so a file with five
         // audio tracks always opened on whichever one it listed first. mpv takes an ordered
         // list and picks the best match, which is exactly the semantics the settings describe.
@@ -448,10 +459,15 @@ final class MPVEngine {
         set("sub-outline-size", outlineSize)
         set("sub-border-size", outlineSize)
         set("sub-border-style", style.backgroundColor.alphaComponent > 0.01 ? "opaque-box" : "outline-and-shadow")
-        // MPV places subtitles using a percentage from the bottom.  Nuvio's stored offset is
+        // MPV places subtitles using a percentage from the bottom, and Nuvio's stored offset is
         // intentionally in small display points, so a 2:1 conversion produces useful remote
         // presets without making the transport bar overlap the text.
-        set("sub-pos", String(format: "%.0f", min(100, max(0, 100 - style.verticalOffset / 10))))
+        //
+        // It starts at 90 rather than 100 because `sub-pos=100` hugs the physical bottom edge of
+        // the frame, which is exactly the strip a television overscans away — the default offset
+        // is zero, so every viewer got the cropped position. The floor keeps a large offset from
+        // pushing the line into the middle of the picture.
+        set("sub-pos", String(format: "%.0f", min(96, max(55, 90 - style.verticalOffset / 10))))
     }
 
     private func mpvColor(_ color: Color) -> String {

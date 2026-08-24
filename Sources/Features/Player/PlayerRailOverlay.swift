@@ -141,6 +141,7 @@ struct PlayerRailCard: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(PlayerRailCardStyle(isSelected: isSelected))
+        .focusEffectDisabled()
         .focused($focused)
         .onAppear {
             guard requestsInitialFocus else { return }
@@ -217,6 +218,7 @@ private struct PlayerRailStepButton: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(PlayerRailCardStyle(isSelected: false, restingStroke: enabled ? 0.18 : 0))
+        .focusEffectDisabled()
         .disabled(!enabled)
         .focused($focused)
         .onAppear {

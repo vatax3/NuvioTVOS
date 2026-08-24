@@ -56,6 +56,17 @@ final class MPVSubtitleFontResolver {
         return family
     }
 
+    /// libass does not consume CoreText's process registration. It needs the actual directory
+    /// as a font source as well, otherwise a bundled CJK face can appear available to Swift but
+    /// still render as tofu inside mpv.
+    var bundledFontsDirectory: String? {
+        Self.registerBundledFontsIfNeeded()
+        return [
+            Bundle.main.url(forResource: "NotoSansCJKsc-Regular", withExtension: "otf", subdirectory: "SubtitleFonts"),
+            Bundle.main.url(forResource: "NotoSansCJKsc-Regular", withExtension: "otf")
+        ].compactMap { $0 }.first?.deletingLastPathComponent().path
+    }
+
     func familyForLanguage(_ language: String?) -> String? {
         let script = Self.script(forLanguageTag: language)
         guard script != scriptFromLanguage else { return nil }
