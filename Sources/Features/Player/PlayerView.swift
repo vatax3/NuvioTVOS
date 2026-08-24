@@ -560,6 +560,9 @@ struct PlayerView: View {
             showParentalGuideIfReady()
         }
         if paused != wasPaused {
+            // A sustained pause lets the television sleep again; a buffer stall does not last
+            // long enough to. See `PlaybackWakeLockPolicy`.
+            PlaybackWakeLock.setPaused(paused)
             schedulePauseOverlay(paused: paused)
             if paused, !isRouteChangePause {
                 simklPause()

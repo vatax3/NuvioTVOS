@@ -86,10 +86,17 @@ enum PlaybackAudioSession {
 /// every buffer stall and every track change passes through a non-playing state, re-arming the
 /// idle timer, and the accumulated idle time is what eventually sleeps the device mid-film.
 /// The Still Watching prompt is what stops an abandoned session, the same as on Android.
+///
+/// A *sustained* pause is the exception, and `PlaybackWakeLockPolicy` draws the line: after two
+/// minutes paused the idle timer is re-armed, so a film left on Pause overnight no longer keeps
+/// the television awake. The hold itself is kept, so resuming re-asserts immediately.
 @MainActor
 enum PlaybackWakeLock {
     private static var holdCount = 0
     private static var reassertTimer: Timer?
+    /// When the current sustained pause began, or `nil` while playback is running.
+    private static var pausedSince: Date?
+    private static var graceTimer: Timer?
     /// Sleeping mid-film leaves no trace of its own, so the hold says when it is taken and
     /// dropped. `log stream --predicate 'category == "Playback"'` is then the whole story.
     private static let log = Logger(subsystem: "com.nuvio.tvos", category: "Playback")
@@ -110,14 +117,47 @@ enum PlaybackWakeLock {
         guard holdCount == 0 else { return }
         reassertTimer?.invalidate()
         reassertTimer = nil
+        graceTimer?.invalidate()
+        graceTimer = nil
+        pausedSince = nil
         apply(disabled: false)
+    }
+
+    /// Told whenever playback starts or stops. A pause only reaches the idle timer once it has
+    /// lasted past `PlaybackWakeLockPolicy.pauseGrace`, which is what keeps a buffer stall from
+    /// being mistaken for someone walking away.
+    static func setPaused(_ paused: Bool) {
+        guard paused != (pausedSince != nil) else { return }
+        pausedSince = paused ? Date() : nil
+        graceTimer?.invalidate()
+        graceTimer = nil
+
+        if paused {
+            log.notice("playback paused; sleep re-armed in \(Int(PlaybackWakeLockPolicy.pauseGrace), privacy: .public)s")
+            let timer = Timer(timeInterval: PlaybackWakeLockPolicy.pauseGrace, repeats: false) { _ in
+                Task { @MainActor in evaluate() }
+            }
+            RunLoop.main.add(timer, forMode: .common)
+            graceTimer = timer
+        } else {
+            log.notice("playback resumed; wake lock re-asserted")
+        }
+        evaluate()
+    }
+
+    private static func evaluate() {
+        let state = PlaybackWakeLockPolicy.State(
+            holders: holdCount,
+            pausedFor: pausedSince.map { Date().timeIntervalSince($0) }
+        )
+        apply(disabled: PlaybackWakeLockPolicy.keepsAwake(state))
     }
 
     /// Forces the idle timer back off while a hold is active. Returning from the background,
     /// and anything else that rebuilds the application state, can clear the flag underneath us.
     static func reassert() {
         guard holdCount > 0 else { return }
-        apply(disabled: true)
+        evaluate()
     }
 
     private static func apply(disabled: Bool) {
