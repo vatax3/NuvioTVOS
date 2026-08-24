@@ -67,8 +67,15 @@ platform detail with no useful tvOS counterpart.
 
 ### P1 — features that can be implemented in this repository
 
-1. Route detail-library and watched/progress mutations through the selected tracking provider:
-   Trakt collection/watchlist/history and Simkl status/history/delete-playback.
+1. ~~Route detail-library and watched/progress mutations through the selected tracking
+   provider~~ — **done for the library path** (`TrackingWrites`, `TrackingWriteService`).
+   `sync/watchlist` and `sync/history` with their `/remove` twins for Trakt, `/sync/add-to-list`
+   and `/sync/history[/remove]` for Simkl, ported from `TraktApi.kt` and
+   `SimklMutationService.kt` rather than guessed. Two corrections to this line came out of that
+   reading: upstream has **no** `sync/collection` call, and Simkl has no list-removal call —
+   removing from a list is removing from history. The watched path needs nothing: the player
+   already scrobbles a stop at 100%, which is what marks a title watched on both accounts.
+   Simkl's `delete-playback` remains open.
 2. Port Android's Simkl snapshot cache/reconciliation and anime identity model, including MAL,
    Kitsu, AniDB/AniList, Simkl IDs and season-vs-absolute episode coordinates.
 3. Validate the player on physical Apple TV hardware with a matrix of HLS/MKV, AAC/E-AC3,
@@ -77,12 +84,25 @@ platform detail with no useful tvOS counterpart.
 
 ### P2 — visible parity polish
 
-1. Add `home_imdb_ratings_visibility` and `detail_imdb_ratings_visibility`, including the episode
-   rating source needed for “hide unwatched episode ratings”.
-2. Add debrid device authorization and the formatter/template configuration flow, adapted to QR
-   hand-off on tvOS.
-3. Decide whether Top Shelf should be sourced from the selected remote progress provider when no
-   local preview has been cached.
+Two of the three items originally listed here did not survive being checked against the Android
+source, which is recorded rather than quietly deleted: an audit that invents work is a worse
+failure than one that misses some.
+
+1. ~~Add `home_imdb_ratings_visibility` and `detail_imdb_ratings_visibility`~~ — **withdrawn, not
+   a parity item.** Neither key exists in `0.8.7-beta`. Enumerating every preference key in
+   `app/src/main/java` containing `rating` or `visib` returns `"imdb_rating"`, `"rating"`,
+   `"ratings"` and `"user_rating"` — all JSON field names in API DTOs, none of them settings.
+   There is no rating-visibility control in the app being ported, so building one would be
+   inventing a feature and filing it as parity.
+2. **Debrid device authorization — done for TorBox** (`DebridClient.startDeviceAuthorization`).
+   TorBox only, and deliberately: upstream authorises Premiumize the same way but reads
+   `PREMIUMIZE_CLIENT_ID` from `local.properties`, blank in its own `local.example.properties`,
+   so it genuinely cannot be recovered from public source. Real-Debrid has no device flow
+   upstream at all. The formatter/template editor remains open.
+3. ~~Decide whether Top Shelf should be sourced from the remote progress provider~~ — **already
+   true.** `RemoteProgressService` adopts remote resume points through `LibraryStore.adoptProgress`
+   and caches a preview for each, and `persistProgress` calls `refreshTopShelf`. Remote progress
+   therefore reaches the Top Shelf by the same path local progress does. Nothing to build.
 4. Add visual snapshot/golden tests for profile selection, Home variants, settings, stream cards
    and every player panel. Current UI tests prove navigation/focus, not pixel-level appearance.
 
