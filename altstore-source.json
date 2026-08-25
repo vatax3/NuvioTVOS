@@ -1,0 +1,98 @@
+{
+  "name": "Nuvio for Apple TV",
+  "identifier": "com.nuvio.tvos.source",
+  "subtitle": "Unsigned Nuvio builds for tvOS.",
+  "description": "Official sideloading source for the NuvioTVOS repository. Releases are read directly from GitHub and remain unsigned until installed with your certificate.",
+  "iconURL": "https://raw.githubusercontent.com/vatax3/NuvioTVOS/main/Resources/Brand/app_logo_mark.png",
+  "headerURL": "https://raw.githubusercontent.com/vatax3/NuvioTVOS/main/docs/screenshot-home.png",
+  "website": "https://github.com/vatax3/NuvioTVOS",
+  "sourceURL": "https://raw.githubusercontent.com/vatax3/NuvioTVOS/main/altstore-source.json",
+  "tintColor": "#E53935",
+  "featuredApps": [
+    "com.nuvio.tvos"
+  ],
+  "apps": [
+    {
+      "name": "Nuvio",
+      "bundleIdentifier": "com.nuvio.tvos",
+      "developerName": "NuvioTVOS contributors",
+      "subtitle": "A native Nuvio client for Apple TV.",
+      "localizedDescription": "An unofficial, native tvOS client for the Stremio addon ecosystem, designed to match NuvioTV for Android TV while respecting Apple TV navigation and playback. The IPA is unsigned and must be signed with a tvOS-compatible certificate.",
+      "iconURL": "https://raw.githubusercontent.com/vatax3/NuvioTVOS/main/Resources/Brand/app_logo_mark.png",
+      "tintColor": "#E53935",
+      "category": "entertainment",
+      "screenshots": [
+        {
+          "imageURL": "https://raw.githubusercontent.com/vatax3/NuvioTVOS/main/docs/screenshot-home.png",
+          "width": 3840,
+          "height": 2160
+        },
+        {
+          "imageURL": "https://raw.githubusercontent.com/vatax3/NuvioTVOS/main/docs/screenshot-detail.png",
+          "width": 3840,
+          "height": 2160
+        },
+        {
+          "imageURL": "https://raw.githubusercontent.com/vatax3/NuvioTVOS/main/docs/screenshot-settings.png",
+          "width": 3840,
+          "height": 2160
+        }
+      ],
+      "versions": [
+        {
+          "version": "1.0.16",
+          "buildVersion": "18",
+          "date": "2026-08-24",
+          "localizedDescription": "## Pausing kept the Apple TV awake\n\nThe wake lock was held for the whole presentation regardless of playback state, so a film left on Pause overnight held the idle timer off all night.\n\nThe obvious fix is wrong, and the code already said why: releasing the lock whenever playback is not running does not survive contact with a stream, because **every buffer stall and every track change passes through a non-playing state**. Re-arming the idle timer on each of those is what used to put the device to sleep mid-film.\n\nSo the two are told apart by how long the pause lasts rather than by the fact of it. A stall is seconds; somebody walking away is not.\n\n**After two minutes paused, the idle timer is re-armed** and the television sleeps on its own schedule. The system's Sleep After starts counting from there, so even its shortest setting still gives you seventeen minutes. The hold itself is kept, so resuming re-asserts immediately.\n\nTwo details that would have broken it quietly: a paused player emits no further events, so the pause arms its own timer — nothing else would re-evaluate the rule; and the minute heartbeat that re-asserts the lock now goes through the same rule instead of forcing the flag back on, or it would have undone the release two minutes later.\n\n## Episode scores\n\nEpisode air dates were already shown; scores were not. Reading the Android source shows why they could not simply be added: the per-episode **IMDb** figure comes from two services whose base URLs are build secrets resolving to `placeholder.nuvio.tv` in the public source — a private contract, like the discovery endpoint.\n\nTMDB's own score is not. It arrives in the same season response the titles, overviews, stills and air dates already come from; the field was being decoded away one line from where it was needed. So the row shows a score, and it is TMDB's rather than IMDb's. A zero from TMDB means nobody has scored the episode, so it is dropped rather than shown as zero.\n\n## Verification\n\n217 unit tests, 8 UI tests, 0 failures. The wake-lock rule is a pure function with the buffer-stall case pinned as its own test.\n\nThe sleep behaviour needs a real Apple TV and a real wait to confirm — reported as fixed, not observed.\n\nUnsigned IPA — sideload with your usual signer.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.16/Nuvio-1.0.16-tvOS-unsigned.ipa",
+          "size": 31494744,
+          "minOSVersion": "17.0",
+          "sha256": "066efdfc5add0d676eec7a425800df0cfbd2984b2a28b3732695e68405c77b58"
+        },
+        {
+          "version": "1.0.15",
+          "buildVersion": "17",
+          "date": "2026-08-24",
+          "localizedDescription": "## Add to Library was a broken button\n\nReads were routed to Trakt and Simkl; writes were not. The Library screen shows the Trakt list and nothing else when the library source is Trakt, while the detail screen's Add button wrote to the local store — so a viewer on Trakt pressed Add and watched the title disappear. Saved on the device, read from a list it had never been sent to.\n\nIt now reaches the account. The rule is **local always, remote in addition**: the local copy survives an expired token and a flight-mode launch, and it is the only record left if the remote request fails. The detail screen says when a save reached the device but not the account, because silence is how the original bug hid.\n\nTrakt answers 201 for a title it did not recognise and reports the miss in `not_found`, so a status code alone can no longer pass a write that changed nothing off as success.\n\nThe watched path is deliberately untouched — the player already scrobbles a stop at 100%, which is what marks a title watched on both accounts.\n\n## Sign in to TorBox with a code\n\nA debrid API key is forty characters and the only way in was the on-screen keyboard. TorBox hands back a short code, you approve it on a phone, and the key arrives on its own.\n\nTorBox only: Premiumize's device flow needs a client id that really is absent from upstream's public source, and Real-Debrid has no device flow at all. The row is only drawn for a provider that can honour it.\n\n## The audit withdrew two items that were not parity\n\nBoth endpoints above were ported by reading the Android source rather than guessing, and that reading corrected the audit twice: upstream has **no** `sync/collection` call, and Simkl has no list-removal call — removing from a list is removing from history.\n\nTwo of the three remaining P2 entries did not survive the same check:\n\n- **IMDb rating-visibility settings do not exist upstream.** Every preference key containing \"rating\" or \"visib\" in 0.8.7-beta is a JSON field name in an API DTO, not a setting. Building the controls would have been inventing a feature and filing it as parity.\n- **Top Shelf already carries remote progress.** Trakt and Simkl resume points are adopted into the same store that publishes the shelf. Nothing to build.\n\nThey are struck through rather than deleted. An audit that invents work is a worse failure than one that misses some.\n\nParity now stands at 18 of 28 areas at the expected level, 8 partial, 2 missing — one of those by decision.\n\n## Verification\n\n205 unit tests, 8 UI tests, 0 failures. 17 new contract tests assert the method, path, auth headers and body of every write against a stubbed session — these endpoints mutate a real library, so they must never reach one during development.\n\nNot verified against live Trakt, Simkl or TorBox accounts. That remains an acceptance test, not a claim.\n\nUnsigned IPA — sideload with your usual signer.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.15/Nuvio-1.0.15-tvOS-unsigned.ipa",
+          "size": 31493031,
+          "minOSVersion": "17.0",
+          "sha256": "02f8902f3e6c8da767d089e0f2cb2bf3b97005099609cade0e8c7ad9da0709ef"
+        },
+        {
+          "version": "1.0.14",
+          "buildVersion": "16",
+          "date": "2026-08-24",
+          "localizedDescription": "Four fixes in the mpv player. Three were salvaged from a parked branch where they had been mixed in with remux work that is not ready; they had nothing to do with it.\n\n## Subtitles now clear the edge of the television\n\n`sub-pos` was computed as `100 - offset/10`, and the stored offset defaults to zero — so the default was **100**, which puts the line against the physical bottom of the frame. That strip is exactly what a television overscans away. Every viewer had this on muxed subtitle tracks.\n\nIt now starts at 90, inside the title-safe area, with mpv's margins enabled so text is laid out inside the frame rather than against it. A positive offset still moves the line upward.\n\n## The bundled CJK font reaches mpv\n\nRegistering the Noto CJK face with CoreText was never enough: libass loads fonts through FreeType and does not consult the process registration. The face was visible to Swift and still rendered as tofu. It now gets the directory as a font source too.\n\n## Changing audio or subtitle track no longer cuts the sound\n\nmpv demuxes only the streams that are selected, so picking a new track makes it seek back to the playhead to collect that stream's packets. `demuxer-max-back-bytes` defaults to zero, so that seek went to the network — one to two seconds of silence, every time, on a debrid or HTTP source.\n\nA 32 MiB backward buffer with a seekable cache serves the same seek from memory, and the switch happens under the picture.\n\n## Smaller\n\n- The viewer's default picture shape is applied before `loadfile`, so the first frame already has it instead of snapping out of Fit a beat later.\n- `.focusEffectDisabled()` on the in-player panel rows, source rows and rail cards — the same tvOS 26 focus plate fixed on the skip and post-play cards in 1.0.9, on the surfaces that pass was not looking at.\n\n## Verification\n\n182 unit tests, 8 UI tests, 0 failures. Built from a clean tree at the release commit.\n\nThe track switch and the subtitle position need a real stream and a real television to confirm — reported as fixed in principle, not as observed.\n\nUnsigned IPA — sideload with your usual signer.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.14/Nuvio-1.0.14-tvOS-unsigned.ipa",
+          "size": 31462088,
+          "minOSVersion": "17.0",
+          "sha256": "d373017d521b68105ad872a6196f7a36f60017c6130856e7c740519fe07c5ad6"
+        },
+        {
+          "version": "1.0.13",
+          "buildVersion": "15",
+          "date": "2026-08-24",
+          "localizedDescription": "Fixes a regression that locked people out of their own Nuvio account.\n\n## What was wrong\n\nThe app shipped with an empty Supabase publishable key, on the reasoning that the official Android app reads it from `local.properties` at build time and so could not be redistributed. The reasoning was sound; the premise was wrong — the key is in Nuvio's public API docs, and this app's own earlier tvOS build carried it citing them. A `sb_publishable_` key is meant to live in the client: row-level security protects the rows, not the obscurity of the key.\n\nThe cost was not a missing convenience. An empty key refuses **both** the QR flow and email/password at once, so the failure had no way out from inside the app.\n\nIt surfaced through an asymmetry worth recording: the session lives in the keychain, the server configuration lives in a file in the app container. Deleting an app on Apple platforms clears the container and leaves the keychain — so a reinstall was still signed in but no longer configured. It kept working on the stored token until you signed out, which removed the only thing holding it together.\n\n## What changed\n\n- Nuvio's backend URL **and** key ship again. Nothing to paste to use a Nuvio account.\n- A configuration that lost its key is repaired, at launch and on save. Emptying the fields now lands back on Nuvio's own backend.\n- A self-hosted instance with no key is left exactly as it is — Nuvio's key would not authenticate against someone else's project, and writing it there would trade a legible \"not configured\" for a baffling 401.\n- The account screen's copy no longer tells you to paste something that is already there.\n- A test now asserts the shipped default is usable, which is what nothing did before. It was verified to fail: blanking the key turns four of its eight tests red.\n\n## Verification\n\n206 unit tests, 8 UI tests, 0 failures. Built from a clean tree at the release commit.\n\nUnsigned IPA — sideload with your usual signer.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.13/Nuvio-1.0.13-tvOS-unsigned.ipa",
+          "size": 31459771,
+          "minOSVersion": "17.0",
+          "sha256": "2c807d4f89e41d3cef3b59e66c38f9e1ee19e0a58302426bece8f1ae50f48034"
+        }
+      ],
+      "appPermissions": {
+        "entitlements": [
+          "com.apple.security.application-groups"
+        ],
+        "privacy": {}
+      },
+      "version": "1.0.16",
+      "versionDate": "2026-08-24",
+      "versionDescription": "## Pausing kept the Apple TV awake\n\nThe wake lock was held for the whole presentation regardless of playback state, so a film left on Pause overnight held the idle timer off all night.\n\nThe obvious fix is wrong, and the code already said why: releasing the lock whenever playback is not running does not survive contact with a stream, because **every buffer stall and every track change passes through a non-playing state**. Re-arming the idle timer on each of those is what used to put the device to sleep mid-film.\n\nSo the two are told apart by how long the pause lasts rather than by the fact of it. A stall is seconds; somebody walking away is not.\n\n**After two minutes paused, the idle timer is re-armed** and the television sleeps on its own schedule. The system's Sleep After starts counting from there, so even its shortest setting still gives you seventeen minutes. The hold itself is kept, so resuming re-asserts immediately.\n\nTwo details that would have broken it quietly: a paused player emits no further events, so the pause arms its own timer — nothing else would re-evaluate the rule; and the minute heartbeat that re-asserts the lock now goes through the same rule instead of forcing the flag back on, or it would have undone the release two minutes later.\n\n## Episode scores\n\nEpisode air dates were already shown; scores were not. Reading the Android source shows why they could not simply be added: the per-episode **IMDb** figure comes from two services whose base URLs are build secrets resolving to `placeholder.nuvio.tv` in the public source — a private contract, like the discovery endpoint.\n\nTMDB's own score is not. It arrives in the same season response the titles, overviews, stills and air dates already come from; the field was being decoded away one line from where it was needed. So the row shows a score, and it is TMDB's rather than IMDb's. A zero from TMDB means nobody has scored the episode, so it is dropped rather than shown as zero.\n\n## Verification\n\n217 unit tests, 8 UI tests, 0 failures. The wake-lock rule is a pure function with the buffer-stall case pinned as its own test.\n\nThe sleep behaviour needs a real Apple TV and a real wait to confirm — reported as fixed, not observed.\n\nUnsigned IPA — sideload with your usual signer.",
+      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.16/Nuvio-1.0.16-tvOS-unsigned.ipa",
+      "size": 31494744,
+      "minOSVersion": "17.0"
+    }
+  ],
+  "news": []
+}

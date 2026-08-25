@@ -9,6 +9,24 @@ Compose source, token for token.
 
 <img src="docs/screenshot-home.png" width="720" alt="Modern home layout">
 
+## Install from a sideloading source
+
+FlareStore, SideStore and other clients that understand the standard AltStore source format can
+subscribe to the release feed directly:
+
+```text
+https://raw.githubusercontent.com/vatax3/NuvioTVOS/main/altstore-source.json
+```
+
+The source points only to unsigned IPA assets published by this repository. The installer still
+has to sign the app with a tvOS-compatible certificate. FlareStore can then send it to a paired
+Apple TV; SideStore understands the same catalog format, although the SideStore iOS client does
+not itself deploy tvOS applications to an Apple TV.
+
+Every published or edited GitHub release refreshes the source automatically. Version, build,
+minimum OS, byte size, SHA-256 and release notes are taken from the release and its tagged
+`Info.plist`, rather than maintained by hand.
+
 ## Why this is a rewrite, not a port
 
 The four Nuvio codebases split across two stacks:
