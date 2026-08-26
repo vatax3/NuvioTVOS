@@ -190,6 +190,10 @@ Also: our preference keys were documented as matching the Android names, and mos
 
 ### P1 — real gaps, buildable here, ordered by value per line
 
+Every item in this tier has shipped. What is left of the poster dialog — Trakt list management
+and the removal-impact warning — and the Next Up sibling-id reconciliation are the two threads
+still open, both recorded against their entries below.
+
 1. **Poster options dialog.** Reaches library and watched state from Home, Discover, Search and
    Detail at once, and is the only route to removing a Continue Watching item.
 2. ~~**`videos[].rating` from addon metadata**~~ — **shipped in 1.0.19.**
@@ -236,11 +240,11 @@ test that the readout never takes the remote.
 
 ## Verification
 
-- Unit suite at 1.0.22: **337 tests, 0 failures**. UI suite: **9 tests, 0 failures**.
-- Test density is now ahead of upstream per line — 346 tests over 39k lines against 983 over
-  201k —
+- Unit suite at 1.0.27: **427 tests, 0 failures**. UI suite: **9 tests, 0 failures**.
+- Test density is ahead of upstream per line — 436 tests over ~42k lines against 983 over 201k —
   so the 1.0.12 plan's "tests too thin" framing was wrong on volume. It was right about
-  *placement*: the network clients carry the least of it.
+  *placement*: the network clients still carry the least of it, though the five releases since
+  1.0.22 have each added a testable policy type in front of one.
 
 Not verified: a physical Apple TV, live Trakt/Simkl/debrid/Nuvio accounts, every third-party
 addon, or a side-by-side against a running 0.8.9 installation. In particular **the Dolby Vision
