@@ -28,7 +28,7 @@ final class LocalConfigServer {
     @ObservationIgnored private var listener: NWListener?
     @ObservationIgnored private var connections: [ObjectIdentifier: NWConnection] = [:]
     @ObservationIgnored private var page: () -> String = { "" }
-    @ObservationIgnored private var handler: ([String: String]) -> Void = { _ in }
+    @ObservationIgnored private var handler: ([String: String]) async -> Void = { _ in }
     @ObservationIgnored private let log = Logger(subsystem: "com.nuvio.tvos", category: "ConfigServer")
 
     /// Starts serving, replacing anything already running.
@@ -36,8 +36,10 @@ final class LocalConfigServer {
     /// - Parameters:
     ///   - page: builds the HTML on each request, so the form always shows the current values
     ///     rather than the ones captured when the screen opened.
-    ///   - onSubmit: the decoded form fields.
-    func start(page: @escaping () -> String, onSubmit: @escaping ([String: String]) -> Void) {
+    ///   - onSubmit: the decoded form fields. Awaited before the redirect goes out, so a
+    ///     submission that has to reach the network — importing a badge pack from a URL — sends
+    ///     the phone back to a page that already reflects what it did.
+    func start(page: @escaping () -> String, onSubmit: @escaping ([String: String]) async -> Void) {
         stop()
         self.page = page
         self.handler = onSubmit
@@ -111,14 +113,14 @@ final class LocalConfigServer {
                     if isComplete { self.close(connection) } else { self.receive(connection, buffer: buffer) }
                     return
                 }
-                self.respond(to: request, on: connection)
+                await self.respond(to: request, on: connection)
             }
         }
     }
 
-    private func respond(to request: HTTPRequest, on connection: NWConnection) {
+    private func respond(to request: HTTPRequest, on connection: NWConnection) async {
         if request.method == "POST" {
-            handler(FormDecoder.decode(request.body))
+            await handler(FormDecoder.decode(request.body))
             revision += 1
             // 303 rather than echoing the page: it turns the browser's reload into a GET, so a
             // viewer who refreshes does not re-post the form they already saved.

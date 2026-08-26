@@ -48,6 +48,13 @@ struct ContentDiscoverySettingsContent: View {
                         trailing: { SettingsValueLabel(value: "") },
                         action: { router.push(.pluginManager) }
                     )
+                    SettingsRow(
+                        title: "Repositories",
+                        subtitle: "Add or remove plugin repositories from a phone",
+                        systemImage: "shippingbox",
+                        trailing: { SettingsValueLabel(value: "") },
+                        action: { router.push(.repositoryConfig) }
+                    )
                 }
             }
 

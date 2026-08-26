@@ -12,6 +12,12 @@ final class StreamsViewModel {
     private(set) var failedAddons: [String] = []
     private(set) var cacheStates: [String: DebridCacheResult] = [:]
     private(set) var attributes: [String: ParsedStreamAttributes] = [:]
+    /// Badges earned from the viewer's imported rules, keyed like `attributes`.
+    ///
+    /// Matched here rather than in the row because the rules are user-authored regular
+    /// expressions and a source list is a hundred rows: compiling and matching per row would
+    /// redo the same work on every redraw, including the ones focus changes cause.
+    private(set) var ruleBadges: [String: [StreamBadge]] = [:]
     private(set) var resolvingKey: String?
     private(set) var resolveError: String?
     private(set) var filteredOutCount = 0
@@ -33,6 +39,29 @@ final class StreamsViewModel {
     }
 
     var totalCount: Int { groups.reduce(0) { $0 + $1.streams.count } }
+
+    /// Matches the viewer's imported rules against every stream in one pass.
+    ///
+    /// Compiling is the expensive half — a pack is up to a few hundred user-authored regular
+    /// expressions — so it happens once per load rather than once per row.
+    private func applyBadgeRules(
+        to streams: [Stream],
+        attributes: [String: ParsedStreamAttributes],
+        rules: StreamBadgeRules
+    ) {
+        let filters = StreamBadgeMatcher.compile(rules)
+        guard !filters.isEmpty else { return ruleBadges = [:] }
+
+        var matched: [String: [StreamBadge]] = [:]
+        for stream in streams {
+            let badges = StreamBadgeMatcher.badges(
+                for: stream, attributes: attributes[stream.stableKey], filters: filters
+            )
+            guard !badges.isEmpty else { continue }
+            matched[stream.stableKey] = badges
+        }
+        ruleBadges = matched
+    }
 
     private func loadSubtitles(request: StreamRequest, addonStore: AddonStore) async {
         let providers = addonStore.addonsProviding(
@@ -76,6 +105,7 @@ final class StreamsViewModel {
             groups = []
             cacheStates = [:]
             attributes = [:]
+            ruleBadges = [:]
         }
         // These are appended to as the load runs, so they are cleared either way — otherwise a
         // refresh reports every failure twice.
@@ -152,6 +182,11 @@ final class StreamsViewModel {
             for stream in group.streams { parsed[stream.stableKey] = StreamAttributeParser.parse(stream) }
         }
         attributes = parsed
+        applyBadgeRules(
+            to: collected.flatMap(\.1) + pluginGroups.flatMap(\.streams),
+            attributes: parsed,
+            rules: settings.streamBadges.rules
+        )
 
         let filterInput = settings.streamFilterInput
         var rendered: [AddonStreams] = []
@@ -853,6 +888,7 @@ private struct StreamGroupSection: View {
                     StreamRow(
                         stream: stream,
                         attributes: model.attributes[stream.stableKey],
+                        ruleBadges: model.ruleBadges[stream.stableKey] ?? [],
                         cache: model.cacheState(for: stream),
                         isResolving: model.resolvingKey == stream.stableKey,
                         action: { onSelect(stream) }
@@ -874,6 +910,8 @@ private struct StreamRow: View {
 
     let stream: Stream
     let attributes: ParsedStreamAttributes?
+    /// Badges from the viewer's imported rules. Already matched — the row only draws them.
+    let ruleBadges: [StreamBadge]
     let cache: DebridCacheResult?
     let isResolving: Bool
     let action: () -> Void
@@ -967,7 +1005,8 @@ private struct StreamRow: View {
                         .lineLimit(1)
                 }
 
-                if settings.streamBadges.placement != .hidden, !visibleBadges.isEmpty {
+                if settings.streamBadges.placement != .hidden,
+                   !visibleBadges.isEmpty || !ruleBadges.isEmpty {
                     badges
                 }
             }
@@ -1086,7 +1125,10 @@ private struct StreamRow: View {
         if a.encode != .unknown {
             badges.append(RowBadge(text: a.encode.displayName))
         }
-        return badges.filter { !isDescribed($0.text) }
+        // A pack that names Atmos and an app chip that says Atmos are the same fact twice. The
+        // imported one wins, because the viewer asked for it by name.
+        let claimed = Set(ruleBadges.map { $0.name.lowercased() })
+        return badges.filter { !isDescribed($0.text) && !claimed.contains($0.text.lowercased()) }
     }
 
     /// The debrid state and the seeder count are not the addon's to describe: one comes from
@@ -1119,6 +1161,10 @@ private struct StreamRow: View {
     @ViewBuilder
     private var badges: some View {
         HStack(spacing: NuvioTheme.spacing.sm) {
+            // Imported badges lead: they are the ones the viewer chose to see.
+            ForEach(Array(ruleBadges.enumerated()), id: \.offset) { _, badge in
+                StreamRuleBadgeChip(badge: badge)
+            }
             ForEach(visibleBadges) { badge in
                 NuvioBadge(text: badge.text, tint: badge.tint, filled: badge.filled)
             }

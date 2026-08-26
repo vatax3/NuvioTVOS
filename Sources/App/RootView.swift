@@ -157,6 +157,10 @@ struct RootView: View {
             CollectionManagerView()
         case .streamFormat:
             StreamFormatEditorView()
+        case .streamBadgeRules:
+            StreamBadgeRulesView()
+        case .repositoryConfig:
+            RepositoryConfigView()
         case .catalogOrder:
             CatalogOrderView()
         case .themeSettings:

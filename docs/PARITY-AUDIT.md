@@ -61,9 +61,9 @@ platform refuses the upstream approach.
 | Next Up from trackers ✻ | Partial | Since 1.0.21 a series whose last episode was finished is offered its next one, with the airing rules, both anchor modes and per-series dismissal. Previously the rail held only half-watched episodes, so finishing one removed the series from Home entirely. Sibling-id reconciliation across id namespaces is not reproduced, and the projection needs the episode list to have been cached by a visit to the detail screen. |
 | Debrid providers ✻ | Parity | Validation, cache checks, resolution, file choice, cloud libraries for all three, TorBox device sign-in, and since 1.0.20 the stream name/description template language with its editor. The DSL is ported rather than reinvented, so a format written on Android pastes in and produces the same rows. |
 | Stream filtering/ranking | Parity | Resolution, quality, HDR/DV, codec, audio, channels, language, group, limits and the sort matrix are consumed. |
-| Stream badges ✻ | Partial | Badges are computed and rendered from parsed attributes. Upstream's badges are **user-editable rules** with a placement setting, authored on a web page the TV serves. |
+| Stream badges | Parity | Computed badges from parsed attributes, plus — since 1.0.23 — imported rule packs: named regular expressions with their own colours and logos, matched against every field an addon supplied. Upstream's file format, so a pack written for Android TV imports unchanged. Three packs held, one applied. |
 | Stream selection UI | Adapted | Same information and grouping; density and geometry follow tvOS. |
-| On-TV configuration servers ✻ | Partial | `LocalConfigServer` since 1.0.20, serving the debrid formatter. The addon case was already covered by handing off the addon's *own* remote `configure` URL. Repository config and stream badge rules still have no editor — both now need only a page, not a server. |
+| On-TV configuration servers | Parity | `LocalConfigServer` since 1.0.20, serving the debrid formatter, and since 1.0.23 badge rules and plugin repositories. The addon case was already covered by handing off the addon's *own* remote `configure` URL. |
 | Direct torrent playback ✻ | **Forced** | Upstream ships TorrServer as `libtorrserver.so` and starts it with `ProcessBuilder`. tvOS allows neither subprocesses nor downloaded executables, so the upstream design cannot be ported at all. A linked-in engine is a different project, not a port. |
 | Parallel chunked streaming ✻ | **Missing** | New since 0.8.7: a 1,352-line range downloader with pipelined prefetch, playhead/moov retention across scatter seeks, adaptive 429/503 handling and a chunk cap on low-RAM devices — plus the non-faststart MP4 path built on it. Five settings drive it. |
 | Plugin runtime | Partial | Repository/install/settings, HTML/CSS helpers, fetch, `getStreams`. CryptoJS covers common hashes/HMAC, PBKDF2 and AES, not the legacy DES family. |
@@ -101,7 +101,6 @@ path and AVFoundation refuses.
 - **Poster options**: no series watched walk, no Trakt list management, no removal-impact
   warning.
 - **Home**: no inline trailers.
-- **Stream badges**: fixed rules instead of editable ones.
 - **Simkl**: no snapshot reconciliation, no `delete-playback`.
 - **Next Up**: no sibling-id reconciliation; the projection needs a cached episode list.
 - **Player audio**: five controls absent.
@@ -114,8 +113,6 @@ path and AVFoundation refuses.
 
 - ~~The **poster options dialog**~~ — shipped in 1.0.18; what is left of it is listed under
   *Partial*.
-- Editors for **repository config** and **stream badge rules**. The server they need shipped in
-  1.0.20; only their pages are missing.
 - The **parallel chunked downloader** and the non-faststart MP4 path built on it.
 - The **in-app update banner**.
 - ~~The **hidden-controls seek overlay**~~ — shipped in 1.0.17. Horizontal presses now seek
@@ -193,7 +190,8 @@ Also: our preference keys were documented as matching the Android names, and mos
 4. ~~**Rating visibility, Continue Watching toggle, addon renaming, library sort**~~ —
    **shipped in 1.0.19.**
 5. ~~**Debrid formatter**, with the local HTTP server the editors need~~ — **shipped in
-   1.0.20.** Stream badge rules and repository config are now a page each on the same server.
+   1.0.20.** Stream badge rules and repository config followed in **1.0.23**, a page each on
+   the same server.
 6. ~~**Simkl anime identity model**~~ — **shipped in 1.0.22.** Snapshot reconciliation and
    `delete-playback` remain.
 7. ~~**Next Up projection and dismissal**~~ — **shipped in 1.0.21.** What remains is

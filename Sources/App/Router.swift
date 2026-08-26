@@ -220,6 +220,8 @@ enum Route: Hashable {
     case collectionManager
     case catalogOrder
     case streamFormat
+    case streamBadgeRules
+    case repositoryConfig
     case themeSettings
     case layoutSettings
     case playbackSettings

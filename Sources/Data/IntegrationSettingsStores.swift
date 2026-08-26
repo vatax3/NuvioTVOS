@@ -496,6 +496,15 @@ final class StreamBadgeSettingsStore: PreferenceStore {
         get { bool("show_cache_badges", default: true) }
         set { setBool("show_cache_badges", newValue) }
     }
+
+    /// Imported badge packs. Shares Android's key so a synced account carries its packs across.
+    ///
+    /// Normalised on the way out as well as in: the value can arrive from sync, where nothing
+    /// guarantees the cap or the single-active invariant that every local mutation maintains.
+    var rules: StreamBadgeRules {
+        get { codable("stream_badge_rules", default: StreamBadgeRules()).normalized() }
+        set { setCodable("stream_badge_rules", newValue.normalized()) }
+    }
 }
 
 // MARK: - Trailers (port of TrailerSettingsDataStore)

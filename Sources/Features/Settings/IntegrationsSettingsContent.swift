@@ -465,6 +465,7 @@ struct AnimeSkipSettingsCard: View {
 /// Stream-list badges — presentation of the source list, so it sits with Playback.
 struct StreamBadgeSettingsCard: View {
     @Environment(AppSettings.self) private var settings
+    @Environment(Router.self) private var router
 
     var body: some View {
         @Bindable var badges = settings.streamBadges
@@ -480,7 +481,23 @@ struct StreamBadgeSettingsCard: View {
                 SettingsToggle(title: "File size", isOn: $badges.showFileSizeBadges)
                 SettingsToggle(title: "Seeders", isOn: $badges.showSeederBadges)
                 SettingsToggle(title: "Cache status", isOn: $badges.showCacheBadges)
+                SettingsRow(
+                    title: "Badge rules",
+                    subtitle: ruleSubtitle,
+                    systemImage: "checkerboard.rectangle",
+                    trailing: { SettingsValueLabel(value: "") },
+                    action: { router.push(.streamBadgeRules) }
+                )
             }
         }
+    }
+
+    private var ruleSubtitle: String {
+        let rules = settings.streamBadges.rules
+        guard rules.hasImport else {
+            return "Import a badge pack — managed from a phone"
+        }
+        let count = rules.enabledFilterCount
+        return count == 1 ? "1 rule applied" : "\(count) rules applied"
     }
 }
