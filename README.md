@@ -172,9 +172,13 @@ The remaining differences are tracked in
 [the parity audit](docs/PARITY-AUDIT.md). The four platform or product-level ones
 that cannot be closed by simply porting another Swift view are:
 
-1. **Torrent streaming without a debrid service.** Android streams a torrent directly through a
-   bundled client. There is no comparable torrent engine available here, so torrents are only
-   playable via Real-Debrid, Premiumize or TorBox.
+1. **A debrid service is required for torrents**, by decision, and the decision is not
+   reversible by porting anything. Android does not bundle a torrent library: it ships
+   TorrServer as a native binary (`libtorrserver.so`) and starts it with `ProcessBuilder`. tvOS
+   allows neither a subprocess nor downloaded executable code, so that design cannot be carried
+   across at all. Torrents are playable here through Real-Debrid, Premiumize or TorBox. A
+   torrent engine linked into the app would be a separate project rather than a port, and is
+   not planned.
 2. **Nuvio's own backend credentials.** Account sync itself is implemented (see below), but the
    official app's Supabase URL and publishable key are build-time secrets absent from its public
    source, so they cannot ship here. The Account screen asks for them — the official app exposes
@@ -187,9 +191,8 @@ that cannot be closed by simply porting another Swift view are:
    covers WordArray, the common hashes/HMACs, PBKDF2 and AES CBC/ECB/GCM. Less common algorithms
    such as DES/TripleDES and unimplemented npm surface still fail explicitly.
 
-Smaller player gaps, all in the mpv transport: there is no seek overlay while the controls are
-hidden (scrubbing brings them back instead), no sync-by-line subtitle timing dialog, no playback
-issue reporting, and no torrent progress overlay. Startup and sustained-stall recovery now share
+Smaller player gaps, all in the mpv transport: no sync-by-line subtitle timing dialog, no
+playback issue reporting, and no torrent progress overlay. Startup and sustained-stall recovery now share
 one bounded retry policy and resume from the live playhead. Frame-rate and dynamic-range matching
 is wired to `AVDisplayManager` on both engines but has only been exercised on the simulator, which
 has no display modes to switch between.

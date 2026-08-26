@@ -1,126 +1,228 @@
-# Functional parity audit — tvOS 1.0.15 vs Android TV 0.8.7-beta
+# Functional parity audit — tvOS 1.0.16 vs Android TV 0.8.9-beta
 
-Audit date: 2026-08-23.
+Audit date: 2026-08-25. Supersedes the audit published with 1.0.15.
 
 ## Scope and evidence
 
-The baseline revisions are exact rather than inferred from screenshots:
+Baseline revisions, exact:
 
-- tvOS `v1.0.15`: the release state carrying this document;
-- Android TV `0.8.7-beta`: commit `91c1355224edfbac796a6b63cb43a999d71d3ce3`.
+- tvOS `v1.0.16` — commit `8ab03e3`, the current `main`;
+- Android TV `0.8.9-beta` — commit `f40c422ee`, tagged 2026-08-25.
 
-The comparison covered screen/routes, persisted preferences and their consumers, protocol and
-API clients, tracking mutations, stream resolution, player state transitions, system
-integrations and test coverage. It deliberately does not call a Compose component missing just
-because SwiftUI expresses the same screen differently.
+`0.8.9-beta` is the newest upstream release; `origin/dev` carries 43 further commits.
 
-The second column preserves the published `1.0.11` baseline; the third tracks the current state
-and is updated as work lands, so the delta against that baseline stays reviewable instead of
-being silently replaced. The release it reflects is named in the heading above.
+### The previous audit measured the wrong tree
+
+This pass began by re-fetching upstream, and that immediately invalidated a claim in the
+1.0.15 document. That audit named `0.8.7-beta` (`91c1355`) as its baseline, but the local
+clone was shallow and its `HEAD` was `3303cd1` — an **ancestor** of `0.8.7-beta`, not the tag.
+Every "absent upstream" finding it made was measured against a tree older than the release it
+cited. One withdrawal was wrong because of it (see *Corrections*, below).
+
+The lesson is procedural and worth keeping: **fetch before auditing, and check out the tag by
+name.** This pass works from `git worktree add --detach <tag>`, so the compared tree is the
+tagged release and nothing else.
+
+### What this pass re-derived
+
+Structural comparison, re-run from scratch against `0.8.9-beta`:
+
+- all 300 upstream preference keys against every string literal in `Sources/`;
+- the screen/route inventory (40 upstream `*Screen.kt`, 46 settings files, 84 player files);
+- the API-client inventory (16 Retrofit interfaces) and their build-time configuration;
+- the 139 commits between `0.8.7-beta` and `0.8.9-beta`, for subsystems added since;
+- targeted reads of the subsystems those turned up.
+
+Rows below marked ✻ were re-verified in this pass. Unmarked rows are carried from the 1.0.15
+audit's screen-by-screen comparison and were not independently re-derived here.
 
 Legend: **Parity** = same viewer outcome; **Adapted** = intentional tvOS implementation;
-**Partial** = meaningful behavior is missing; **Missing** = no implementation; **N/A** = Android
-platform detail with no useful tvOS counterpart.
+**Partial** = meaningful behaviour missing; **Missing** = no implementation; **Forced** = the
+platform refuses the upstream approach.
 
 ## Result by product area
 
-| Area | 1.0.11 baseline | Now | Remaining difference |
-|---|---|---|---|
-| First run | Parity | Parity | Three Android screens are one three-step tvOS flow; Back remains inside setup. |
-| Profiles | Parity | Parity | Avatars/backgrounds, selection at launch, create/edit/delete, PIN and restricted profiles are present. |
-| Nuvio account and multi-device sync | Adapted | Adapted | QR sign-in, device codes, linked devices and per-profile sync exist, but an official hosted account still requires the upstream backend URL/key. |
-| Main navigation | Adapted | Adapted | Same destinations and placement options; Liquid Glass/sidebar focus behavior is intentionally tvOS-native. |
-| Home layouts and hero | Parity | Parity | Classic/Grid/Modern, hero, catalog order, collections and focus-hold expansion exist. Inline focused YouTube trailers do not. |
-| Addons | Adapted | Adapted | Install/enable/order/remove and catalog configuration exist; configuration is handed to a phone by QR because tvOS has no web view. |
-| Search | Partial | Parity for the Stremio surface | Added debounced incremental results, persisted recent queries, stale-request cancellation and paginated See All. The private official discovery service is still unavailable. |
-| Discover | Partial | Parity for addon catalogs | Added tail pagination, de-duplication and cancellation across catalog/genre changes. |
-| Detail and metadata | Partial | Partial | Metadata, cast, companies, trailers, recommendations, comments and parental guidance exist. Episode IMDb ratings and the 0.8.7 home/detail rating-visibility controls do not. |
-| Collections | Parity | Parity | Data shape, live folder sources, ordering and sync match. Per-card `focusGifUrl` and `heroVideoUrl` are retained in data but intentionally not rendered. |
-| Local library/progress | Parity | Parity | Save/remove, Continue Watching, watched threshold, per-profile persistence and account sync exist. |
-| Trakt | Partial | Parity | OAuth, progress, list reads, comments, related titles, scrobbling — and, since 1.0.15, `sync/watchlist` and `sync/history` writes routed from the detail screen. Upstream has no `sync/collection` call, so neither does this. Resume points cannot be deleted, but no affordance asks to: `LibraryStore.clearProgress` has no caller in the UI either. |
-| Simkl | Minimal/Partial | Partial | All five list states, remote resume points, start/pause/stop scrobbling, and `add-to-list`/`history` writes since 1.0.15 — Simkl has no list-removal call, so a removal is a history removal, as upstream does. Still missing playback-session deletion, snapshot reconciliation and Android's complete anime identity/season mapping. |
-| Next Up from trackers | Partial | Partial | Local and imported resume state can seed playback. Android's full watched-series projection, sibling-id reconciliation and Simkl Next Up model are not reproduced. |
-| Debrid providers | Partial | Partial | Validation, cache checks, resolution, file choice and cloud libraries for all three, plus TorBox device-code sign-in since 1.0.15. Premiumize's device flow needs `PREMIUMIZE_CLIENT_ID`, genuinely absent from upstream's public source; Real-Debrid has no device flow upstream. The QR formatter/template editor is absent. |
-| Stream filtering/ranking | Parity | Parity | Required/excluded/preferred resolution, quality, HDR/DV, codec, audio, channels, language, group, limits and sort matrix are consumed. |
-| Stream selection UI | Adapted | Adapted | Same information and refresh/filter/source grouping; card density, focus and overlay geometry follow tvOS. It is not pixel-identical to Compose. |
-| Direct torrent playback | Missing | Missing | Android bundles a torrent engine and progress overlay. tvOS currently requires an HTTP source or debrid resolution. |
-| Plugin runtime | Partial | Partial | Repository/install/settings, HTML/CSS helpers, fetch and the usual `getStreams` contract exist. CryptoJS compatibility covers common hashes/HMAC, PBKDF2 and AES, not the complete npm package or legacy DES family. |
-| Player transport | Adapted/Parity | Adapted/Parity | In-place sources, episodes, tracks, subtitle appearance/delay, audio delay, speed, seven display modes, stream info, skip cards, post-play, still-watching and external-player hand-off exist. |
-| Player failure recovery | Partial | Parity at state-machine level | Added decoded-first-frame detection, one bounded startup/stall retry, AVFoundation-to-mpv fallback and live-playhead resume without leaving the player. |
-| Player parity gaps | Partial | Partial | No subtitle sync-by-line dialog, hidden-controls seek overlay, torrent progress or upstream playback-report upload. Real Apple TV validation remains mandatory for AFR/HDR, CJK fonts and audio routes. |
-| Subtitles | Adapted/Parity | Adapted/Parity | Addon and muxed tracks, auto-language/forced rules, style, delay, SDH stripping, charset detection and CJK font fallback exist. Rendering uses libass/mpv or the tvOS sidecar overlay rather than ExoPlayer. |
-| External players | Adapted/Parity | Adapted/Parity | Infuse/VLC/nPlayer/Outplayer hand-off exists; subtitle forwarding is supported where the target accepts it. Android-only Zidoo monitoring is N/A. |
-| Top Shelf / launcher | Adapted | Adapted | Top Shelf publishes local Continue Watching with detail/play deep links. Android preview-channel fingerprinting and launcher jobs are N/A; remote-only Next Up does not yet enrich Top Shelf independently. |
-| Supporter perks | Missing by decision | Missing by decision | Monetisation/product ownership belongs to the official project. |
-| Diagnostics/backend reports | Partial | Partial | Local verbose/network diagnostics exist. Crash/playback reports and the official discovery endpoint require contracts/credentials not shipped in public source. |
-| Localization | Partial | Partial | The tvOS app has its own resources; it does not yet mirror the complete Android string catalog. |
+| Area | Status | Difference |
+|---|---|---|
+| First run | Parity | Three Android screens are one three-step tvOS flow. |
+| Profiles | Parity | Avatars, launch selection, create/edit/delete, PIN, restricted profiles. |
+| Nuvio account and sync | Adapted | QR sign-in, device codes, linked devices, per-profile sync. |
+| Main navigation | Adapted | Same destinations; sidebar focus behaviour is tvOS-native. |
+| Home layouts and hero ✻ | Partial | Classic/Grid/Modern, hero, catalog order, collections, focus-hold expansion and the classic focus gradient exist. No inline focused trailers, no toggle to hide Continue Watching, no rating-visibility control. |
+| Poster options dialog ✻ | **Missing** | Upstream opens a dialog on any poster: add/remove library, mark watched/unwatched, manage Trakt lists, go to details, with a removal-impact warning. We have none of it. |
+| Addons ✻ | Partial | Install/enable/order/remove and catalog configuration exist. No addon renaming; no local config server (below). |
+| Search | Parity for the Stremio surface | Debounced results, recent queries, cancellation, paginated See All. The private discovery service is unavailable. |
+| Discover | Parity for addon catalogs | Tail pagination, de-duplication, cancellation. |
+| Detail and metadata ✻ | Partial | Metadata, cast, companies, trailers, More like this, comments, parental guidance exist. Missing: the TMDB franchise-collection row, the episode-options overlay, the ratings tab's IMDb scores, and `videos[].rating` from addon metadata. |
+| Collections | Parity | Data shape, live folder sources, ordering, sync. `focusGifUrl`/`heroVideoUrl` retained but not rendered. |
+| Local library/progress ✻ | Partial | Save/remove, Continue Watching, watched threshold, per-profile persistence, account sync. **No way to remove an item from Continue Watching** — `LibraryStore.clearProgress` still has no UI caller. No library sort control. |
+| Trakt | Parity | OAuth, progress, list reads, comments, related titles, scrobbling, `sync/watchlist` and `sync/history` writes. Upstream has no `sync/collection`; neither do we. |
+| Simkl | Partial | Five list states, remote resume points, scrobbling, `add-to-list`/`history` writes. Missing playback-session deletion, snapshot reconciliation, and the anime identity model (`simkl_anime_id_preference`, MAL/Kitsu/AniDB/AniList, season-vs-absolute). |
+| Next Up from trackers | Partial | Local and imported resume state seed playback. No watched-series projection, no sibling-id reconciliation, no per-card dismissal. |
+| Debrid providers ✻ | Partial | Validation, cache checks, resolution, file choice, cloud libraries for all three, plus TorBox device sign-in. **The stream name/description template engine and its editor are absent** — a real DSL upstream, with conditionals, joins and byte formatting. |
+| Stream filtering/ranking | Parity | Resolution, quality, HDR/DV, codec, audio, channels, language, group, limits and the sort matrix are consumed. |
+| Stream badges ✻ | Partial | Badges are computed and rendered from parsed attributes. Upstream's badges are **user-editable rules** with a placement setting, authored on a web page the TV serves. |
+| Stream selection UI | Adapted | Same information and grouping; density and geometry follow tvOS. |
+| On-TV configuration servers ✻ | **Missing** | Upstream runs local HTTP servers (~7.2k lines) serving four editors to a phone on the LAN: addon config, repository config, debrid formatter, stream badges. We hand off only the addon's *own* remote `configure` URL by QR — which covers the first case and none of the other three. |
+| Direct torrent playback ✻ | **Forced** | Upstream ships TorrServer as `libtorrserver.so` and starts it with `ProcessBuilder`. tvOS allows neither subprocesses nor downloaded executables, so the upstream design cannot be ported at all. A linked-in engine is a different project, not a port. |
+| Parallel chunked streaming ✻ | **Missing** | New since 0.8.7: a 1,352-line range downloader with pipelined prefetch, playhead/moov retention across scatter seeks, adaptive 429/503 handling and a chunk cap on low-RAM devices — plus the non-faststart MP4 path built on it. Five settings drive it. |
+| Plugin runtime | Partial | Repository/install/settings, HTML/CSS helpers, fetch, `getStreams`. CryptoJS covers common hashes/HMAC, PBKDF2 and AES, not the legacy DES family. |
+| Player transport | Parity | In-place sources, episodes, tracks, subtitle appearance/delay, audio delay, speed, seven display modes, stream info, skip cards, post-play, still-watching, external hand-off — and, since 1.0.17, the hidden-controls seek readout. |
+| Player failure recovery | Parity at state-machine level | Decoded-first-frame detection, one bounded retry, AVFoundation→mpv fallback, live-playhead resume. |
+| Player audio controls ✻ | Partial | Output channels and in-player amplification exist. Missing: persisted amplification, centre-mix level, downmix normalisation, keep-original-on-downmix, forced optical passthrough. |
+| Dolby Vision profile 7 ✻ | **Adapted (in our favour)** | Upstream carries a forked Matroska extractor, a libdovi bridge, an RPU stripper and DV5→DV8.1 conversion — ~13 files — because ExoPlayer cannot play dual-layer DV. libmpv with the vendored `Libdovi`/`Libplacebo` handles it in-engine. Their five DV settings have no counterpart because they have no problem to solve here. **Unverified on hardware.** |
+| Subtitles ✻ | Partial | Addon and muxed tracks, auto-language/forced rules, style, delay, SDH stripping, charset detection, CJK fallback. **Missing the mojibake repair added in 0.8.8** — double-encoded UTF-8 is valid UTF-8, so our detector accepts it and renders `â€™`. Upstream repairs it; `sub-codepage=auto` does not. |
+| External players | Parity | Infuse/VLC/nPlayer/Outplayer hand-off with subtitle forwarding. Skip-segment forwarding is absent. Zidoo monitoring is Android-only. |
+| Top Shelf / launcher | Adapted | Publishes Continue Watching with deep links. Android channel fingerprinting is N/A. |
+| In-app updater ✻ | **Missing** | Upstream polls the GitHub releases API and shows a dismissible update banner. We publish GitHub releases too, so this is available to us — it is simply not built. |
+| Localisation ✻ | Partial | 108 strings in 2 languages against **2,865 strings in 36 languages**. Most of our UI text is hardcoded English in the views. |
+| Supporter perks | Missing by decision | Monetisation belongs to the official project. |
+| Crash/diagnostic reporting ✻ | **Forced** | Sentry DSN, the auth-diagnostic and playback-report endpoints are build-time secrets, blank in public source. |
+| Episode IMDb ratings ✻ | **Forced** | Served by `api/shows/{id}/season-ratings` on two hosts read from `IMDB_RATINGS_API_BASE_URL` and `IMDB_TAPFRAME_API_BASE_URL` — both blank in public source, same as `PREMIUMIZE_CLIENT_ID`. We substitute TMDB episode scores. |
 
-## Highest-priority remaining work
+## The four lists
 
-### P0 — architecture/product blockers
+### Implemented — same viewer outcome
 
-1. **Choose a direct-torrent strategy.** Either ship and maintain a tvOS-compatible torrent
-   engine, explicitly make debrid a requirement, or integrate an external LAN service. This is
-   the largest functional difference and cannot be solved in the view layer.
-2. **Obtain/document the official backend contracts** for discovery and playback reports, or keep
-   those controls absent. Guessing endpoint shapes would create silent data loss or misleading UI.
+First run · profiles and PIN · Nuvio account, QR sign-in, device codes, linked devices ·
+navigation · the three home layouts and the hero · search and its history · discover with
+pagination · collections and live folder sources · Trakt end to end including list writes ·
+stream filtering and the ranking matrix · the player transport and its seven display modes ·
+player failure recovery · external player hand-off · Top Shelf · parental guidance · MDBList ·
+AniSkip · addon catalog ordering.
 
-### P1 — features that can be implemented in this repository
+Two areas where we are ahead, both consequences of the engine: **Dolby Vision profile 7**
+needs no workaround stack, and **AV1** decodes through dav1d where the A15 has no hardware
+path and AVFoundation refuses.
 
-1. ~~Route detail-library and watched/progress mutations through the selected tracking
-   provider~~ — **done for the library path** (`TrackingWrites`, `TrackingWriteService`).
-   `sync/watchlist` and `sync/history` with their `/remove` twins for Trakt, `/sync/add-to-list`
-   and `/sync/history[/remove]` for Simkl, ported from `TraktApi.kt` and
-   `SimklMutationService.kt` rather than guessed. Two corrections to this line came out of that
-   reading: upstream has **no** `sync/collection` call, and Simkl has no list-removal call —
-   removing from a list is removing from history. The watched path needs nothing: the player
-   already scrobbles a stop at 100%, which is what marks a title watched on both accounts.
-   Simkl's `delete-playback` remains open.
-2. Port Android's Simkl snapshot cache/reconciliation and anime identity model, including MAL,
-   Kitsu, AniDB/AniList, Simkl IDs and season-vs-absolute episode coordinates.
-3. Validate the player on physical Apple TV hardware with a matrix of HLS/MKV, AAC/E-AC3,
-   Bluetooth/HDMI route changes, ASS/SRT/WebVTT, RTL and CJK. Simulator success is insufficient
-   evidence for display matching, hardware decode and route timing.
+### Partial — the feature exists, some behaviour is missing
 
-### P2 — visible parity polish
+- **Detail**: no franchise-collection row, no episode-options overlay, no `videos[].rating`.
+- **Library**: no Continue Watching removal, no library sort.
+- **Home**: no Continue Watching toggle, no rating-visibility control, no inline trailers.
+- **Addons**: no renaming.
+- **Debrid**: no stream name/description templates.
+- **Stream badges**: fixed rules instead of editable ones.
+- **Simkl**: no anime identity model, no snapshot reconciliation, no `delete-playback`.
+- **Next Up**: no watched-series projection, no dismissal.
+- **Player audio**: five controls absent.
+- **Subtitles**: no mojibake repair; no sync-by-line dialog.
+- **External players**: no skip-segment forwarding.
+- **Plugins**: CryptoJS legacy DES family.
+- **Localisation**: 108 strings against 2,865, 2 languages against 36.
 
-Two of the three items originally listed here did not survive being checked against the Android
-source, which is recorded rather than quietly deleted: an audit that invents work is a worse
-failure than one that misses some.
+### Missing — nothing implemented
 
-1. ~~Add `home_imdb_ratings_visibility` and `detail_imdb_ratings_visibility`~~ — **withdrawn, not
-   a parity item.** Neither key exists in `0.8.7-beta`. Enumerating every preference key in
-   `app/src/main/java` containing `rating` or `visib` returns `"imdb_rating"`, `"rating"`,
-   `"ratings"` and `"user_rating"` — all JSON field names in API DTOs, none of them settings.
-   There is no rating-visibility control in the app being ported, so building one would be
-   inventing a feature and filing it as parity.
-2. **Debrid device authorization — done for TorBox** (`DebridClient.startDeviceAuthorization`).
-   TorBox only, and deliberately: upstream authorises Premiumize the same way but reads
-   `PREMIUMIZE_CLIENT_ID` from `local.properties`, blank in its own `local.example.properties`,
-   so it genuinely cannot be recovered from public source. Real-Debrid has no device flow
-   upstream at all. The formatter/template editor remains open.
-3. ~~Decide whether Top Shelf should be sourced from the remote progress provider~~ — **already
-   true.** `RemoteProgressService` adopts remote resume points through `LibraryStore.adoptProgress`
-   and caches a preview for each, and `persistProgress` calls `refreshTopShelf`. Remote progress
-   therefore reaches the Top Shelf by the same path local progress does. Nothing to build.
-4. Add visual snapshot/golden tests for profile selection, Home variants, settings, stream cards
-   and every player panel. Current UI tests prove navigation/focus, not pixel-level appearance.
+- The **poster options dialog** — the single most-used affordance we lack, because it is how
+  upstream reaches library and watched state from anywhere.
+- The **on-TV configuration servers** for repository, debrid formatter and badges.
+- The **parallel chunked downloader** and the non-faststart MP4 path built on it.
+- The **in-app update banner**.
+- ~~The **hidden-controls seek overlay**~~ — shipped in 1.0.17. Horizontal presses now seek
+  behind a compact readout instead of revealing the transport over the picture; vertical still
+  brings the transport back. See `PlayerSeekOverlayPolicy`.
 
-### P3 — deliberate or low-frequency differences
+### Differences assumed or forced
 
-1. Expand CryptoJS compatibility only when a real supported plugin requires more surface.
-2. Translate the remaining Android strings instead of maintaining two independent catalogs.
-3. Revisit inline trailers only if a supported YouTube playback path becomes available on tvOS.
+**Assumed — our decision, and we would make it again:**
 
-## Verification performed
+- **libmpv instead of ExoPlayer.** It costs us their buffer-tuning surface, their decoder
+  priority controls and their DV7 stack — and it removes the need for the last of those.
+- **Supporter perks omitted.** Monetisation belongs to the official project.
+- **tvOS-native focus and geometry** rather than pixel-identical Compose.
+- **Storage shape**: JSON files and Keychain where upstream uses DataStore. Of the 154
+  upstream keys absent from our tree, roughly half are this or ExoPlayer internals; about 45
+  correspond to a control a viewer can actually see.
 
-- `xcodebuild` tvOS Simulator build: passed.
-- Unit suite: **174 tests, 0 failures**.
-- UI suite from the same remediation pass: **8 tests, 0 failures**.
-- New contract/state tests cover Simkl mixed IDs and list projection, search-history behavior and
-  player recovery gating.
-- `git diff --check`: passed.
+**Forced — the platform or the source refuses:**
 
-Not verified: live Trakt/Simkl/debrid/Nuvio accounts, a physical Apple TV, every third-party addon,
-or visual comparison against a running Android 0.8.7 installation. Those are the remaining
-acceptance tests, not evidence that the code is already equivalent.
+- **Direct torrent**, as established above: no subprocess, no downloaded binary.
+- **Inline focused trailers**: no supported YouTube playback path on tvOS.
+- **Addon configuration pages**: no web view, hence the QR hand-off.
+- **Episode IMDb ratings, Premiumize device auth, crash and playback reports**: build-time
+  secrets, blank in public source. Guessing endpoint shapes would create silent data loss.
+- **The official discovery service**: same.
+
+## Corrections to the 1.0.15 audit
+
+1. **Rating visibility was withdrawn in error.** `home_imdb_ratings_visibility` and
+   `detail_imdb_ratings_visibility` were added upstream on 2026-08-13 (`93ff6eea6`) and ship in
+   `0.8.7-beta` — the very tag that audit claimed to measure. It measured `3303cd1` instead.
+   **The item is reinstated.**
+2. **"No Stremio addon publishes a per-episode score"** — the comment at
+   [Models.swift:365](Sources/Domain/Models.swift#L365) is falsified by upstream issue #3129 and
+   commit `855593afe`, which reads `meta.videos[].rating`. The comment should go and the field
+   should be decoded.
+3. **"Resume points cannot be deleted, but no affordance asks to"** — upstream's affordance is
+   the poster options dialog, which we lack entirely. The gap is the dialog, not the deletion.
+4. **The torrent P0 is not a strategy choice.** Upstream's implementation cannot be ported;
+   only a differently-architected one could exist here.
+5. **Episode IMDb ratings are confirmed unobtainable**, which retroactively justifies shipping
+   TMDB scores instead. Upstream's *second* source — addon metadata — is obtainable, and is now
+   the cheapest real win on the list.
+
+## Findings this pass turned up in our own tree
+
+Five settings enums are defined and never referenced anywhere: `DecoderPriority`,
+`LibassRenderType`, `DolbyVision7HandlingMode`, `VodCacheSizeMode`, `FocusedPosterTrailerTarget`
+— all in [SettingsModels.swift](Sources/Domain/SettingsModels.swift). They are the shape of
+parity without the substance. Two should be deleted as N/A under mpv; `FocusedPosterTrailerTarget`
+tracks a forced gap and can stay only if it is commented as such.
+
+Also: our preference keys were documented as matching the Android names, and mostly do — but
+`hero_catalog_keys` and `remember_last_profile` diverge from upstream's `hero_catalog_key` and
+`remember_last_profile_enabled`, which breaks the wire compatibility that comment promises.
+
+## Priorities
+
+### P0 — decisions, not code
+
+1. ~~**Direct torrent**: declare debrid a requirement, or scope a linked-in engine as its own
+   project~~ — **decided: debrid is required**, stated in the README. Upstream starts TorrServer
+   as a subprocess, which tvOS forbids outright, so there was never a port to choose between.
+   A linked-in engine would be a separate project and is not planned. This line is closed.
+2. **Backend contracts** remain unavailable; keep those controls absent.
+
+### P1 — real gaps, buildable here, ordered by value per line
+
+1. **Poster options dialog.** Reaches library and watched state from Home, Discover, Search and
+   Detail at once, and is the only route to removing a Continue Watching item.
+2. **`videos[].rating` from addon metadata.** A decoded field and a precedence rule.
+3. **Mojibake repair for subtitles.** A pure function and a test table; upstream's own tests
+   port directly.
+4. **Rating visibility, Continue Watching toggle, addon renaming, library sort.** Four small
+   settings, reinstated or newly found.
+5. **Debrid formatter and stream badge rules**, with the local HTTP server the editors need.
+6. **Simkl anime identity model** and snapshot reconciliation.
+7. **Next Up projection and dismissal.**
+
+### P2 — larger, or lower value
+
+1. **Parallel chunked downloader.** 1,352 lines upstream. Worth measuring before building:
+   mpv's own cache and `--stream-lavf-o` may already close most of the gap on debrid links.
+2. **Localisation.** Mechanical and large; the blocker is that our strings are in the views.
+3. **In-app update banner.** Small, and we already publish the releases it would read.
+4. **Player audio controls** — five settings, each a one-line mpv option.
+5. **Visual snapshot tests.** Current UI tests prove navigation and focus, not appearance.
+
+### Resolved since this document was written
+
+The **hidden-controls seek overlay** was parked because it failed
+`testEveryDirectionBringsTheTransportBack`, a test whose comment records a real bug report. The
+invariant turned out to be about the *response*, not the transport: what the report asked for is
+that a press with the controls down does something visible, and the split keeps that true —
+vertical answers with the transport, horizontal with the readout. The test was renamed to
+`testEveryDirectionAnswersWhileTheTransportIsDown` and now asserts both halves, plus a second
+test that the readout never takes the remote.
+
+## Verification
+
+- Unit suite at 1.0.17: **226 tests, 0 failures**. UI suite: **9 tests, 0 failures**.
+- Test density is comparable to upstream — 235 tests over 38k lines against 983 over 201k —
+  so the 1.0.12 plan's "tests too thin" framing was wrong on volume. It was right about
+  *placement*: the network clients carry the least of it.
+
+Not verified: a physical Apple TV, live Trakt/Simkl/debrid/Nuvio accounts, every third-party
+addon, or a side-by-side against a running 0.8.9 installation. In particular **the Dolby Vision
+and AV1 advantages claimed above are architectural, not measured.** They remain the largest
+untested assertion in this document.
