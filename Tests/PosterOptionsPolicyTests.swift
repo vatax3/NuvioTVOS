@@ -9,12 +9,13 @@ final class PosterOptionsPolicyTests: XCTestCase {
         watched: Bool = false,
         progress: Bool = false,
         suggestion: Bool = false,
-        knownEpisodes: Bool = false
+        knownEpisodes: Bool = false,
+        traktLists: Bool = false
     ) -> PosterOptionsPolicy.Context {
         .init(
             type: type, isInLibrary: inLibrary, isWatched: watched,
             hasProgress: progress, isNextUpSuggestion: suggestion,
-            canWalkEpisodes: knownEpisodes
+            canWalkEpisodes: knownEpisodes, hasTraktLists: traktLists
         )
     }
 
@@ -138,6 +139,28 @@ final class PosterOptionsPolicyTests: XCTestCase {
         XCTAssertEqual(
             Set(destructive),
             [.removeFromLibrary, .removeFromContinueWatching, .markUnwatched, .dismissNextUp]
+        )
+    }
+
+    /// A row that opens a dialog saying "you have no lists" is worse than no row.
+    func testTheListRowNeedsSomewhereToPutIt() {
+        XCTAssertFalse(PosterOptionsPolicy.actions(for: context()).contains(.manageLists))
+        XCTAssertTrue(
+            PosterOptionsPolicy.actions(for: context(traktLists: true)).contains(.manageLists)
+        )
+    }
+
+    /// Filing something into a list is not undoing anything, so it must not be dressed as
+    /// destructive — that colouring only means something while it is rare.
+    func testTheListRowIsNotDestructive() {
+        XCTAssertFalse(PosterOptionsPolicy.Action.manageLists.isDestructive)
+    }
+
+    /// Details still closes the list, whatever else is on it.
+    func testDetailsStaysLastWithTheListRowPresent() {
+        XCTAssertEqual(
+            PosterOptionsPolicy.actions(for: context(traktLists: true)).last,
+            .openDetails
         )
     }
 

@@ -909,6 +909,90 @@ actor TraktClient {
     }
 
 
+    // MARK: Custom lists
+
+    /// One of the viewer's own lists.
+    struct CustomList: Sendable, Identifiable, Hashable {
+        var id: Int
+        var name: String
+        var itemCount: Int
+    }
+
+    /// The signed-in viewer's own lists.
+    ///
+    /// Distinct from `libraryLists`, which returns the two fixed ones — Collection and Watchlist.
+    /// These are the lists somebody made, and they are the only Trakt destination the poster
+    /// dialog can offer that is not already the library toggle.
+    func customLists(clientId: String, token: String) async -> [CustomList] {
+        struct Ids: Decodable { let trakt: Int? }
+        struct Entry: Decodable { let name: String?; let ids: Ids?; let item_count: Int? }
+
+        guard !clientId.isEmpty, !token.isEmpty else { return [] }
+        guard let lists = try? await IntegrationHTTP.get(
+            "\(base)/users/me/lists",
+            headers: headers(clientId: clientId, token: token),
+            as: [Entry].self
+        ) else { return [] }
+
+        return lists.compactMap { entry in
+            guard let id = entry.ids?.trakt, let name = entry.name?.nilIfBlank else { return nil }
+            return CustomList(id: id, name: name, itemCount: entry.item_count ?? 0)
+        }
+    }
+
+    /// Adds a title to one of the viewer's lists, or takes it out.
+    ///
+    /// Same `not_found` trap as the sync writes: Trakt answers 201 whether or not it recognised
+    /// the title, so the counts are the only thing that says whether anything happened.
+    @discardableResult
+    func writeListItem(
+        listId: Int,
+        removing: Bool,
+        imdbId: String,
+        type: ContentType,
+        clientId: String,
+        token: String
+    ) async throws -> SyncOutcome {
+        struct Ids: Encodable { let imdb: String }
+        struct Ref: Encodable { let ids: Ids }
+        struct Payload: Encodable {
+            var movies: [Ref]?
+            var shows: [Ref]?
+        }
+        struct Counts: Decodable {
+            let movies: Int?
+            let shows: Int?
+            var total: Int { (movies ?? 0) + (shows ?? 0) }
+        }
+        struct Ignored: Decodable { let ids: [String: AnyJSONValue]? }
+        struct NotFound: Decodable {
+            let movies: [Ignored]?
+            let shows: [Ignored]?
+            var total: Int { (movies?.count ?? 0) + (shows?.count ?? 0) }
+        }
+        struct Response: Decodable {
+            let added: Counts?
+            let deleted: Counts?
+            let not_found: NotFound?
+        }
+
+        let reference = Ref(ids: Ids(imdb: imdbId))
+        var payload = Payload()
+        if type == .series { payload.shows = [reference] } else { payload.movies = [reference] }
+
+        let path = removing ? "items/remove" : "items"
+        let response = try await IntegrationHTTP.post(
+            "\(base)/users/me/lists/\(listId)/\(path)",
+            headers: headers(clientId: clientId, token: token),
+            json: payload,
+            as: Response.self
+        )
+        return SyncOutcome(
+            accepted: (removing ? response.deleted : response.added)?.total ?? 0,
+            notFound: response.not_found?.total ?? 0
+        )
+    }
+
     // MARK: Mutations
 
     /// Endpoints ported from the Android client's `TraktApi`, not guessed: `sync/watchlist`,

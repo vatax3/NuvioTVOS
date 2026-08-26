@@ -14,6 +14,7 @@ enum PosterOptionsPolicy {
         case markUnwatched
         case removeFromContinueWatching
         case dismissNextUp
+        case manageLists
         case openDetails
 
         var id: String { rawValue }
@@ -26,6 +27,7 @@ enum PosterOptionsPolicy {
             case .markUnwatched: return "eye.slash"
             case .removeFromContinueWatching: return "xmark"
             case .dismissNextUp: return "bell.slash"
+            case .manageLists: return "list.bullet"
             case .openDetails: return "info.circle"
             }
         }
@@ -50,6 +52,9 @@ enum PosterOptionsPolicy {
         /// Whether this series' episodes are known — cached, or fetchable from an installed
         /// addon. Meaningless for a film, which is its own episode.
         var canWalkEpisodes: Bool = false
+        /// Whether the viewer has Trakt lists of their own to file this into. Without any, the
+        /// row would open a dialog saying "no lists".
+        var hasTraktLists: Bool = false
     }
 
     /// The rows, in the order they are drawn.
@@ -64,6 +69,9 @@ enum PosterOptionsPolicy {
 
         if context.type == .movie || context.canWalkEpisodes {
             actions.append(context.isWatched ? .markUnwatched : .markWatched)
+        }
+        if context.hasTraktLists {
+            actions.append(.manageLists)
         }
         if context.isNextUpSuggestion {
             // Nothing has been watched of it, so there is no resume point to remove — what the
@@ -98,6 +106,10 @@ struct PosterOptionsDialog: View {
     /// Its own instance: the service is per-screen state elsewhere too, and the dialog
     /// outlives none of its writes — each one is fired and reported by `lastResult` nowhere.
     @State private var tracking = TrackingWriteService()
+    @State private var showsListPicker = false
+    /// Set when a removal would destroy something on the tracking account. See
+    /// `TrackingRemovalImpact` — only Simkl earns this, and it is checked against our own writes.
+    @State private var pendingRemoval: TrackingProviderId?
 
     let request: PosterOptionsRequest
     let onDismiss: () -> Void
@@ -113,7 +125,9 @@ struct PosterOptionsDialog: View {
             isWatched: isWatched,
             hasProgress: hasProgress,
             isNextUpSuggestion: request.isNextUpSuggestion,
-            canWalkEpisodes: SeriesWatchedWalk.canWalk(cachedEpisodes)
+            canWalkEpisodes: SeriesWatchedWalk.canWalk(cachedEpisodes),
+            hasTraktLists: settings.connectedTrackingProviders.contains(.trakt)
+                && preview.imdbId?.nilIfBlank != nil
         )
     }
 
@@ -172,6 +186,25 @@ struct PosterOptionsDialog: View {
         .focusSection()
         .onExitCommand(perform: onDismiss)
         .onAppear { focused = PosterOptionsPolicy.actions(for: context).first }
+        .overlay {
+            if showsListPicker {
+                TraktListPicker(preview: preview, onDismiss: onDismiss)
+            }
+        }
+        .alert(
+            pendingRemoval.map { TrackingRemovalImpact.prompt(title: preview.name, provider: $0) } ?? "",
+            isPresented: .init(
+                get: { pendingRemoval != nil },
+                set: { if !$0 { pendingRemoval = nil } }
+            )
+        ) {
+            Button("Keep it", role: .cancel) { pendingRemoval = nil }
+            Button("Remove", role: .destructive) { confirmRemoval() }
+        } message: {
+            if let provider = pendingRemoval, let caution = TrackingRemovalImpact.caution(provider: provider) {
+                Text(caution)
+            }
+        }
     }
 
     private var header: some View {
@@ -216,6 +249,7 @@ struct PosterOptionsDialog: View {
         case .markUnwatched: return L10n.text("poster_options.mark_unwatched")
         case .removeFromContinueWatching: return L10n.text("poster_options.remove_from_continue_watching")
         case .dismissNextUp: return L10n.text("poster_options.dismiss_next_up")
+        case .manageLists: return L10n.text("poster_options.manage_lists", fallback: "Trakt lists…")
         case .openDetails: return L10n.text("poster_options.go_to_details")
         }
     }
@@ -223,6 +257,17 @@ struct PosterOptionsDialog: View {
     private func perform(_ action: PosterOptionsPolicy.Action) {
         switch action {
         case .addToLibrary, .removeFromLibrary:
+            let destination = TrackingWrites.remoteDestination(
+                librarySource: settings.tracking.librarySourceMode,
+                connected: settings.connectedTrackingProviders
+            )
+            // Removing on Simkl calls `sync/history/remove`, which erases every episode marked
+            // watched there. That is not something to do on one press of a long-press menu.
+            if action == .removeFromLibrary,
+               TrackingRemovalImpact.requiresConfirmation(removingFrom: destination) {
+                pendingRemoval = destination
+                return
+            }
             library.toggleLibrary(preview)
             let added = library.isInLibrary(preview)
             Task { await tracking.library(preview, added: added, settings: settings) }
@@ -251,6 +296,12 @@ struct PosterOptionsDialog: View {
             settings.layout.dismissedNextUpKeys = NextUpDismissal.adding(
                 contentId: preview.id, to: settings.layout.dismissedNextUpKeys
             )
+
+        case .manageLists:
+            // The picker replaces this dialog rather than stacking on it: two overlays deep, the
+            // focus engine has no obvious way back and Menu closes the wrong one.
+            showsListPicker = true
+            return
 
         case .openDetails:
             router.openDetail(preview)
@@ -301,6 +352,15 @@ struct PosterOptionsDialog: View {
             removing: !watched,
             settings: settings
         )
+    }
+
+    /// The removal the viewer just agreed to, with the warning already shown.
+    private func confirmRemoval() {
+        pendingRemoval = nil
+        library.toggleLibrary(preview)
+        let added = library.isInLibrary(preview)
+        Task { await tracking.library(preview, added: added, settings: settings) }
+        onDismiss()
     }
 
     private func markMovie(watched: Bool) {

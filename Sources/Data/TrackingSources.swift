@@ -10,6 +10,14 @@ import Foundation
 enum TrackingProviderId: String, Hashable, Sendable, CaseIterable {
     case trakt
     case simkl
+
+    /// How the service writes its own name, which is what a warning about it has to use.
+    var displayName: String {
+        switch self {
+        case .trakt: return "Trakt"
+        case .simkl: return "Simkl"
+        }
+    }
 }
 
 extension WatchProgressSource {
