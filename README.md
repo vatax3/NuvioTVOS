@@ -62,7 +62,7 @@ card is 252 pt here and occupies the identical fraction of the screen.
 
 ## Upstream parity
 
-Reconciled through NuvioTV **`0.8.7-beta`** (2026-08-20). That means every upstream release up to
+Reconciled through NuvioTV **`0.8.9-beta`** (2026-08-25). That means every upstream release up to
 that tag has been read and each change ported, judged not applicable, or declined with a reason —
 not that the two apps have the same feature set, which they cannot. The version lines are
 independent on purpose: see [docs/UPSTREAM-PARITY.md](docs/UPSTREAM-PARITY.md) for the table and
@@ -197,9 +197,12 @@ one bounded retry policy and resume from the live playhead. Frame-rate and dynam
 is wired to `AVDisplayManager` on both engines but has only been exercised on the simulator, which
 has no display modes to switch between.
 
-The **in-app addon configurator** is present but adapted: with no browser on tvOS, the addon's
-configure URL is rendered as a QR code to finish on a phone, and the resulting manifest URL is
-pasted back to install.
+**Configuring from a phone.** tvOS has no web view and no usable keyboard, so anything that
+needs typing is handed to a phone on the same network. The addon configurator renders the
+addon's own configure URL as a QR code and takes the resulting manifest URL back. The stream
+format editor goes further: the Apple TV serves the form itself over HTTP, and whatever the
+phone saves lands straight in settings — which is the only sane way to enter a line like
+`{stream.size::>0["{stream.size::bytes} "||""]}`.
 
 ## Verification status
 

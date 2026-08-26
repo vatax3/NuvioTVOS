@@ -82,6 +82,24 @@ final class DebridSettingsStore: PreferenceStore {
         set { setCodable("stream_preferences", newValue) }
     }
 
+    /// `debrid_stream_name_template` / `debrid_stream_description_template`, kept together
+    /// because they are edited together. Stored as typed rather than resolved, so a viewer who
+    /// clears a field and comes back sees their empty field, not the default text.
+    var streamTemplates: DebridStreamTemplates {
+        get {
+            DebridStreamTemplates(
+                name: string("debrid_stream_name_template", default: DebridStreamTemplate.defaultName),
+                description: string(
+                    "debrid_stream_description_template", default: DebridStreamTemplate.defaultDescription
+                )
+            )
+        }
+        set {
+            setString("debrid_stream_name_template", newValue.name)
+            setString("debrid_stream_description_template", newValue.description)
+        }
+    }
+
     // MARK: Derived
 
     func apiKey(for provider: DebridProvider) -> String {

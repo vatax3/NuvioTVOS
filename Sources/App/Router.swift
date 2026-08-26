@@ -219,6 +219,7 @@ enum Route: Hashable {
     case pluginManager
     case collectionManager
     case catalogOrder
+    case streamFormat
     case themeSettings
     case layoutSettings
     case playbackSettings

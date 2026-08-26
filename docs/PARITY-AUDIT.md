@@ -59,11 +59,11 @@ platform refuses the upstream approach.
 | Trakt | Parity | OAuth, progress, list reads, comments, related titles, scrobbling, `sync/watchlist` and `sync/history` writes. Upstream has no `sync/collection`; neither do we. |
 | Simkl | Partial | Five list states, remote resume points, scrobbling, `add-to-list`/`history` writes. Missing playback-session deletion, snapshot reconciliation, and the anime identity model (`simkl_anime_id_preference`, MAL/Kitsu/AniDB/AniList, season-vs-absolute). |
 | Next Up from trackers | Partial | Local and imported resume state seed playback. No watched-series projection, no sibling-id reconciliation, no per-card dismissal. |
-| Debrid providers ✻ | Partial | Validation, cache checks, resolution, file choice, cloud libraries for all three, plus TorBox device sign-in. **The stream name/description template engine and its editor are absent** — a real DSL upstream, with conditionals, joins and byte formatting. |
+| Debrid providers ✻ | Parity | Validation, cache checks, resolution, file choice, cloud libraries for all three, TorBox device sign-in, and since 1.0.20 the stream name/description template language with its editor. The DSL is ported rather than reinvented, so a format written on Android pastes in and produces the same rows. |
 | Stream filtering/ranking | Parity | Resolution, quality, HDR/DV, codec, audio, channels, language, group, limits and the sort matrix are consumed. |
 | Stream badges ✻ | Partial | Badges are computed and rendered from parsed attributes. Upstream's badges are **user-editable rules** with a placement setting, authored on a web page the TV serves. |
 | Stream selection UI | Adapted | Same information and grouping; density and geometry follow tvOS. |
-| On-TV configuration servers ✻ | **Missing** | Upstream runs local HTTP servers (~7.2k lines) serving four editors to a phone on the LAN: addon config, repository config, debrid formatter, stream badges. We hand off only the addon's *own* remote `configure` URL by QR — which covers the first case and none of the other three. |
+| On-TV configuration servers ✻ | Partial | `LocalConfigServer` since 1.0.20, serving the debrid formatter. The addon case was already covered by handing off the addon's *own* remote `configure` URL. Repository config and stream badge rules still have no editor — both now need only a page, not a server. |
 | Direct torrent playback ✻ | **Forced** | Upstream ships TorrServer as `libtorrserver.so` and starts it with `ProcessBuilder`. tvOS allows neither subprocesses nor downloaded executables, so the upstream design cannot be ported at all. A linked-in engine is a different project, not a port. |
 | Parallel chunked streaming ✻ | **Missing** | New since 0.8.7: a 1,352-line range downloader with pipelined prefetch, playhead/moov retention across scatter seeks, adaptive 429/503 handling and a chunk cap on low-RAM devices — plus the non-faststart MP4 path built on it. Five settings drive it. |
 | Plugin runtime | Partial | Repository/install/settings, HTML/CSS helpers, fetch, `getStreams`. CryptoJS covers common hashes/HMAC, PBKDF2 and AES, not the legacy DES family. |
@@ -101,7 +101,6 @@ path and AVFoundation refuses.
 - **Poster options**: no series watched walk, no Trakt list management, no removal-impact
   warning.
 - **Home**: no inline trailers.
-- **Debrid**: no stream name/description templates.
 - **Stream badges**: fixed rules instead of editable ones.
 - **Simkl**: no anime identity model, no snapshot reconciliation, no `delete-playback`.
 - **Next Up**: no watched-series projection, no dismissal.
@@ -115,7 +114,8 @@ path and AVFoundation refuses.
 
 - ~~The **poster options dialog**~~ — shipped in 1.0.18; what is left of it is listed under
   *Partial*.
-- The **on-TV configuration servers** for repository, debrid formatter and badges.
+- Editors for **repository config** and **stream badge rules**. The server they need shipped in
+  1.0.20; only their pages are missing.
 - The **parallel chunked downloader** and the non-faststart MP4 path built on it.
 - The **in-app update banner**.
 - ~~The **hidden-controls seek overlay**~~ — shipped in 1.0.17. Horizontal presses now seek
@@ -192,7 +192,8 @@ Also: our preference keys were documented as matching the Android names, and mos
    encoding rather than tabulating sequences.
 4. ~~**Rating visibility, Continue Watching toggle, addon renaming, library sort**~~ —
    **shipped in 1.0.19.**
-5. **Debrid formatter and stream badge rules**, with the local HTTP server the editors need.
+5. ~~**Debrid formatter**, with the local HTTP server the editors need~~ — **shipped in
+   1.0.20.** Stream badge rules and repository config are now a page each on the same server.
 6. **Simkl anime identity model** and snapshot reconciliation.
 7. **Next Up projection and dismissal.**
 
@@ -217,8 +218,8 @@ test that the readout never takes the remote.
 
 ## Verification
 
-- Unit suite at 1.0.19: **266 tests, 0 failures**. UI suite: **9 tests, 0 failures**.
-- Test density is now ahead of upstream per line — 275 tests over 38k lines against 983 over
+- Unit suite at 1.0.20: **299 tests, 0 failures**. UI suite: **9 tests, 0 failures**.
+- Test density is now ahead of upstream per line — 308 tests over 39k lines against 983 over
   201k —
   so the 1.0.12 plan's "tests too thin" framing was wrong on volume. It was right about
   *placement*: the network clients carry the least of it.

@@ -46,9 +46,14 @@ final class PlayerRemoteUITests: XCTestCase {
     }
 
     /// Leaves the player with its transport down, which is the state every test below starts in.
+    ///
+    /// The startup wait is generous on purpose. `testEveryDirectionAnswers…` relaunches the app
+    /// between directions, so one test pays this cost four times, and on a simulator that has
+    /// just run the whole unit suite a cold launch to first frame has been measured past twenty
+    /// seconds. A tighter bound does not catch a slow player, it just fails in CI.
     private func hideTransport(file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertTrue(
-            wait(for: { self.transportHoldsRemote }, timeout: 20),
+            wait(for: { self.transportHoldsRemote }, timeout: 45),
             "the transport should come up with playback", file: file, line: line
         )
         Thread.sleep(forTimeInterval: autoHide)

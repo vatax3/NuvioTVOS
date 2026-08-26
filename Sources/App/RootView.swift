@@ -155,6 +155,8 @@ struct RootView: View {
             PluginManagerView()
         case .collectionManager:
             CollectionManagerView()
+        case .streamFormat:
+            StreamFormatEditorView()
         case .catalogOrder:
             CatalogOrderView()
         case .themeSettings:

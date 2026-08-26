@@ -878,6 +878,33 @@ private struct StreamRow: View {
     let isResolving: Bool
     let action: () -> Void
 
+    /// The template's output, when this row is one debrid will resolve.
+    ///
+    /// Only those rows: a direct HTTP source from an addon is already labelled the way that
+    /// addon meant, and rewriting it with a template written for debrid results would replace
+    /// information with a guess. Android draws the same line.
+    private var formatted: DebridStreamFormatter.Rendered? {
+        guard stream.effectiveInfoHash != nil, settings.debrid.canResolvePlayableLinks else {
+            return nil
+        }
+        let rendered = DebridStreamFormatter.render(
+            stream: stream,
+            attributes: attributes,
+            service: cache?.provider ?? settings.debrid.activeResolver?.provider,
+            // `nil` while the check is still in flight, so `service.cached` is absent rather
+            // than false and a template does not flash "Not Ready" before the answer arrives.
+            isCached: cache.flatMap { result in
+                switch result.state {
+                case .cached: return true
+                case .notCached: return false
+                case .checking, .unknown: return nil
+                }
+            },
+            templates: settings.debrid.streamTemplates.resolved
+        )
+        return rendered.isEmpty ? nil : rendered
+    }
+
     /// A torrent is actionable when debrid can resolve it, or when it already has an HTTP URL.
     private var isPlayable: Bool {
         if stream.streamURL() != nil { return true }
@@ -892,7 +919,7 @@ private struct StreamRow: View {
         HStack(alignment: .top, spacing: NuvioTheme.spacing.md) {
             VStack(alignment: .leading, spacing: dp(3)) {
                 HStack(alignment: .firstTextBaseline, spacing: NuvioTheme.spacing.sm) {
-                    Text(stream.displayName)
+                    Text(formatted?.name.nilIfBlank ?? stream.displayName)
                         .nuvioText(NuvioTextStyles.cardTitle)
                         .foregroundStyle(colors.textPrimary)
                         .lineLimit(1)
@@ -913,7 +940,8 @@ private struct StreamRow: View {
                 // Whatever the addon chose to say, in full. This is the line that carries the
                 // codec, the audio layout, the running time, the seeders and the indexer —
                 // clipping it to three lines threw away most of what a viewer compares on.
-                if let detail = stream.displayDescription?.nilIfBlank, detail != stream.displayName {
+                if let detail = formatted?.description.nilIfBlank
+                    ?? stream.displayDescription?.nilIfBlank, detail != stream.displayName {
                     Text(detail)
                         .nuvioText(NuvioTextStyles.metadata)
                         .foregroundStyle(colors.textSecondary)

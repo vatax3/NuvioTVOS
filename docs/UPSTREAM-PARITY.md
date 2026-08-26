@@ -3,13 +3,13 @@
 Nuvio for Apple TV is a port of [NuvioMedia/NuvioTV](https://github.com/NuvioMedia/NuvioTV), the
 Android TV app. This file records how far the port has been reconciled against it.
 
-**Reconciled through: `0.8.7-beta` (2026-08-20).**
+**Reconciled through: `0.8.9-beta` (2026-08-25).**
 
 That sentence is the whole point of this file, and it is deliberately not "we have the same
 features as 0.8.7". A shared version number would claim an equality that cannot exist: roughly a
 third of every upstream release is ExoPlayer, Compose or Android TV platform work with no tvOS
 counterpart. What is claimed here is narrower and checkable — **every upstream release up to and
-including 0.8.7 has been read, and each change in it was ported, judged not applicable, or
+including 0.8.9 has been read, and each change in it was ported, judged not applicable, or
 declined for a stated reason.**
 
 The two version lines are therefore independent. Ours is `1.0.x`; theirs is `0.8.x-beta`. They
@@ -41,6 +41,11 @@ we kept up with their releases" but "does what we already shipped actually work"
 | Persist library type filter | 0.8.7 | [`LayoutSettingsStore.libraryFilter`](../Sources/Data/LayoutSettingsStore.swift), and the same for the debrid cloud list. |
 | Simkl library read and playback lifecycle | pre-0.8.4 | [`SimklClient`](../Sources/Data/IntegrationClients.swift), [`RemoteProgressService`](../Sources/Data/RemoteProgressService.swift) and [`SimklLibraryView`](../Sources/Features/Library/SimklLibraryView.swift): PIN login, all five library states, remote resume points, and start/pause/stop scrobbling. IMDb, TMDB, TVDB and anime-oriented ids are preserved instead of silently excluding non-IMDb shows. Remote list/history mutations and Android's full anime-id reconciliation remain open in the full audit. |
 | Incremental catalog discovery and search memory | pre-0.8.4 | [`SearchView`](../Sources/Features/Search/SearchView.swift) and [`DiscoverView`](../Sources/Features/Search/DiscoverView.swift): persisted recent queries, stale-request cancellation, de-duplication, and Stremio `skip` pagination when the focused row reaches the tail. |
+| Subtitle mojibake repair | 0.8.8 | [`SubtitleMojibake`](../Sources/Data/SubtitleMojibake.swift). Upstream tabulates the sequences they were sent; this inverts the double encoding, so the Cyrillic, Greek and Japanese cases their table does not carry come out right too. Foundation refuses the five bytes Windows-1252 leaves undefined, in both directions, so the mapping is written out — `E3 81 93` is Japanese `こ`, and a strict encoder declines exactly the text that most needs repairing. |
+| Per-episode rating from addon metadata | 0.8.9 | [`Video.addonRating`](../Sources/Domain/Models.swift), preferred over the TMDB score. Their other source — an IMDb service — sits behind a build-time base URL that ships blank, so this is the only episode rating obtainable from public source. |
+| Configurable rating visibility | 0.8.7 | [`HomeRatingsVisibility`/`DetailRatingsVisibility`](../Sources/Domain/SettingsModels.swift), including hide-until-watched. **Previously withdrawn in error**: the 1.0.15 audit read a tree older than the tag it named and concluded the keys did not exist. |
+| Option to hide Continue Watching | 0.8.7 | [`LayoutSettingsStore.continueWatchingEnabled`](../Sources/Data/LayoutSettingsStore.swift), gated at the rail's source so it also leaves the focus order. |
+| Confirm addon deletion, rename an addon | 0.8.8 | Renaming is [`AddonStore.rename`](../Sources/Data/AddonStore.swift), stored on the record so it survives a manifest refetch. The delete confirmation is declined: our remove is a single icon in a settings row, not a swipe. |
 | Bounded player startup/stall recovery | pre-0.8.4 | [`PlayerRecoveryPolicy`](../Sources/Features/Player/PlayerRecoveryPolicy.swift) remounts a failed mpv session or falls back from AVFoundation to mpv without leaving the player, preserving the live playhead. [`MPVEngine`](../Sources/Features/Player/MPVEngine.swift) now reports success only after a decoded video reconfiguration rather than immediately after `loadfile`. |
 
 Found on the way, in no upstream changelog: the byte order mark was never stripped from a

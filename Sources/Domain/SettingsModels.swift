@@ -834,6 +834,19 @@ struct DebridStreamPreferences: Codable, Hashable {
 
 // MARK: - Debrid providers
 
+/// A settings option whose `UNKNOWN` case means "the parser found nothing", not a value.
+///
+/// Every stream attribute carries one, and a template that printed "Unknown" wherever a release
+/// name omitted the codec would be worse than printing nothing — so the templates read through
+/// this rather than `displayName`.
+protocol StreamAttributeOption: SettingsOption {
+    static var unknownCase: Self { get }
+}
+
+extension StreamAttributeOption {
+    var labelUnlessUnknown: String? { self == Self.unknownCase ? nil : displayName }
+}
+
 enum DebridProvider: String, SettingsOption {
     case realDebrid = "realdebrid"
     case premiumize = "premiumize"
@@ -844,6 +857,15 @@ enum DebridProvider: String, SettingsOption {
         case .realDebrid: return "Real-Debrid"
         case .premiumize: return "Premiumize"
         case .torbox: return "TorBox"
+        }
+    }
+
+    /// What a stream row calls it when space is short. Android's `service.shortName`.
+    var shortName: String {
+        switch self {
+        case .realDebrid: return "RD"
+        case .premiumize: return "PM"
+        case .torbox: return "TB"
         }
     }
 
@@ -871,4 +893,32 @@ struct DebridCredential: Hashable, Identifiable {
     let provider: DebridProvider
     let apiKey: String
     var id: String { provider.rawValue }
+}
+
+extension DebridStreamResolution: StreamAttributeOption {
+    static var unknownCase: Self { .unknown }
+}
+
+extension DebridStreamQuality: StreamAttributeOption {
+    static var unknownCase: Self { .unknown }
+}
+
+extension DebridStreamVisualTag: StreamAttributeOption {
+    static var unknownCase: Self { .unknown }
+}
+
+extension DebridStreamAudioTag: StreamAttributeOption {
+    static var unknownCase: Self { .unknown }
+}
+
+extension DebridStreamAudioChannel: StreamAttributeOption {
+    static var unknownCase: Self { .unknown }
+}
+
+extension DebridStreamEncode: StreamAttributeOption {
+    static var unknownCase: Self { .unknown }
+}
+
+extension DebridStreamLanguage: StreamAttributeOption {
+    static var unknownCase: Self { .unknown }
 }

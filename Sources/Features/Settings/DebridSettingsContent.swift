@@ -5,6 +5,7 @@ import SwiftUI
 struct DebridSettingsContent: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(AppSettings.self) private var settings
+    @Environment(Router.self) private var router
 
     enum Tab: String, CaseIterable, Identifiable {
         case providers, filters, ranking, limits
@@ -48,6 +49,13 @@ struct DebridSettingsContent: View {
                         : "Add at least one API key below",
                     systemImage: "link",
                     isOn: $debrid.enabled
+                )
+                SettingsRow(
+                    title: "Stream format",
+                    subtitle: "Choose what each result is labelled — edited from a phone",
+                    systemImage: "textformat",
+                    trailing: { SettingsValueLabel(value: "") },
+                    action: { router.push(.streamFormat) }
                 )
             }
 

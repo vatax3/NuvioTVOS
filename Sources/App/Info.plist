@@ -42,6 +42,8 @@
 		<string>nplayer</string>
 		<string>outplayer</string>
 	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Nuvio serves a settings page on your network so you can edit the stream format from a phone. Nothing leaves your home.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
