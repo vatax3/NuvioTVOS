@@ -47,6 +47,20 @@ enum IntegrationHTTP {
         if T.self == EmptyResponse.self { return EmptyResponse() as! T }
         return try JSONDecoder().decode(T.self, from: data)
     }
+
+    /// Used for removing a remote resume point, which both Trakt and Simkl spell
+    /// `DELETE /sync/playback/{id}`. No body either way, and no response worth decoding — the
+    /// status is the whole answer.
+    static func delete(_ url: String, headers: [String: String] = [:]) async throws {
+        guard let url = URL(string: url) else { throw StremioError.invalidURL(url) }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        for (key, value) in headers { request.setValue(value, forHTTPHeaderField: key) }
+        let (_, response) = try await session.data(for: request)
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw StremioError.http(http.statusCode, url.absoluteString)
+        }
+    }
 }
 
 struct EmptyResponse: Decodable {}
@@ -990,12 +1004,24 @@ actor TraktClient {
         let episode: Int?
         let progress: Double
         let pausedAt: Date?
+        /// The playback session, which is what `DELETE /sync/playback/{id}` addresses. Without
+        /// it a row removed from Continue Watching comes back on the next sync.
+        var sessionId: Int?
     }
 
     struct LibraryList: Sendable, Identifiable {
         let id: String
         let title: String
         let items: [MetaPreview]
+    }
+
+    /// Removes one remote resume point. See `SimklClient.deletePlayback` — same endpoint, same
+    /// reason: without it the next sync adopts back what the viewer just removed.
+    func deletePlayback(sessionId: Int, clientId: String, token: String) async throws {
+        try await IntegrationHTTP.delete(
+            "\(base)/sync/playback/\(sessionId)",
+            headers: headers(clientId: clientId, token: token)
+        )
     }
 
     /// Trakt's resume points, used when watch progress is sourced from Trakt.
@@ -1005,6 +1031,7 @@ actor TraktClient {
         struct Show: Decodable { let ids: Ids? }
         struct Episode: Decodable { let season: Int?; let number: Int? }
         struct Item: Decodable {
+            let id: Int?
             let progress: Double?
             let paused_at: String?
             let type: String?
@@ -1028,7 +1055,8 @@ actor TraktClient {
                 season: item.episode?.season,
                 episode: item.episode?.number,
                 progress: item.progress ?? 0,
-                pausedAt: item.paused_at.flatMap { VideoDateParser.parse($0) }
+                pausedAt: item.paused_at.flatMap { VideoDateParser.parse($0) },
+                sessionId: item.id
             )
         }
     }
@@ -1640,6 +1668,8 @@ actor SimklClient {
         let progress: Double
         let durationSeconds: Double
         let pausedAt: Date?
+        /// As Trakt's: the session `DELETE /sync/playback/{id}` addresses.
+        var sessionId: Int?
     }
 
     private struct PlaybackPayload: Decodable, Sendable {
@@ -1650,6 +1680,7 @@ actor SimklClient {
             let tvdb_number: Int?
         }
         struct Entry: Decodable, Sendable {
+            let id: Int?
             let progress: Double?
             let paused_at: String?
             let watched_at: String?
@@ -1950,6 +1981,18 @@ actor SimklClient {
         }
     }
 
+    /// Removes one remote resume point.
+    ///
+    /// Both services spell it the same way, and without it removing a row from Continue Watching
+    /// is undone by the next sync — the local record goes, the remote one is adopted straight
+    /// back, and the row reappears looking like a bug in the removal.
+    func deletePlayback(sessionId: Int, clientId: String, token: String) async throws {
+        try await IntegrationHTTP.delete(
+            "\(base)/sync/playback/\(sessionId)",
+            headers: headers(clientId: clientId, token: token)
+        )
+    }
+
     /// Resume points used by Continue Watching when Simkl is the selected progress source.
     func playbackProgress(clientId: String, token: String) async throws -> [PlaybackItem] {
         let response = try await IntegrationHTTP.get(
@@ -1976,7 +2019,8 @@ actor SimklClient {
                 episode: episode,
                 progress: min(100, max(0, entry.progress ?? 0)),
                 durationSeconds: Double(max(0, media.runtime ?? 0) * 60),
-                pausedAt: (entry.paused_at ?? entry.watched_at).flatMap(VideoDateParser.parse)
+                pausedAt: (entry.paused_at ?? entry.watched_at).flatMap(VideoDateParser.parse),
+                sessionId: entry.id
             )
         }
     }

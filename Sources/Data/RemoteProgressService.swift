@@ -88,6 +88,70 @@ final class RemoteProgressService {
         adoptedVideoIds = adopted
     }
 
+    /// Removes a title's resume points from whichever service is supplying them.
+    ///
+    /// A no-op on the local setting, which is the default — there is nothing remote to remove and
+    /// nothing that would bring the row back.
+    ///
+    /// Failures are swallowed on purpose. The local removal has already happened and is what the
+    /// viewer asked for; an error here means the row may return on a later sync, which is worse
+    /// than silence but much better than an alert about a tracking account over a gesture that
+    /// was about tidying up a rail.
+    func removeRemoteProgress(
+        contentId: String,
+        season: Int? = nil,
+        episode: Int? = nil,
+        settings: AppSettings
+    ) async {
+        switch settings.effectiveWatchProgressSource {
+        case .trakt:
+            let clientId = settings.tracking.traktClientId
+            let token = settings.tracking.traktAccessToken
+            guard !clientId.isEmpty, !token.isEmpty else { return }
+            let items = await TraktClient.shared.playbackProgress(clientId: clientId, token: token)
+            let sessions = items.compactMap { item -> RemoteResumePointRemoval.Session? in
+                guard let sessionId = item.sessionId else { return nil }
+                return .init(
+                    sessionId: sessionId, contentId: item.imdbId,
+                    season: item.season, episode: item.episode
+                )
+            }
+            for id in RemoteResumePointRemoval.sessions(
+                in: sessions, contentId: contentId, season: season, episode: episode
+            ) {
+                try? await TraktClient.shared.deletePlayback(
+                    sessionId: id, clientId: clientId, token: token
+                )
+            }
+        case .simkl:
+            let clientId = settings.tracking.simklClientId
+            let token = settings.tracking.simklAccessToken
+            guard !clientId.isEmpty, !token.isEmpty else { return }
+            let items = (try? await SimklClient.shared.playbackProgress(
+                clientId: clientId, token: token
+            )) ?? []
+            let sessions = items.compactMap { item -> RemoteResumePointRemoval.Session? in
+                guard let sessionId = item.sessionId else { return nil }
+                return .init(
+                    sessionId: sessionId, contentId: item.contentId,
+                    season: item.season, episode: item.episode
+                )
+            }
+            for id in RemoteResumePointRemoval.sessions(
+                in: sessions, contentId: contentId, season: season, episode: episode
+            ) {
+                try? await SimklClient.shared.deletePlayback(
+                    sessionId: id, clientId: clientId, token: token
+                )
+            }
+        default:
+            return
+        }
+        // The cached refresh timestamp would otherwise hold the removal invisible until the
+        // minimum interval elapsed.
+        lastRefresh = nil
+    }
+
     private func adopt(_ entry: WatchProgress, into library: LibraryStore) -> Bool {
         // A position recorded on this device is the better one: it has a real duration and is
         // the exact point the engine can seek to. Remote percentages only fill gaps/newer rows.

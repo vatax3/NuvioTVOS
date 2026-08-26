@@ -57,7 +57,7 @@ platform refuses the upstream approach.
 | Collections | Parity | Data shape, live folder sources, ordering, sync. `focusGifUrl`/`heroVideoUrl` retained but not rendered. |
 | Local library/progress ✻ | Parity | Save/remove, Continue Watching, watched threshold, per-profile persistence, account sync, removal from Continue Watching (1.0.18) and a sort control (1.0.19). |
 | Trakt | Parity | OAuth, progress, list reads, comments, related titles, scrobbling, `sync/watchlist` and `sync/history` writes. Upstream has no `sync/collection`; neither do we. |
-| Simkl ✻ | Partial | Five list states, remote resume points, scrobbling, `add-to-list`/`history` writes, and since 1.0.22 the anime identity model: `simkl_anime_id_preference`, MAL/Kitsu/AniDB/AniList namespaces, and the season-versus-absolute split with `use_tvdb_anime_seasons`. Episode writes now name the episode at all — they previously marked the whole series. Playback-session deletion and snapshot reconciliation remain. |
+| Simkl | Parity | Five list states, remote resume points, scrobbling, `add-to-list`/`history` writes, the anime identity model since 1.0.22, and playback-session deletion since 1.0.26. Snapshot reconciliation does not apply here; see *Differences assumed*. |
 | Next Up from trackers ✻ | Partial | Since 1.0.21 a series whose last episode was finished is offered its next one, with the airing rules, both anchor modes and per-series dismissal. Previously the rail held only half-watched episodes, so finishing one removed the series from Home entirely. Sibling-id reconciliation across id namespaces is not reproduced, and the projection needs the episode list to have been cached by a visit to the detail screen. |
 | Debrid providers ✻ | Parity | Validation, cache checks, resolution, file choice, cloud libraries for all three, TorBox device sign-in, and since 1.0.20 the stream name/description template language with its editor. The DSL is ported rather than reinvented, so a format written on Android pastes in and produces the same rows. |
 | Stream filtering/ranking | Parity | Resolution, quality, HDR/DV, codec, audio, channels, language, group, limits and the sort matrix are consumed. |
@@ -101,7 +101,6 @@ path and AVFoundation refuses.
 - **Poster options**: no series watched walk, no Trakt list management, no removal-impact
   warning.
 - **Home**: no inline trailers.
-- **Simkl**: no snapshot reconciliation, no `delete-playback`.
 - **Next Up**: no sibling-id reconciliation; the projection needs a cached episode list.
 - **Player audio**: five controls absent.
 - **Subtitles**: no sync-by-line dialog.
@@ -126,6 +125,10 @@ path and AVFoundation refuses.
   priority controls and their DV7 stack — and it removes the need for the last of those.
 - **Supporter perks omitted.** Monetisation belongs to the official project.
 - **tvOS-native focus and geometry** rather than pixel-identical Compose.
+- **No cached tracking snapshot.** Upstream holds a Simkl snapshot and applies a receipt to it
+  after each write, so the interface reflects a mutation before the next sync. Our Trakt and
+  Simkl list screens fetch when they appear, so there is no snapshot to reconcile — the same
+  outcome by a shorter route, at the cost of a request the cached design would not make.
 - **Storage shape**: JSON files and Keychain where upstream uses DataStore. Of the 154
   upstream keys absent from our tree, roughly half are this or ExoPlayer internals; about 45
   correspond to a control a viewer can actually see.

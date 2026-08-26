@@ -94,6 +94,7 @@ struct PosterOptionsDialog: View {
     @Environment(AppSettings.self) private var settings
     @Environment(Router.self) private var router
     @Environment(AddonStore.self) private var addons
+    @Environment(RemoteProgressService.self) private var remoteProgress
     /// Its own instance: the service is per-screen state elsewhere too, and the dialog
     /// outlives none of its writes — each one is fired and reported by `lastResult` nowhere.
     @State private var tracking = TrackingWriteService()
@@ -238,6 +239,13 @@ struct PosterOptionsDialog: View {
             // By content id rather than video id: for a series the resume point sits on an
             // episode the viewer never named, and removing the row means removing all of them.
             library.clearProgress(contentId: preview.id)
+            // And on the service too, when that is where progress comes from. Local-only, the
+            // next sync adopted the remote point back and the row returned.
+            Task {
+                await remoteProgress.removeRemoteProgress(
+                    contentId: preview.imdbId?.nilIfBlank ?? preview.id, settings: settings
+                )
+            }
 
         case .dismissNextUp:
             settings.layout.dismissedNextUpKeys = NextUpDismissal.adding(
