@@ -74,7 +74,7 @@ platform refuses the upstream approach.
 | Subtitles ✻ | Partial | Addon and muxed tracks, auto-language/forced rules, style, delay, SDH stripping, charset detection, CJK fallback, and since 1.0.19 mojibake repair. Ours reverses the double encoding rather than tabulating known sequences, so it also covers the Cyrillic, Greek and Japanese cases upstream's table does not. Still no sync-by-line dialog. |
 | External players | Parity | Infuse/VLC/nPlayer/Outplayer hand-off with subtitle forwarding. Skip-segment forwarding is absent. Zidoo monitoring is Android-only. |
 | Top Shelf / launcher | Adapted | Publishes Continue Watching with deep links. Android channel fingerprinting is N/A. |
-| In-app updater ✻ | **Missing** | Upstream polls the GitHub releases API and shows a dismissible update banner. We publish GitHub releases too, so this is available to us — it is simply not built. |
+| In-app updater | Parity | Shipped in 1.0.24, on the About screen. Reads the sideloading feed rather than the releases API — the feed is the artefact that has to be right for anyone to install an update at all, so a check that reads it fails loudly when it is wrong. Versions compare numerically, because `1.0.9` sorts after `1.0.23` as a string. It tells and does not install: nothing sideloaded on tvOS can replace itself. |
 | Localisation ✻ | Partial | 108 strings in 2 languages against **2,865 strings in 36 languages**. Most of our UI text is hardcoded English in the views. |
 | Supporter perks | Missing by decision | Monetisation belongs to the official project. |
 | Crash/diagnostic reporting ✻ | **Forced** | Sentry DSN, the auth-diagnostic and playback-report endpoints are build-time secrets, blank in public source. |
