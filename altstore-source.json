@@ -40,6 +40,16 @@
       ],
       "versions": [
         {
+          "version": "1.0.24",
+          "buildVersion": "26",
+          "date": "2026-08-26",
+          "localizedDescription": "## Dialogue you can actually hear\n\nA new **Dialogue level** control under Settings → Playback → Audio. It sets how\nloud the centre channel is folded in when a 5.1 track is played through stereo —\nthe usual reason speech sits under the music. **Prevent downmix clipping** is\nbeside it, trading a little level for headroom.\n\nBoth are in Settings rather than in the player because libmpv builds its audio\nchain from them when playback starts.\n\n## Amplification that stays put\n\nThe player's amplification control can now be remembered between films. It is off\nby default — amplification is usually the fix for one badly mastered release, and\ncarrying it forward is how everything ends up loud. Turning it on keeps whatever\nlevel you are listening to.\n\n## It tells you when it is out of date\n\nSettings → About now says when a newer build has been published, and what changed.\nIt cannot install it — nothing sideloaded on tvOS can replace itself — but your\nsideloading app will already be offering it if it follows the Nuvio source.\n\n## Notes\n\nTwo audio settings from Android TV are not here and will not be: keeping the\noriginal track alongside a downmix, and forced optical passthrough. The first is\nan ExoPlayer arrangement libmpv has no equivalent of; the second needs an audio\npassthrough API that tvOS does not have. Passthrough on Apple TV is decided by the\nApple TV's own audio settings.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.24/Nuvio-1.0.24-tvOS-unsigned.ipa",
+          "size": 31701339,
+          "minOSVersion": "17.0",
+          "sha256": "bed6a8cbc10122c4f73ff114513239e86cf05b463bdbf13cadbf8da59113872c"
+        },
+        {
           "version": "1.0.23",
           "buildVersion": "25",
           "date": "2026-08-26",
@@ -156,11 +166,11 @@
         ],
         "privacy": {}
       },
-      "version": "1.0.23",
+      "version": "1.0.24",
       "versionDate": "2026-08-26",
-      "versionDescription": "## Badge rules\n\nA source list can now say what you want it to say. Point the Apple TV at a badge\npack — a JSON file of named patterns with their own colours and logos — and every\nmatching source gets its badge. It uses the same file format as NuvioTV for\nAndroid TV, so a pack written there works here unchanged.\n\nSettings → Playback → Source list → **Badge rules**. Scan the code with a phone\non the same Wi-Fi; adding, swapping and removing packs all happen there. Three\npacks can be held at once and one is applied.\n\n## Plugin repositories, from a phone\n\nThe same idea for plugin repositories: the phone lists them and asks for changes,\nand the **Apple TV asks you before anything happens**. Adding a repository\ninstalls code that then runs on every stream search, and this page is visible to\nyour whole network — so the phone can only ask.\n\nSettings → Addons → **Repositories**.",
-      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.23/Nuvio-1.0.23-tvOS-unsigned.ipa",
-      "size": 31688526,
+      "versionDescription": "## Dialogue you can actually hear\n\nA new **Dialogue level** control under Settings → Playback → Audio. It sets how\nloud the centre channel is folded in when a 5.1 track is played through stereo —\nthe usual reason speech sits under the music. **Prevent downmix clipping** is\nbeside it, trading a little level for headroom.\n\nBoth are in Settings rather than in the player because libmpv builds its audio\nchain from them when playback starts.\n\n## Amplification that stays put\n\nThe player's amplification control can now be remembered between films. It is off\nby default — amplification is usually the fix for one badly mastered release, and\ncarrying it forward is how everything ends up loud. Turning it on keeps whatever\nlevel you are listening to.\n\n## It tells you when it is out of date\n\nSettings → About now says when a newer build has been published, and what changed.\nIt cannot install it — nothing sideloaded on tvOS can replace itself — but your\nsideloading app will already be offering it if it follows the Nuvio source.\n\n## Notes\n\nTwo audio settings from Android TV are not here and will not be: keeping the\noriginal track alongside a downmix, and forced optical passthrough. The first is\nan ExoPlayer arrangement libmpv has no equivalent of; the second needs an audio\npassthrough API that tvOS does not have. Passthrough on Apple TV is decided by the\nApple TV's own audio settings.",
+      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.24/Nuvio-1.0.24-tvOS-unsigned.ipa",
+      "size": 31701339,
       "minOSVersion": "17.0"
     }
   ],
