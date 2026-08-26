@@ -256,6 +256,44 @@ struct PlaybackSettingsContent: View {
             }
 
             SettingsCard(
+                title: "Mixing",
+                footnote: """
+                These shape how a multichannel track is folded down. They are set here rather \
+                than in the player because libmpv builds its audio chain from them at start, \
+                and changing one mid-film would mean rebuilding it under the picture.
+                """
+            ) {
+                SettingsStepperRow(
+                    title: "Dialogue level",
+                    subtitle: "How loud the centre channel is folded into a downmix",
+                    systemImage: "waveform.badge.mic",
+                    value: $player.centerMixLevelDb,
+                    range: PlayerAudioMix.centerMixRangeDb,
+                    format: { $0 == 0 ? "Default" : "\($0 > 0 ? "+" : "")\($0) dB" }
+                )
+                SettingsToggle(
+                    title: "Prevent downmix clipping",
+                    subtitle: "Trades some level for headroom when 5.1 is folded to stereo",
+                    isOn: $player.downmixNormalization
+                )
+            }
+
+            SettingsCard(
+                title: "Amplification",
+                footnote: """
+                The player's own amplification control is under Audio while a film is playing. \
+                Remembering it is off by default: it is usually the fix for one badly mastered \
+                release, and carrying it into the next film is how everything ends up loud.
+                """
+            ) {
+                SettingsToggle(
+                    title: "Remember amplification",
+                    subtitle: amplificationSubtitle,
+                    isOn: $player.persistAudioAmplification
+                )
+            }
+
+            SettingsCard(
                 title: "Audio",
                 footnote: """
                 Track selection, passthrough and dynamic-range handling are supplied by the \
@@ -269,6 +307,14 @@ struct PlaybackSettingsContent: View {
                 )
             }
         }
+    }
+
+    private var amplificationSubtitle: String {
+        let db = player.audioAmplificationDb
+        guard player.persistAudioAmplification else {
+            return "Every film starts at 0 dB"
+        }
+        return db == 0 ? "Currently 0 dB" : "Currently +\(db) dB"
     }
 
     // MARK: Subtitles

@@ -167,6 +167,7 @@ final class MPVEngine {
         hardwareDecoding: MpvHardwareDecodeMode = .hardwareCopy,
         audioOutput: MpvAudioOutput = .automatic,
         audioChannels: AudioOutputChannels = .auto,
+        audioMix: PlayerAudioMix.Options = .init(),
         audioLanguages: [String] = [],
         subtitleLanguages: [String] = [],
         subtitleStyle: SubtitleStyle,
@@ -194,6 +195,12 @@ final class MPVEngine {
         setOption("audio-fallback-to-null", "yes")
         // Headroom for the amplification control; mpv refuses volumes above `volume-max`.
         setOption("volume-max", "400")
+        // A remembered amplification is set here rather than after playback starts, so the first
+        // second of the film is already at the level the viewer chose.
+        if audioMix.amplificationDb != 0 {
+            amplificationDb = audioMix.amplificationDb
+            setOption("volume", String(format: "%.0f", PlayerAudioMix.volumePercent(amplificationDb: amplificationDb)))
+        }
         // Conservative Vulkan settings: MoltenVK is a translation layer, and the async paths
         // are where it is least reliable.
         setOption("vulkan-swap-mode", "fifo")
@@ -247,6 +254,12 @@ final class MPVEngine {
         // The layout mpv asks the AudioUnit for. Getting this wrong is not a quality problem
         // but a silence problem — see `PlayerSettingsStore.audioOutputChannels`.
         setOption("audio-channels", audioChannels.mpvValue)
+        setOption("audio-normalize-downmix", audioMix.normalizesDownmix ? "yes" : "no")
+        // The dialogue control. Passed to libswresample rather than set on mpv, because mpv has
+        // no centre-level option of its own — it is the resampler that folds the channels.
+        if let swresample = PlayerAudioMix.swresampleOptions(centerMixDb: audioMix.centerMixLevelDb) {
+            setOption("audio-swresample-o", swresample)
+        }
         applySubtitleStyle(subtitleStyle, asOption: true)
         // A TV is not a laptop: cache generously, the network is the bottleneck.
         setOption("cache", "yes")
@@ -394,15 +407,14 @@ final class MPVEngine {
         command(["set", "audio-channels", channels.mpvValue])
     }
 
-    /// Post-decode gain, Android's "Amplification (PCM)" control. mpv expresses volume as a
-    /// percentage, so the dB the viewer picks is converted rather than passed through.
-    static let amplificationLimitDb = 10
+    /// Post-decode gain, Android's "Amplification (PCM)" control. See `PlayerAudioMix` for the
+    /// conversion — mpv wants a percentage, the viewer picked decibels.
+    static let amplificationLimitDb = PlayerAudioMix.amplificationRangeDb.upperBound
 
     func setAmplification(db: Int) {
         let clamped = min(Self.amplificationLimitDb, max(0, db))
         amplificationDb = clamped
-        let percent = pow(10.0, Double(clamped) / 20.0) * 100
-        command(["set", "volume", String(format: "%.0f", percent)])
+        command(["set", "volume", String(format: "%.0f", PlayerAudioMix.volumePercent(amplificationDb: clamped))])
     }
 
     func setAspectMode(_ mode: AspectMode) {

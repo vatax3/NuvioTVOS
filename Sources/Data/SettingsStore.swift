@@ -208,6 +208,16 @@ final class AppSettings {
             }
     }
 
+    /// The audio settings the engine is built with. Amplification is only carried in when the
+    /// viewer asked for it to be remembered — otherwise every film starts at zero.
+    var playerAudioMix: PlayerAudioMix.Options {
+        PlayerAudioMix.Options(
+            amplificationDb: player.persistAudioAmplification ? player.audioAmplificationDb : 0,
+            centerMixLevelDb: player.centerMixLevelDb,
+            normalizesDownmix: player.downmixNormalization
+        )
+    }
+
     var audioTrackLanguages: [String] {
         trackLanguages(player.preferredAudioLanguage, player.secondaryPreferredAudioLanguage)
     }

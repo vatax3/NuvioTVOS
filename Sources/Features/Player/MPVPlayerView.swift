@@ -27,6 +27,7 @@ struct MPVPlayerView: View {
     let hardwareDecoding: MpvHardwareDecodeMode
     let audioOutput: MpvAudioOutput
     let audioChannels: AudioOutputChannels
+    let audioMix: PlayerAudioMix.Options
     let audioLanguages: [String]
     let subtitleLanguages: [String]
     let subtitleStyle: SubtitleStyle
@@ -137,6 +138,7 @@ struct MPVPlayerView: View {
             MPVMetalSurface(engine: engine, request: request, resumeAt: resumeAt,
                             verboseLogging: verboseLogging, hardwareDecoding: hardwareDecoding,
                             audioOutput: audioOutput, audioChannels: audioChannels,
+                            audioMix: audioMix,
                             audioLanguages: audioLanguages, subtitleLanguages: subtitleLanguages,
                             subtitleStyle: subtitleStyle, initialAspectMode: initialAspectMode)
                 .ignoresSafeArea()
@@ -978,11 +980,18 @@ struct MPVPlayerView: View {
                     ),
                     canDecrease: engine.amplificationDb > 0,
                     canIncrease: engine.amplificationDb < MPVEngine.amplificationLimitDb,
-                    onDecrease: { engine.setAmplification(db: engine.amplificationDb - 1) },
-                    onIncrease: { engine.setAmplification(db: engine.amplificationDb + 1) }
+                    onDecrease: { setAmplification(engine.amplificationDb - 1) },
+                    onIncrease: { setAmplification(engine.amplificationDb + 1) }
                 )
             }
         }
+    }
+
+    /// Written whether or not the viewer asked for it to be remembered, so turning that switch
+    /// on adopts the level they are listening to rather than resetting it to zero.
+    private func setAmplification(_ db: Int) {
+        engine.setAmplification(db: db)
+        settings.player.audioAmplificationDb = engine.amplificationDb
     }
 
     /// The subtitle chooser mirrors it: the tracks mpv holds — the file's own and every addon
@@ -1587,6 +1596,7 @@ private struct MPVMetalSurface: UIViewControllerRepresentable {
     let hardwareDecoding: MpvHardwareDecodeMode
     let audioOutput: MpvAudioOutput
     let audioChannels: AudioOutputChannels
+    let audioMix: PlayerAudioMix.Options
     let audioLanguages: [String]
     let subtitleLanguages: [String]
     let subtitleStyle: SubtitleStyle
@@ -1596,7 +1606,7 @@ private struct MPVMetalSurface: UIViewControllerRepresentable {
         MPVMetalViewController(
             engine: engine, request: request, resumeAt: resumeAt,
             verboseLogging: verboseLogging, hardwareDecoding: hardwareDecoding,
-            audioOutput: audioOutput, audioChannels: audioChannels,
+            audioOutput: audioOutput, audioChannels: audioChannels, audioMix: audioMix,
             audioLanguages: audioLanguages, subtitleLanguages: subtitleLanguages,
             subtitleStyle: subtitleStyle, initialAspectMode: initialAspectMode
         )
@@ -1615,6 +1625,7 @@ final class MPVMetalViewController: UIViewController {
     private let hardwareDecoding: MpvHardwareDecodeMode
     private let audioOutput: MpvAudioOutput
     private let audioChannels: AudioOutputChannels
+    private let audioMix: PlayerAudioMix.Options
     private let audioLanguages: [String]
     private let subtitleLanguages: [String]
     private let subtitleStyle: SubtitleStyle
@@ -1632,6 +1643,7 @@ final class MPVMetalViewController: UIViewController {
         hardwareDecoding: MpvHardwareDecodeMode,
         audioOutput: MpvAudioOutput,
         audioChannels: AudioOutputChannels,
+        audioMix: PlayerAudioMix.Options,
         audioLanguages: [String],
         subtitleLanguages: [String],
         subtitleStyle: SubtitleStyle,
@@ -1644,6 +1656,7 @@ final class MPVMetalViewController: UIViewController {
         self.hardwareDecoding = hardwareDecoding
         self.audioOutput = audioOutput
         self.audioChannels = audioChannels
+        self.audioMix = audioMix
         self.audioLanguages = audioLanguages
         self.subtitleLanguages = subtitleLanguages
         self.subtitleStyle = subtitleStyle
@@ -1679,6 +1692,7 @@ final class MPVMetalViewController: UIViewController {
             hardwareDecoding: hardwareDecoding,
             audioOutput: audioOutput,
             audioChannels: audioChannels,
+            audioMix: audioMix,
             audioLanguages: audioLanguages,
             subtitleLanguages: subtitleLanguages,
             subtitleStyle: subtitleStyle,

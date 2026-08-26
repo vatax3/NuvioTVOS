@@ -81,6 +81,39 @@ final class PlayerSettingsStore: PreferenceStore {
         set { setOption("audio_output_channels", newValue) }
     }
 
+    /// Whether the in-player amplification survives the film it was set on.
+    ///
+    /// Off by default, as upstream has it, and the default is the right one: amplification is
+    /// usually a fix for one badly mastered release, and carrying it into the next film is how
+    /// somebody ends up wondering why everything is loud.
+    var persistAudioAmplification: Bool {
+        get { bool("persist_audio_amplification", default: false) }
+        set { setBool("persist_audio_amplification", newValue) }
+    }
+
+    /// The amplification to start playback at. Only read when the switch above is on; written
+    /// whenever the player's own control moves, so turning the switch on adopts what is set now.
+    var audioAmplificationDb: Int {
+        get { int("audio_amplification_db", default: 0) }
+        set { setInt("audio_amplification_db", newValue) }
+    }
+
+    /// How loud the centre channel is folded into a downmix — the dialogue control.
+    ///
+    /// See `PlayerAudioMix.centerMixLevel(db:)`: zero means libswresample's own default, so the
+    /// setting starts out changing nothing.
+    var centerMixLevelDb: Int {
+        get { int("center_mix_level_db", default: 0) }
+        set { setInt("center_mix_level_db", newValue) }
+    }
+
+    /// `--audio-normalize-downmix`. Prevents a 5.1 track clipping when it is folded to stereo,
+    /// at the cost of some level.
+    var downmixNormalization: Bool {
+        get { bool("downmix_normalization_enabled", default: false) }
+        set { setBool("downmix_normalization_enabled", newValue) }
+    }
+
     // MARK: - Subtitles
 
     var subtitlePreferredLanguage: String {

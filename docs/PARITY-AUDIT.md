@@ -69,7 +69,7 @@ platform refuses the upstream approach.
 | Plugin runtime | Partial | Repository/install/settings, HTML/CSS helpers, fetch, `getStreams`. CryptoJS covers common hashes/HMAC, PBKDF2 and AES, not the legacy DES family. |
 | Player transport | Parity | In-place sources, episodes, tracks, subtitle appearance/delay, audio delay, speed, seven display modes, stream info, skip cards, post-play, still-watching, external hand-off — and, since 1.0.17, the hidden-controls seek readout. |
 | Player failure recovery | Parity at state-machine level | Decoded-first-frame detection, one bounded retry, AVFoundation→mpv fallback, live-playhead resume. |
-| Player audio controls ✻ | Partial | Output channels and in-player amplification exist. Missing: persisted amplification, centre-mix level, downmix normalisation, keep-original-on-downmix, forced optical passthrough. |
+| Player audio controls | Parity, less two the platform refuses | Output channels, in-player amplification and — since 1.0.24 — persisted amplification, centre-mix level and downmix normalisation. Keep-original-on-downmix and forced optical passthrough cannot exist here; see *Forced*. |
 | Dolby Vision profile 7 ✻ | **Adapted (in our favour)** | Upstream carries a forked Matroska extractor, a libdovi bridge, an RPU stripper and DV5→DV8.1 conversion — ~13 files — because ExoPlayer cannot play dual-layer DV. libmpv with the vendored `Libdovi`/`Libplacebo` handles it in-engine. Their five DV settings have no counterpart because they have no problem to solve here. **Unverified on hardware.** |
 | Subtitles ✻ | Partial | Addon and muxed tracks, auto-language/forced rules, style, delay, SDH stripping, charset detection, CJK fallback, and since 1.0.19 mojibake repair. Ours reverses the double encoding rather than tabulating known sequences, so it also covers the Cyrillic, Greek and Japanese cases upstream's table does not. Still no sync-by-line dialog. |
 | External players | Parity | Infuse/VLC/nPlayer/Outplayer hand-off with subtitle forwarding. Skip-segment forwarding is absent. Zidoo monitoring is Android-only. |
@@ -114,7 +114,6 @@ path and AVFoundation refuses.
 - ~~The **poster options dialog**~~ — shipped in 1.0.18; what is left of it is listed under
   *Partial*.
 - The **parallel chunked downloader** and the non-faststart MP4 path built on it.
-- The **in-app update banner**.
 - ~~The **hidden-controls seek overlay**~~ — shipped in 1.0.17. Horizontal presses now seek
   behind a compact readout instead of revealing the transport over the picture; vertical still
   brings the transport back. See `PlayerSeekOverlayPolicy`.
@@ -139,6 +138,12 @@ path and AVFoundation refuses.
 - **Episode IMDb ratings, Premiumize device auth, crash and playback reports**: build-time
   secrets, blank in public source. Guessing endpoint shapes would create silent data loss.
 - **The official discovery service**: same.
+- **Keep original audio on downmix** and **forced optical passthrough**. The first is an
+  ExoPlayer arrangement — its decoder emits a downmix while the multichannel track stays
+  selectable — and libmpv has one output chain, not two. The second needs a bitstream
+  passthrough API, and tvOS 26 has none: `AVAudioContentSource` is an *encoder* settings key
+  (`AVEncoderContentSourceKey`), not a playback path. Passthrough on this platform is what the
+  Apple TV's own audio settings decide, which is what the Audio card says.
 
 ## Corrections to the 1.0.15 audit
 
@@ -205,8 +210,13 @@ Also: our preference keys were documented as matching the Android names, and mos
    are wired and in use at 209 call sites covering 115 keys — the shell and player
    vocabulary. Roughly 700 prose literals remain, 636 of them in `Sources/Features`. It is
    extended screen by screen, and no mechanism has to be built first.
-3. **In-app update banner.** Small, and we already publish the releases it would read.
-4. **Player audio controls** — five settings, each a one-line mpv option.
+3. ~~**In-app update banner**~~ — **shipped in 1.0.24**, on the About screen and reading the
+   sideloading feed rather than the releases API: it is the artefact that has to be right for
+   anyone to install an update at all. It tells and does not install, because a sideloaded app
+   on tvOS has no way to replace itself.
+4. ~~**Player audio controls**~~ — **shipped in 1.0.24**, and the estimate was wrong: three of
+   the five are mpv options, and the other two are ExoPlayer and Android AudioTrack concepts
+   with no tvOS equivalent. They moved to *Forced* rather than being built.
 5. **Visual snapshot tests.** Current UI tests prove navigation and focus, not appearance.
 
 ### Resolved since this document was written

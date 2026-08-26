@@ -701,6 +701,11 @@ struct ExperienceSettingsContent: View {
 struct AboutContent: View {
     @Environment(\.nuvioColors) private var colors
 
+    /// Checked when this screen opens, not at launch. A sideloaded build cannot update itself on
+    /// tvOS, so the most an update check can do is tell you — and a thing that can only tell you
+    /// does not need to reach the network before you have asked.
+    @State private var update: AppUpdateCheck.Available?
+
     private var version: String {
         let short = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
@@ -709,6 +714,8 @@ struct AboutContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
+            updateCard
+
             SettingsCard(title: "Nuvio for Apple TV") {
                 VStack(alignment: .leading, spacing: NuvioTheme.spacing.md) {
                     Text("Nuvio")
@@ -739,6 +746,40 @@ struct AboutContent: View {
             }
 
             LicensesContent()
+        }
+        .task {
+            update = await AppUpdateCheck.fetch(current: AppUpdateCheck.currentVersion)
+        }
+    }
+
+    @ViewBuilder
+    private var updateCard: some View {
+        if let update {
+            SettingsCard(title: "Update available") {
+                VStack(alignment: .leading, spacing: NuvioTheme.spacing.sm) {
+                    Text("Version \(update.version)")
+                        .nuvioText(NuvioTextStyles.cardTitle)
+                        .foregroundStyle(colors.textPrimary)
+                    Text("""
+                    Nuvio cannot install this itself — a sideloaded app on tvOS has no way to \
+                    replace itself. Sideload it the way you installed this one; your \
+                    sideloading app will already be offering it if it follows the Nuvio source.
+                    """)
+                        .nuvioText(NuvioTextStyles.bodyCompact)
+                        .foregroundStyle(colors.textSecondary)
+                        .frame(maxWidth: dp(720), alignment: .leading)
+                    if !update.notes.isEmpty {
+                        Text(update.notes)
+                            .nuvioText(NuvioTextStyles.metadata)
+                            .foregroundStyle(colors.textTertiary)
+                            .frame(maxWidth: dp(720), alignment: .leading)
+                    }
+                }
+                .padding(.horizontal, NuvioTheme.spacing.lg)
+                .padding(.vertical, NuvioTheme.spacing.sm)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .readableBlock()
+            }
         }
     }
 }

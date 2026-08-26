@@ -218,6 +218,7 @@ struct PlayerView: View {
                 hardwareDecoding: settings.player.mpvHardwareDecodeMode,
                 audioOutput: settings.player.mpvAudioOutput,
                 audioChannels: settings.player.audioOutputChannels,
+                audioMix: settings.playerAudioMix,
                 audioLanguages: settings.audioTrackLanguages,
                 subtitleLanguages: settings.subtitleTrackLanguages,
                 subtitleStyle: settings.subtitleStyle,
