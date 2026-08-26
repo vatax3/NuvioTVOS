@@ -40,6 +40,16 @@
       ],
       "versions": [
         {
+          "version": "1.0.27",
+          "buildVersion": "29",
+          "date": "2026-08-26",
+          "localizedDescription": "## The rest of the franchise\n\nA film that belongs to a series now shows the others on its page, under the\nfranchise's own name and above **More like this** — knowing there are two more\nDune films is a better answer to \"what next\" than a genre match.\n\nIn release order, and the film you are looking at is not in its own row.\n\nNeeds a TMDB API key, under Settings → Integrations.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.27/Nuvio-1.0.27-tvOS-unsigned.ipa",
+          "size": 31727908,
+          "minOSVersion": "17.0",
+          "sha256": "321e7e53ea0339e05cf2a5ce325e1a9d28382ba683cfc73e17a836074d682f87"
+        },
+        {
           "version": "1.0.26",
           "buildVersion": "28",
           "date": "2026-08-26",
@@ -186,11 +196,11 @@
         ],
         "privacy": {}
       },
-      "version": "1.0.26",
+      "version": "1.0.27",
       "versionDate": "2026-08-26",
-      "versionDescription": "## Removing from Continue Watching now sticks\n\nIf your watch progress comes from Trakt or Simkl, removing a row from Continue\nWatching only removed it from this Apple TV. The next sync fetched the resume\npoint back from the service and the row returned, as though the removal had not\nworked.\n\nIt now removes the resume point on the service too. Nothing else on your tracking\naccount is touched — the title's own resume points and nothing beyond them.\n\nOn the default local setting nothing changes; there was never anything remote to\nbring the row back.",
-      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.26/Nuvio-1.0.26-tvOS-unsigned.ipa",
-      "size": 31723025,
+      "versionDescription": "## The rest of the franchise\n\nA film that belongs to a series now shows the others on its page, under the\nfranchise's own name and above **More like this** — knowing there are two more\nDune films is a better answer to \"what next\" than a genre match.\n\nIn release order, and the film you are looking at is not in its own row.\n\nNeeds a TMDB API key, under Settings → Integrations.",
+      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.27/Nuvio-1.0.27-tvOS-unsigned.ipa",
+      "size": 31727908,
       "minOSVersion": "17.0"
     }
   ],
