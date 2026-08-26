@@ -40,6 +40,16 @@
       ],
       "versions": [
         {
+          "version": "1.0.23",
+          "buildVersion": "25",
+          "date": "2026-08-26",
+          "localizedDescription": "## Badge rules\n\nA source list can now say what you want it to say. Point the Apple TV at a badge\npack — a JSON file of named patterns with their own colours and logos — and every\nmatching source gets its badge. It uses the same file format as NuvioTV for\nAndroid TV, so a pack written there works here unchanged.\n\nSettings → Playback → Source list → **Badge rules**. Scan the code with a phone\non the same Wi-Fi; adding, swapping and removing packs all happen there. Three\npacks can be held at once and one is applied.\n\n## Plugin repositories, from a phone\n\nThe same idea for plugin repositories: the phone lists them and asks for changes,\nand the **Apple TV asks you before anything happens**. Adding a repository\ninstalls code that then runs on every stream search, and this page is visible to\nyour whole network — so the phone can only ask.\n\nSettings → Addons → **Repositories**.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.23/Nuvio-1.0.23-tvOS-unsigned.ipa",
+          "size": 31688526,
+          "minOSVersion": "17.0",
+          "sha256": "e8f26038c474311eb4fb0c103c95e6793b7966ac400f512889be29eb50773dac"
+        },
+        {
           "version": "1.0.22",
           "buildVersion": "24",
           "date": "2026-08-26",
@@ -146,11 +156,11 @@
         ],
         "privacy": {}
       },
-      "version": "1.0.22",
+      "version": "1.0.23",
       "versionDate": "2026-08-26",
-      "versionDescription": "## Simkl now knows which episode you watched\n\nMarking an episode watched sent Simkl the *show's* ids and nothing else — so it marked the whole series. Episode writes now name the episode.\n\n## Anime\n\nSimkl can be addressed two ways and they cannot be mixed: season coordinates, or an absolute number against a per-season entry. Sending both a franchise IMDb id and a per-season MyAnimeList id is not extra information — Simkl matches whichever it recognises first, and the episode lands on the wrong season of the wrong show.\n\nThe two shapes are now kept apart properly, with `use_tvdb_anime_seasons` telling Simkl which one it is looking at.\n\n**Settings → Integrations → Simkl → Anime seasons** decides whether a franchise is one title or several. One IMDb id spans every season, while MyAnimeList and Kitsu give each its own entry — so grouping is right if you think of a show as one thing, and wrong if you track seasons separately. Your call now. Films and ordinary series are unaffected.\n\n---\n\n337 unit tests and 9 UI tests pass. The IPA is unsigned and must be signed with your own certificate.",
-      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.22/Nuvio-1.0.22-tvOS-unsigned.ipa",
-      "size": 31611440,
+      "versionDescription": "## Badge rules\n\nA source list can now say what you want it to say. Point the Apple TV at a badge\npack — a JSON file of named patterns with their own colours and logos — and every\nmatching source gets its badge. It uses the same file format as NuvioTV for\nAndroid TV, so a pack written there works here unchanged.\n\nSettings → Playback → Source list → **Badge rules**. Scan the code with a phone\non the same Wi-Fi; adding, swapping and removing packs all happen there. Three\npacks can be held at once and one is applied.\n\n## Plugin repositories, from a phone\n\nThe same idea for plugin repositories: the phone lists them and asks for changes,\nand the **Apple TV asks you before anything happens**. Adding a repository\ninstalls code that then runs on every stream search, and this page is visible to\nyour whole network — so the phone can only ask.\n\nSettings → Addons → **Repositories**.",
+      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.23/Nuvio-1.0.23-tvOS-unsigned.ipa",
+      "size": 31688526,
       "minOSVersion": "17.0"
     }
   ],
