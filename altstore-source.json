@@ -40,6 +40,16 @@
       ],
       "versions": [
         {
+          "version": "1.0.28",
+          "buildVersion": "30",
+          "date": "2026-08-26",
+          "localizedDescription": "## \"Remember last profile\" now tells the truth\n\nThe switch under Settings → Advanced showed **on** by default while every launch\nbehaved as though it were **off** — straight to \"Who's watching?\". Two parts of\nthe app disagreed about what the default was.\n\nNothing changes about how your Apple TV behaves. What changes is that the switch\nnow shows the state it is actually in, and turning it on works.\n\nIf you had already set it, your choice is kept.\n\n## Syncing with Android TV\n\nThis setting was stored under a name Android TV does not use, so it was the one\npreference that quietly failed to travel between the two apps. It now uses the\nsame name.\n\n## Housekeeping\n\nFour settings that appeared in the code but could never do anything on Apple TV\nhave been removed — decoder priority, subtitle renderer choice, Dolby Vision\nprofile 7 handling and cache sizing. libmpv either has no such choice to make or\nhas no such problem to solve.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.28/Nuvio-1.0.28-tvOS-unsigned.ipa",
+          "size": 31728544,
+          "minOSVersion": "17.0",
+          "sha256": "4283b7bf6ccd6e7fd901ac895083826f3e96968f26f3c447d0d53a4a63257f38"
+        },
+        {
           "version": "1.0.27",
           "buildVersion": "29",
           "date": "2026-08-26",
@@ -196,11 +206,11 @@
         ],
         "privacy": {}
       },
-      "version": "1.0.27",
+      "version": "1.0.28",
       "versionDate": "2026-08-26",
-      "versionDescription": "## The rest of the franchise\n\nA film that belongs to a series now shows the others on its page, under the\nfranchise's own name and above **More like this** — knowing there are two more\nDune films is a better answer to \"what next\" than a genre match.\n\nIn release order, and the film you are looking at is not in its own row.\n\nNeeds a TMDB API key, under Settings → Integrations.",
-      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.27/Nuvio-1.0.27-tvOS-unsigned.ipa",
-      "size": 31727908,
+      "versionDescription": "## \"Remember last profile\" now tells the truth\n\nThe switch under Settings → Advanced showed **on** by default while every launch\nbehaved as though it were **off** — straight to \"Who's watching?\". Two parts of\nthe app disagreed about what the default was.\n\nNothing changes about how your Apple TV behaves. What changes is that the switch\nnow shows the state it is actually in, and turning it on works.\n\nIf you had already set it, your choice is kept.\n\n## Syncing with Android TV\n\nThis setting was stored under a name Android TV does not use, so it was the one\npreference that quietly failed to travel between the two apps. It now uses the\nsame name.\n\n## Housekeeping\n\nFour settings that appeared in the code but could never do anything on Apple TV\nhave been removed — decoder priority, subtitle renderer choice, Dolby Vision\nprofile 7 handling and cache sizing. libmpv either has no such choice to make or\nhas no such problem to solve.",
+      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.28/Nuvio-1.0.28-tvOS-unsigned.ipa",
+      "size": 31728544,
       "minOSVersion": "17.0"
     }
   ],
