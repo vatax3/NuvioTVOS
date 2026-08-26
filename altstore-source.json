@@ -40,6 +40,26 @@
       ],
       "versions": [
         {
+          "version": "1.0.30",
+          "buildVersion": "32",
+          "date": "2026-08-26",
+          "localizedDescription": "## Your Trakt lists, from any poster\n\nLong-press a poster and choose **Trakt lists…** to file it into one of your own\nlists, or take it out. Your watchlist is not in there — that is what the library\nrow already does.\n\nWhich lists already hold the title fills in a moment after the dialog opens.\nTrakt has no way to ask \"which of my lists contain this\", so it is one question\nper list, and waiting on all of them before showing anything would be worse.\n\n## Removing from Simkl asks first\n\nSimkl stores a title's list state and its watched history as one record. Removing\nit from your library there also clears every episode you had marked watched — so\nit now asks before doing it.\n\nRemoving from Trakt does not ask, because on Trakt it only touches the watchlist.\nNothing else is lost, and a warning that fires when nothing is at stake is a\nwarning people learn to dismiss.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.30/Nuvio-1.0.30-tvOS-unsigned.ipa",
+          "size": 31798637,
+          "minOSVersion": "17.0",
+          "sha256": "df2b255546960e8043ffa12c5c7a0b59694efe70492b9761b163ea4b164151a3"
+        },
+        {
+          "version": "1.0.29",
+          "buildVersion": "31",
+          "date": "2026-08-26",
+          "localizedDescription": "## Mark an episode watched\n\nLong-press any episode on a series page. Until now there was no way to do this —\nyou either played the episode past the watched threshold, or marked the whole\nseries. Somebody who watched an episode elsewhere had no way to say so, and\nContinue Watching kept offering it.\n\nThe dialog offers: play, start from the beginning, mark this episode, mark this\nseason, **mark this and everything before it**, and comments.\n\n\"Everything before it\" crosses seasons — starting a show at season three and\nmarking everything before it watched means the earlier seasons, which is what you\nmeant.\n\nSpecials and episodes that have not aired are never marked.\n\n## One show, one row\n\nIf you watch a series through two different addons, each one names it differently,\nand Continue Watching used to show it twice — two rows for one show, each\nsuggesting a different next episode.\n\nNow it is one row, following whichever addon you last watched it on.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.29/Nuvio-1.0.29-tvOS-unsigned.ipa",
+          "size": 31767010,
+          "minOSVersion": "17.0",
+          "sha256": "f0b08364aa54371ee43ac5dff296c4f0aaa25a55701f0374b1d3efe1e687c33c"
+        },
+        {
           "version": "1.0.28",
           "buildVersion": "30",
           "date": "2026-08-26",
@@ -206,11 +226,11 @@
         ],
         "privacy": {}
       },
-      "version": "1.0.28",
+      "version": "1.0.30",
       "versionDate": "2026-08-26",
-      "versionDescription": "## \"Remember last profile\" now tells the truth\n\nThe switch under Settings → Advanced showed **on** by default while every launch\nbehaved as though it were **off** — straight to \"Who's watching?\". Two parts of\nthe app disagreed about what the default was.\n\nNothing changes about how your Apple TV behaves. What changes is that the switch\nnow shows the state it is actually in, and turning it on works.\n\nIf you had already set it, your choice is kept.\n\n## Syncing with Android TV\n\nThis setting was stored under a name Android TV does not use, so it was the one\npreference that quietly failed to travel between the two apps. It now uses the\nsame name.\n\n## Housekeeping\n\nFour settings that appeared in the code but could never do anything on Apple TV\nhave been removed — decoder priority, subtitle renderer choice, Dolby Vision\nprofile 7 handling and cache sizing. libmpv either has no such choice to make or\nhas no such problem to solve.",
-      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.28/Nuvio-1.0.28-tvOS-unsigned.ipa",
-      "size": 31728544,
+      "versionDescription": "## Your Trakt lists, from any poster\n\nLong-press a poster and choose **Trakt lists…** to file it into one of your own\nlists, or take it out. Your watchlist is not in there — that is what the library\nrow already does.\n\nWhich lists already hold the title fills in a moment after the dialog opens.\nTrakt has no way to ask \"which of my lists contain this\", so it is one question\nper list, and waiting on all of them before showing anything would be worse.\n\n## Removing from Simkl asks first\n\nSimkl stores a title's list state and its watched history as one record. Removing\nit from your library there also clears every episode you had marked watched — so\nit now asks before doing it.\n\nRemoving from Trakt does not ask, because on Trakt it only touches the watchlist.\nNothing else is lost, and a warning that fires when nothing is at stake is a\nwarning people learn to dismiss.",
+      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.30/Nuvio-1.0.30-tvOS-unsigned.ipa",
+      "size": 31798637,
       "minOSVersion": "17.0"
     }
   ],
