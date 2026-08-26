@@ -341,6 +341,9 @@ struct EpisodeCard: View {
     /// caller resolves the rule against this episode's watched state rather than the card.
     var showsRating: Bool = true
     var action: () -> Void
+    /// Absent where the card is drawn outside a detail screen — the in-player episode list has
+    /// no room for a dialog and nothing to open one against.
+    var onLongPress: (() -> Void)?
 
     @State private var isFocused = false
 
@@ -380,6 +383,9 @@ struct EpisodeCard: View {
                 .cardDepth(.episode, cornerRadius: tokens.cornerRadius)
             }
             .buttonStyle(NuvioCardButtonStyle(cornerRadius: tokens.cornerRadius))
+            // The same gesture the poster carries. Until now the only way to mark an episode
+            // watched was to play it past the threshold. See `EpisodeOptionsPolicy`.
+            .onLongPressGesture { onLongPress?() }
             .onFocusChange { isFocused = $0 }
 
             VStack(alignment: .leading, spacing: NuvioTheme.spacing.xxs) {

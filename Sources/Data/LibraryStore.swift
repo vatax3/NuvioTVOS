@@ -177,6 +177,15 @@ final class LibraryStore {
         entries += projectedNextUp(
             threshold: threshold, cutoff: cutoff, excluding: seenContent, options: nextUp
         )
+        // `seenContent` only dedupes ids that are literally equal. Two addons keying the same
+        // show differently get past it, and the rail shows one series twice, each row offering a
+        // different next episode. See `SeriesIdentity`.
+        entries = SeriesIdentity.deduplicated(
+            entries,
+            contentId: { $0.progress.contentId },
+            imdbId: { $0.preview.imdbId },
+            activity: { $0.progress.updatedAt }
+        )
         return sorted(entries, by: sort)
     }
 

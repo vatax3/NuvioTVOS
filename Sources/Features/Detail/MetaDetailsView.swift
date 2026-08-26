@@ -19,6 +19,9 @@ struct MetaDetailsView: View {
 
     @State private var model = MetaDetailsViewModel()
     @State private var logoFailed = false
+    /// The long-press overlay on an episode. Held here rather than on the router because it is
+    /// only reachable from this screen and dies with it.
+    @State private var episodeOptions: EpisodeOptionsRequest?
 
     var body: some View {
         GeometryReader { proxy in
@@ -48,6 +51,15 @@ struct MetaDetailsView: View {
         .onChange(of: model.meta?.videos.count ?? 0, initial: true) { _, _ in
             guard let meta = model.meta, meta.type == .series else { return }
             library.cacheEpisodes(meta.episodeRefs, forContentId: meta.id)
+        }
+        .overlay {
+            if let request = episodeOptions {
+                EpisodeOptionsDialog(
+                    request: request,
+                    onPlay: { playEpisode($0) },
+                    onDismiss: { episodeOptions = nil }
+                )
+            }
         }
     }
 
@@ -89,7 +101,12 @@ struct MetaDetailsView: View {
                     .padding(.horizontal, NuvioTheme.layout.tvSafeHorizontal)
 
                 if meta.type == .series, !model.seasons.isEmpty {
-                    EpisodesSection(model: model, meta: meta, onPlay: playEpisode)
+                    EpisodesSection(
+                        model: model,
+                        meta: meta,
+                        onPlay: playEpisode,
+                        onLongPress: { episodeOptions = .init(video: $0, meta: meta) }
+                    )
                 }
 
                 // Every card in this rail hands off to the YouTube app, so with the app absent
@@ -423,6 +440,7 @@ struct EpisodesSection: View {
     let model: MetaDetailsViewModel
     let meta: Meta
     let onPlay: (Video) -> Void
+    let onLongPress: (Video) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: NuvioTheme.spacing.lg) {
@@ -461,7 +479,8 @@ struct EpisodesSection: View {
                                     threshold: settings.watchedThreshold
                                 )
                             ),
-                            action: { onPlay(episode) }
+                            action: { onPlay(episode) },
+                            onLongPress: { onLongPress(episode) }
                         )
                     }
                 }
