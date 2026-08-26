@@ -53,7 +53,7 @@ platform refuses the upstream approach.
 | Addons ✻ | Partial | Install, enable, order, remove, rename and catalog configuration exist. No local config server (below). |
 | Search | Parity for the Stremio surface | Debounced results, recent queries, cancellation, paginated See All. The private discovery service is unavailable. |
 | Discover | Parity for addon catalogs | Tail pagination, de-duplication, cancellation. |
-| Detail and metadata ✻ | Partial | Metadata, cast, companies, trailers, More like this, comments, parental guidance, and since 1.0.19 `videos[].rating` from addon metadata plus the rating-visibility rules including hide-until-watched. Missing: the TMDB franchise-collection row, the episode-options overlay, and the ratings tab's IMDb scores. |
+| Detail and metadata ✻ | Partial | Metadata, cast, companies, trailers, More like this, comments, parental guidance, and since 1.0.19 `videos[].rating` from addon metadata plus the rating-visibility rules including hide-until-watched. Since 1.0.27 the TMDB franchise-collection row. Missing: the episode-options overlay and the ratings tab's IMDb scores. |
 | Collections | Parity | Data shape, live folder sources, ordering, sync. `focusGifUrl`/`heroVideoUrl` retained but not rendered. |
 | Local library/progress ✻ | Parity | Save/remove, Continue Watching, watched threshold, per-profile persistence, account sync, removal from Continue Watching (1.0.18) and a sort control (1.0.19). |
 | Trakt | Parity | OAuth, progress, list reads, comments, related titles, scrobbling, `sync/watchlist` and `sync/history` writes. Upstream has no `sync/collection`; neither do we. |
@@ -97,7 +97,7 @@ path and AVFoundation refuses.
 
 ### Partial — the feature exists, some behaviour is missing
 
-- **Detail**: no franchise-collection row, no episode-options overlay.
+- **Detail**: no episode-options overlay.
 - **Poster options**: no series watched walk, no Trakt list management, no removal-impact
   warning.
 - **Home**: no inline trailers.

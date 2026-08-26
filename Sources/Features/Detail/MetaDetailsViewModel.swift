@@ -10,6 +10,8 @@ final class MetaDetailsViewModel {
     private(set) var isLoading = true
     private(set) var error: String?
     private(set) var moreLikeThis: [MetaPreview] = []
+    /// The other films in this one's franchise, when TMDB places it in one.
+    private(set) var collection: (name: String, items: [MetaPreview])?
     private(set) var ratings: MDBListRatings?
     private(set) var enrichment: TMDBClient.Enrichment?
 
@@ -191,6 +193,8 @@ final class MetaDetailsViewModel {
             moreLikeThis = result.recommendations
         }
 
+        await loadCollection(result.collection, meta: merged, settings: settings)
+
         await enrichEpisodes(season: selectedSeason, settings: settings)
     }
 
@@ -285,6 +289,29 @@ final class MetaDetailsViewModel {
         case .addonCatalog:
             await loadMoreLikeThisFromCatalog(addonStore: addonStore, meta: meta)
         }
+    }
+
+    /// The franchise row. The two rules that shape it are in `FranchiseCollectionRow`.
+    private func loadCollection(
+        _ reference: TMDBClient.Collection?,
+        meta: Meta,
+        settings: AppSettings
+    ) async {
+        guard meta.type == .movie, let reference, settings.tmdb.isUsable else {
+            collection = nil
+            return
+        }
+        let parts = await TMDBClient.shared.collectionItems(
+            kind: .collection,
+            tmdbId: reference.id,
+            type: .movie,
+            sortBy: "",
+            page: 1,
+            apiKey: settings.tmdb.apiKey,
+            language: settings.tmdb.language
+        )
+        let others = FranchiseCollectionRow.others(in: parts, excluding: meta)
+        collection = FranchiseCollectionRow.isWorthShowing(others) ? (reference.name, others) : nil
     }
 
     /// Genre-matched items from the first catalog that supports a genre filter for this type.

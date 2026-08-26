@@ -208,6 +208,15 @@ actor TMDBClient {
         var certification: String?
         var trailerYouTubeIds: [String] = []
         var recommendations: [MetaPreview] = []
+        /// The franchise this film belongs to, when TMDB says it belongs to one. Carried on the
+        /// detail payload we already fetch, so knowing costs nothing — only listing the other
+        /// films does.
+        var collection: Collection?
+    }
+
+    struct Collection: Sendable, Equatable {
+        var id: Int
+        var name: String
     }
 
     /// Resolves an IMDb id to a TMDB record, then pulls everything the settings allow.
@@ -312,6 +321,12 @@ actor TMDBClient {
                     imdbRating: item.vote_average.map { Float($0) }
                 )
             }
+        }
+        // Free: it rides along on the detail payload already fetched. Listing the other
+        // films is the request, and that is only made when there is a franchise to list.
+        if let reference = details.belongs_to_collection,
+           let id = reference.id, let name = reference.name?.nilIfBlank {
+            enrichment.collection = Collection(id: id, name: name)
         }
         if options.useReleaseDates {
             enrichment.certification = details.certification(for: "US")
@@ -596,6 +611,7 @@ private struct TMDBFindResponse: Decodable {
 }
 
 private struct TMDBNamed: Decodable { let id: Int?; let name: String?; let logo_path: String? }
+private struct TMDBCollectionRef: Decodable { let id: Int?; let name: String? }
 private struct TMDBGenre: Decodable { let name: String? }
 private struct TMDBImage: Decodable { let file_path: String? }
 private struct TMDBImages: Decodable { let logos: [TMDBImage]? }
@@ -688,6 +704,7 @@ private struct TMDBDetails: Decodable {
     let recommendations: TMDBRecommendations?
     let content_ratings: TMDBContentRatings?
     let release_dates: TMDBReleaseDates?
+    let belongs_to_collection: TMDBCollectionRef?
 
     func certification(for country: String) -> String? {
         if let rating = content_ratings?.results?

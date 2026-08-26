@@ -121,6 +121,18 @@ struct MetaDetailsView: View {
                     )
                 }
 
+                // Before "More like this", because a franchise is a stronger answer to "what do
+                // I watch next" than a genre match is.
+                if let collection = model.collection {
+                    CatalogRowView(
+                        title: collection.name,
+                        items: collection.items,
+                        showsSeeAll: false,
+                        backdropExpandEnabled: false,
+                        onSelect: { router.openDetail($0) }
+                    )
+                }
+
                 if !model.moreLikeThis.isEmpty {
                     CatalogRowView(
                         title: "More like this",
