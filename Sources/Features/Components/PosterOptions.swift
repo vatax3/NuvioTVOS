@@ -7,6 +7,14 @@ import SwiftUI
 /// point could be created from anywhere and removed from nowhere — `LibraryStore.clearProgress`
 /// existed for releases with no caller in the interface at all.
 enum PosterOptionsPolicy {
+    /// The identifier each row carries, named here rather than written out in the test so a
+    /// rename cannot leave the test passing against nothing.
+    ///
+    /// Rows only — deliberately no identifier on the container. One there propagates to every
+    /// descendant and *overrides* theirs, so the whole dialog answered to a single name and
+    /// none of the rows answered to their own.
+    static func identifier(for action: Action) -> String { "posterOptions.\(action.rawValue)" }
+
     enum Action: String, Identifiable, Hashable, CaseIterable {
         case addToLibrary
         case removeFromLibrary
@@ -239,6 +247,7 @@ struct PosterOptionsDialog: View {
         }
         .buttonStyle(NuvioRowButtonStyle(cornerRadius: NuvioTheme.radii.lg))
         .focused($focused, equals: action)
+        .accessibilityIdentifier(PosterOptionsPolicy.identifier(for: action))
     }
 
     private func label(_ action: PosterOptionsPolicy.Action) -> String {

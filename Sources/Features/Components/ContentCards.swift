@@ -19,6 +19,9 @@ struct ContentCard: View {
     var action: () -> Void
 
     @State private var isFocused = false
+    /// Set when a held Select opened the dialog, so the press that arrives on release is not
+    /// also treated as "open this title". See `SelectHoldGate`.
+    @State private var swallowsNextPress = false
     @State private var isExpanded = false
     @State private var logoFailed = false
     @State private var expandTask: Task<Void, Never>?
@@ -42,14 +45,25 @@ struct ContentCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Button(action: action) {
+            Button(action: {
+                if swallowsNextPress {
+                    swallowsNextPress = false
+                    return
+                }
+                action()
+            }) {
                 artwork
             }
             .buttonStyle(NuvioCardButtonStyle(cornerRadius: cornerRadius))
             // Library and watched state from anywhere a poster is drawn, which is the gesture
             // Android uses and the only route to removing a resume point. See
             // `PosterOptionsPolicy`.
-            .onLongPressGesture { router.posterOptions = .init(preview: item) }
+            // Library and watched state from anywhere a poster is drawn, which is the gesture
+            // Android uses and the only route to removing a resume point.
+            .onSelectHold(isFocused: isFocused, swallowsNextPress: $swallowsNextPress) {
+                router.posterOptions = .init(preview: item)
+            }
+            .accessibilityIdentifier("card.poster.\(item.id)")
             .focusedIfAvailable(focusBinding, equals: item.rowKey)
             .onFocusChange { focused in
                 guard focused != isFocused else { return }
@@ -230,6 +244,7 @@ struct ContinueWatchingCard: View {
     var action: () -> Void
 
     @State private var isFocused = false
+    @State private var swallowsNextPress = false
 
     private var tokens: NuvioCardComponentTokens { NuvioTheme.components.continueWatchingCard }
 
@@ -255,7 +270,13 @@ struct ContinueWatchingCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Button(action: action) {
+            Button(action: {
+                if swallowsNextPress {
+                    swallowsNextPress = false
+                    return
+                }
+                action()
+            }) {
                 ZStack(alignment: .bottom) {
                     RemoteImage(url: artworkURL, contentMode: .fill) {
                         PosterPlaceholder()
@@ -297,9 +318,10 @@ struct ContinueWatchingCard: View {
             .buttonStyle(NuvioCardButtonStyle(cornerRadius: tokens.cornerRadius))
             // The rail this card sits in is the one the dialog exists for: a resume point could
             // be created from anywhere and removed from nowhere.
-            .onLongPressGesture {
+            .onSelectHold(isFocused: isFocused, swallowsNextPress: $swallowsNextPress) {
                 router.posterOptions = .init(preview: entry.preview, isNextUpSuggestion: entry.isNextUp)
             }
+            .accessibilityIdentifier("card.continue.\(entry.preview.id)")
             .focusedIfAvailable(focusBinding, equals: entry.preview.rowKey)
             .onFocusChange { focused in
                 isFocused = focused
@@ -346,6 +368,7 @@ struct EpisodeCard: View {
     var onLongPress: (() -> Void)?
 
     @State private var isFocused = false
+    @State private var swallowsNextPress = false
 
     private var tokens: NuvioCardComponentTokens { NuvioTheme.components.episodeCard }
 
@@ -353,7 +376,13 @@ struct EpisodeCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: NuvioTheme.spacing.sm) {
-            Button(action: action) {
+            Button(action: {
+                if swallowsNextPress {
+                    swallowsNextPress = false
+                    return
+                }
+                action()
+            }) {
                 ZStack(alignment: .bottomLeading) {
                     RemoteImage(url: video.thumbnail ?? fallbackImage, contentMode: .fill) {
                         PosterPlaceholder(systemImage: "tv")
@@ -383,9 +412,15 @@ struct EpisodeCard: View {
                 .cardDepth(.episode, cornerRadius: tokens.cornerRadius)
             }
             .buttonStyle(NuvioCardButtonStyle(cornerRadius: tokens.cornerRadius))
-            // The same gesture the poster carries. Until now the only way to mark an episode
-            // watched was to play it past the threshold. See `EpisodeOptionsPolicy`.
-            .onLongPressGesture { onLongPress?() }
+            // The same gesture the poster carries, and it was broken the same way: until
+            // `SelectHoldGate` the hold opened the episode instead. The only route to marking
+            // an episode watched without playing it. See `EpisodeOptionsPolicy`.
+            // Focus alone is not enough here: without a handler — the in-player episode list —
+            // there is nothing to open, and swallowing the press would make the card inert.
+            .onSelectHold(
+                isFocused: isFocused && onLongPress != nil,
+                swallowsNextPress: $swallowsNextPress
+            ) { onLongPress?() }
             .onFocusChange { isFocused = $0 }
 
             VStack(alignment: .leading, spacing: NuvioTheme.spacing.xxs) {

@@ -28,6 +28,7 @@ struct RootView: View {
                 destination(for: route)
             }
         }
+
         .background(colors.background)
         .fullScreenCover(isPresented: Binding(
             get: { showsFirstRun == true },
@@ -39,14 +40,14 @@ struct RootView: View {
             guard showsFirstRun == nil else { return }
             showsFirstRun = FirstRunView.shouldPresent(settings: settings, addons: addons)
         }
-        .environment(\.posterMetrics, settings.posterMetrics)
-        .environment(\.cardDepth, settings.cardDepthStyle)
-        .environment(\.navigationFeel, settings.navigationFeel)
         // Presented here rather than per-rail: the same gesture has to reach the same dialog
         // from Home, Discover, Search, Library and every collection folder.
         .fullScreenCover(item: $router.posterOptions) { request in
             PosterOptionsDialog(request: request) { router.posterOptions = nil }
         }
+        .environment(\.posterMetrics, settings.posterMetrics)
+        .environment(\.cardDepth, settings.cardDepthStyle)
+        .environment(\.navigationFeel, settings.navigationFeel)
         .fullScreenCover(item: $router.playback) { request in
             PlayerView(request: request)
                 // Replacing a source remains in the same full-screen presentation, but the
@@ -67,6 +68,9 @@ struct RootView: View {
             // behaviour without an account, an addon or a stream picker in the way. Inert
             // unless the launch argument is passed.
             if let harness = PlayerHarness.request() { router.playback = harness }
+            // Puts a poster in the library grid and a row in Continue Watching, so a test has
+            // something to hold Select on. Also inert without its own launch argument.
+            LibraryHarness.seed(into: library)
             #endif
             // "Add Profile" and the long-press gesture leave the chooser asking for the
             // Profiles settings rather than Home.

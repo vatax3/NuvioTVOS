@@ -1,12 +1,14 @@
-# Functional parity audit — tvOS 1.0.16 vs Android TV 0.8.9-beta
+# Functional parity audit — tvOS 1.0.31 vs Android TV 0.8.9-beta
 
-Audit date: 2026-08-25. Supersedes the audit published with 1.0.15.
+Audit date: 2026-08-25, re-derived against 1.0.31 on 2026-08-26. Supersedes the audit
+published with 1.0.15. Fifteen releases landed while it was open, so the table below is
+the live record and the lists that follow are kept in step with it.
 
 ## Scope and evidence
 
 Baseline revisions, exact:
 
-- tvOS `v1.0.16` — commit `8ab03e3`, the current `main`;
+- tvOS `v1.0.31` — commit `19aef3d`, the current `main`;
 - Android TV `0.8.9-beta` — commit `f40c422ee`, tagged 2026-08-25.
 
 `0.8.9-beta` is the newest upstream release; `origin/dev` carries 43 further commits.
@@ -49,7 +51,7 @@ platform refuses the upstream approach.
 | Nuvio account and sync | Adapted | QR sign-in, device codes, linked devices, per-profile sync. |
 | Main navigation | Adapted | Same destinations; sidebar focus behaviour is tvOS-native. |
 | Home layouts and hero ✻ | Partial | Classic/Grid/Modern, hero, catalog order, collections, focus-hold expansion, the classic focus gradient, and since 1.0.19 the Continue Watching toggle and the rating-visibility control. No inline focused trailers. |
-| Poster options dialog | Parity | Since 1.0.18 a long press on any poster offers library add/remove, watched/unwatched, removal from Continue Watching and the detail screen. Since 1.0.25 the watched row covers series too, walking every aired episode — specials and unaired excluded — with one remote call rather than one per episode. Since 1.0.30 the viewer's own Trakt lists are managed from it, and removing a title from Simkl asks first — that removal calls `sync/history/remove`, so it erases every episode marked watched there. Trakt's removal touches only the watchlist and is not warned about, which is narrower than upstream's generic warning and checked against our own writes. |
+| Poster options dialog | Parity | Since 1.0.18 a long press on any poster offers library add/remove, watched/unwatched, removal from Continue Watching and the detail screen. Since 1.0.25 the watched row covers series too, walking every aired episode — specials and unaired excluded — with one remote call rather than one per episode. Since 1.0.30 the viewer's own Trakt lists are managed from it, and removing a title from Simkl asks first — that removal calls `sync/history/remove`, so it erases every episode marked watched there. Trakt's removal touches only the watchlist and is not warned about, which is narrower than upstream's generic warning and checked against our own writes. **None of it was reachable until 1.0.32** — see below. |
 | Addons | Parity | Install, enable, order, remove, rename and catalog configuration. An addon's own settings are reached by handing off its remote `configure` URL to a phone, which is what upstream's addon config server exists to avoid needing — see *Forced*. |
 | Search | Parity for the Stremio surface | Debounced results, recent queries, cancellation, paginated See All. The private discovery service is unavailable. |
 | Discover | Parity for addon catalogs | Tail pagination, de-duplication, cancellation. |
@@ -97,15 +99,19 @@ path and AVFoundation refuses.
 
 ### Partial — the feature exists, some behaviour is missing
 
-- **Poster options**: no series watched walk, no Trakt list management, no removal-impact
-  warning.
-- **Home**: no inline trailers.
-- **Next Up**: no sibling-id reconciliation; the projection needs a cached episode list.
-- **Player audio**: five controls absent.
+- ~~**Poster options**~~ — the series watched walk shipped in **1.0.25**, Trakt list
+  management and the Simkl removal warning in **1.0.30**. This entry is closed.
+- **Home**: no inline trailers. Forced, not missing — see below.
+- ~~**Next Up**~~ — the episode cache is seeded from Continue Watching since **1.0.25** and
+  sibling ids are reconciled since **1.0.29**. This entry is closed.
+- ~~**Player audio**~~ — three of the five shipped in **1.0.24**; the other two moved to
+  *Forced*, having no tvOS equivalent to build.
 - **Subtitles**: no sync-by-line dialog.
 - **External players**: no skip-segment forwarding.
 - **Plugins**: CryptoJS legacy DES family.
-- **Localisation**: 108 strings against 2,865, 2 languages against 36.
+- **Localisation**: the viewing surface is translated as of **1.0.31** — 231 keys in 2
+  languages against 2,865 in 36. What is left is Settings, ~570 literals, and 46 scattered
+  elsewhere. Nothing a viewer reads while finding or watching something is still English.
 
 ### Missing — nothing implemented
 
@@ -165,6 +171,35 @@ path and AVFoundation refuses.
    TMDB scores instead. Upstream's *second* source — addon metadata — is obtainable, and is now
    the cheapest real win on the list.
 
+## The long press did not work, and had not since it shipped
+
+Recorded at the top of its own section because it is the most expensive thing this audit missed,
+and because of *how* it was missed.
+
+`.onLongPressGesture` was attached to the card's `Button`. On tvOS a focused `Button` consumes a
+held Select and fires its **primary** action on release, so the gesture never ran: holding Select
+on a poster opened the title, on a Continue Watching card opened the title, on an episode played
+the episode, and on a profile chose the profile. The poster options dialog shipped in 1.0.18 and
+was unreachable for thirteen releases. The episode options overlay shipped in 1.0.29 and was
+unreachable for three.
+
+Nothing in the tree could have caught it. `PosterOptionsPolicyTests` has twenty tests and
+`EpisodeOptionsPolicyTests` more; every one of them asks what the dialog *offers*, and none of
+them presses anything. The audit read the same way — the feature was in the source, its rows were
+correct, its strings were translated, so it was marked Parity.
+
+Fixed in 1.0.32 by `SelectHoldGate`, which is the idiom the player already used for the same class
+of problem: a `UILongPressGestureRecognizer` filtered on `UIPress.PressType.select`, hung off the
+hosting controller's view, outside the focus graph. It deliberately does **not** cancel the press —
+that would break Select everywhere else — so the card that answered the hold drops the press that
+follows, and only that card.
+
+The lasting change is `PosterOptionsUITests`: three tests that hold a real Select through
+`XCUIRemote` and assert the dialog opens, in both places, **and that the press is not also
+delivered as an ordinary one**. That third test is the regression. The lesson generalises past this
+bug — a gesture is not covered by testing the policy behind it, and this codebase now has two
+features that were only ever proven by driving the remote.
+
 ## Findings this pass turned up in our own tree
 
 Both are **closed in 1.0.28**, and one of them was half wrong.
@@ -200,12 +235,13 @@ choice is lost.
 
 ### P1 — real gaps, buildable here, ordered by value per line
 
-Every item in this tier has shipped. What is left of the poster dialog — Trakt list management
-and the removal-impact warning — and the Next Up sibling-id reconciliation are the two threads
-still open, both recorded against their entries below.
+**This tier is closed.** The last two threads shut in 1.0.29 and 1.0.30. Each entry keeps its
+original wording and the release that answered it, because what this tier is worth recording now
+is which guesses about effort were right — and several were not.
 
-1. **Poster options dialog.** Reaches library and watched state from Home, Discover, Search and
-   Detail at once, and is the only route to removing a Continue Watching item.
+1. ~~**Poster options dialog**~~ — **shipped in 1.0.18**, extended through **1.0.30**. Reaches
+   library and watched state from Home, Discover, Search and Detail at once, and is the only
+   route to removing a Continue Watching item.
 2. ~~**`videos[].rating` from addon metadata**~~ — **shipped in 1.0.19.**
 3. ~~**Mojibake repair for subtitles**~~ — **shipped in 1.0.19**, by inverting the double
    encoding rather than tabulating sequences.
@@ -214,12 +250,15 @@ still open, both recorded against their entries below.
 5. ~~**Debrid formatter**, with the local HTTP server the editors need~~ — **shipped in
    1.0.20.** Stream badge rules and repository config followed in **1.0.23**, a page each on
    the same server.
-6. ~~**Simkl anime identity model**~~ — **shipped in 1.0.22.** Snapshot reconciliation and
-   `delete-playback` remain.
+6. ~~**Simkl anime identity model**~~ — **shipped in 1.0.22**, and `delete-playback` in
+   **1.0.26**: removing a series from Continue Watching left Simkl's playback session standing,
+   so the next sync put the row straight back. Snapshot reconciliation stays out by decision —
+   our list screens fetch when they appear, so there is no snapshot to reconcile.
 7. ~~**Next Up projection and dismissal**~~ — **shipped in 1.0.21**, and the episode cache is
-   seeded from Continue Watching since **1.0.25**, bounded to the front of the rail. What
-   remains is sibling-id reconciliation: a series watched under one addon's id and listed under
-   another's is two rows to us and one show to the viewer.
+   seeded from Continue Watching since **1.0.25**, bounded to the front of the rail.
+   Sibling-id reconciliation followed in **1.0.29**: a series watched under one addon's id and
+   listed under another's was two rows to us and one show to the viewer. Bridged on the IMDb
+   id, which the metadata carries even when the addon keys the show in its own namespace.
 
 ### P2 — larger, or lower value
 
@@ -258,11 +297,14 @@ test that the readout never takes the remote.
 
 ## Verification
 
-- Unit suite at 1.0.27: **427 tests, 0 failures**. UI suite: **9 tests, 0 failures**.
-- Test density is ahead of upstream per line — 436 tests over ~42k lines against 983 over 201k —
+- Unit suite at 1.0.32: **476 tests, 0 failures**. UI suite: **12 tests, 0 failures**.
+- Test density is ahead of upstream per line — 485 tests over ~43k lines against 983 over 201k —
   so the 1.0.12 plan's "tests too thin" framing was wrong on volume. It was right about
-  *placement*: the network clients still carry the least of it, though the five releases since
-  1.0.22 have each added a testable policy type in front of one.
+  *placement*: the network clients still carry the least of it, though every release since
+  1.0.22 has added a testable policy type in front of one.
+- Three build guards now fail on structural drift rather than leaving it to review: a declared
+  setting with no reader, a localisation key missing from either table, and a release whose
+  version never reached the sideloading feed.
 
 Not verified: a physical Apple TV, live Trakt/Simkl/debrid/Nuvio accounts, every third-party
 addon, or a side-by-side against a running 0.8.9 installation. In particular **the Dolby Vision

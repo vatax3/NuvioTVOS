@@ -15,6 +15,7 @@ struct ProfileSelectionView: View {
     @State private var entry = ""
     @State private var didFail = false
     @State private var isVerifying = false
+    @State private var swallowsNextPress = false
     @FocusState private var keypadFocus: Int?
 
     private var tintedProfile: Profile? {
@@ -123,7 +124,13 @@ struct ProfileSelectionView: View {
     }
 
     private func card(for profile: Profile) -> some View {
-        Button(action: { choose(profile) }) {
+        Button(action: {
+            if swallowsNextPress {
+                swallowsNextPress = false
+                return
+            }
+            choose(profile)
+        }) {
             VStack(spacing: dp(10)) {
                 ProfileAvatar(profile: profile, diameter: avatarSize)
                 Text(profile.name)
@@ -139,8 +146,12 @@ struct ProfileSelectionView: View {
         .buttonStyle(NuvioRowButtonStyle(cornerRadius: NuvioTheme.radii.lg))
         .focused($focusedProfileId, equals: profile.id)
         // Long press is the management gesture on Android; the same gesture is available here
-        // rather than adding a button the official screen does not have.
-        .onLongPressGesture { profiles.requestProfileManagement() }
+        // rather than adding a button the official screen does not have. One flag for the whole
+        // screen is enough — exactly one card holds focus at a time.
+        .onSelectHold(
+            isFocused: focusedProfileId == profile.id,
+            swallowsNextPress: $swallowsNextPress
+        ) { profiles.requestProfileManagement() }
     }
 
     private var addCard: some View {

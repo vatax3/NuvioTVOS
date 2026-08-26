@@ -9,6 +9,9 @@ struct NuvioApp: App {
     @State private var sync = NuvioSyncService()
     /// Profile pictures are account-wide, like the account itself.
     @State private var avatars = AvatarCatalog()
+    /// One Select-hold recognizer for the whole app, above the profile gate because the chooser
+    /// carries the gesture too. See `SelectHoldGate`.
+    @State private var selectHolds = SelectHoldReporter()
 
     init() {
         NuvioFontRegistrar.registerIfNeeded()
@@ -17,6 +20,8 @@ struct NuvioApp: App {
     var body: some Scene {
         WindowGroup {
             ProfileGate(profiles: profiles, account: account, sync: sync, avatars: avatars)
+                .environment(selectHolds)
+                .selectHoldGate(reporting: selectHolds)
         }
     }
 }
