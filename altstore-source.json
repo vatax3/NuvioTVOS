@@ -40,6 +40,16 @@
       ],
       "versions": [
         {
+          "version": "1.0.31",
+          "buildVersion": "33",
+          "date": "2026-08-26",
+          "localizedDescription": "## French, everywhere you actually watch\n\nIf your Apple TV is set to French, the whole viewing experience is now in French:\nhome, search, discover, your library, the Trakt and Simkl lists, the cloud\nlibrary, a title's page, cast, comments, the source list and the hand-off sheet,\nthe player and all its overlays, post-play, profiles and the sidebar.\n\n**Settings is still English.** It is by far the largest part — 571 pieces of text\n— and translating it properly is its own piece of work rather than the tail of\nthis one.\n\nNothing changes if your Apple TV is set to English.\n\n## Under the hood\n\nThe app now refuses to build if a piece of text asks for a translation that does\nnot exist, exists in only one of the two languages, or is defined twice. That last\none is the quiet failure: two definitions, the second silently winning, so a\ncorrected translation can sit unused under a stale one.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.31/Nuvio-1.0.31-tvOS-unsigned.ipa",
+          "size": 31813730,
+          "minOSVersion": "17.0",
+          "sha256": "a26f6316aced890d69c2071ff4c8e402194d37b75adde027fc324b627090f838"
+        },
+        {
           "version": "1.0.30",
           "buildVersion": "32",
           "date": "2026-08-26",
@@ -226,11 +236,11 @@
         ],
         "privacy": {}
       },
-      "version": "1.0.30",
+      "version": "1.0.31",
       "versionDate": "2026-08-26",
-      "versionDescription": "## Your Trakt lists, from any poster\n\nLong-press a poster and choose **Trakt lists…** to file it into one of your own\nlists, or take it out. Your watchlist is not in there — that is what the library\nrow already does.\n\nWhich lists already hold the title fills in a moment after the dialog opens.\nTrakt has no way to ask \"which of my lists contain this\", so it is one question\nper list, and waiting on all of them before showing anything would be worse.\n\n## Removing from Simkl asks first\n\nSimkl stores a title's list state and its watched history as one record. Removing\nit from your library there also clears every episode you had marked watched — so\nit now asks before doing it.\n\nRemoving from Trakt does not ask, because on Trakt it only touches the watchlist.\nNothing else is lost, and a warning that fires when nothing is at stake is a\nwarning people learn to dismiss.",
-      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.30/Nuvio-1.0.30-tvOS-unsigned.ipa",
-      "size": 31798637,
+      "versionDescription": "## French, everywhere you actually watch\n\nIf your Apple TV is set to French, the whole viewing experience is now in French:\nhome, search, discover, your library, the Trakt and Simkl lists, the cloud\nlibrary, a title's page, cast, comments, the source list and the hand-off sheet,\nthe player and all its overlays, post-play, profiles and the sidebar.\n\n**Settings is still English.** It is by far the largest part — 571 pieces of text\n— and translating it properly is its own piece of work rather than the tail of\nthis one.\n\nNothing changes if your Apple TV is set to English.\n\n## Under the hood\n\nThe app now refuses to build if a piece of text asks for a translation that does\nnot exist, exists in only one of the two languages, or is defined twice. That last\none is the quiet failure: two definitions, the second silently winning, so a\ncorrected translation can sit unused under a stale one.",
+      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.31/Nuvio-1.0.31-tvOS-unsigned.ipa",
+      "size": 31813730,
       "minOSVersion": "17.0"
     }
   ],
