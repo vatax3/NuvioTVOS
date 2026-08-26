@@ -99,7 +99,9 @@ final class TrackingWriteService {
         }
     }
 
-    /// Marking an episode or film watched. Trakt calls this history; Simkl calls it the same.
+    /// Marking an episode or film watched, or taking that mark back. Both accounts call it
+    /// history, and both express "unwatched" as removing the history entry rather than as a
+    /// state of its own.
     func watched(
         imdbId: String,
         trackingIds: [String: String],
@@ -108,6 +110,7 @@ final class TrackingWriteService {
         type: ContentType,
         season: Int?,
         episode: Int?,
+        removing: Bool = false,
         settings: AppSettings
     ) async {
         guard let provider = TrackingWrites.remoteDestination(
@@ -122,7 +125,7 @@ final class TrackingWriteService {
             case .trakt:
                 let outcome = try await TraktClient.shared.write(
                     .history,
-                    removing: false,
+                    removing: removing,
                     imdbId: imdbId,
                     type: type,
                     season: season,
@@ -134,7 +137,7 @@ final class TrackingWriteService {
             case .simkl:
                 try await SimklClient.shared.write(
                     list: nil,
-                    removing: false,
+                    removing: removing,
                     ids: trackingIds,
                     title: title,
                     year: year,

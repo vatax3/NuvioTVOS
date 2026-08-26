@@ -122,3 +122,11 @@
 "player.reveal_controls" = "Show playback controls";
 "player.you_are_watching" = "You are watching";
 "player.preparing_stream" = "Preparing stream…";
+
+/* Poster options — the long-press dialog on any card */
+"poster_options.add_to_library" = "Add to Library";
+"poster_options.remove_from_library" = "Remove from Library";
+"poster_options.mark_watched" = "Mark as watched";
+"poster_options.mark_unwatched" = "Mark as unwatched";
+"poster_options.remove_from_continue_watching" = "Remove from Continue Watching";
+"poster_options.go_to_details" = "Go to details";

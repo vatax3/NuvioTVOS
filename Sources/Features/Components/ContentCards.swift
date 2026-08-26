@@ -5,6 +5,7 @@ import SwiftUI
 struct ContentCard: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(\.posterMetrics) private var metrics
+    @Environment(Router.self) private var router
 
     let item: MetaPreview
     var isWatched: Bool = false
@@ -45,6 +46,10 @@ struct ContentCard: View {
                 artwork
             }
             .buttonStyle(NuvioCardButtonStyle(cornerRadius: cornerRadius))
+            // Library and watched state from anywhere a poster is drawn, which is the gesture
+            // Android uses and the only route to removing a resume point. See
+            // `PosterOptionsPolicy`.
+            .onLongPressGesture { router.posterOptions = .init(preview: item) }
             .focusedIfAvailable(focusBinding, equals: item.rowKey)
             .onFocusChange { focused in
                 guard focused != isFocused else { return }
@@ -210,6 +215,7 @@ struct ContentCard: View {
 struct ContinueWatchingCard: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(\.posterMetrics) private var metrics
+    @Environment(Router.self) private var router
 
     let entry: ContinueWatchingEntry
     var style: ContinueWatchingCardStyle = .landscape
@@ -287,6 +293,9 @@ struct ContinueWatchingCard: View {
                 .cardDepth(.continueWatching, cornerRadius: tokens.cornerRadius)
             }
             .buttonStyle(NuvioCardButtonStyle(cornerRadius: tokens.cornerRadius))
+            // The rail this card sits in is the one the dialog exists for: a resume point could
+            // be created from anywhere and removed from nowhere.
+            .onLongPressGesture { router.posterOptions = .init(preview: entry.preview) }
             .focusedIfAvailable(focusBinding, equals: entry.preview.rowKey)
             .onFocusChange { focused in
                 isFocused = focused

@@ -122,3 +122,11 @@
 "player.reveal_controls" = "Afficher les commandes de lecture";
 "player.you_are_watching" = "Vous regardez";
 "player.preparing_stream" = "Préparation du flux…";
+
+/* Poster options — the long-press dialog on any card */
+"poster_options.add_to_library" = "Ajouter à la bibliothèque";
+"poster_options.remove_from_library" = "Retirer de la bibliothèque";
+"poster_options.mark_watched" = "Marquer comme vu";
+"poster_options.mark_unwatched" = "Marquer comme non vu";
+"poster_options.remove_from_continue_watching" = "Retirer de la reprise";
+"poster_options.go_to_details" = "Voir la fiche";

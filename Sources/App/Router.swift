@@ -240,6 +240,9 @@ final class Router {
     /// Presented as a full-screen cover so playback owns the whole display, the way the
     /// Android player activity does.
     var playback: PlaybackRequest?
+    /// The long-press dialog, presented from the root so every rail and grid reaches it without
+    /// each call site wiring its own sheet. See `PosterOptionsPolicy`.
+    var posterOptions: PosterOptionsRequest?
 
     func push(_ route: Route) { path.append(route) }
 

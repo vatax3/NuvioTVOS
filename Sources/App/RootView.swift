@@ -42,6 +42,11 @@ struct RootView: View {
         .environment(\.posterMetrics, settings.posterMetrics)
         .environment(\.cardDepth, settings.cardDepthStyle)
         .environment(\.navigationFeel, settings.navigationFeel)
+        // Presented here rather than per-rail: the same gesture has to reach the same dialog
+        // from Home, Discover, Search, Library and every collection folder.
+        .fullScreenCover(item: $router.posterOptions) { request in
+            PosterOptionsDialog(request: request) { router.posterOptions = nil }
+        }
         .fullScreenCover(item: $router.playback) { request in
             PlayerView(request: request)
                 // Replacing a source remains in the same full-screen presentation, but the

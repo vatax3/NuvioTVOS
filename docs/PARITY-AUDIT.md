@@ -49,13 +49,13 @@ platform refuses the upstream approach.
 | Nuvio account and sync | Adapted | QR sign-in, device codes, linked devices, per-profile sync. |
 | Main navigation | Adapted | Same destinations; sidebar focus behaviour is tvOS-native. |
 | Home layouts and hero ✻ | Partial | Classic/Grid/Modern, hero, catalog order, collections, focus-hold expansion and the classic focus gradient exist. No inline focused trailers, no toggle to hide Continue Watching, no rating-visibility control. |
-| Poster options dialog ✻ | **Missing** | Upstream opens a dialog on any poster: add/remove library, mark watched/unwatched, manage Trakt lists, go to details, with a removal-impact warning. We have none of it. |
+| Poster options dialog ✻ | Partial | Since 1.0.18 a long press on any poster offers library add/remove, watched/unwatched, removal from Continue Watching and the detail screen, routed through the same tracking writes the detail screen uses. Watched is offered for films only — marking a whole series watched needs an episode walk that does not exist yet — and Trakt list management and the removal-impact warning are not built. |
 | Addons ✻ | Partial | Install/enable/order/remove and catalog configuration exist. No addon renaming; no local config server (below). |
 | Search | Parity for the Stremio surface | Debounced results, recent queries, cancellation, paginated See All. The private discovery service is unavailable. |
 | Discover | Parity for addon catalogs | Tail pagination, de-duplication, cancellation. |
 | Detail and metadata ✻ | Partial | Metadata, cast, companies, trailers, More like this, comments, parental guidance exist. Missing: the TMDB franchise-collection row, the episode-options overlay, the ratings tab's IMDb scores, and `videos[].rating` from addon metadata. |
 | Collections | Parity | Data shape, live folder sources, ordering, sync. `focusGifUrl`/`heroVideoUrl` retained but not rendered. |
-| Local library/progress ✻ | Partial | Save/remove, Continue Watching, watched threshold, per-profile persistence, account sync. **No way to remove an item from Continue Watching** — `LibraryStore.clearProgress` still has no UI caller. No library sort control. |
+| Local library/progress ✻ | Partial | Save/remove, Continue Watching, watched threshold, per-profile persistence, account sync — and, since 1.0.18, removing an item from Continue Watching, which had no affordance at all. No library sort control. |
 | Trakt | Parity | OAuth, progress, list reads, comments, related titles, scrobbling, `sync/watchlist` and `sync/history` writes. Upstream has no `sync/collection`; neither do we. |
 | Simkl | Partial | Five list states, remote resume points, scrobbling, `add-to-list`/`history` writes. Missing playback-session deletion, snapshot reconciliation, and the anime identity model (`simkl_anime_id_preference`, MAL/Kitsu/AniDB/AniList, season-vs-absolute). |
 | Next Up from trackers | Partial | Local and imported resume state seed playback. No watched-series projection, no sibling-id reconciliation, no per-card dismissal. |
@@ -98,7 +98,9 @@ path and AVFoundation refuses.
 ### Partial — the feature exists, some behaviour is missing
 
 - **Detail**: no franchise-collection row, no episode-options overlay, no `videos[].rating`.
-- **Library**: no Continue Watching removal, no library sort.
+- **Library**: no library sort.
+- **Poster options**: no series watched walk, no Trakt list management, no removal-impact
+  warning.
 - **Home**: no Continue Watching toggle, no rating-visibility control, no inline trailers.
 - **Addons**: no renaming.
 - **Debrid**: no stream name/description templates.
@@ -113,8 +115,8 @@ path and AVFoundation refuses.
 
 ### Missing — nothing implemented
 
-- The **poster options dialog** — the single most-used affordance we lack, because it is how
-  upstream reaches library and watched state from anywhere.
+- ~~The **poster options dialog**~~ — shipped in 1.0.18; what is left of it is listed under
+  *Partial*.
 - The **on-TV configuration servers** for repository, debrid formatter and badges.
 - The **parallel chunked downloader** and the non-faststart MP4 path built on it.
 - The **in-app update banner**.
@@ -217,8 +219,8 @@ test that the readout never takes the remote.
 
 ## Verification
 
-- Unit suite at 1.0.17: **226 tests, 0 failures**. UI suite: **9 tests, 0 failures**.
-- Test density is comparable to upstream — 235 tests over 38k lines against 983 over 201k —
+- Unit suite at 1.0.18: **236 tests, 0 failures**. UI suite: **9 tests, 0 failures**.
+- Test density is comparable to upstream — 245 tests over 38k lines against 983 over 201k —
   so the 1.0.12 plan's "tests too thin" framing was wrong on volume. It was right about
   *placement*: the network clients carry the least of it.
 
