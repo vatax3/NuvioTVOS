@@ -253,6 +253,13 @@ final class TrackingSettingsStore: PreferenceStore {
     }
 
     var isSimklAuthenticated: Bool { !simklAccessToken.isEmpty }
+    /// `simkl_anime_id_preference`: whether the seasons of an anime franchise are one title or
+    /// several. See `SimklAnimeIdPreference`.
+    var simklAnimeIdPreference: SimklAnimeIdPreference {
+        get { option("simkl_anime_id_preference", default: .imdb) }
+        set { setOption("simkl_anime_id_preference", newValue) }
+    }
+
     var canStartSimklAuth: Bool { !simklClientId.isEmpty }
 
     func clearSimklSession() {

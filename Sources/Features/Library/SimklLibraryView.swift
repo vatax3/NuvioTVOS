@@ -23,7 +23,8 @@ final class SimklLibraryViewModel {
         do {
             lists = try await SimklClient.shared.libraryLists(
                 clientId: tracking.simklClientId,
-                token: tracking.simklAccessToken
+                token: tracking.simklAccessToken,
+                animePreference: tracking.simklAnimeIdPreference
             )
             if lists.isEmpty { errorMessage = "No Simkl list items were found." }
         } catch {

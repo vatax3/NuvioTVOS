@@ -1683,26 +1683,60 @@ actor SimklClient {
         title: String?,
         year: Int?,
         type: ContentType,
+        season: Int? = nil,
+        episode: Int? = nil,
+        videoId: String? = nil,
+        animePreference: SimklAnimeIdPreference = .imdb,
         clientId: String,
         token: String
     ) async throws {
+        struct EpisodeItem: Encodable {
+            var number: Int
+        }
+        struct SeasonItem: Encodable {
+            var number: Int
+            var episodes: [EpisodeItem]
+        }
         struct Item: Encodable {
             var to: String?
             var title: String?
             var year: Int?
             var ids: [String: String]?
+            var episodes: [EpisodeItem]?
+            var seasons: [SeasonItem]?
+            var use_tvdb_anime_seasons: Bool?
         }
         struct Payload: Encodable {
             var movies: [Item]?
             var shows: [Item]?
         }
 
-        let item = Item(
+        var item = Item(
             to: status?.rawValue,
             title: title?.nilIfBlank,
             year: year,
             ids: ids.isEmpty ? nil : ids
         )
+
+        // An episode write has to name the episode. Sending only the show's ids marks the whole
+        // series, which is what this did before and is not what "watched" meant.
+        //
+        // Anime is where the shape matters. Simkl accepts season coordinates *or* an absolute
+        // number against a per-season entry, and mixing them is not extra information — it is a
+        // contradiction Simkl resolves by matching whichever id it recognises first, which lands
+        // the episode on the wrong season of the wrong entry. See `SimklAnimeAddressing`.
+        if type == .series, season != nil || episode != nil || videoId != nil {
+            let resolved = SimklAnimeAddressing.resolve(
+                videoId: videoId, ids: ids, season: season, episode: episode
+            )
+            item.ids = resolved.ids.isEmpty ? nil : resolved.ids
+            if let season = resolved.season {
+                item.seasons = [SeasonItem(number: season, episodes: [.init(number: resolved.episode)])]
+                item.use_tvdb_anime_seasons = true
+            } else {
+                item.episodes = [EpisodeItem(number: resolved.episode)]
+            }
+        }
         var payload = Payload()
         if type == .movie { payload.movies = [item] } else { payload.shows = [item] }
 
@@ -1732,15 +1766,30 @@ actor SimklClient {
         return headers
     }
 
-    private static func canonicalContentId(_ ids: [String: FlexibleID]) -> String? {
-        if let imdb = ids["imdb"]?.value.nilIfBlank { return imdb }
+    /// The id a library row is keyed on.
+    ///
+    /// `preference` only changes the anime case, which is the only one where "the same show"
+    /// is genuinely ambiguous — see `SimklAnimeIdPreference`.
+    static func canonicalContentId(
+        _ ids: [String: String],
+        preference: SimklAnimeIdPreference = .imdb
+    ) -> String? {
+        for key in preference.preferredKeys {
+            guard let value = ids[key]?.nilIfBlank else { continue }
+            return key == "imdb" ? value : "\(key):\(value)"
+        }
         for key in ["tmdb", "tvdb", "mal", "kitsu"] {
-            if let value = ids[key]?.value.nilIfBlank { return "\(key):\(value)" }
+            if let value = ids[key]?.nilIfBlank { return "\(key):\(value)" }
         }
-        if let value = (ids["simkl"] ?? ids["simkl_id"])?.value.nilIfBlank {
-            return "simkl:\(value)"
-        }
+        if let value = (ids["simkl"] ?? ids["simkl_id"])?.nilIfBlank { return "simkl:\(value)" }
         return nil
+    }
+
+    private static func canonicalContentId(
+        _ ids: [String: FlexibleID],
+        preference: SimklAnimeIdPreference = .imdb
+    ) -> String? {
+        canonicalContentId(ids.mapValues(\.value), preference: preference)
     }
 
     private static func posterURL(_ path: String?) -> String? {
@@ -1810,7 +1859,11 @@ actor SimklClient {
 
     /// Mirrors Android's Simkl library projection. All statuses are fetched in one snapshot and
     /// exposed as stable rows rather than pretending Simkl is merely a write-only scrobbler.
-    func libraryLists(clientId: String, token: String) async throws -> [LibraryList] {
+    func libraryLists(
+        clientId: String,
+        token: String,
+        animePreference: SimklAnimeIdPreference = .imdb
+    ) async throws -> [LibraryList] {
         guard !clientId.isEmpty, !token.isEmpty else { return [] }
         var components = URLComponents(string: "\(base)/sync/all-items")!
         components.queryItems = [
@@ -1826,17 +1879,23 @@ actor SimklClient {
             as: LibraryPayload.self
         )
 
-        return Self.projectLibrary(payload)
+        return Self.projectLibrary(payload, preference: animePreference)
     }
 
     /// Fixture entry point for the same tolerant decoder used by the live endpoint. Keeping the
     /// projection testable matters here because Simkl mixes numeric and string ids and returns a
     /// bare empty array for an account with no library.
-    nonisolated static func decodeLibrarySnapshot(_ data: Data) throws -> [LibraryList] {
-        projectLibrary(try JSONDecoder().decode(LibraryPayload.self, from: data))
+    nonisolated static func decodeLibrarySnapshot(
+        _ data: Data,
+        preference: SimklAnimeIdPreference = .imdb
+    ) throws -> [LibraryList] {
+        projectLibrary(try JSONDecoder().decode(LibraryPayload.self, from: data), preference: preference)
     }
 
-    private nonisolated static func projectLibrary(_ payload: LibraryPayload) -> [LibraryList] {
+    private nonisolated static func projectLibrary(
+        _ payload: LibraryPayload,
+        preference: SimklAnimeIdPreference = .imdb
+    ) -> [LibraryList] {
         struct Status { let id: String; let title: String }
         let statuses = [
             Status(id: "watching", title: "Watching"),
@@ -1866,7 +1925,12 @@ actor SimklClient {
                       let title = media.title?.nilIfBlank else { return nil }
                 let ids = media.ids ?? [:]
                 let imdb = ids["imdb"]?.value.nilIfBlank
-                let canonical = Self.canonicalContentId(ids)
+                // Only the anime list is projected through the preference: it is the one place
+                // where a franchise and a season are both defensible answers to "which title is
+                // this". Shows and films keep IMDb.
+                let canonical = Self.canonicalContentId(
+                    ids, preference: type == .movie ? .imdb : preference
+                )
                 guard let canonical else { return nil }
                 let rowKey = "\(type.apiString())|\(canonical)"
                 guard seen.insert(rowKey).inserted else { return nil }

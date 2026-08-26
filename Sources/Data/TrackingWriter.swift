@@ -110,6 +110,10 @@ final class TrackingWriteService {
         type: ContentType,
         season: Int?,
         episode: Int?,
+        /// The addon's own id for the episode. Anime addons encode the entry and an absolute
+        /// episode number in it — `mal:42203:7` — which is the only shape Simkl's anime
+        /// catalogue can be addressed by. See `SimklAnimeAddressing`.
+        videoId: String? = nil,
         removing: Bool = false,
         settings: AppSettings
     ) async {
@@ -142,6 +146,10 @@ final class TrackingWriteService {
                     title: title,
                     year: year,
                     type: type,
+                    season: season,
+                    episode: episode,
+                    videoId: videoId,
+                    animePreference: settings.tracking.simklAnimeIdPreference,
                     clientId: settings.tracking.simklClientId,
                     token: settings.tracking.simklAccessToken
                 )

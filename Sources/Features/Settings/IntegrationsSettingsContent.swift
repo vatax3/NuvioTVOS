@@ -40,6 +40,12 @@ struct TrackingSettingsContent: View {
                         systemImage: "dot.radiowaves.up.forward",
                         isOn: $tracking.traktScrobbleEnabled
                     )
+                    SettingsOptionRow(
+                        title: "Anime seasons",
+                        subtitle: tracking.simklAnimeIdPreference.summary,
+                        systemImage: "square.stack.3d.up",
+                        selection: $tracking.simklAnimeIdPreference
+                    )
                     SettingsRow(
                         title: "Sign out",
                         subtitle: "Remove the token from this device",
