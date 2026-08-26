@@ -17,7 +17,7 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.19</string>
+	<string>1.0.20</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -42,8 +42,6 @@
 		<string>nplayer</string>
 		<string>outplayer</string>
 	</array>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>Nuvio serves a settings page on your network so you can edit the stream format from a phone. Nothing leaves your home.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
