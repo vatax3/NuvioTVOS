@@ -163,6 +163,17 @@ final class AppSettings {
         )
     }
 
+    /// The four Next Up preferences in one value, so every caller of `continueWatching` reads
+    /// the same set rather than each assembling its own.
+    var nextUpOptions: NextUpOptions {
+        NextUpOptions(
+            isEnabled: layout.continueWatchingEnabled,
+            allowsUnaired: layout.showUnairedNextUp,
+            fromFurthestEpisode: layout.nextUpFromFurthestEpisode,
+            dismissedKeys: layout.dismissedNextUpKeys
+        )
+    }
+
     /// Subtitle appearance, shared by the overlay that draws addon tracks and the style rules
     /// applied to tracks embedded in the stream.
     var subtitleStyle: SubtitleStyle {

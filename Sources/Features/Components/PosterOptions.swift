@@ -13,6 +13,7 @@ enum PosterOptionsPolicy {
         case markWatched
         case markUnwatched
         case removeFromContinueWatching
+        case dismissNextUp
         case openDetails
 
         var id: String { rawValue }
@@ -24,6 +25,7 @@ enum PosterOptionsPolicy {
             case .markWatched: return "eye.fill"
             case .markUnwatched: return "eye.slash"
             case .removeFromContinueWatching: return "xmark"
+            case .dismissNextUp: return "bell.slash"
             case .openDetails: return "info.circle"
             }
         }
@@ -31,7 +33,8 @@ enum PosterOptionsPolicy {
         /// Whether choosing it undoes something the viewer built up, which the dialog marks so
         /// the destructive entry is not one indistinguishable row among six.
         var isDestructive: Bool {
-            self == .removeFromLibrary || self == .removeFromContinueWatching || self == .markUnwatched
+            self == .removeFromLibrary || self == .removeFromContinueWatching
+                || self == .markUnwatched || self == .dismissNextUp
         }
     }
 
@@ -41,6 +44,9 @@ enum PosterOptionsPolicy {
         var isWatched: Bool
         /// Whether the title has a resume point — which is what makes it removable.
         var hasProgress: Bool
+        /// Whether this card is a *suggestion* rather than something part-watched, which is the
+        /// only case where "stop offering this" means anything.
+        var isNextUpSuggestion: Bool = false
     }
 
     /// The rows, in the order they are drawn.
@@ -56,7 +62,11 @@ enum PosterOptionsPolicy {
         if context.type == .movie {
             actions.append(context.isWatched ? .markUnwatched : .markWatched)
         }
-        if context.hasProgress {
+        if context.isNextUpSuggestion {
+            // Nothing has been watched of it, so there is no resume point to remove — what the
+            // viewer wants gone is the suggestion.
+            actions.append(.dismissNextUp)
+        } else if context.hasProgress {
             actions.append(.removeFromContinueWatching)
         }
         actions.append(.openDetails)
@@ -69,6 +79,9 @@ enum PosterOptionsPolicy {
 /// during the dismissal animation.
 struct PosterOptionsRequest: Identifiable, Hashable {
     var preview: MetaPreview
+    /// Set by the Continue Watching rail for a row it projected rather than one the viewer
+    /// started. Only those can be dismissed — there is no resume point to remove.
+    var isNextUpSuggestion: Bool = false
     var id: String { preview.rowKey }
 }
 
@@ -93,7 +106,8 @@ struct PosterOptionsDialog: View {
             type: preview.type,
             isInLibrary: library.isInLibrary(preview),
             isWatched: library.isWatched(videoId: preview.id, threshold: settings.watchedThreshold),
-            hasProgress: hasProgress
+            hasProgress: hasProgress,
+            isNextUpSuggestion: request.isNextUpSuggestion
         )
     }
 
@@ -175,6 +189,7 @@ struct PosterOptionsDialog: View {
         case .markWatched: return L10n.text("poster_options.mark_watched")
         case .markUnwatched: return L10n.text("poster_options.mark_unwatched")
         case .removeFromContinueWatching: return L10n.text("poster_options.remove_from_continue_watching")
+        case .dismissNextUp: return L10n.text("poster_options.dismiss_next_up")
         case .openDetails: return L10n.text("poster_options.go_to_details")
         }
     }
@@ -194,6 +209,11 @@ struct PosterOptionsDialog: View {
             // By content id rather than video id: for a series the resume point sits on an
             // episode the viewer never named, and removing the row means removing all of them.
             library.clearProgress(contentId: preview.id)
+
+        case .dismissNextUp:
+            settings.layout.dismissedNextUpKeys = NextUpDismissal.adding(
+                contentId: preview.id, to: settings.layout.dismissedNextUpKeys
+            )
 
         case .openDetails:
             router.openDetail(preview)

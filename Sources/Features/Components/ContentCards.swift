@@ -297,7 +297,9 @@ struct ContinueWatchingCard: View {
             .buttonStyle(NuvioCardButtonStyle(cornerRadius: tokens.cornerRadius))
             // The rail this card sits in is the one the dialog exists for: a resume point could
             // be created from anywhere and removed from nowhere.
-            .onLongPressGesture { router.posterOptions = .init(preview: entry.preview) }
+            .onLongPressGesture {
+                router.posterOptions = .init(preview: entry.preview, isNextUpSuggestion: entry.isNextUp)
+            }
             .focusedIfAvailable(focusBinding, equals: entry.preview.rowKey)
             .onFocusChange { focused in
                 isFocused = focused

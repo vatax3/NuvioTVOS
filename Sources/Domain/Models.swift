@@ -506,6 +506,24 @@ struct Meta: Codable, Hashable, Identifiable, Sendable {
             .sorted { ($0.episode ?? 0) < ($1.episode ?? 0) }
     }
 
+    /// The episode list reduced to what Continue Watching needs, dropping anything with no
+    /// season and episode: a special or a trailer is not something to offer next.
+    var episodeRefs: [SeriesEpisodeRef] {
+        videos.compactMap { video in
+            guard let season = video.season, let episode = video.episode, season > 0 else {
+                return nil
+            }
+            return SeriesEpisodeRef(
+                videoId: video.id,
+                season: season,
+                episode: episode,
+                title: video.name ?? video.title,
+                thumbnail: video.thumbnail,
+                released: video.releaseDate
+            )
+        }
+    }
+
     func preview() -> MetaPreview {
         MetaPreview(
             id: id, type: type, rawType: rawType, name: name,

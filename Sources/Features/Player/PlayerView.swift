@@ -1060,6 +1060,14 @@ struct PlayerView: View {
             )
             return
         }
+        // Watching it again spends the dismissal. Otherwise one wave-away silences the series
+        // for good, including seasons that have not aired yet.
+        let remaining = NextUpDismissal.clearing(
+            contentId: request.contentId, from: settings.layout.dismissedNextUpKeys
+        )
+        if remaining.count != settings.layout.dismissedNextUpKeys.count {
+            settings.layout.dismissedNextUpKeys = remaining
+        }
         library.record(
             contentId: request.contentId,
             contentType: request.contentType,

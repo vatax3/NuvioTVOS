@@ -7,9 +7,13 @@ final class PosterOptionsPolicyTests: XCTestCase {
         type: ContentType = .movie,
         inLibrary: Bool = false,
         watched: Bool = false,
-        progress: Bool = false
+        progress: Bool = false,
+        suggestion: Bool = false
     ) -> PosterOptionsPolicy.Context {
-        .init(type: type, isInLibrary: inLibrary, isWatched: watched, hasProgress: progress)
+        .init(
+            type: type, isInLibrary: inLibrary, isWatched: watched,
+            hasProgress: progress, isNextUpSuggestion: suggestion
+        )
     }
 
     func testALibraryRowIsAlwaysOffered() {
@@ -63,6 +67,25 @@ final class PosterOptionsPolicyTests: XCTestCase {
         )
     }
 
+    /// A projected row has nothing watched of it, so there is no resume point to remove — what
+    /// the viewer wants gone is the suggestion.
+    func testASuggestionIsDismissedRatherThanRemoved() {
+        let actions = PosterOptionsPolicy.actions(for: context(type: .series, suggestion: true))
+
+        XCTAssertTrue(actions.contains(.dismissNextUp))
+        XCTAssertFalse(actions.contains(.removeFromContinueWatching))
+    }
+
+    /// And the two never appear together, or the dialog offers one thing twice.
+    func testASuggestionWithStaleProgressStillOffersOnlyTheDismissal() {
+        let actions = PosterOptionsPolicy.actions(
+            for: context(type: .series, progress: true, suggestion: true)
+        )
+
+        XCTAssertEqual(actions.filter { $0 == .dismissNextUp || $0 == .removeFromContinueWatching }.count, 1)
+        XCTAssertTrue(actions.contains(.dismissNextUp))
+    }
+
     func testNothingOffersARemovalWithNothingToRemove() {
         XCTAssertFalse(
             PosterOptionsPolicy.actions(for: context()).contains(.removeFromContinueWatching)
@@ -84,7 +107,7 @@ final class PosterOptionsPolicyTests: XCTestCase {
 
         XCTAssertEqual(
             Set(destructive),
-            [.removeFromLibrary, .removeFromContinueWatching, .markUnwatched]
+            [.removeFromLibrary, .removeFromContinueWatching, .markUnwatched, .dismissNextUp]
         )
     }
 

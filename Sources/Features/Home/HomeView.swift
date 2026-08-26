@@ -43,7 +43,8 @@ struct HomeView: View {
             await remoteProgress.enrichContinueWatching(
                 library.continueWatching(
                     threshold: settings.watchedThreshold,
-                    withinDays: settings.tracking.continueWatchingDaysCap
+                    withinDays: settings.tracking.continueWatchingDaysCap,
+                    nextUp: settings.nextUpOptions
                 ),
                 settings: settings,
                 library: library
@@ -95,7 +96,8 @@ struct HomeRailList: View {
         return library.continueWatching(
             threshold: settings.watchedThreshold,
             sort: settings.layout.continueWatchingSortMode,
-            withinDays: settings.tracking.continueWatchingDaysCap
+            withinDays: settings.tracking.continueWatchingDaysCap,
+            nextUp: settings.nextUpOptions
         )
     }
 

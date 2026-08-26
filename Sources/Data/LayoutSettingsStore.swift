@@ -250,6 +250,12 @@ final class LayoutSettingsStore: PreferenceStore {
         set { setBool("blur_unwatched_episodes", newValue) }
     }
 
+    /// `dismissed_next_up_keys`: series the viewer has waved out of the rail.
+    var dismissedNextUpKeys: [String] {
+        get { stringList("dismissed_next_up_keys") }
+        set { setStringList("dismissed_next_up_keys", newValue) }
+    }
+
     var nextUpFromFurthestEpisode: Bool {
         get { bool("next_up_from_furthest_episode", default: true) }
         set { setBool("next_up_from_furthest_episode", newValue) }

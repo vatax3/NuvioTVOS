@@ -130,3 +130,4 @@
 "poster_options.mark_unwatched" = "Mark as unwatched";
 "poster_options.remove_from_continue_watching" = "Remove from Continue Watching";
 "poster_options.go_to_details" = "Go to details";
+"poster_options.dismiss_next_up" = "Stop suggesting this";

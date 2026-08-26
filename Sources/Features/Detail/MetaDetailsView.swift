@@ -42,6 +42,13 @@ struct MetaDetailsView: View {
         .ignoresSafeArea()
         .background(colors.background)
         .task { await model.load(request: request, addonStore: addons, settings: settings) }
+        // The episode list is what lets Continue Watching offer the *next* episode once one is
+        // finished, and the rail is drawn before any addon could answer. Cached here rather than
+        // fetched there. See `NextUpProjection`.
+        .onChange(of: model.meta?.videos.count ?? 0, initial: true) { _, _ in
+            guard let meta = model.meta, meta.type == .series else { return }
+            library.cacheEpisodes(meta.episodeRefs, forContentId: meta.id)
+        }
     }
 
     // MARK: Backdrop

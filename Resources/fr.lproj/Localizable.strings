@@ -130,3 +130,4 @@
 "poster_options.mark_unwatched" = "Marquer comme non vu";
 "poster_options.remove_from_continue_watching" = "Retirer de la reprise";
 "poster_options.go_to_details" = "Voir la fiche";
+"poster_options.dismiss_next_up" = "Ne plus proposer";

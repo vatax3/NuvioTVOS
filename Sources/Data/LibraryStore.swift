@@ -65,12 +65,18 @@ final class LibraryStore {
     private let previewFile = JSONFileStore<[String: MetaPreview]>(filename: "preview-cache.json")
     private let thumbnailFile = JSONFileStore<[String: String]>(filename: "episode-thumbnails.json")
     private let deletionFile = JSONFileStore<[String]>(filename: "library-deletions.json")
+    private let episodeFile = JSONFileStore<[String: [SeriesEpisodeRef]]>(filename: "series-episodes.json")
+
+    /// Episode lists per series, so Next Up can name the episode that follows one just
+    /// finished without an addon round trip on the first frame of Home.
+    private(set) var seriesEpisodes: [String: [SeriesEpisodeRef]] = [:]
 
     init() {
         progress = progressFile.load() ?? [:]
         library = libraryFile.load() ?? []
         previewCache = previewFile.load() ?? [:]
         episodeThumbnails = thumbnailFile.load() ?? [:]
+        seriesEpisodes = episodeFile.load() ?? [:]
         pendingLibraryDeletions = deletionFile.load() ?? []
         refreshTopShelf()
     }
@@ -137,7 +143,8 @@ final class LibraryStore {
     func continueWatching(
         threshold: Double,
         sort: ContinueWatchingSortMode = .recentlyWatched,
-        withinDays: Int = 0
+        withinDays: Int = 0,
+        nextUp: NextUpOptions = NextUpOptions()
     ) -> [ContinueWatchingEntry] {
         let cutoff = Self.cutoffDate(withinDays: withinDays)
         let unfinished = progress.values
@@ -167,7 +174,81 @@ final class LibraryStore {
                 isNextUp: item.fraction < 0.02
             ))
         }
+        entries += projectedNextUp(
+            threshold: threshold, cutoff: cutoff, excluding: seenContent, options: nextUp
+        )
         return sorted(entries, by: sort)
+    }
+
+    /// Series whose latest episode is finished, offered their next one.
+    ///
+    /// Without this the rail only ever holds half-watched episodes, so finishing one removes
+    /// the series from Home entirely and the viewer has to go and find the next episode
+    /// themselves. See `NextUpProjection`.
+    private func projectedNextUp(
+        threshold: Double,
+        cutoff: Date?,
+        excluding represented: Set<String>,
+        options: NextUpOptions
+    ) -> [ContinueWatchingEntry] {
+        guard options.isEnabled else { return [] }
+
+        // Every finished episode, by series, newest activity first.
+        var watchedBySeries: [String: [(progress: WatchProgress, episode: SeriesEpisodeRef)]] = [:]
+        for item in progress.values where item.isFinished(threshold: threshold) {
+            guard item.season != nil, item.episode != nil else { continue }
+            guard let episodes = seriesEpisodes[item.contentId] else { continue }
+            guard let episode = episodes.first(where: { $0.videoId == item.videoId }) else { continue }
+            watchedBySeries[item.contentId, default: []].append((item, episode))
+        }
+
+        var entries: [ContinueWatchingEntry] = []
+        for (contentId, watched) in watchedBySeries {
+            let key = "series|\(contentId)"
+            guard !represented.contains(key), let preview = previewCache[key] else { continue }
+            guard !NextUpDismissal.isDismissed(contentId: contentId, keys: options.dismissedKeys)
+            else { continue }
+
+            // The rail's own cap applies to the activity that seeded the row, not to the
+            // episode being offered — which has no timestamp of its own.
+            let lastWatched = watched.map(\.progress.updatedAt).max() ?? .distantPast
+            if let cutoff, lastWatched < cutoff { continue }
+
+            let anchor = NextUpProjection.anchor(
+                watched: watched.map { ($0.episode, $0.progress.updatedAt) },
+                fromFurthest: options.fromFurthestEpisode
+            )
+            guard let next = NextUpProjection.next(
+                in: seriesEpisodes[contentId] ?? [],
+                isWatched: { [weak self] videoId in
+                    self?.progress[videoId]?.isFinished(threshold: threshold) ?? false
+                },
+                after: anchor,
+                allowsUnaired: options.allowsUnaired
+            ) else { continue }
+
+            let seed = watched.first?.progress
+            entries.append(ContinueWatchingEntry(
+                progress: WatchProgress(
+                    contentId: contentId,
+                    contentType: seed?.contentType ?? "series",
+                    videoId: next.videoId,
+                    season: next.season,
+                    episode: next.episode,
+                    // Nothing watched of it yet, which is exactly what the card should draw.
+                    positionSeconds: 0,
+                    durationSeconds: 0,
+                    // The series sorts by when it was last watched, not by an episode that has
+                    // never been opened.
+                    updatedAt: lastWatched
+                ),
+                preview: preview,
+                episodeTitle: String(format: "S%02dE%02d", next.season, next.episode),
+                episodeThumbnail: next.thumbnail ?? episodeThumbnails[next.videoId],
+                isNextUp: true
+            ))
+        }
+        return entries
     }
 
     /// Split out so the cap can be tested without building a store, and so "no cap" has exactly
@@ -198,6 +279,20 @@ final class LibraryStore {
                 $0.preview.name.localizedCaseInsensitiveCompare($1.preview.name) == .orderedAscending
             }
         }
+    }
+
+    /// Remembers a series' episode list, written whenever a detail screen resolves one.
+    ///
+    /// Only for series already in progress or in the library: caching every series a viewer
+    /// merely looked at would grow without bound, and none of those can seed a Next Up row.
+    func cacheEpisodes(_ episodes: [SeriesEpisodeRef], forContentId contentId: String) {
+        guard !episodes.isEmpty else { return }
+        let key = "series|\(contentId)"
+        guard previewCache[key] != nil || progress.values.contains(where: { $0.contentId == contentId })
+        else { return }
+        guard seriesEpisodes[contentId] != episodes else { return }
+        seriesEpisodes[contentId] = episodes
+        episodeFile.save(seriesEpisodes)
     }
 
     /// Episode stills keyed by video id, so the rail can show the actual episode rather than

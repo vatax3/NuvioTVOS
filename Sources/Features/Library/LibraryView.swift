@@ -31,7 +31,8 @@ struct LibraryView: View {
         library.continueWatching(
             threshold: settings.watchedThreshold,
             sort: settings.layout.continueWatchingSortMode,
-            withinDays: settings.tracking.continueWatchingDaysCap
+            withinDays: settings.tracking.continueWatchingDaysCap,
+            nextUp: settings.nextUpOptions
         )
     }
 

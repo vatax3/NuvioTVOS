@@ -58,7 +58,7 @@ platform refuses the upstream approach.
 | Local library/progress ✻ | Parity | Save/remove, Continue Watching, watched threshold, per-profile persistence, account sync, removal from Continue Watching (1.0.18) and a sort control (1.0.19). |
 | Trakt | Parity | OAuth, progress, list reads, comments, related titles, scrobbling, `sync/watchlist` and `sync/history` writes. Upstream has no `sync/collection`; neither do we. |
 | Simkl | Partial | Five list states, remote resume points, scrobbling, `add-to-list`/`history` writes. Missing playback-session deletion, snapshot reconciliation, and the anime identity model (`simkl_anime_id_preference`, MAL/Kitsu/AniDB/AniList, season-vs-absolute). |
-| Next Up from trackers | Partial | Local and imported resume state seed playback. No watched-series projection, no sibling-id reconciliation, no per-card dismissal. |
+| Next Up from trackers ✻ | Partial | Since 1.0.21 a series whose last episode was finished is offered its next one, with the airing rules, both anchor modes and per-series dismissal. Previously the rail held only half-watched episodes, so finishing one removed the series from Home entirely. Sibling-id reconciliation across id namespaces is not reproduced, and the projection needs the episode list to have been cached by a visit to the detail screen. |
 | Debrid providers ✻ | Parity | Validation, cache checks, resolution, file choice, cloud libraries for all three, TorBox device sign-in, and since 1.0.20 the stream name/description template language with its editor. The DSL is ported rather than reinvented, so a format written on Android pastes in and produces the same rows. |
 | Stream filtering/ranking | Parity | Resolution, quality, HDR/DV, codec, audio, channels, language, group, limits and the sort matrix are consumed. |
 | Stream badges ✻ | Partial | Badges are computed and rendered from parsed attributes. Upstream's badges are **user-editable rules** with a placement setting, authored on a web page the TV serves. |
@@ -103,7 +103,7 @@ path and AVFoundation refuses.
 - **Home**: no inline trailers.
 - **Stream badges**: fixed rules instead of editable ones.
 - **Simkl**: no anime identity model, no snapshot reconciliation, no `delete-playback`.
-- **Next Up**: no watched-series projection, no dismissal.
+- **Next Up**: no sibling-id reconciliation; the projection needs a cached episode list.
 - **Player audio**: five controls absent.
 - **Subtitles**: no sync-by-line dialog.
 - **External players**: no skip-segment forwarding.
@@ -195,7 +195,8 @@ Also: our preference keys were documented as matching the Android names, and mos
 5. ~~**Debrid formatter**, with the local HTTP server the editors need~~ — **shipped in
    1.0.20.** Stream badge rules and repository config are now a page each on the same server.
 6. **Simkl anime identity model** and snapshot reconciliation.
-7. **Next Up projection and dismissal.**
+7. ~~**Next Up projection and dismissal**~~ — **shipped in 1.0.21.** What remains is
+   sibling-id reconciliation and seeding the episode cache without a detail-screen visit.
 
 ### P2 — larger, or lower value
 
@@ -218,8 +219,8 @@ test that the readout never takes the remote.
 
 ## Verification
 
-- Unit suite at 1.0.20: **299 tests, 0 failures**. UI suite: **9 tests, 0 failures**.
-- Test density is now ahead of upstream per line — 308 tests over 39k lines against 983 over
+- Unit suite at 1.0.21: **321 tests, 0 failures**. UI suite: **9 tests, 0 failures**.
+- Test density is now ahead of upstream per line — 330 tests over 39k lines against 983 over
   201k —
   so the 1.0.12 plan's "tests too thin" framing was wrong on volume. It was right about
   *placement*: the network clients carry the least of it.

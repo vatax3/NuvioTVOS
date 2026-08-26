@@ -201,8 +201,15 @@ final class PlayerRemoteUITests: XCTestCase {
         usleep(500_000)
         XCUIRemote.shared.press(.select)
 
+        // Same generosity as `hideTransport`, and for the same reason: this walk is six timed
+        // presses deep, and on a simulator that has just run the whole unit suite each one lands
+        // slower than the fixed sleeps assume. Measured failing at the old six-second bound and
+        // passing at eighteen with no code change between the two.
         let panelRow = app.staticTexts["MPV"]
-        XCTAssertTrue(wait(for: { panelRow.exists }), "the stream information panel should open")
+        XCTAssertTrue(
+            wait(for: { panelRow.exists }, timeout: 20),
+            "the stream information panel should open"
+        )
 
         XCUIRemote.shared.press(.menu)
         XCTAssertTrue(wait(for: { !panelRow.exists }), "Menu should close the panel")
