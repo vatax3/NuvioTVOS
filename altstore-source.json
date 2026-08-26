@@ -40,6 +40,16 @@
       ],
       "versions": [
         {
+          "version": "1.0.32",
+          "buildVersion": "34",
+          "date": "2026-08-26",
+          "localizedDescription": "**Holding Select on a poster now opens its options. It never did before.**\n\nThe menu itself has been in the app since 1.0.18 — add to or remove from your library, mark\nwatched, take something out of Continue Watching, manage your Trakt lists. Holding Select just\nopened the title instead, so there was no way to reach any of it.\n\nThe same press now works everywhere it should:\n\n- **Continue Watching** — remove a title from the row.\n- **Library** — remove a title you saved.\n- **Episodes** — mark one watched without playing it, or mark the season.\n- **Profile chooser** — hold on a profile to manage it.\n\nMarking something watched or removing it from Continue Watching was previously only possible\nby playing it, or not possible at all.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.32/Nuvio-1.0.32-tvOS-unsigned.ipa",
+          "size": 31820816,
+          "minOSVersion": "17.0",
+          "sha256": "066eeaf54322fce709453e44da3120419d53205476b33aa0a704a74f9a78037e"
+        },
+        {
           "version": "1.0.31",
           "buildVersion": "33",
           "date": "2026-08-26",
@@ -236,11 +246,11 @@
         ],
         "privacy": {}
       },
-      "version": "1.0.31",
+      "version": "1.0.32",
       "versionDate": "2026-08-26",
-      "versionDescription": "## French, everywhere you actually watch\n\nIf your Apple TV is set to French, the whole viewing experience is now in French:\nhome, search, discover, your library, the Trakt and Simkl lists, the cloud\nlibrary, a title's page, cast, comments, the source list and the hand-off sheet,\nthe player and all its overlays, post-play, profiles and the sidebar.\n\n**Settings is still English.** It is by far the largest part — 571 pieces of text\n— and translating it properly is its own piece of work rather than the tail of\nthis one.\n\nNothing changes if your Apple TV is set to English.\n\n## Under the hood\n\nThe app now refuses to build if a piece of text asks for a translation that does\nnot exist, exists in only one of the two languages, or is defined twice. That last\none is the quiet failure: two definitions, the second silently winning, so a\ncorrected translation can sit unused under a stale one.",
-      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.31/Nuvio-1.0.31-tvOS-unsigned.ipa",
-      "size": 31813730,
+      "versionDescription": "**Holding Select on a poster now opens its options. It never did before.**\n\nThe menu itself has been in the app since 1.0.18 — add to or remove from your library, mark\nwatched, take something out of Continue Watching, manage your Trakt lists. Holding Select just\nopened the title instead, so there was no way to reach any of it.\n\nThe same press now works everywhere it should:\n\n- **Continue Watching** — remove a title from the row.\n- **Library** — remove a title you saved.\n- **Episodes** — mark one watched without playing it, or mark the season.\n- **Profile chooser** — hold on a profile to manage it.\n\nMarking something watched or removing it from Continue Watching was previously only possible\nby playing it, or not possible at all.",
+      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.32/Nuvio-1.0.32-tvOS-unsigned.ipa",
+      "size": 31820816,
       "minOSVersion": "17.0"
     }
   ],
