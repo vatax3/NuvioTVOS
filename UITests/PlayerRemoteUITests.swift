@@ -27,6 +27,8 @@ final class PlayerRemoteUITests: XCTestCase {
     private var playPause: XCUIElement { app.buttons["player.transport.playPause"] }
     /// The invisible full-screen target that owns the remote while the transport is down.
     private var sink: XCUIElement { app.otherElements["player.remoteSink"] }
+    /// The compact position readout a horizontal press draws instead of the transport.
+    private var seekReadout: XCUIElement { app.otherElements["player.seekReadout"] }
 
     /// Focus is the only honest signal here: the transport is faded rather than unmounted, so
     /// "is it on screen" cannot tell a live control row from the ghost of one. Which control
@@ -70,7 +72,14 @@ final class PlayerRemoteUITests: XCTestCase {
     }
 
     /// The reported bug, direction by direction.
-    func testEveryDirectionBringsTheTransportBack() {
+    ///
+    /// What the report asked for is that a press with the transport down **produces a visible
+    /// response** — it used to produce none at all, because the faded buttons still held focus
+    /// and swallowed it. The response is not the same in both axes, and deliberately so: a
+    /// horizontal press seeks behind the compact readout rather than revealing the transport,
+    /// which would put the whole bar over the picture being scrubbed through. See
+    /// `PlayerSeekOverlayPolicy`. Both halves are asserted here so neither can be lost.
+    func testEveryDirectionAnswersWhileTheTransportIsDown() {
         for (index, button) in [XCUIRemote.Button.down, .up, .left, .right].enumerated() {
             // A direction can legitimately move focus into a different transport control.
             // Relaunch between cases so every direction is measured from the same fresh player
@@ -81,11 +90,39 @@ final class PlayerRemoteUITests: XCTestCase {
             }
             hideTransport()
             XCUIRemote.shared.press(button)
-            XCTAssertTrue(
-                wait(for: { self.transportHoldsRemote }),
-                "pressing \(button) with the transport down must bring it back"
-            )
+
+            switch button {
+            case .up, .down:
+                XCTAssertTrue(
+                    wait(for: { self.transportHoldsRemote }),
+                    "pressing \(button) with the transport down must bring it back"
+                )
+            default:
+                XCTAssertTrue(
+                    wait(for: { self.seekReadout.exists }),
+                    "pressing \(button) with the transport down must seek and show the readout"
+                )
+                XCTAssertFalse(
+                    transportHoldsRemote,
+                    "a horizontal press must not reveal the transport over the picture"
+                )
+            }
         }
+    }
+
+    /// The readout is a label, not a control: it must never take the remote, or the next press
+    /// lands on it instead of the player and the original bug is back in a new costume.
+    func testTheSeekReadoutNeverTakesTheRemote() {
+        hideTransport()
+        XCUIRemote.shared.press(.right)
+        XCTAssertTrue(wait(for: { self.seekReadout.exists }))
+        XCTAssertTrue(sink.hasFocus, "the sink must still own the remote behind the readout")
+
+        XCUIRemote.shared.press(.down)
+        XCTAssertTrue(
+            wait(for: { self.transportHoldsRemote }),
+            "a vertical press after a scrub must still bring the transport back"
+        )
     }
 
     /// Bringing the row back is only half of it: the buttons then have to work. Focus flags in

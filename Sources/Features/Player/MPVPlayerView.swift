@@ -94,6 +94,10 @@ struct MPVPlayerView: View {
     @State private var scrubCommit: Task<Void, Never>?
     /// The ramp that runs while a direction is held down.  See `PlayerHoldSeekGate`.
     @State private var holdSeek: Task<Void, Never>?
+    /// The compact seek readout, drawn only while the transport is down. See
+    /// `PlayerSeekOverlayPolicy` for why a horizontal press no longer reveals the transport.
+    @State private var seekReadout: PlayerSeekReadout.Model?
+    @State private var seekReadoutDismiss: Task<Void, Never>?
     /// Android flashes the new picture mode as a pill instead of opening a menu, so the aspect
     /// button can be pressed repeatedly while watching the picture change.
     @State private var aspectFlash: String?
@@ -178,6 +182,10 @@ struct MPVPlayerView: View {
             clockOverlay
             aspectFlashPill
 
+            if let seekReadout {
+                PlayerSeekReadout(model: seekReadout, duration: engine.duration)
+            }
+
             if let picker {
                 playerPanel(picker)
             }
@@ -233,6 +241,7 @@ struct MPVPlayerView: View {
             hideTask?.cancel()
             scrubCommit?.cancel()
             holdSeek?.cancel()
+            seekReadoutDismiss?.cancel()
             aspectFlashTask?.cancel()
             focusRetry?.cancel()
             persist(completed: false)
@@ -268,6 +277,13 @@ struct MPVPlayerView: View {
         .onChange(of: showsPauseOverlay) { _, _ in retargetFocus() }
         .onChange(of: chromeState, initial: true) { _, state in onChromeChange(state) }
         .onChange(of: hasFocusableOverlay) { _, _ in retargetFocus() }
+        // The transport carries the same position, so the two must never be up together — a
+        // vertical press mid-scrub would otherwise leave the readout stranded over the bar.
+        .onChange(of: controlsInteractable) { _, isUp in
+            guard isUp, seekReadout != nil else { return }
+            seekReadoutDismiss?.cancel()
+            withAnimation(NuvioMotion.quickTween) { seekReadout = nil }
+        }
         .onChange(of: engine.errorMessage) { _, message in
             retargetFocus()
             // The host's "Preparing stream" cover is drawn above this view, so a source that
@@ -671,9 +687,14 @@ struct MPVPlayerView: View {
     }
 
     private func scrub(forward: Bool) {
-        // Revealed by a seek, so focus belongs on the bar: the presses that follow continue the
-        // scrub and pick up Android's acceleration instead of walking the button row.
-        wakeControls(focusing: .progress)
+        let transportWasDown = !controlsInteractable
+        if PlayerSeekOverlayPolicy.revealsTransport(controlsInteractable: controlsInteractable) {
+            // The bar is already showing the position, so the press only has to restart its
+            // auto-hide timer, and focus belongs on the scrubber: the presses that follow
+            // continue the scrub and pick up Android's acceleration instead of walking the
+            // button row.
+            wakeControls(focusing: .progress)
+        }
         let now = Date()
         scrubRepeatCount = now.timeIntervalSince(lastScrubAt) <= PlayerScrubRates.repeatWindow
             ? scrubRepeatCount + 1
@@ -683,7 +704,18 @@ struct MPVPlayerView: View {
         let base = scrubTarget ?? engine.position
         let delta = PlayerScrubRates.delta(forRepeatCount: scrubRepeatCount, forward: forward)
         let upperBound = engine.duration > 0 ? engine.duration : base + delta
-        scrubTarget = min(max(0, base + delta), max(0, upperBound))
+        let target = min(max(0, base + delta), max(0, upperBound))
+        scrubTarget = target
+
+        if transportWasDown {
+            // Measured from where playback actually is, so a held direction reads as one jump
+            // that keeps growing rather than a stream of identical ten-second steps.
+            let origin = seekReadout?.origin ?? engine.position
+            withAnimation(NuvioMotion.quickTween) {
+                seekReadout = .init(origin: origin, target: target, forward: forward)
+            }
+            scheduleSeekReadoutDismiss()
+        }
 
         scrubCommit?.cancel()
         scrubCommit = Task { @MainActor in
@@ -696,6 +728,16 @@ struct MPVPlayerView: View {
             guard !Task.isCancelled else { return }
             scrubTarget = nil
             scrubRepeatCount = 0
+        }
+    }
+
+    /// The readout has no press to end it — a scrub is a burst, not a hold — so it times out.
+    private func scheduleSeekReadoutDismiss() {
+        seekReadoutDismiss?.cancel()
+        seekReadoutDismiss = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(PlayerSeekOverlayPolicy.linger))
+            guard !Task.isCancelled else { return }
+            withAnimation(NuvioMotion.quickTween) { seekReadout = nil }
         }
     }
 
@@ -1230,15 +1272,10 @@ struct MPVPlayerView: View {
         onProgress(engine.position, engine.duration, completed)
     }
 
+    /// Shared with the seek readout, which is on screen alongside the transport during the
+    /// frame a scrub reveals it: two formatters would eventually disagree about one second.
     private func timecode(_ seconds: Double) -> String {
-        guard seconds.isFinite, seconds >= 0 else { return "0:00" }
-        let total = Int(seconds)
-        let hours = total / 3600
-        let minutes = (total % 3600) / 60
-        let secs = total % 60
-        return hours > 0
-            ? String(format: "%d:%02d:%02d", hours, minutes, secs)
-            : String(format: "%d:%02d", minutes, secs)
+        PlayerSeekOverlayPolicy.timecode(seconds)
     }
 }
 
