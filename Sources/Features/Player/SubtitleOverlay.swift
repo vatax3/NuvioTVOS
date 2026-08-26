@@ -106,7 +106,7 @@ final class SubtitleTrackController {
                 guard !Task.isCancelled else { return }
                 rawCues = loaded
                 applyFilters()
-                if loaded.isEmpty { loadError = "That track had no readable cues." }
+                if loaded.isEmpty { loadError = L10n.text("player.no_readable_cues", fallback: "That track had no readable cues.") }
             } catch {
                 guard !Task.isCancelled else { return }
                 loadError = error.localizedDescription

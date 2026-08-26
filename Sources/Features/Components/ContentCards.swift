@@ -322,7 +322,7 @@ struct ContinueWatchingCard: View {
 
     private var remainingLabel: String {
         let remaining = Int(entry.progress.remainingSeconds / 60)
-        return remaining > 0 ? "\(remaining) min left" : "Almost done"
+        return remaining > 0 ? "\(remaining) min left" : L10n.text("card.almost_done", fallback: "Almost done")
     }
 }
 

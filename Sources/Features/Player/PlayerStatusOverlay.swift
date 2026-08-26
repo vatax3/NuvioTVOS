@@ -131,7 +131,7 @@ struct ParentalGuideOverlay: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .shadow(color: .black.opacity(0.80), radius: dp(5), y: dp(2))
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("Content guide")
+            .accessibilityLabel(L10n.text("player.content_guide", fallback: "Content guide"))
         }
     }
 

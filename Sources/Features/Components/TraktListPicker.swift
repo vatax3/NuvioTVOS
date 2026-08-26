@@ -35,7 +35,7 @@ struct TraktListPicker: View {
 
             VStack(alignment: .leading, spacing: NuvioTheme.spacing.lg) {
                 VStack(alignment: .leading, spacing: NuvioTheme.spacing.xxs) {
-                    Text("Trakt lists")
+                    Text(L10n.text("trakt_lists.title", fallback: "Trakt lists"))
                         .nuvioText(NuvioTypography.headlineLarge)
                         .foregroundStyle(colors.textPrimary)
                     Text(preview.name)
@@ -65,11 +65,11 @@ struct TraktListPicker: View {
                 .nuvioText(NuvioTextStyles.bodyCompact)
                 .foregroundStyle(colors.error)
         } else if isLoading {
-            Text("Loading your lists…")
+            Text(L10n.text("trakt_lists.loading", fallback: "Loading your lists…"))
                 .nuvioText(NuvioTextStyles.bodyCompact)
                 .foregroundStyle(colors.textTertiary)
         } else if lists.isEmpty {
-            Text("You have no lists of your own on Trakt.")
+            Text(L10n.text("trakt_lists.none", fallback: "You have no lists of your own on Trakt."))
                 .nuvioText(NuvioTextStyles.bodyCompact)
                 .foregroundStyle(colors.textTertiary)
         } else {
@@ -119,7 +119,7 @@ struct TraktListPicker: View {
         let clientId = settings.tracking.traktClientId
         let token = settings.tracking.traktAccessToken
         guard !clientId.isEmpty, !token.isEmpty, imdbId != nil else {
-            failure = "Connect Trakt in Settings → Integrations to use your lists."
+            failure = L10n.text("trakt_lists.disconnected", fallback: "Connect Trakt in Settings → Integrations to use your lists.")
             isLoading = false
             return
         }

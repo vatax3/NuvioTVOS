@@ -14,7 +14,7 @@ struct PostPlayOverlay: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: NuvioTheme.spacing.lg) {
-            Text("Up next")
+            Text(L10n.text("postplay.up_next", fallback: "Up next"))
                 .nuvioText(NuvioTextStyles.metadata)
                 .foregroundStyle(colors.textSecondary)
 
@@ -33,7 +33,7 @@ struct PostPlayOverlay: View {
                     action: continuePlayback
                 )
                 PlayerCardButton(
-                    title: "Stay here",
+                    title: L10n.text("postplay.stay", fallback: "Stay here"),
                     emphasis: .secondary,
                     focus: $focus,
                     choice: .decline,
@@ -49,7 +49,7 @@ struct PostPlayOverlay: View {
         }
         .focusSection()
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Next episode")
+        .accessibilityLabel(L10n.text("postplay.next_episode", fallback: "Next episode"))
         // The transport is out of the focus graph while a card is up, so the card has to take
         // the remote itself — otherwise focus lands nowhere and the countdown cannot be
         // answered at all.
@@ -67,16 +67,16 @@ struct StillWatchingOverlay: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: NuvioTheme.spacing.lg) {
-            Label("Still watching?", systemImage: "person.fill.questionmark")
+            Label(L10n.text("postplay.still_watching", fallback: "Still watching?"), systemImage: "person.fill.questionmark")
                 .nuvioText(NuvioTextStyles.sectionTitle)
                 .foregroundStyle(colors.textPrimary)
-            Text("Continue to the next episode, or stop auto-play for this session.")
+            Text(L10n.text("postplay.still_watching_body", fallback: "Continue to the next episode, or stop auto-play for this session."))
                 .nuvioText(NuvioTextStyles.bodyCompact)
                 .foregroundStyle(colors.textSecondary)
 
             HStack(spacing: NuvioTheme.spacing.md) {
                 PlayerCardButton(
-                    title: "Continue watching",
+                    title: L10n.text("postplay.continue", fallback: "Continue watching"),
                     systemImage: "play.fill",
                     emphasis: .primary,
                     focus: $focus,
@@ -84,7 +84,7 @@ struct StillWatchingOverlay: View {
                     action: continuePlayback
                 )
                 PlayerCardButton(
-                    title: "Stop auto-play",
+                    title: L10n.text("postplay.stop_autoplay", fallback: "Stop auto-play"),
                     emphasis: .secondary,
                     focus: $focus,
                     choice: .decline,

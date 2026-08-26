@@ -287,7 +287,7 @@ final class MPVEngine {
         mpv_request_log_messages(mpv, verboseLogging ? "v" : "warn")
 
         guard mpv_initialize(mpv) >= 0 else {
-            errorMessage = "The MPV engine could not start."
+            errorMessage = L10n.text("player.engine_failed", fallback: "The MPV engine could not start.")
             destroy()
             return
         }
@@ -407,7 +407,7 @@ final class MPVEngine {
         command(["set", "audio-channels", channels.mpvValue])
     }
 
-    /// Post-decode gain, Android's "Amplification (PCM)" control. See `PlayerAudioMix` for the
+    /// Post-decode gain, Android's L10n.text("player.amplification_pcm", fallback: "Amplification (PCM)") control. See `PlayerAudioMix` for the
     /// conversion — mpv wants a percentage, the viewer picked decibels.
     static let amplificationLimitDb = PlayerAudioMix.amplificationRangeDb.upperBound
 

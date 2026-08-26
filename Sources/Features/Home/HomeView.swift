@@ -18,13 +18,13 @@ struct HomeView: View {
     var body: some View {
         Group {
             if isShowingSpinner {
-                NuvioLoadingView(message: "Loading catalogs…")
+                NuvioLoadingView(message: L10n.text("home.loading", fallback: "Loading catalogs…"))
             } else if let error = model.loadError, model.rows.isEmpty {
                 EmptyStateView(
                     systemImage: "puzzlepiece.extension",
-                    title: "Nothing to show yet",
+                    title: L10n.text("home.empty", fallback: "Nothing to show yet"),
                     message: error,
-                    actionTitle: "Open Addon Manager",
+                    actionTitle: L10n.text("home.open_addons", fallback: "Open Addon Manager"),
                     action: { router.push(.addonManager) }
                 )
             } else {

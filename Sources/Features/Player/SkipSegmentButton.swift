@@ -34,10 +34,10 @@ struct SkipSegmentButton: View {
 
     private var label: String {
         switch segment.kind {
-        case .intro: return "Skip intro"
-        case .outro: return "Skip outro"
-        case .recap: return "Skip recap"
-        case .mixed: return "Skip segment"
+        case .intro: return L10n.text("player.skip_intro", fallback: "Skip intro")
+        case .outro: return L10n.text("player.skip_outro", fallback: "Skip outro")
+        case .recap: return L10n.text("player.skip_recap", fallback: "Skip recap")
+        case .mixed: return L10n.text("player.skip_segment", fallback: "Skip segment")
         }
     }
 

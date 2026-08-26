@@ -584,12 +584,12 @@ struct StreamsView: View {
                     }
 
                     if model.isLoading && model.groups.isEmpty {
-                        NuvioLoadingView(message: "Searching your addons for sources…")
+                        NuvioLoadingView(message: L10n.text("streams.searching", fallback: "Searching your addons for sources…"))
                             .frame(maxWidth: .infinity, minHeight: dp(320))
                     } else if model.groups.isEmpty {
                         EmptyStateView(
                             systemImage: "antenna.radiowaves.left.and.right.slash",
-                            title: "No sources found",
+                            title: L10n.text("streams.none_found", fallback: "No sources found"),
                             message: emptyMessage
                         )
                         .frame(maxWidth: .infinity, minHeight: dp(320))
@@ -930,7 +930,7 @@ private struct StreamRow: View {
             attributes: attributes,
             service: cache?.provider ?? settings.debrid.activeResolver?.provider,
             // `nil` while the check is still in flight, so `service.cached` is absent rather
-            // than false and a template does not flash "Not Ready" before the answer arrives.
+            // than false and a template does not flash L10n.text("streams.not_ready", fallback: "Not Ready") before the answer arrives.
             isCached: cache.flatMap { result in
                 switch result.state {
                 case .cached: return true
@@ -1137,7 +1137,7 @@ private struct StreamRow: View {
         var badges = attributeBadges
         if settings.streamBadges.showCacheBadges, let cache, cache.state != .unknown {
             badges.append(RowBadge(
-                text: cache.state == .cached ? "Cached" : "Not cached",
+                text: cache.state == .cached ? "Cached" : L10n.text("streams.not_cached", fallback: "Not cached"),
                 tint: cache.state == .cached ? colors.cached : colors.textTertiary,
                 filled: cache.state == .cached
             ))
@@ -1233,7 +1233,7 @@ struct ExternalPlayerPicker: View {
     var body: some View {
         NuvioScreenBackground {
             VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
-                Text("Play with")
+                Text(L10n.text("streams.play_with", fallback: "Play with"))
                     .nuvioText(NuvioTextStyles.display)
                     .foregroundStyle(colors.textPrimary)
 
@@ -1242,11 +1242,11 @@ struct ExternalPlayerPicker: View {
                     .foregroundStyle(colors.textSecondary)
 
                 SettingsCard(
-                    title: "This device",
+                    title: L10n.text("streams.this_device", fallback: "This device"),
                     footnote: "AVFoundation covers H.264 and HEVC in MP4 and HLS. It cannot open MKV — use an external player for those."
                 ) {
                     SettingsRow(
-                        title: "Nuvio player",
+                        title: L10n.text("streams.nuvio_player", fallback: "Nuvio player"),
                         subtitle: "Resume, progress tracking, addon subtitles and auto-play all work here",
                         systemImage: "play.rectangle.fill",
                         action: onInternal
@@ -1254,10 +1254,10 @@ struct ExternalPlayerPicker: View {
                 }
 
                 SettingsCard(
-                    title: "External players",
+                    title: L10n.text("streams.external_players", fallback: "External players"),
                     footnote: losesHeaders
-                        ? "This source needs request headers that a hand-off cannot carry, so it will probably fail outside Nuvio. Progress and auto-play also stop at the hand-off."
-                        : "Nuvio stops tracking progress once playback moves to another app."
+                        ? L10n.text("streams.handoff_headers_warning", fallback: "This source needs request headers that a hand-off cannot carry, so it will probably fail outside Nuvio. Progress and auto-play also stop at the hand-off.")
+                        : L10n.text("streams.handoff_progress_warning", fallback: "Nuvio stops tracking progress once playback moves to another app.")
                 ) {
                     ForEach(installed) { player in
                         SettingsRow(

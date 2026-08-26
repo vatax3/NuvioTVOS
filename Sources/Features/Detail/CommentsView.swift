@@ -33,8 +33,8 @@ struct CommentsView: View {
                     } else if model.comments.isEmpty {
                         EmptyStateView(
                             systemImage: "bubble.left.and.bubble.right",
-                            title: "No comments",
-                            message: model.error ?? "Nobody has posted about this on Trakt yet."
+                            title: L10n.text("comments.empty_title", fallback: "No comments"),
+                            message: model.error ?? L10n.text("comments.empty_body", fallback: "Nobody has posted about this on Trakt yet.")
                         )
                         .frame(height: dp(280))
                     } else {
@@ -50,7 +50,7 @@ struct CommentsView: View {
                                     )
                                 }
                             }) {
-                                Text(model.isLoading ? "Loading…" : "Load more")
+                                Text(model.isLoading ? "Loading…" : L10n.text("comments.load_more", fallback: "Load more"))
                                     .nuvioText(NuvioTextStyles.button)
                                     .padding(.horizontal, NuvioTheme.spacing.xl)
                                     .frame(height: NuvioTheme.components.buttonHeight)
@@ -139,7 +139,7 @@ private struct CommentCard: View {
                 Button(action: { isRevealed = true }) {
                     HStack(spacing: NuvioTheme.spacing.sm) {
                         Image(systemName: "eye.slash.fill")
-                        Text("Spoiler — show anyway")
+                        Text(L10n.text("comments.reveal_spoiler", fallback: "Spoiler — show anyway"))
                     }
                     .nuvioText(NuvioTextStyles.button)
                     .padding(.horizontal, NuvioTheme.spacing.xl)
@@ -182,10 +182,10 @@ final class CommentsViewModel {
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .likes: return "Most liked"
+            case .likes: return L10n.text("comments.sort_likes", fallback: "Most liked")
             case .newest: return "Newest"
-            case .replies: return "Most replies"
-            case .highest: return "Highest rated"
+            case .replies: return L10n.text("comments.sort_replies", fallback: "Most replies")
+            case .highest: return L10n.text("comments.sort_rating", fallback: "Highest rated")
             }
         }
     }
@@ -202,7 +202,7 @@ final class CommentsViewModel {
         guard comments.isEmpty else { return }
         guard !settings.tracking.traktClientId.isEmpty else {
             isLoading = false
-            error = "Comments come from Trakt — add a Trakt client ID in Tracking settings."
+            error = L10n.text("comments.needs_trakt", fallback: "Comments come from Trakt — add a Trakt client ID in Tracking settings.")
             return
         }
         await loadMore(imdbId: imdbId, contentType: contentType, settings: settings)

@@ -17,7 +17,7 @@ struct LibraryView: View {
             case .all: return "All"
             case .movies: return "Movies"
             case .series: return "Series"
-            case .continueWatching: return "Continue Watching"
+            case .continueWatching: return L10n.text("library.continue_watching", fallback: "Continue Watching")
             case .collections: return "Collections"
             }
         }
@@ -94,8 +94,8 @@ struct LibraryView: View {
             if continueWatching.isEmpty {
                 emptyState(
                     icon: "play.circle",
-                    title: "Nothing in progress",
-                    message: "Titles you start watching show up here."
+                    title: L10n.text("library.nothing_in_progress", fallback: "Nothing in progress"),
+                    message: L10n.text("library.nothing_in_progress_body", fallback: "Titles you start watching show up here.")
                 )
             } else {
                 ContinueWatchingRow(
@@ -113,8 +113,8 @@ struct LibraryView: View {
         } else if savedItems.isEmpty {
             emptyState(
                 icon: "bookmark",
-                title: "Your library is empty",
-                message: "Open any title and press Add to Library to keep it here."
+                title: L10n.text("library.empty_title", fallback: "Your library is empty"),
+                message: L10n.text("library.empty_body", fallback: "Open any title and press Add to Library to keep it here.")
             )
         } else {
             LazyVGrid(columns: columns, alignment: .leading, spacing: NuvioTheme.spacing.xl) {
@@ -140,9 +140,9 @@ struct LibraryView: View {
         if collections.collections.isEmpty {
             EmptyStateView(
                 systemImage: "folder",
-                title: "No collections yet",
+                title: L10n.text("library.no_collections", fallback: "No collections yet"),
                 message: "A collection is a set of folders, and a folder is a live query — an addon catalog, a TMDB search, a Trakt list. Build one in Settings → Sources → Collections.",
-                actionTitle: "Open Collections",
+                actionTitle: L10n.text("library.open_collections", fallback: "Open Collections"),
                 action: { router.push(.collectionManager) }
             )
             .frame(height: dp(340))
@@ -199,8 +199,8 @@ struct CatalogSeeAllView: View {
                 } else if visibleItems.isEmpty {
                     EmptyStateView(
                         systemImage: "rectangle.on.rectangle",
-                        title: "Empty catalog",
-                        message: error ?? "This catalog returned no items."
+                        title: L10n.text("library.empty_catalog", fallback: "Empty catalog"),
+                        message: error ?? L10n.text("library.empty_catalog_body", fallback: "This catalog returned no items.")
                     )
                     .frame(height: dp(340))
                 } else {

@@ -42,7 +42,7 @@ struct PlayerView: View {
     @State private var isLoading = true
     /// The loading overlay covers the whole picture, so it belongs to the moment before the
     /// first frame and to nothing after it. Changing an audio or subtitle track makes mpv go
-    /// briefly idle while it re-reads the stream; showing "Preparing stream" over that reads
+    /// briefly idle while it re-reads the stream; showing L10n.text("player.preparing", fallback: "Preparing stream") over that reads
     /// as the player having thrown the film away and started again.
     @State private var hasStartedPlayback = false
     /// The pause card is not simply "paused is true". Android raises it a few seconds after a
@@ -510,7 +510,7 @@ struct PlayerView: View {
         requestedSeek = target
     }
 
-    /// "Skip automatically" for the kinds the viewer opted into — a setting that existed in the
+    /// L10n.text("player.skip_automatically", fallback: "Skip automatically") for the kinds the viewer opted into — a setting that existed in the
     /// UI and was read by nothing until now.
     ///
     /// `skip(_:)` records the segment in `dismissedSkipSegments`, which is also what stops the
@@ -1227,7 +1227,7 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
         }
 
         return UIMenu(
-            title: "Addon Subtitles",
+            title: L10n.text("player.addon_subtitles", fallback: "Addon Subtitles"),
             image: UIImage(systemName: "captions.bubble"),
             children: [off] + children
         )

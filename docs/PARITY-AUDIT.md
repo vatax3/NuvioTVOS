@@ -75,7 +75,7 @@ platform refuses the upstream approach.
 | External players | Parity | Infuse/VLC/nPlayer/Outplayer hand-off with subtitle forwarding. Skip-segment forwarding is absent. Zidoo monitoring is Android-only. |
 | Top Shelf / launcher | Adapted | Publishes Continue Watching with deep links. Android channel fingerprinting is N/A. |
 | In-app updater | Parity | Shipped in 1.0.24, on the About screen. Reads the sideloading feed rather than the releases API — the feed is the artefact that has to be right for anyone to install an update at all, so a check that reads it fails loudly when it is wrong. Versions compare numerically, because `1.0.9` sorts after `1.0.23` as a string. It tells and does not install: nothing sideloaded on tvOS can replace itself. |
-| Localisation ✻ | Partial | 115 keys in 2 languages, wired and in use at 209 call sites — the shell and player vocabulary — against **2,865 strings in 36 languages**. Roughly 700 prose literals are still English in the views, 636 of them in `Sources/Features`. Mechanical, not blocked. |
+| Localisation ✻ | Partial | 231 keys in 2 languages against **2,865 strings in 36 languages**. Since 1.0.31 the whole viewing surface is translated — home, search, discover, library, detail, comments, streams, the player chrome and its overlays, profiles — and `Scripts/check-localisation-keys.sh` fails the build on a key missing from either table, present in only one, or defined twice. What remains is **571 literals in `Sources/Features/Settings`** and 46 scattered elsewhere, most of the latter interpolated. Settings is a separate job, and the work in it is writing 571 French strings rather than converting them. |
 | Supporter perks | Missing by decision | Monetisation belongs to the official project. |
 | Crash/diagnostic reporting ✻ | **Forced** | Sentry DSN, the auth-diagnostic and playback-report endpoints are build-time secrets, blank in public source. |
 | Episode IMDb ratings ✻ | **Forced** | Served by `api/shows/{id}/season-ratings` on two hosts read from `IMDB_RATINGS_API_BASE_URL` and `IMDB_TAPFRAME_API_BASE_URL` — both blank in public source, same as `PREMIUMIZE_CLIENT_ID`. We substitute TMDB episode scores. |
@@ -232,10 +232,11 @@ still open, both recorded against their entries below.
    capped below the bitrate, only more connections help. FFmpeg's HTTP is single-connection with
    no option to change that, so the shape here would be a local proxy mpv streams from.
    Still gated on measuring a real per-connection ceiling on actual hardware.
-2. **Localisation.** Mechanical and large, but not blocked: `L10n` and the `en`/`fr` tables
-   are wired and in use at 209 call sites covering 115 keys — the shell and player
-   vocabulary. Roughly 700 prose literals remain, 636 of them in `Sources/Features`. It is
-   extended screen by screen, and no mechanism has to be built first.
+2. **Localisation.** The viewing surface is done as of 1.0.31 — everything a viewer reads
+   while finding and watching something. What is left is Settings: 571 literals, and the work
+   in them is writing 571 French strings rather than converting them, which is why it is its
+   own job rather than the tail of this one. A build guard now fails on any key missing from
+   either table, so the coverage cannot quietly rot.
 3. ~~**In-app update banner**~~ — **shipped in 1.0.24**, on the About screen and reading the
    sideloading feed rather than the releases API: it is the artefact that has to be right for
    anyone to install an update at all. It tells and does not install, because a sideloaded app

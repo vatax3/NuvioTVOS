@@ -119,8 +119,8 @@ final class HomeViewModel {
             rows = []
             isInitialLoading = false
             loadError = addonStore.enabledAddons.isEmpty
-                ? "No addons installed yet."
-                : "None of your addons expose a home catalog."
+                ? L10n.text("home.no_addons", fallback: "No addons installed yet.")
+                : L10n.text("home.no_catalogs", fallback: "None of your addons expose a home catalog.")
             return
         }
 

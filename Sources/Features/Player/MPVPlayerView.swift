@@ -267,7 +267,7 @@ struct MPVPlayerView: View {
         // Derived, and reported from its initial value, because the events it replaces could
         // be missed entirely: mpv is started by the surface controller during the same body
         // evaluation that mounts this view, so a local file could reach its first frame before
-        // `start()` ran — and the "Preparing stream" cover, set there, then had nothing left
+        // `start()` ran — and the L10n.text("player.preparing", fallback: "Preparing stream") cover, set there, then had nothing left
         // to change and stayed up over a film that was already playing.
         .onChange(of: isStalled, initial: true) { _, stalled in
             onPlaybackState(engine.isPaused, stalled)
@@ -288,7 +288,7 @@ struct MPVPlayerView: View {
         }
         .onChange(of: engine.errorMessage) { _, message in
             retargetFocus()
-            // The host's "Preparing stream" cover is drawn above this view, so a source that
+            // The host's L10n.text("player.preparing", fallback: "Preparing stream") cover is drawn above this view, so a source that
             // never opens sat behind a spinner that could not end. Reporting the stall as
             // finished is what lets mpv's own account of the failure be read.
             if message != nil { onPlaybackState(engine.isPaused, false) }
@@ -329,7 +329,7 @@ struct MPVPlayerView: View {
 
     private var renderDiagnostic: some View {
         VStack(alignment: .leading, spacing: NuvioTheme.spacing.md) {
-            Text("Audio is playing but no picture is being drawn")
+            Text(L10n.text("player.audio_no_video", fallback: "Audio is playing but no picture is being drawn"))
                 .nuvioText(NuvioTextStyles.headline)
                 .foregroundStyle(.white)
             Text(
@@ -1212,20 +1212,20 @@ struct MPVPlayerView: View {
             InPlayerPanelSection(title: "Video") {
                 infoRow("Codec", engine.streamInfo.videoCodec)
                 infoRow("Resolution", engine.streamInfo.resolution)
-                infoRow("Frame rate", engine.streamInfo.frameRate)
+                infoRow(L10n.text("player.frame_rate", fallback: "Frame rate"), engine.streamInfo.frameRate)
                 InPlayerInfoRow(title: "Display", value: engine.aspectMode.label)
             }
 
-            InPlayerPanelSection(title: "Audio & subtitles") {
+            InPlayerPanelSection(title: L10n.text("player.audio_and_subtitles", fallback: "Audio & subtitles")) {
                 infoRow("Codec", engine.streamInfo.audioCodec)
                 infoRow("Channels", engine.streamInfo.audioChannels)
                 infoRow("Output", engine.streamInfo.audioOutput)
-                InPlayerInfoRow(title: "Audio delay", value: delayLabel(engine.audioDelay))
-                InPlayerInfoRow(title: "Subtitle delay", value: delayLabel(engine.subtitleDelay))
+                InPlayerInfoRow(title: L10n.text("player.audio_delay", fallback: "Audio delay"), value: delayLabel(engine.audioDelay))
+                InPlayerInfoRow(title: L10n.text("player.subtitle_delay", fallback: "Subtitle delay"), value: delayLabel(engine.subtitleDelay))
             }
 
             if !engine.logTail.isEmpty {
-                InPlayerPanelSection(title: "Recent player log") {
+                InPlayerPanelSection(title: L10n.text("player.recent_log", fallback: "Recent player log")) {
                     Text(engine.logTail.suffix(6).joined(separator: "\n"))
                         .font(.system(size: sp(10), design: .monospaced))
                         .foregroundStyle(colors.textSecondary)

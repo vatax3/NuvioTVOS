@@ -13,7 +13,7 @@ final class CloudLibraryViewModel {
     private(set) var errorMessage: String?
 
     func showNoPlayableFiles() {
-        errorMessage = "This item has no supported video files."
+        errorMessage = L10n.text("cloud.no_supported_files", fallback: "This item has no supported video files.")
     }
 
     func refresh(debrid: DebridSettingsStore) async {
@@ -102,10 +102,10 @@ struct CloudLibrarySection: View {
         VStack(alignment: .leading, spacing: NuvioTheme.spacing.lg) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: NuvioTheme.spacing.xs) {
-                    Text("Cloud library")
+                    Text(L10n.text("cloud.title", fallback: "Cloud library"))
                         .nuvioText(NuvioTextStyles.sectionTitle)
                         .foregroundStyle(colors.textPrimary)
-                    Text("Files saved in Premiumize and TorBox")
+                    Text(L10n.text("cloud.subtitle", fallback: "Files saved in Premiumize and TorBox"))
                         .nuvioText(NuvioTextStyles.metadata)
                         .foregroundStyle(colors.textSecondary)
                 }
@@ -143,7 +143,7 @@ struct CloudLibrarySection: View {
                     }
                 }
 
-                TextField("Filter cloud files", text: $query)
+                TextField(L10n.text("cloud.filter", fallback: "Filter cloud files"), text: $query)
                     .textFieldStyle(.plain)
                     .padding(.horizontal, NuvioTheme.spacing.md)
                     .frame(height: dp(52))
@@ -180,15 +180,15 @@ struct CloudLibrarySection: View {
     @ViewBuilder
     private var content: some View {
         if !enabled {
-            cloudEmpty(icon: "cloud.slash", title: "Cloud library is off", message: "Enable it in Settings → Debrid to browse your provider files.")
+            cloudEmpty(icon: "cloud.slash", title: L10n.text("cloud.off_title", fallback: "Cloud library is off"), message: L10n.text("cloud.off_body", fallback: "Enable it in Settings → Debrid to browse your provider files."))
         } else if !isConnected {
-            cloudEmpty(icon: "key", title: "Connect Premiumize or TorBox", message: "Add an API key in Settings → Debrid to show your stored files here.")
+            cloudEmpty(icon: "key", title: L10n.text("cloud.disconnected_title", fallback: "Connect Premiumize or TorBox"), message: L10n.text("cloud.disconnected_body", fallback: "Add an API key in Settings → Debrid to show your stored files here."))
         } else if model.isLoading && !model.hasLoaded {
-            ProgressView("Loading cloud library…")
+            ProgressView(L10n.text("cloud.loading", fallback: "Loading cloud library…"))
                 .tint(colors.secondary)
                 .frame(maxWidth: .infinity, minHeight: dp(160))
         } else if items.isEmpty {
-            cloudEmpty(icon: "externaldrive", title: "No cloud files found", message: providerError ?? "Your connected provider did not return any saved files.")
+            cloudEmpty(icon: "externaldrive", title: L10n.text("cloud.empty_title", fallback: "No cloud files found"), message: providerError ?? L10n.text("cloud.empty_body", fallback: "Your connected provider did not return any saved files."))
         } else {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: NuvioTheme.spacing.lg) {
@@ -272,7 +272,7 @@ private struct CloudLibraryCard: View {
 
     private var metadata: String {
         let count = item.playableFiles.count
-        let fileLabel = count == 0 ? "No playable files" : "\(count) playable file\(count == 1 ? "" : "s")"
+        let fileLabel = count == 0 ? L10n.text("cloud.no_playable", fallback: "No playable files") : "\(count) playable file\(count == 1 ? "" : "s")"
         return [
             item.provider.displayName,
             item.type.label,

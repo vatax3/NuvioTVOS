@@ -130,7 +130,7 @@ struct SeeAllCard: View {
             VStack(spacing: NuvioTheme.spacing.sm) {
                 Image(systemName: "arrow.right")
                     .font(.system(size: NuvioTheme.sizes.icons.lg))
-                Text("See all")
+                Text(L10n.text("row.see_all", fallback: "See all"))
                     .nuvioText(NuvioTextStyles.button)
             }
             .foregroundStyle(colors.textSecondary)
@@ -154,7 +154,7 @@ struct ContinueWatchingRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: NuvioTheme.components.row.titleBottomSpacing) {
-            Text("Continue Watching")
+            Text(L10n.text("library.continue_watching", fallback: "Continue Watching"))
                 .nuvioText(NuvioTextStyles.sectionTitle)
                 .foregroundStyle(colors.textPrimary)
                 .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)
@@ -235,7 +235,7 @@ struct ErrorStateView: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: NuvioTheme.sizes.icons.xl * 1.4))
                 .foregroundStyle(colors.error)
-            Text("Something went wrong")
+            Text(L10n.text("row.failed", fallback: "Something went wrong"))
                 .nuvioText(NuvioTextStyles.headline)
                 .foregroundStyle(colors.textPrimary)
             Text(message)

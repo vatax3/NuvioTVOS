@@ -16,7 +16,7 @@ final class TraktLibraryViewModel {
         guard !isLoading else { return }
         guard tracking.isTraktAuthenticated, !tracking.traktClientId.isEmpty else {
             lists = []
-            errorMessage = "Connect Trakt in Settings → Integrations to browse its collection."
+            errorMessage = L10n.text("trakt.disconnected", fallback: "Connect Trakt in Settings → Integrations to browse its collection.")
             hasLoaded = true
             return
         }
@@ -28,7 +28,7 @@ final class TraktLibraryViewModel {
             token: tracking.traktAccessToken
         )
         if lists.isEmpty {
-            errorMessage = "No Trakt collection or watchlist items were found."
+            errorMessage = L10n.text("trakt.empty", fallback: "No Trakt collection or watchlist items were found.")
         }
     }
 }
@@ -45,10 +45,10 @@ struct TraktLibraryContent: View {
         VStack(alignment: .leading, spacing: NuvioTheme.spacing.lg) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: NuvioTheme.spacing.xs) {
-                    Text("Trakt library")
+                    Text(L10n.text("trakt.title", fallback: "Trakt library"))
                         .nuvioText(NuvioTextStyles.sectionTitle)
                         .foregroundStyle(colors.textPrimary)
-                    Text("Your Trakt collection and watchlist")
+                    Text(L10n.text("trakt.subtitle", fallback: "Your Trakt collection and watchlist"))
                         .nuvioText(NuvioTextStyles.metadata)
                         .foregroundStyle(colors.textSecondary)
                 }
@@ -64,7 +64,7 @@ struct TraktLibraryContent: View {
             if model.isLoading && model.lists.isEmpty {
                 PosterSkeletonRow(showsTitle: false)
             } else if let message = model.errorMessage, model.lists.isEmpty {
-                EmptyStateView(systemImage: "checklist", title: "Trakt library", message: message)
+                EmptyStateView(systemImage: "checklist", title: L10n.text("trakt.title", fallback: "Trakt library"), message: message)
                     .frame(height: dp(260))
             } else {
                 ForEach(model.lists) { list in

@@ -198,7 +198,7 @@ struct PosterOptionsDialog: View {
                 set: { if !$0 { pendingRemoval = nil } }
             )
         ) {
-            Button("Keep it", role: .cancel) { pendingRemoval = nil }
+            Button(L10n.text("poster_options.keep_it", fallback: "Keep it"), role: .cancel) { pendingRemoval = nil }
             Button("Remove", role: .destructive) { confirmRemoval() }
         } message: {
             if let provider = pendingRemoval, let caution = TrackingRemovalImpact.caution(provider: provider) {

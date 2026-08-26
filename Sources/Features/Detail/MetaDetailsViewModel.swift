@@ -92,7 +92,7 @@ final class MetaDetailsViewModel {
                 apiKey: settings.tmdb.apiKey
             ) else {
                 error = settings.tmdb.apiKey.isEmpty
-                    ? "This title came from TMDB — add a TMDB API key in Metadata settings to open it."
+                    ? L10n.text("detail.needs_tmdb", fallback: "This title came from TMDB — add a TMDB API key in Metadata settings to open it.")
                     : "TMDB has no IMDb id for this title, so no addon can describe it."
                 return
             }
@@ -121,7 +121,7 @@ final class MetaDetailsViewModel {
         }
 
         guard !candidates.isEmpty else {
-            error = "No installed addon can describe this title."
+            error = L10n.text("detail.no_addon", fallback: "No installed addon can describe this title.")
             return
         }
 
@@ -144,7 +144,7 @@ final class MetaDetailsViewModel {
                 return
             }
         }
-        error = "Could not load details for this title."
+        error = L10n.text("detail.load_failed", fallback: "Could not load details for this title.")
     }
 
     /// Fills gaps in the addon's metadata from TMDB, per the Metadata settings.

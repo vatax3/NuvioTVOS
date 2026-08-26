@@ -121,7 +121,7 @@ struct CollectionFolderView: View {
                 if let reason = model.blockingReason {
                     EmptyStateView(
                         systemImage: "exclamationmark.triangle",
-                        title: "Nothing to show",
+                        title: L10n.text("collection.empty", fallback: "Nothing to show"),
                         message: reason.message
                     )
                     .frame(height: dp(320))
@@ -236,7 +236,7 @@ struct CollectionFolderView: View {
             if let tab = visibleTab, tab.hasMore {
                 // The grid has no tail-focus signal of its own, so paging is a button rather than
                 // something that happens as you scroll into it.
-                Button("Load more") {
+                Button(L10n.text("collection.load_more", fallback: "Load more")) {
                     Task { await model.loadMore(tab.id, addons: addons, settings: settings) }
                 }
                 .buttonStyle(NuvioPillButtonStyle(emphasis: .secondary))

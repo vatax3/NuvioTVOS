@@ -25,7 +25,7 @@ struct ProfileLockView: View {
                     .nuvioText(NuvioTextStyles.display)
                     .foregroundStyle(colors.textPrimary)
 
-                Text(didFail ? "Wrong PIN — try again" : "Enter your PIN")
+                Text(didFail ? L10n.text("profiles.wrong_pin", fallback: "Wrong PIN — try again") : L10n.text("profiles.enter_pin", fallback: "Enter your PIN"))
                     .nuvioText(NuvioTextStyles.bodyCompact)
                     .foregroundStyle(didFail ? colors.error : colors.textSecondary)
 
@@ -39,7 +39,7 @@ struct ProfileLockView: View {
 
                 if profiles.hasMultipleProfiles {
                     Button(action: switchToPrimary) {
-                        Text("Use another profile")
+                        Text(L10n.text("profiles.switch", fallback: "Use another profile"))
                             .nuvioText(NuvioTextStyles.button)
                             .padding(.horizontal, NuvioTheme.spacing.xl)
                             .frame(height: NuvioTheme.components.buttonHeight)

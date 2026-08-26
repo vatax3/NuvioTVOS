@@ -74,7 +74,7 @@ struct InPlayerEpisodesView: View {
 
     private func load() async {
         guard request.contentType == "series" else {
-            error = "Episode selection is available for series only."
+            error = L10n.text("player.episodes_series_only", fallback: "Episode selection is available for series only.")
             isLoading = false
             return
         }
@@ -94,8 +94,8 @@ struct InPlayerEpisodesView: View {
             }
         }
         error = candidates.isEmpty
-            ? "No installed addon can provide this episode list."
-            : "Episodes could not be loaded from the installed addons."
+            ? L10n.text("player.episodes_no_addon", fallback: "No installed addon can provide this episode list.")
+            : L10n.text("player.episodes_failed", fallback: "Episodes could not be loaded from the installed addons.")
         isLoading = false
     }
 

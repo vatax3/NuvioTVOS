@@ -128,7 +128,7 @@ final class CastDetailViewModel {
         defer { isLoading = false }
 
         guard !settings.tmdb.apiKey.isEmpty else {
-            error = "Cast details come from TMDB — add an API key in Metadata settings."
+            error = L10n.text("cast.needs_tmdb", fallback: "Cast details come from TMDB — add an API key in Metadata settings.")
             return
         }
         guard let loaded = await TMDBClient.shared.person(
@@ -169,7 +169,7 @@ struct TMDBBrowseView: View {
                     } else if model.items.isEmpty {
                         EmptyStateView(
                             systemImage: "building.2",
-                            title: "Nothing here",
+                            title: L10n.text("cast.empty", fallback: "Nothing here"),
                             message: model.error ?? "TMDB returned no titles for this."
                         )
                         .frame(height: dp(320))
@@ -233,7 +233,7 @@ final class TMDBBrowseViewModel {
         guard items.isEmpty else { return }
         guard !settings.tmdb.apiKey.isEmpty else {
             isLoading = false
-            error = "Browsing by studio or network uses TMDB — add an API key in Metadata settings."
+            error = L10n.text("browse.needs_tmdb", fallback: "Browsing by studio or network uses TMDB — add an API key in Metadata settings.")
             return
         }
         await loadMore(request: request, settings: settings)

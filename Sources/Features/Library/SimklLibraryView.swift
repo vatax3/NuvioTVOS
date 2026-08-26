@@ -13,7 +13,7 @@ final class SimklLibraryViewModel {
         guard !isLoading else { return }
         guard tracking.isSimklAuthenticated, !tracking.simklClientId.isEmpty else {
             lists = []
-            errorMessage = "Connect Simkl in Settings → Integrations to browse its lists."
+            errorMessage = L10n.text("simkl.disconnected", fallback: "Connect Simkl in Settings → Integrations to browse its lists.")
             hasLoaded = true
             return
         }
@@ -26,7 +26,7 @@ final class SimklLibraryViewModel {
                 token: tracking.simklAccessToken,
                 animePreference: tracking.simklAnimeIdPreference
             )
-            if lists.isEmpty { errorMessage = "No Simkl list items were found." }
+            if lists.isEmpty { errorMessage = L10n.text("simkl.empty", fallback: "No Simkl list items were found.") }
         } catch {
             lists = []
             errorMessage = "Simkl could not be refreshed. \(error.localizedDescription)"
@@ -46,7 +46,7 @@ struct SimklLibraryContent: View {
         VStack(alignment: .leading, spacing: NuvioTheme.spacing.lg) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: NuvioTheme.spacing.xs) {
-                    Text("Simkl library")
+                    Text(L10n.text("simkl.title", fallback: "Simkl library"))
                         .nuvioText(NuvioTextStyles.sectionTitle)
                         .foregroundStyle(colors.textPrimary)
                     Text("Watching, Plan to Watch, On Hold, Completed and Dropped")
@@ -65,7 +65,7 @@ struct SimklLibraryContent: View {
             if model.isLoading && model.lists.isEmpty {
                 PosterSkeletonRow(showsTitle: false)
             } else if let message = model.errorMessage, model.lists.isEmpty {
-                EmptyStateView(systemImage: "checklist", title: "Simkl library", message: message)
+                EmptyStateView(systemImage: "checklist", title: L10n.text("simkl.title", fallback: "Simkl library"), message: message)
                     .frame(height: dp(260))
             } else {
                 ForEach(model.lists) { list in

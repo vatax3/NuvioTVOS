@@ -191,7 +191,7 @@ struct SearchView: View {
             VStack(alignment: .leading, spacing: NuvioTheme.spacing.xl) {
                 header
 
-                TextField("Search movies, series…", text: $model.query)
+                TextField(L10n.text("search.placeholder", fallback: "Search movies, series…"), text: $model.query)
                     .textFieldStyle(.plain)
                     .nuvioText(NuvioTextStyles.body)
                     .padding(.horizontal, NuvioTheme.spacing.xl)
@@ -220,7 +220,7 @@ struct SearchView: View {
     }
 
     private var suggestions: some View {
-        ChipRow(title: model.query.isEmpty ? "Recent searches" : "Suggestions") {
+        ChipRow(title: model.query.isEmpty ? L10n.text("search.recent", fallback: "Recent searches") : "Suggestions") {
             ForEach(model.suggestions, id: \.self) { suggestion in
                 NuvioChip(
                     label: suggestion,
@@ -249,7 +249,7 @@ struct SearchView: View {
         } else if model.hasSearched && model.results.isEmpty {
             EmptyStateView(
                 systemImage: "magnifyingglass",
-                title: "No results",
+                title: L10n.text("search.no_results", fallback: "No results"),
                 message: "No addon returned a match for “\(model.query)”."
             )
             .frame(height: dp(320))
@@ -259,8 +259,8 @@ struct SearchView: View {
             } else {
                 EmptyStateView(
                     systemImage: "magnifyingglass",
-                    title: "Search your addons",
-                    message: "Type at least two characters to query every catalog that supports search."
+                    title: L10n.text("search.prompt_title", fallback: "Search your addons"),
+                    message: L10n.text("search.prompt_body", fallback: "Type at least two characters to query every catalog that supports search.")
                 )
                 .frame(height: dp(320))
             }

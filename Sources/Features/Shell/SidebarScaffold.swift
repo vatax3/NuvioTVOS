@@ -319,7 +319,7 @@ struct SidebarScaffold<Content: View>: View {
                     Text(profile.name)
                         .nuvioText(NuvioTextStyles.nav)
                         .lineLimit(1)
-                    Text("Switch profile")
+                    Text(L10n.text("shell.switch_profile", fallback: "Switch profile"))
                         .nuvioText(NuvioTypography.labelSmall)
                         .foregroundStyle(colors.textTertiary)
                 }

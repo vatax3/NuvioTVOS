@@ -128,6 +128,12 @@ targets:
       - script: "\"$SRCROOT/Scripts/check-settings-wiring.sh\""
         name: Check settings wiring
         basedOnDependencyAnalysis: false
+      # Same reason, different drift: a missing key does not crash — NSLocalizedString falls back
+      # to the key or to `fallback:` — so the failure is a French screen that quietly stays
+      # English, which is invisible from the language you develop in.
+      - script: "\"$SRCROOT/Scripts/check-localisation-keys.sh\""
+        name: Check localisation keys
+        basedOnDependencyAnalysis: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.nuvio.tvos
@@ -135,8 +141,8 @@ targets:
         PRODUCT_NAME: Nuvio
         INFOPLIST_KEY_CFBundleDisplayName: Nuvio
         INFOPLIST_KEY_UIUserInterfaceStyle: Dark
-        MARKETING_VERSION: "1.0.30"
-        CURRENT_PROJECT_VERSION: "32"
+        MARKETING_VERSION: "1.0.31"
+        CURRENT_PROJECT_VERSION: "33"
         TARGETED_DEVICE_FAMILY: "3"
         # MoltenVK and shaderc inside the mpv stack are C++, so the C++ runtime and the system
         # libraries they call into have to be linked explicitly.
@@ -190,8 +196,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.nuvio.tvos.topshelf
         PRODUCT_NAME: NuvioTopShelf
         CODE_SIGN_ENTITLEMENTS: TopShelf/NuvioTopShelf.entitlements
-        MARKETING_VERSION: "1.0.30"
-        CURRENT_PROJECT_VERSION: "32"
+        MARKETING_VERSION: "1.0.31"
+        CURRENT_PROJECT_VERSION: "33"
         GENERATE_INFOPLIST_FILE: YES
     info:
       path: TopShelf/Info.plist

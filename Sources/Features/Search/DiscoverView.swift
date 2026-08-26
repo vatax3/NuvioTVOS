@@ -240,8 +240,8 @@ struct DiscoverBrowser: View {
         } else if model.items.isEmpty {
             EmptyStateView(
                 systemImage: "square.grid.2x2",
-                title: "Nothing here",
-                message: model.error ?? "Pick a catalog to browse."
+                title: L10n.text("cast.empty", fallback: "Nothing here"),
+                message: model.error ?? L10n.text("discover.pick_catalog", fallback: "Pick a catalog to browse.")
             )
             .frame(height: dp(300))
         } else {

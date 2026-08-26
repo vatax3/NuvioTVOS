@@ -418,11 +418,11 @@ struct InPlayerSourcesPanel: View {
             }
 
             if model.isLoading && model.groups.isEmpty {
-                ProgressView("Searching sources…")
+                ProgressView(L10n.text("player.searching_sources", fallback: "Searching sources…"))
                     .tint(colors.secondary)
                     .frame(maxWidth: .infinity, minHeight: dp(180))
             } else if let error = model.resolveError?.nilIfBlank {
-                InPlayerPanelSection(title: "Could not open source") {
+                InPlayerPanelSection(title: L10n.text("player.source_failed", fallback: "Could not open source")) {
                     InPlayerInfoRow(title: "Error", value: error)
                 }
             } else if displayedGroups.isEmpty {

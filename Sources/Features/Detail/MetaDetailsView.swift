@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Port of `MetaDetailsScreen`: full-bleed hero with the action row, then the episodes,
-/// cast and "More like this" sections.
+/// cast and L10n.text("detail.more_like_this", fallback: "More like this") sections.
 struct MetaDetailsView: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(AddonStore.self) private var addons
@@ -32,11 +32,11 @@ struct MetaDetailsView: View {
                 )
 
                 if model.isLoading && model.meta == nil {
-                    NuvioLoadingView(message: "Loading details…")
+                    NuvioLoadingView(message: L10n.text("detail.loading", fallback: "Loading details…"))
                 } else if let meta = model.meta {
                     content(meta: meta, size: proxy.size)
                 } else {
-                    ErrorStateView(message: model.error ?? "Unknown error") {
+                    ErrorStateView(message: model.error ?? L10n.text("detail.unknown_error", fallback: "Unknown error")) {
                         Task { await model.load(request: request, addonStore: addons, settings: settings) }
                     }
                 }
@@ -138,7 +138,7 @@ struct MetaDetailsView: View {
                     )
                 }
 
-                // Before "More like this", because a franchise is a stronger answer to "what do
+                // Before L10n.text("detail.more_like_this", fallback: "More like this"), because a franchise is a stronger answer to "what do
                 // I watch next" than a genre match is.
                 if let collection = model.collection {
                     CatalogRowView(
@@ -152,7 +152,7 @@ struct MetaDetailsView: View {
 
                 if !model.moreLikeThis.isEmpty {
                     CatalogRowView(
-                        title: "More like this",
+                        title: L10n.text("detail.more_like_this", fallback: "More like this"),
                         items: model.moreLikeThis,
                         showsSeeAll: false,
                         backdropExpandEnabled: false,
@@ -263,7 +263,7 @@ struct MetaDetailsView: View {
             Button(action: { toggleLibrary(meta) }) {
                 HStack(spacing: NuvioTheme.spacing.sm) {
                     Image(systemName: library.isInLibrary(meta.preview()) ? "checkmark" : "plus")
-                    Text(library.isInLibrary(meta.preview()) ? "In Library" : "Add to Library")
+                    Text(library.isInLibrary(meta.preview()) ? L10n.text("detail.in_library", fallback: "In Library") : L10n.text("detail.add_to_library", fallback: "Add to Library"))
                 }
                 .nuvioText(NuvioTextStyles.button)
                 .padding(.horizontal, NuvioTheme.spacing.xl)
