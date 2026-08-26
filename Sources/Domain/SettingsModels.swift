@@ -39,18 +39,6 @@ enum PlayerPreference: String, SettingsOption {
     }
 }
 
-enum DecoderPriority: String, SettingsOption {
-    case preferHardware = "PREFER_HARDWARE"
-    case preferSoftware = "PREFER_SOFTWARE"
-    case hardwareOnly = "HARDWARE_ONLY"
-    var displayName: String {
-        switch self {
-        case .preferHardware: return "Prefer hardware"
-        case .preferSoftware: return "Prefer software"
-        case .hardwareOnly: return "Hardware only"
-        }
-    }
-}
 
 enum ResizeMode: String, SettingsOption {
     case fit = "FIT"
@@ -249,11 +237,6 @@ enum SubtitleStyleOverride: String, SettingsOption {
     }
 }
 
-enum LibassRenderType: String, SettingsOption {
-    case native = "NATIVE"
-    case libass = "LIBASS"
-    var displayName: String { self == .native ? "Native renderer" : "libass (full ASS/SSA)" }
-}
 
 enum SubtitleOrganizationMode: String, SettingsOption {
     case byLanguage = "BY_LANGUAGE"
@@ -405,26 +388,9 @@ enum DetailRatingsVisibility: String, SettingsOption {
 
 // MARK: - Dolby Vision
 
-enum DolbyVision7HandlingMode: String, SettingsOption {
-    case auto = "AUTO"
-    case forceBaseLayer = "FORCE_BASE_LAYER"
-    case passthrough = "PASSTHROUGH"
-    var displayName: String {
-        switch self {
-        case .auto: return "Auto"
-        case .forceBaseLayer: return "Force HDR10 base layer"
-        case .passthrough: return "Passthrough"
-        }
-    }
-}
 
 // MARK: - Buffering
 
-enum VodCacheSizeMode: String, SettingsOption {
-    case automatic = "AUTO"
-    case manual = "MANUAL"
-    var displayName: String { self == .automatic ? "Automatic" : "Manual" }
-}
 
 // MARK: - Layout
 
@@ -454,6 +420,18 @@ enum ContinueWatchingSortMode: String, SettingsOption {
     }
 }
 
+/// Where an inline trailer would play on focus, if one could.
+///
+/// Kept without a reader, alone among the five enums that were in this position, because it is
+/// the only one that describes something we *want* and cannot have rather than a problem another
+/// engine has. tvOS has no supported YouTube playback path — no web view, and AVPlayer cannot
+/// resolve a watch page — so `TrailerLauncher` hands off to the YouTube app instead. This is the
+/// shape the setting takes on the day that changes.
+///
+/// The other four went: decoder priority and the libass renderer choice are ExoPlayer questions
+/// (mpv *is* libass, and hardware decoding is `hwdec`), the Dolby Vision profile 7 modes exist to
+/// work around an engine that cannot play dual-layer DV, and the cache-size mode is part of the
+/// buffer-tuning surface the audit already records as given up with ExoPlayer.
 enum FocusedPosterTrailerTarget: String, SettingsOption {
     case posterCard = "POSTER"
     case heroOnly = "HERO"

@@ -168,15 +168,26 @@ path and AVFoundation refuses.
 
 ## Findings this pass turned up in our own tree
 
-Five settings enums are defined and never referenced anywhere: `DecoderPriority`,
-`LibassRenderType`, `DolbyVision7HandlingMode`, `VodCacheSizeMode`, `FocusedPosterTrailerTarget`
-— all in [SettingsModels.swift](Sources/Domain/SettingsModels.swift). They are the shape of
-parity without the substance. Two should be deleted as N/A under mpv; `FocusedPosterTrailerTarget`
-tracks a forced gap and can stay only if it is commented as such.
+Both are **closed in 1.0.28**, and one of them was half wrong.
 
-Also: our preference keys were documented as matching the Android names, and mostly do — but
-`hero_catalog_keys` and `remember_last_profile` diverge from upstream's `hero_catalog_key` and
-`remember_last_profile_enabled`, which breaks the wire compatibility that comment promises.
+**Five settings enums defined and never referenced** — the shape of parity without the substance.
+Four are gone: `DecoderPriority` and `LibassRenderType` are ExoPlayer questions (mpv *is* libass,
+and hardware decoding is `hwdec`), `DolbyVision7HandlingMode` exists to work around an engine that
+cannot play dual-layer DV, and `VodCacheSizeMode` is part of the buffer-tuning surface given up
+with ExoPlayer. `FocusedPosterTrailerTarget` stays, commented: it is the only one of the five that
+describes something we want and the platform refuses.
+
+**Two preference keys said to diverge from Android's.** Only one did. `hero_catalog_keys` is
+correct — upstream carries both `hero_catalog_key` and `hero_catalog_keys`, and the plural is the
+live one; the singular is what it migrates from. This finding named the wrong half of that pair.
+
+`remember_last_profile` was a real divergence against upstream's `remember_last_profile_enabled`,
+and renaming it turned up something worse underneath: the setting had **two defaults**.
+`SettingsStore` defaulted it on and `ProfileStore` — which reads `UserDefaults` directly, because
+the settings graph is built per profile and does not exist that early in launch — defaulted it
+off. A fresh install showed the switch on and went to "Who's watching?" every launch anyway. Key
+and default now live once, in `RememberLastProfile`, which reads the old name too so nobody's
+choice is lost.
 
 ## Priorities
 

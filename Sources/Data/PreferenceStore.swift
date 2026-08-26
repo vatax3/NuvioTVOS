@@ -32,6 +32,12 @@ class PreferenceStore {
     /// `UserDefaults` on first access.
     var secureKeys: Set<String> { [] }
 
+    /// Whatever is stored under a key, untyped and without a default.
+    ///
+    /// For the one case a typed accessor cannot express: a setting that was renamed and has to
+    /// consult both names, where "absent" and "false" are different answers.
+    func storedValue(_ key: String) -> Any? { storage[key] }
+
     private func persist(_ key: String, _ value: Any?) {
         storage[key] = value
         if let value {

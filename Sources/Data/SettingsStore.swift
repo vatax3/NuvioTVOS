@@ -69,9 +69,17 @@ final class SettingsStore: PreferenceStore {
     }
 
     /// `advanced_remember_last_profile`: reopen the profile that was active at shutdown.
+    ///
+    /// Key and default both live in `RememberLastProfile`, because this store and `ProfileStore`
+    /// each had their own and disagreed — the switch read on here while launch behaved as off.
     var remembersLastProfile: Bool {
-        get { bool("remember_last_profile", default: true) }
-        set { setBool("remember_last_profile", newValue) }
+        get {
+            RememberLastProfile.resolve(
+                current: storedValue(RememberLastProfile.key),
+                legacy: storedValue(RememberLastProfile.legacyKey)
+            )
+        }
+        set { setBool(RememberLastProfile.key, newValue) }
     }
 
     var settingsUIStyle: SettingsUIStyle {
