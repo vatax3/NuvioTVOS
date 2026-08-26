@@ -50,6 +50,22 @@ struct HomeView: View {
                 library: library
             )
         }
+        // The episode cache was only ever filled by opening a detail screen, which left Next Up
+        // unable to project a series the viewer started from a rail and never opened. Bounded:
+        // the ones that matter are at the front of the rail. See `SeriesEpisodeCatalogue`.
+        .task(id: continueWatchingSignature) {
+            await SeriesEpisodeCatalogue.seed(
+                contentIds: library.continueWatching(
+                    threshold: settings.watchedThreshold,
+                    withinDays: settings.tracking.continueWatchingDaysCap,
+                    nextUp: settings.nextUpOptions
+                )
+                .filter { $0.preview.type == .series }
+                .map(\.preview.id),
+                library: library,
+                addons: addons
+            )
+        }
         .onChange(of: settings.catalogPresentation) { _, presentation in
             model.apply(presentation: presentation)
         }
@@ -60,6 +76,19 @@ struct HomeView: View {
             router.contentHasFocusableViews = !spinning
         }
         .onDisappear { router.contentHasFocusableViews = true }
+    }
+
+    /// Changes when the set of series in Continue Watching does, so the seed runs on a new one
+    /// rather than on every redraw.
+    private var continueWatchingSignature: String {
+        library.continueWatching(
+            threshold: settings.watchedThreshold,
+            withinDays: settings.tracking.continueWatchingDaysCap,
+            nextUp: settings.nextUpOptions
+        )
+        .filter { $0.preview.type == .series }
+        .map(\.preview.id)
+        .joined(separator: "|")
     }
 
     @ViewBuilder

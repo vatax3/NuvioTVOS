@@ -8,11 +8,13 @@ final class PosterOptionsPolicyTests: XCTestCase {
         inLibrary: Bool = false,
         watched: Bool = false,
         progress: Bool = false,
-        suggestion: Bool = false
+        suggestion: Bool = false,
+        knownEpisodes: Bool = false
     ) -> PosterOptionsPolicy.Context {
         .init(
             type: type, isInLibrary: inLibrary, isWatched: watched,
-            hasProgress: progress, isNextUpSuggestion: suggestion
+            hasProgress: progress, isNextUpSuggestion: suggestion,
+            canWalkEpisodes: knownEpisodes
         )
     }
 
@@ -38,14 +40,42 @@ final class PosterOptionsPolicyTests: XCTestCase {
         XCTAssertFalse(PosterOptionsPolicy.actions(for: context(watched: true)).contains(.markWatched))
     }
 
-    /// The scope call, pinned: marking a whole series watched needs a walk over its episodes
-    /// that does not exist yet, and a row that quietly does less than it says is worse than no
-    /// row. If the walk lands, this test is the thing that should fail first.
-    func testASeriesIsNotOfferedAWatchedRow() {
+    /// This was the pinned scope call — a series got no watched row, because nothing walked its
+    /// episodes. `SeriesWatchedWalk` does now, and the rule that replaced it is narrower: the row
+    /// appears when the episodes are *known*.
+    ///
+    /// Worth recording how the pin behaved when the walk landed, because it did not fire.
+    /// `canWalkEpisodes` arrived with a default of `false`, so this test kept passing while
+    /// quietly becoming an assertion about a different case. A defaulted field is exactly how a
+    /// guard stops guarding, which is why the positive case below is now its twin.
+    func testASeriesWithNoKnownEpisodesIsNotOfferedAWatchedRow() {
         let actions = PosterOptionsPolicy.actions(for: context(type: .series))
 
         XCTAssertFalse(actions.contains(.markWatched))
         XCTAssertFalse(actions.contains(.markUnwatched))
+    }
+
+    /// An empty episode list is a series nobody has opened, not a series with no episodes. Once
+    /// they are known, the row does exactly what it says.
+    func testASeriesWithKnownEpisodesIsOfferedAWatchedRow() {
+        XCTAssertTrue(
+            PosterOptionsPolicy.actions(for: context(type: .series, knownEpisodes: true))
+                .contains(.markWatched)
+        )
+        XCTAssertTrue(
+            PosterOptionsPolicy.actions(for: context(type: .series, watched: true, knownEpisodes: true))
+                .contains(.markUnwatched)
+        )
+    }
+
+    /// A film is its own episode, so the walk has nothing to say about it either way.
+    func testAFilmNeverNeedsKnownEpisodes() {
+        for known in [true, false] {
+            XCTAssertTrue(
+                PosterOptionsPolicy.actions(for: context(type: .movie, knownEpisodes: known))
+                    .contains(.markWatched)
+            )
+        }
     }
 
     /// The reason the dialog exists: `LibraryStore.clearProgress` shipped for releases with no

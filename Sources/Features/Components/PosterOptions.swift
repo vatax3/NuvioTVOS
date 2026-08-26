@@ -47,19 +47,22 @@ enum PosterOptionsPolicy {
         /// Whether this card is a *suggestion* rather than something part-watched, which is the
         /// only case where "stop offering this" means anything.
         var isNextUpSuggestion: Bool = false
+        /// Whether this series' episodes are known — cached, or fetchable from an installed
+        /// addon. Meaningless for a film, which is its own episode.
+        var canWalkEpisodes: Bool = false
     }
 
     /// The rows, in the order they are drawn.
     ///
-    /// Watched is offered for films only, and deliberately. Upstream carries two separate paths
-    /// — one per film, one that walks a whole series — and marking a series watched here would
-    /// have to enumerate every episode to write the same local state the episode list writes
-    /// one row at a time. Offering a control that silently does less than it says is worse than
-    /// not offering it, so the series case is left to the detail screen until the walk exists.
+    /// Watched was films-only for six releases because marking a series meant enumerating its
+    /// episodes and nothing enumerated them. `SeriesWatchedWalk` does now, so the row is offered
+    /// for both — but only when the episodes are actually known: an empty list is a series
+    /// nobody has opened yet, not a series with no episodes, and a row that reports success
+    /// having marked nothing is the thing the films-only rule was avoiding.
     static func actions(for context: Context) -> [Action] {
         var actions: [Action] = [context.isInLibrary ? .removeFromLibrary : .addToLibrary]
 
-        if context.type == .movie {
+        if context.type == .movie || context.canWalkEpisodes {
             actions.append(context.isWatched ? .markUnwatched : .markWatched)
         }
         if context.isNextUpSuggestion {
@@ -90,6 +93,7 @@ struct PosterOptionsDialog: View {
     @Environment(LibraryStore.self) private var library
     @Environment(AppSettings.self) private var settings
     @Environment(Router.self) private var router
+    @Environment(AddonStore.self) private var addons
     /// Its own instance: the service is per-screen state elsewhere too, and the dialog
     /// outlives none of its writes — each one is fired and reported by `lastResult` nowhere.
     @State private var tracking = TrackingWriteService()
@@ -105,10 +109,31 @@ struct PosterOptionsDialog: View {
         .init(
             type: preview.type,
             isInLibrary: library.isInLibrary(preview),
-            isWatched: library.isWatched(videoId: preview.id, threshold: settings.watchedThreshold),
+            isWatched: isWatched,
             hasProgress: hasProgress,
-            isNextUpSuggestion: request.isNextUpSuggestion
+            isNextUpSuggestion: request.isNextUpSuggestion,
+            canWalkEpisodes: SeriesWatchedWalk.canWalk(cachedEpisodes)
         )
+    }
+
+    /// Read from the cache rather than fetched. Deciding which rows to draw cannot wait on an
+    /// addon, and a row that appears a second after the dialog did is worse than one that does
+    /// not appear — the viewer has already started moving down the list.
+    private var cachedEpisodes: [SeriesEpisodeRef] {
+        preview.type == .series ? (library.seriesEpisodes[preview.id] ?? []) : []
+    }
+
+    /// For a film, whether it was watched. For a series, whether every aired episode was — which
+    /// is what decides between offering "mark watched" and "mark unwatched".
+    private var isWatched: Bool {
+        guard preview.type == .series else {
+            return library.isWatched(videoId: preview.id, threshold: settings.watchedThreshold)
+        }
+        let aired = SeriesWatchedWalk.episodesToMark(in: cachedEpisodes)
+        guard !aired.isEmpty else { return false }
+        return aired.allSatisfy {
+            library.isWatched(videoId: $0.videoId, threshold: settings.watchedThreshold)
+        }
     }
 
     /// A series is in Continue Watching through whichever episode is in flight, so the removal
@@ -203,7 +228,11 @@ struct PosterOptionsDialog: View {
 
         case .markWatched, .markUnwatched:
             let watched = action == .markWatched
-            markMovie(watched: watched)
+            if preview.type == .series {
+                Task { await markSeries(watched: watched) }
+            } else {
+                markMovie(watched: watched)
+            }
 
         case .removeFromContinueWatching:
             // By content id rather than video id: for a series the resume point sits on an
@@ -219,6 +248,51 @@ struct PosterOptionsDialog: View {
             router.openDetail(preview)
         }
         onDismiss()
+    }
+
+    /// Marks or clears every episode of a series.
+    ///
+    /// The remote half is one call, not one per episode: both Trakt and Simkl take a show with no
+    /// season or episode to mean the whole run, and forty round trips to say what one says would
+    /// be forty chances to half-fail.
+    private func markSeries(watched: Bool) async {
+        let episodes = await SeriesEpisodeCatalogue.episodes(
+            forContentId: preview.id, library: library, addons: addons
+        )
+        guard SeriesWatchedWalk.canWalk(episodes) else { return }
+
+        if watched {
+            for episode in SeriesWatchedWalk.episodesToMark(in: episodes) {
+                // Nothing here has a measured runtime, and the store only ever compares a
+                // fraction of it — see `markMovie`.
+                let duration = library.progress(forVideoId: episode.videoId)?.durationSeconds ?? 1
+                library.markWatched(
+                    contentId: preview.id,
+                    contentType: preview.rawType,
+                    videoId: episode.videoId,
+                    season: episode.season,
+                    episode: episode.episode,
+                    duration: duration
+                )
+            }
+        } else {
+            for episode in SeriesWatchedWalk.episodesToClear(in: episodes) {
+                library.clearProgress(videoId: episode.videoId)
+            }
+        }
+
+        guard let imdb = preview.imdbId?.nilIfBlank else { return }
+        await tracking.watched(
+            imdbId: imdb,
+            trackingIds: preview.trackingIds,
+            title: preview.name,
+            year: preview.year,
+            type: preview.type,
+            season: nil,
+            episode: nil,
+            removing: !watched,
+            settings: settings
+        )
     }
 
     private func markMovie(watched: Bool) {

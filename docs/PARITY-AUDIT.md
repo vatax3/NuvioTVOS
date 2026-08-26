@@ -49,7 +49,7 @@ platform refuses the upstream approach.
 | Nuvio account and sync | Adapted | QR sign-in, device codes, linked devices, per-profile sync. |
 | Main navigation | Adapted | Same destinations; sidebar focus behaviour is tvOS-native. |
 | Home layouts and hero ✻ | Partial | Classic/Grid/Modern, hero, catalog order, collections, focus-hold expansion, the classic focus gradient, and since 1.0.19 the Continue Watching toggle and the rating-visibility control. No inline focused trailers. |
-| Poster options dialog ✻ | Partial | Since 1.0.18 a long press on any poster offers library add/remove, watched/unwatched, removal from Continue Watching and the detail screen, routed through the same tracking writes the detail screen uses. Watched is offered for films only — marking a whole series watched needs an episode walk that does not exist yet — and Trakt list management and the removal-impact warning are not built. |
+| Poster options dialog ✻ | Partial | Since 1.0.18 a long press on any poster offers library add/remove, watched/unwatched, removal from Continue Watching and the detail screen. Since 1.0.25 the watched row covers series too, walking every aired episode — specials and unaired excluded — with one remote call rather than one per episode. Trakt list management and the removal-impact warning are not built. |
 | Addons ✻ | Partial | Install, enable, order, remove, rename and catalog configuration exist. No local config server (below). |
 | Search | Parity for the Stremio surface | Debounced results, recent queries, cancellation, paginated See All. The private discovery service is unavailable. |
 | Discover | Parity for addon catalogs | Tail pagination, de-duplication, cancellation. |
@@ -199,8 +199,10 @@ Also: our preference keys were documented as matching the Android names, and mos
    the same server.
 6. ~~**Simkl anime identity model**~~ — **shipped in 1.0.22.** Snapshot reconciliation and
    `delete-playback` remain.
-7. ~~**Next Up projection and dismissal**~~ — **shipped in 1.0.21.** What remains is
-   sibling-id reconciliation and seeding the episode cache without a detail-screen visit.
+7. ~~**Next Up projection and dismissal**~~ — **shipped in 1.0.21**, and the episode cache is
+   seeded from Continue Watching since **1.0.25**, bounded to the front of the rail. What
+   remains is sibling-id reconciliation: a series watched under one addon's id and listed under
+   another's is two rows to us and one show to the viewer.
 
 ### P2 — larger, or lower value
 
