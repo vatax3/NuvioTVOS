@@ -65,7 +65,7 @@ platform refuses the upstream approach.
 | Stream selection UI | Adapted | Same information and grouping; density and geometry follow tvOS. |
 | On-TV configuration servers | Parity | `LocalConfigServer` since 1.0.20, serving the debrid formatter, and since 1.0.23 badge rules and plugin repositories. The addon case was already covered by handing off the addon's *own* remote `configure` URL. |
 | Direct torrent playback ✻ | **Forced** | Upstream ships TorrServer as `libtorrserver.so` and starts it with `ProcessBuilder`. tvOS allows neither subprocesses nor downloaded executables, so the upstream design cannot be ported at all. A linked-in engine is a different project, not a port. |
-| Parallel chunked streaming ✻ | **Missing** | New since 0.8.7: a 1,352-line range downloader with pipelined prefetch, playhead/moov retention across scatter seeks, adaptive 429/503 handling and a chunk cap on low-RAM devices — plus the non-faststart MP4 path built on it. Five settings drive it. |
+| Parallel chunked streaming | Missing, and declined | A 1,352-line range downloader: 2–4 HTTP connections each fetching a different byte range, to get past a per-connection throughput ceiling. Its prefetch window, its two pinned side chunks and its 429 backoff all exist to make the parallelism behave — the feature buys throughput and nothing else. Upstream ships it **off by default** with a speed tester to justify enabling it. Not worth 1,352 lines without a measurement showing a real per-connection ceiling; see P2. |
 | Plugin runtime | Partial | Repository/install/settings, HTML/CSS helpers, fetch, `getStreams`. CryptoJS covers common hashes/HMAC, PBKDF2 and AES, not the legacy DES family. |
 | Player transport | Parity | In-place sources, episodes, tracks, subtitle appearance/delay, audio delay, speed, seven display modes, stream info, skip cards, post-play, still-watching, external hand-off — and, since 1.0.17, the hidden-controls seek readout. |
 | Player failure recovery | Parity at state-machine level | Decoded-first-frame detection, one bounded retry, AVFoundation→mpv fallback, live-playhead resume. |
@@ -112,7 +112,7 @@ path and AVFoundation refuses.
 
 - ~~The **poster options dialog**~~ — shipped in 1.0.18; what is left of it is listed under
   *Partial*.
-- The **parallel chunked downloader** and the non-faststart MP4 path built on it.
+- The **parallel chunked downloader**.
 - ~~The **hidden-controls seek overlay**~~ — shipped in 1.0.17. Horizontal presses now seek
   behind a compact readout instead of revealing the transport over the picture; vertical still
   brings the transport back. See `PlayerSeekOverlayPolicy`.
@@ -213,8 +213,15 @@ still open, both recorded against their entries below.
 
 ### P2 — larger, or lower value
 
-1. **Parallel chunked downloader.** 1,352 lines upstream. Worth measuring before building:
-   mpv's own cache and `--stream-lavf-o` may already close most of the gap on debrid links.
+1. **Parallel chunked downloader.** 1,352 lines upstream, and the earlier note here was wrong
+   twice. The non-faststart MP4 path is **not** built on it — `FrameRateUtils.kt` never
+   references `ParallelRangeDataSource`, and what that path does is fetch a file's head and tail
+   to find the `moov` atom so ExoPlayer can read the frame rate before playback. mpv gives us
+   `container-fps` once the file is open, so we never needed it. And mpv's cache cannot close
+   this gap: a cache smooths variability, it does not raise a ceiling. If a single connection is
+   capped below the bitrate, only more connections help. FFmpeg's HTTP is single-connection with
+   no option to change that, so the shape here would be a local proxy mpv streams from.
+   Still gated on measuring a real per-connection ceiling on actual hardware.
 2. **Localisation.** Mechanical and large, but not blocked: `L10n` and the `en`/`fr` tables
    are wired and in use at 209 call sites covering 115 keys — the shell and player
    vocabulary. Roughly 700 prose literals remain, 636 of them in `Sources/Features`. It is
