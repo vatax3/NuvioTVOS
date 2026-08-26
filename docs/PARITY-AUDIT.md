@@ -203,7 +203,10 @@ Also: our preference keys were documented as matching the Android names, and mos
 
 1. **Parallel chunked downloader.** 1,352 lines upstream. Worth measuring before building:
    mpv's own cache and `--stream-lavf-o` may already close most of the gap on debrid links.
-2. **Localisation.** Mechanical and large; the blocker is that our strings are in the views.
+2. **Localisation.** Mechanical and large, but not blocked: `L10n` and the `en`/`fr` tables
+   are wired and in use at 209 call sites covering 115 keys — the shell and player
+   vocabulary. Roughly 700 prose literals remain, 636 of them in `Sources/Features`. It is
+   extended screen by screen, and no mechanism has to be built first.
 3. **In-app update banner.** Small, and we already publish the releases it would read.
 4. **Player audio controls** — five settings, each a one-line mpv option.
 5. **Visual snapshot tests.** Current UI tests prove navigation and focus, not appearance.

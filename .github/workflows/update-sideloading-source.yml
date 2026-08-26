@@ -28,6 +28,24 @@ jobs:
         run: python3 Scripts/update-altstore-source.py
       - name: Validate the generated source
         run: python3 Scripts/update-altstore-source.py --validate
+      # The generator can now only skip a release by raising, but this is the assertion that
+      # actually speaks for the trigger: the release that fired this run is in the feed. Six runs
+      # once reported success while advertising a version six releases old, because "no diff" and
+      # "nothing to do" are indistinguishable from the commit step's point of view.
+      - name: Confirm this release reached the feed
+        if: github.event_name == 'release'
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+
+          tag = os.environ["RELEASE_TAG"].removeprefix("v")
+          versions = json.load(open("altstore-source.json"))["apps"][0]["versions"]
+          if tag not in {version["version"] for version in versions}:
+              sys.exit(f"{tag} is not in the feed, which leads with {versions[0]['version']}")
+          print(f"{tag} is in the feed, which leads with {versions[0]['version']}")
+          PY
       - name: Commit an updated source
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}

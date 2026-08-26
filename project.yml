@@ -148,11 +148,13 @@ targets:
       path: Sources/App/Info.plist
       properties:
         CFBundleDisplayName: Nuvio
-        # Kept beside the build settings so the checked-in plist and the built app agree; the
-        # About screen prints both, which is how a sideloaded build is told from the one it
-        # replaced.
-        CFBundleShortVersionString: "1.0.22"
-        CFBundleVersion: "18"
+        # Referenced, not repeated. Written out as literals these drifted: the build number was
+        # bumped in the settings above for six releases running and left at 18 here, so the
+        # checked-in plist claimed a build the shipped app had not been since 1.0.16 — and the
+        # sideloading feed, which read the plist, published the stale number. MARKETING_VERSION
+        # and CURRENT_PROJECT_VERSION are the one place a version is now written.
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         UIUserInterfaceStyle: Dark
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
@@ -194,8 +196,10 @@ targets:
     info:
       path: TopShelf/Info.plist
       properties:
-        CFBundleShortVersionString: "1.0.22"
-        CFBundleVersion: "18"
+        # As above: the extension has to carry the same numbers as the app it ships inside, so
+        # it reads them from the same settings rather than repeating them a fourth time.
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.tv-top-shelf
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NuvioTopShelfProvider

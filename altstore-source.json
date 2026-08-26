@@ -40,6 +40,66 @@
       ],
       "versions": [
         {
+          "version": "1.0.22",
+          "buildVersion": "24",
+          "date": "2026-08-26",
+          "localizedDescription": "## Simkl now knows which episode you watched\n\nMarking an episode watched sent Simkl the *show's* ids and nothing else — so it marked the whole series. Episode writes now name the episode.\n\n## Anime\n\nSimkl can be addressed two ways and they cannot be mixed: season coordinates, or an absolute number against a per-season entry. Sending both a franchise IMDb id and a per-season MyAnimeList id is not extra information — Simkl matches whichever it recognises first, and the episode lands on the wrong season of the wrong show.\n\nThe two shapes are now kept apart properly, with `use_tvdb_anime_seasons` telling Simkl which one it is looking at.\n\n**Settings → Integrations → Simkl → Anime seasons** decides whether a franchise is one title or several. One IMDb id spans every season, while MyAnimeList and Kitsu give each its own entry — so grouping is right if you think of a show as one thing, and wrong if you track seasons separately. Your call now. Films and ordinary series are unaffected.\n\n---\n\n337 unit tests and 9 UI tests pass. The IPA is unsigned and must be signed with your own certificate.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.22/Nuvio-1.0.22-tvOS-unsigned.ipa",
+          "size": 31611440,
+          "minOSVersion": "17.0",
+          "sha256": "88dca7d93349c24134c3bb08d1e5281a81c40428bdcd0fadadea4926756e0a70"
+        },
+        {
+          "version": "1.0.21",
+          "buildVersion": "23",
+          "date": "2026-08-26",
+          "localizedDescription": "## Continue Watching now offers the next episode\n\nUntil now the rail held only *half-watched* episodes. Finish one and the series left Home entirely — you had to go and find episode four yourself. That is the difference between \"continue watching\" and \"things you gave up on partway\".\n\nA series whose last episode you finished is now offered its next one.\n\n- **Unaired episodes are not offered.** An addon lists a whole season the day the first episode airs, so without this every currently-airing show would point at something that will not play. There is a setting if you want them anyway.\n- **A caught-up series stays on the rail** when a new episode airs, rather than vanishing at the exact moment it becomes interesting again.\n- **\"Next up from furthest episode\"** now means something: off, going back to rewatch episode two offers you three, instead of jumping past everything to the finale you saw out of order.\n\nHold Select on a suggestion to **stop being offered that show**. Watching it again brings it back.\n\nThe episode list is remembered when you open a series' page, so the rail can name the next episode instantly instead of waiting on an addon.\n\n---\n\n321 unit tests and 9 UI tests pass. The IPA is unsigned and must be signed with your own certificate.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.21/Nuvio-1.0.21-tvOS-unsigned.ipa",
+          "size": 31610027,
+          "minOSVersion": "17.0",
+          "sha256": "caf937814f4db1b4276b8b26fd3bed36cc6a62b14bb88f196999e1deb6684d17"
+        },
+        {
+          "version": "1.0.20",
+          "buildVersion": "22",
+          "date": "2026-08-26",
+          "localizedDescription": "## Edit the stream format from your phone\n\nNobody is going to type `{stream.size::>0[\"{stream.size::bytes} \"||\"\"]}` on a Siri Remote, so the Apple TV now serves the editor itself.\n\n**Settings → Debrid → Stream format** shows a QR code. Scan it with a phone on the same Wi-Fi, edit the name and description there, and save — the preview on the television updates as you go.\n\nThe template language is Android's, reproduced rather than reinvented: a format written in the phone or Android TV app pastes in and produces the same rows. Conditions, comparisons, `and`/`or`, and transforms like `bytes`, `title` and `join(' | ')`. The shipped defaults are theirs byte for byte, so nothing changes unless you change it.\n\nApplied only to results a debrid service will resolve. A direct HTTP source is already labelled the way its addon meant it.\n\nThe page is served on your local network only, from the Apple TV, and stops when you leave the screen.\n\n---\n\n299 unit tests and 9 UI tests pass. The IPA is unsigned and must be signed with your own certificate.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.20/Nuvio-1.0.20-tvOS-unsigned.ipa",
+          "size": 31592411,
+          "minOSVersion": "17.0",
+          "sha256": "f347c677792844eeebcc9dd321f64e072393ff5d85642047cf1cfa3d6199b9fb"
+        },
+        {
+          "version": "1.0.19",
+          "buildVersion": "21",
+          "date": "2026-08-26",
+          "localizedDescription": "Six gaps the re-run parity audit turned up.\n\n## Subtitles that arrive already broken\n\nA subtitle file that some earlier tool read as Windows-1252 and wrote back out as UTF-8 is *itself* valid UTF-8 — so charset detection accepts it, correctly, and you get `Itâ€™s` where the author wrote `It's`. mpv's own auto-detection has the same blind spot for the same reason.\n\nNuvio now reverses the double encoding rather than matching known sequences, so Cyrillic, Greek and Japanese tracks come out right too — not just the Western European cases.\n\n## Episode scores from the addon itself\n\nAddons that publish `videos[].rating` now have it shown, in preference to the TMDB score. It is the only per-episode rating obtainable at all: the service Android uses sits behind a base URL that ships blank in its public source.\n\n## Four settings\n\n- **Rating visibility**, on Home and on a title's page — including *hide until watched*, since a 9.6 three episodes ahead tells you something happens there.\n- **Hide the Continue Watching rail** entirely.\n- **Rename an addon**, which survives the manifest being refetched.\n- **Sort your library** by date added or title.\n\nThe rating-visibility controls are an apology as much as a feature: a previous audit withdrew them as \"not a parity item\" while reading an older tree than the release it named.\n\n---\n\n266 unit tests and 9 UI tests pass. The IPA is unsigned and must be signed with your own certificate.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.19/Nuvio-1.0.19-tvOS-unsigned.ipa",
+          "size": 31542401,
+          "minOSVersion": "17.0",
+          "sha256": "d32beeff6e05e657f393616c7f44690a7961d2aace0c30d3397a2de4232846f7"
+        },
+        {
+          "version": "1.0.18",
+          "buildVersion": "20",
+          "date": "2026-08-26",
+          "localizedDescription": "## Hold Select on any poster\n\n`clearProgress` has existed in the library store since the library store did, and nothing in the app has ever called it — a resume point could be created from anywhere and removed from nowhere. The only way to clear a Continue Watching row was to finish the thing.\n\nHolding Select on any poster — Home, Discover, Search, Library, a collection folder, the Continue Watching rail — now opens a dialog with:\n\n- **Add to / Remove from Library**\n- **Mark as watched / unwatched** (films)\n- **Remove from Continue Watching**\n- **Go to details**\n\nLibrary and watched writes go through the same path the detail screen uses, so with Trakt or Simkl connected they land on the account you read from.\n\nTwo things deliberately not offered yet: marking a whole *series* watched, which needs an episode walk that does not exist here, and Trakt list management.\n\n---\n\n236 unit tests and 9 UI tests pass. The IPA is unsigned and must be signed with your own certificate.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.18/Nuvio-1.0.18-tvOS-unsigned.ipa",
+          "size": 31528332,
+          "minOSVersion": "17.0",
+          "sha256": "864b591c4ecd1076dbf9c8fb275f53988f0ba1797539b52da35e7049a312c1c6"
+        },
+        {
+          "version": "1.0.17",
+          "buildVersion": "19",
+          "date": "2026-08-26",
+          "localizedDescription": "## Scrubbing no longer covers what you are scrubbing through\n\nWith the controls hidden, pressing left or right used to bring the whole transport bar up and *then* seek — the bar landing over the bottom of the frame you were hunting through. It now seeks in place behind a compact readout: the target time, how far the jump has travelled, and where that sits in the film. Up or down still brings the transport back, and holding a direction still accelerates.\n\nThe readout is a label, never a control. It stays out of the focus graph, so the next press reaches the player rather than landing on it.\n\n## Parity audit re-run against Android TV 0.8.9-beta\n\nThe previous audit named 0.8.7-beta but measured an older commit, so several \"missing upstream\" findings were made against the wrong tree. Corrected, along with three claims that came out of it — including the IMDb rating-visibility controls, which had been withdrawn as \"not a parity item\" when they had in fact shipped in the tag named.\n\n**Torrents now require a debrid service, stated plainly.** This was never a choice to make: upstream runs TorrServer as a native binary in a subprocess, which tvOS does not permit at all.\n\nFull comparison in [`docs/PARITY-AUDIT.md`](https://github.com/vatax3/NuvioTVOS/blob/main/docs/PARITY-AUDIT.md).\n\n---\n\n226 unit tests and 9 UI tests pass. The IPA is unsigned and must be signed with your own certificate.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.17/Nuvio-1.0.17-tvOS-unsigned.ipa",
+          "size": 31504096,
+          "minOSVersion": "17.0",
+          "sha256": "a7d1d9cd49be9065f9ee137b8a34283a549bfb9986f844265788f8c619f9e5f0"
+        },
+        {
           "version": "1.0.16",
           "buildVersion": "18",
           "date": "2026-08-24",
@@ -86,11 +146,11 @@
         ],
         "privacy": {}
       },
-      "version": "1.0.16",
-      "versionDate": "2026-08-24",
-      "versionDescription": "## Pausing kept the Apple TV awake\n\nThe wake lock was held for the whole presentation regardless of playback state, so a film left on Pause overnight held the idle timer off all night.\n\nThe obvious fix is wrong, and the code already said why: releasing the lock whenever playback is not running does not survive contact with a stream, because **every buffer stall and every track change passes through a non-playing state**. Re-arming the idle timer on each of those is what used to put the device to sleep mid-film.\n\nSo the two are told apart by how long the pause lasts rather than by the fact of it. A stall is seconds; somebody walking away is not.\n\n**After two minutes paused, the idle timer is re-armed** and the television sleeps on its own schedule. The system's Sleep After starts counting from there, so even its shortest setting still gives you seventeen minutes. The hold itself is kept, so resuming re-asserts immediately.\n\nTwo details that would have broken it quietly: a paused player emits no further events, so the pause arms its own timer — nothing else would re-evaluate the rule; and the minute heartbeat that re-asserts the lock now goes through the same rule instead of forcing the flag back on, or it would have undone the release two minutes later.\n\n## Episode scores\n\nEpisode air dates were already shown; scores were not. Reading the Android source shows why they could not simply be added: the per-episode **IMDb** figure comes from two services whose base URLs are build secrets resolving to `placeholder.nuvio.tv` in the public source — a private contract, like the discovery endpoint.\n\nTMDB's own score is not. It arrives in the same season response the titles, overviews, stills and air dates already come from; the field was being decoded away one line from where it was needed. So the row shows a score, and it is TMDB's rather than IMDb's. A zero from TMDB means nobody has scored the episode, so it is dropped rather than shown as zero.\n\n## Verification\n\n217 unit tests, 8 UI tests, 0 failures. The wake-lock rule is a pure function with the buffer-stall case pinned as its own test.\n\nThe sleep behaviour needs a real Apple TV and a real wait to confirm — reported as fixed, not observed.\n\nUnsigned IPA — sideload with your usual signer.",
-      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.16/Nuvio-1.0.16-tvOS-unsigned.ipa",
-      "size": 31494744,
+      "version": "1.0.22",
+      "versionDate": "2026-08-26",
+      "versionDescription": "## Simkl now knows which episode you watched\n\nMarking an episode watched sent Simkl the *show's* ids and nothing else — so it marked the whole series. Episode writes now name the episode.\n\n## Anime\n\nSimkl can be addressed two ways and they cannot be mixed: season coordinates, or an absolute number against a per-season entry. Sending both a franchise IMDb id and a per-season MyAnimeList id is not extra information — Simkl matches whichever it recognises first, and the episode lands on the wrong season of the wrong show.\n\nThe two shapes are now kept apart properly, with `use_tvdb_anime_seasons` telling Simkl which one it is looking at.\n\n**Settings → Integrations → Simkl → Anime seasons** decides whether a franchise is one title or several. One IMDb id spans every season, while MyAnimeList and Kitsu give each its own entry — so grouping is right if you think of a show as one thing, and wrong if you track seasons separately. Your call now. Films and ordinary series are unaffected.\n\n---\n\n337 unit tests and 9 UI tests pass. The IPA is unsigned and must be signed with your own certificate.",
+      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.22/Nuvio-1.0.22-tvOS-unsigned.ipa",
+      "size": 31611440,
       "minOSVersion": "17.0"
     }
   ],

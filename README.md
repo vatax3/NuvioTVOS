@@ -234,7 +234,10 @@ xcodebuild -project NuvioTVOS.xcodeproj -scheme NuvioTVOS \
   build
 ```
 
-`project.yml` is the source of truth — `NuvioTVOS.xcodeproj` is generated and gitignored.
+`project.yml` is the source of truth — `NuvioTVOS.xcodeproj` is generated and gitignored,
+as are the two `Info.plist` files. The version is written there once and referenced
+everywhere else; [docs/RELEASING.md](docs/RELEASING.md) covers cutting a release and the
+two contracts the sideloading feed depends on.
 
 Tests:
 

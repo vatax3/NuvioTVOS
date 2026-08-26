@@ -7,7 +7,6 @@ import argparse
 import hashlib
 import json
 import os
-import plistlib
 import re
 import sys
 import urllib.error
@@ -60,12 +59,32 @@ def release_version(tag: str) -> str | None:
     return match.group(1) if match else None
 
 
-def release_plist(tag: str) -> dict[str, Any]:
-    url = (
-        "https://raw.githubusercontent.com/"
-        f"{REPOSITORY}/{tag}/Sources/App/Info.plist"
-    )
-    return plistlib.loads(request(url, accept="application/octet-stream"))
+def release_versions(tag: str) -> tuple[str, str]:
+    """The marketing and build versions, read from `project.yml` at that tag.
+
+    Not from the checked-in Info.plist, which is the wrong source of truth twice over: XcodeGen
+    generates it *from* `project.yml`, and Xcode overrides its version keys with the build
+    settings anyway. When the two disagreed, the plist was the one that was wrong — six releases
+    shipped as build 19 through 24 while the plist still said 18.
+    """
+    url = f"https://raw.githubusercontent.com/{REPOSITORY}/{tag}/project.yml"
+    text = request(url, accept="text/plain").decode("utf-8")
+
+    def unique(setting: str) -> str:
+        # Every target has to carry the same numbers — the extension ships inside the app. So
+        # the values agreeing is the invariant, and reading them this way needs no YAML parser
+        # and fails loudly if one target is ever bumped without the other.
+        values = set(re.findall(rf'^\s*{setting}:\s*"?([^"\s#]+)"?\s*$', text, re.MULTILINE))
+        if not values:
+            raise ValueError(f"{tag}: project.yml declares no {setting}")
+        if len(values) > 1:
+            raise ValueError(f"{tag}: targets disagree on {setting}: {sorted(values)}")
+        return values.pop()
+
+    if not re.search(r"^\s*PRODUCT_BUNDLE_IDENTIFIER:\s*com\.nuvio\.tvos\s*$", text, re.MULTILINE):
+        raise ValueError(f"{tag}: project.yml does not build com.nuvio.tvos")
+
+    return unique("MARKETING_VERSION"), unique("CURRENT_PROJECT_VERSION")
 
 
 def version_record(release: dict[str, Any]) -> dict[str, Any] | None:
@@ -76,24 +95,23 @@ def version_record(release: dict[str, Any]) -> dict[str, Any] | None:
     if tuple(int(component) for component in version.split(".")) < MINIMUM_PUBLISHED_VERSION:
         return None
 
+    # A qualifying release with no canonical IPA is an error, not a release to skip quietly.
+    # Six releases were once packaged as `Nuvio-1.0.17.ipa` and friends, so every one of them was
+    # passed over here, the regenerated feed came out byte-identical, the commit step found no
+    # diff and exited zero — six green runs while the feed still advertised 1.0.16. Whatever is
+    # wrong here, it has to be loud.
     expected_name = f"Nuvio-{version}-tvOS-unsigned.ipa"
     asset = next(
         (item for item in release.get("assets", []) if item.get("name") == expected_name),
         None,
     )
     if asset is None:
-        return None
+        found = ", ".join(str(item.get("name")) for item in release.get("assets", [])) or "none"
+        raise ValueError(f"{tag}: no asset named {expected_name} (assets: {found})")
 
-    plist = release_plist(tag)
-    plist_version = str(plist.get("CFBundleShortVersionString", ""))
-    build_version = str(plist.get("CFBundleVersion", ""))
-    bundle_identifier = str(plist.get("CFBundleIdentifier", ""))
-    if plist_version != version:
-        raise ValueError(f"{tag}: release version {version} != Info.plist {plist_version}")
-    if bundle_identifier not in {"$(PRODUCT_BUNDLE_IDENTIFIER)", "com.nuvio.tvos"}:
-        raise ValueError(f"{tag}: unexpected bundle identifier {bundle_identifier!r}")
-    if not build_version or build_version.startswith("$("):
-        raise ValueError(f"{tag}: missing concrete CFBundleVersion")
+    marketing_version, build_version = release_versions(tag)
+    if marketing_version != version:
+        raise ValueError(f"{tag}: tag says {version}, project.yml says {marketing_version}")
 
     published_at = str(release.get("published_at") or release.get("created_at") or "")
     record: dict[str, Any] = {
