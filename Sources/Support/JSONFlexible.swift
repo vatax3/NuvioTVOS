@@ -141,6 +141,30 @@ struct FlexibleInt: Codable, Hashable, Sendable {
     }
 }
 
+/// A `Double` that tolerates string encodings.
+///
+/// Addons publish `videos[].rating` as a string — upstream parses it with `toDoubleOrNull` —
+/// but nothing in the Stremio protocol says it must be one, and some send a number.
+struct FlexibleDouble: Codable, Hashable, Sendable {
+    let value: Double?
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let d = try? container.decode(Double.self) {
+            value = d
+        } else if let s = try? container.decode(String.self) {
+            value = Double(s.trimmingCharacters(in: .whitespaces))
+        } else {
+            value = nil
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(value)
+    }
+}
+
 /// An `Int64` that tolerates string encodings (stream `videoSize`, manifest timestamps).
 struct FlexibleInt64: Codable, Hashable, Sendable {
     let value: Int64?

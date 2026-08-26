@@ -9,6 +9,11 @@ struct InstalledAddon: Codable, Hashable, Identifiable {
     var enabled: Bool = true
     var manifest: Addon?
     var fetchedAt: Date?
+    /// `addon_user_set_names`: a name the viewer chose, which survives the manifest being
+    /// refetched. Stored on the record rather than in preferences because the addon list lives
+    /// here, and a rename that outlived an uninstall would attach itself to the next install of
+    /// the same URL.
+    var userSetName: String?
     var id: String { baseUrl }
 
     init(baseUrl: String, enabled: Bool = true, manifest: Addon? = nil, fetchedAt: Date? = nil) {
@@ -102,6 +107,7 @@ final class AddonStore {
         installed.compactMap { record in
             guard var manifest = record.manifest else { return nil }
             manifest.enabled = record.enabled
+            if let name = record.userSetName?.nilIfBlank { manifest.displayName = name }
             return manifest
         }
     }
@@ -228,6 +234,16 @@ final class AddonStore {
         catalogOrder.removeAll { StremioURL.canonicalize($0.addonBaseUrl).caseInsensitiveCompare(canonical) == .orderedSame }
         persistAddons()
         persistOrder()
+    }
+
+    /// Renames an addon, or clears the rename when handed nothing.
+    func rename(baseUrl: String, to name: String?) {
+        let canonical = StremioURL.canonicalize(baseUrl)
+        guard let index = installed.firstIndex(where: {
+            StremioURL.canonicalize($0.baseUrl).caseInsensitiveCompare(canonical) == .orderedSame
+        }) else { return }
+        installed[index].userSetName = name?.nilIfBlank
+        persistAddons()
     }
 
     func setEnabled(_ enabled: Bool, baseUrl: String) {

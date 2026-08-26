@@ -36,7 +36,7 @@ struct LibraryView: View {
     }
 
     private var savedItems: [MetaPreview] {
-        let items = library.library.map(\.preview)
+        let items = library.library.sorted(by: settings.layout.librarySortOption).map(\.preview)
         switch filter {
         case .all, .continueWatching, .collections: return items
         case .movies: return items.filter { $0.type == .movie }

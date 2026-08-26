@@ -158,7 +158,8 @@ final class AppSettings {
             preferLandscape: layout.modernLandscapePostersEnabled,
             backdropExpandEnabled: layout.focusedPosterBackdropExpandEnabled,
             backdropExpandDelay: layout.focusedPosterBackdropExpandDelaySeconds,
-            showsFullReleaseDate: layout.showFullReleaseDate
+            showsFullReleaseDate: layout.showFullReleaseDate,
+            showsRatings: layout.homeRatingsVisibility.showsRatings
         )
     }
 

@@ -150,7 +150,8 @@ struct MetaDetailsView: View {
 
             metaRow(meta)
 
-            if let ratings = model.ratings, !ratings.isEmpty {
+            if settings.layout.detailRatingsVisibility.showsTitleRating,
+               let ratings = model.ratings, !ratings.isEmpty {
                 RatingsStrip(ratings: ratings)
             }
 
@@ -176,7 +177,7 @@ struct MetaDetailsView: View {
 
     private func metaRow(_ meta: Meta) -> some View {
         HStack(spacing: NuvioTheme.spacing.md) {
-            if let rating = meta.imdbRating {
+            if settings.layout.detailRatingsVisibility.showsTitleRating, let rating = meta.imdbRating {
                 RatingLabel(rating: rating)
             }
             ForEach(metaTokens(meta), id: \.self) { token in
@@ -435,6 +436,12 @@ struct EpisodesSection: View {
                             ),
                             progress: library.progress(forVideoId: episode.id)?.fraction ?? 0,
                             blursUnwatched: settings.layout.blurUnwatchedEpisodes,
+                            showsRating: settings.layout.detailRatingsVisibility.showsEpisodeRating(
+                                isWatched: library.isWatched(
+                                    videoId: episode.id,
+                                    threshold: settings.watchedThreshold
+                                )
+                            ),
                             action: { onPlay(episode) }
                         )
                     }

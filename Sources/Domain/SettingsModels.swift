@@ -306,6 +306,103 @@ enum NextEpisodeThresholdMode: String, SettingsOption {
     }
 }
 
+// MARK: - Library
+
+/// How the saved-titles grid is ordered. Keys match Android's `LibrarySortOption`.
+///
+/// Upstream also carries a `default` that means "whatever order the tracking provider returned".
+/// It is not offered here: our grid is the local library, which has no provider order to defer
+/// to, and an option that silently means "added, newest first" would be the same thing twice.
+enum LibrarySortOption: String, SettingsOption, CaseIterable {
+    case recentlyAdded = "added_desc"
+    case firstAdded = "added_asc"
+    case titleAscending = "title_asc"
+    case titleDescending = "title_desc"
+
+    var displayName: String {
+        switch self {
+        case .recentlyAdded: return "Recently added"
+        case .firstAdded: return "First added"
+        case .titleAscending: return "Title, A–Z"
+        case .titleDescending: return "Title, Z–A"
+        }
+    }
+}
+
+extension Array where Element == SavedLibraryItem {
+    /// Sorting is by the item, not by the view, so the grid and anything else reading the
+    /// library agree on an order.
+    func sorted(by option: LibrarySortOption) -> [SavedLibraryItem] {
+        switch option {
+        case .recentlyAdded: return sorted { $0.addedAt > $1.addedAt }
+        case .firstAdded: return sorted { $0.addedAt < $1.addedAt }
+        case .titleAscending:
+            return sorted { $0.preview.name.localizedStandardCompare($1.preview.name) == .orderedAscending }
+        case .titleDescending:
+            return sorted { $0.preview.name.localizedStandardCompare($1.preview.name) == .orderedDescending }
+        }
+    }
+}
+
+// MARK: - Ratings visibility
+
+/// Whether scores are drawn on Home. `SHOW_ALL`/`HIDE_ALL` upstream.
+enum HomeRatingsVisibility: String, SettingsOption {
+    case showAll = "SHOW_ALL"
+    case hideAll = "HIDE_ALL"
+
+    var displayName: String {
+        switch self {
+        case .showAll: return "Show ratings"
+        case .hideAll: return "Hide ratings"
+        }
+    }
+
+    var showsRatings: Bool { self == .showAll }
+}
+
+/// Whether scores are drawn on a detail screen, and on its episodes.
+///
+/// The middle case is the one worth having: an episode score is a spoiler in itself — a 9.6
+/// three episodes ahead says something happens there — so hiding it until the episode has been
+/// watched protects the viewer without hiding the title's own rating.
+enum DetailRatingsVisibility: String, SettingsOption {
+    case showAll = "SHOW_ALL"
+    case hideUnwatchedEpisodes = "HIDE_UNWATCHED_EPISODES"
+    case hideEpisodes = "HIDE_EPISODES"
+    case hideAll = "HIDE_ALL"
+
+    var displayName: String {
+        switch self {
+        case .showAll: return "Show everything"
+        case .hideUnwatchedEpisodes: return "Hide until watched"
+        case .hideEpisodes: return "Hide episode scores"
+        case .hideAll: return "Hide ratings"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .showAll: return "Titles and episodes both show their score"
+        case .hideUnwatchedEpisodes: return "An episode score appears once you have watched it"
+        case .hideEpisodes: return "Only the title keeps its score"
+        case .hideAll: return "No score anywhere on the screen"
+        }
+    }
+
+    /// The title's own rating, in the hero.
+    var showsTitleRating: Bool { self != .hideAll }
+
+    /// One episode's rating, which depends on whether it has been watched.
+    func showsEpisodeRating(isWatched: Bool) -> Bool {
+        switch self {
+        case .showAll: return true
+        case .hideUnwatchedEpisodes: return isWatched
+        case .hideEpisodes, .hideAll: return false
+        }
+    }
+}
+
 // MARK: - Dolby Vision
 
 enum DolbyVision7HandlingMode: String, SettingsOption {

@@ -16,6 +16,8 @@ struct PosterMetrics: Equatable {
     var backdropExpandDelay: Int
     /// `show_full_release_date`: card metadata shows the full date rather than the bare year.
     var showsFullReleaseDate: Bool = false
+    /// `home_imdb_ratings_visibility`: whether a focused poster shows the title's score.
+    var showsRatings: Bool = true
 
     static let `default` = PosterMetrics(
         width: NuvioTheme.components.posterCard.width,

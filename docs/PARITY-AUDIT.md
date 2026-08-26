@@ -48,14 +48,14 @@ platform refuses the upstream approach.
 | Profiles | Parity | Avatars, launch selection, create/edit/delete, PIN, restricted profiles. |
 | Nuvio account and sync | Adapted | QR sign-in, device codes, linked devices, per-profile sync. |
 | Main navigation | Adapted | Same destinations; sidebar focus behaviour is tvOS-native. |
-| Home layouts and hero ✻ | Partial | Classic/Grid/Modern, hero, catalog order, collections, focus-hold expansion and the classic focus gradient exist. No inline focused trailers, no toggle to hide Continue Watching, no rating-visibility control. |
+| Home layouts and hero ✻ | Partial | Classic/Grid/Modern, hero, catalog order, collections, focus-hold expansion, the classic focus gradient, and since 1.0.19 the Continue Watching toggle and the rating-visibility control. No inline focused trailers. |
 | Poster options dialog ✻ | Partial | Since 1.0.18 a long press on any poster offers library add/remove, watched/unwatched, removal from Continue Watching and the detail screen, routed through the same tracking writes the detail screen uses. Watched is offered for films only — marking a whole series watched needs an episode walk that does not exist yet — and Trakt list management and the removal-impact warning are not built. |
-| Addons ✻ | Partial | Install/enable/order/remove and catalog configuration exist. No addon renaming; no local config server (below). |
+| Addons ✻ | Partial | Install, enable, order, remove, rename and catalog configuration exist. No local config server (below). |
 | Search | Parity for the Stremio surface | Debounced results, recent queries, cancellation, paginated See All. The private discovery service is unavailable. |
 | Discover | Parity for addon catalogs | Tail pagination, de-duplication, cancellation. |
-| Detail and metadata ✻ | Partial | Metadata, cast, companies, trailers, More like this, comments, parental guidance exist. Missing: the TMDB franchise-collection row, the episode-options overlay, the ratings tab's IMDb scores, and `videos[].rating` from addon metadata. |
+| Detail and metadata ✻ | Partial | Metadata, cast, companies, trailers, More like this, comments, parental guidance, and since 1.0.19 `videos[].rating` from addon metadata plus the rating-visibility rules including hide-until-watched. Missing: the TMDB franchise-collection row, the episode-options overlay, and the ratings tab's IMDb scores. |
 | Collections | Parity | Data shape, live folder sources, ordering, sync. `focusGifUrl`/`heroVideoUrl` retained but not rendered. |
-| Local library/progress ✻ | Partial | Save/remove, Continue Watching, watched threshold, per-profile persistence, account sync — and, since 1.0.18, removing an item from Continue Watching, which had no affordance at all. No library sort control. |
+| Local library/progress ✻ | Parity | Save/remove, Continue Watching, watched threshold, per-profile persistence, account sync, removal from Continue Watching (1.0.18) and a sort control (1.0.19). |
 | Trakt | Parity | OAuth, progress, list reads, comments, related titles, scrobbling, `sync/watchlist` and `sync/history` writes. Upstream has no `sync/collection`; neither do we. |
 | Simkl | Partial | Five list states, remote resume points, scrobbling, `add-to-list`/`history` writes. Missing playback-session deletion, snapshot reconciliation, and the anime identity model (`simkl_anime_id_preference`, MAL/Kitsu/AniDB/AniList, season-vs-absolute). |
 | Next Up from trackers | Partial | Local and imported resume state seed playback. No watched-series projection, no sibling-id reconciliation, no per-card dismissal. |
@@ -71,7 +71,7 @@ platform refuses the upstream approach.
 | Player failure recovery | Parity at state-machine level | Decoded-first-frame detection, one bounded retry, AVFoundation→mpv fallback, live-playhead resume. |
 | Player audio controls ✻ | Partial | Output channels and in-player amplification exist. Missing: persisted amplification, centre-mix level, downmix normalisation, keep-original-on-downmix, forced optical passthrough. |
 | Dolby Vision profile 7 ✻ | **Adapted (in our favour)** | Upstream carries a forked Matroska extractor, a libdovi bridge, an RPU stripper and DV5→DV8.1 conversion — ~13 files — because ExoPlayer cannot play dual-layer DV. libmpv with the vendored `Libdovi`/`Libplacebo` handles it in-engine. Their five DV settings have no counterpart because they have no problem to solve here. **Unverified on hardware.** |
-| Subtitles ✻ | Partial | Addon and muxed tracks, auto-language/forced rules, style, delay, SDH stripping, charset detection, CJK fallback. **Missing the mojibake repair added in 0.8.8** — double-encoded UTF-8 is valid UTF-8, so our detector accepts it and renders `â€™`. Upstream repairs it; `sub-codepage=auto` does not. |
+| Subtitles ✻ | Partial | Addon and muxed tracks, auto-language/forced rules, style, delay, SDH stripping, charset detection, CJK fallback, and since 1.0.19 mojibake repair. Ours reverses the double encoding rather than tabulating known sequences, so it also covers the Cyrillic, Greek and Japanese cases upstream's table does not. Still no sync-by-line dialog. |
 | External players | Parity | Infuse/VLC/nPlayer/Outplayer hand-off with subtitle forwarding. Skip-segment forwarding is absent. Zidoo monitoring is Android-only. |
 | Top Shelf / launcher | Adapted | Publishes Continue Watching with deep links. Android channel fingerprinting is N/A. |
 | In-app updater ✻ | **Missing** | Upstream polls the GitHub releases API and shows a dismissible update banner. We publish GitHub releases too, so this is available to us — it is simply not built. |
@@ -97,18 +97,16 @@ path and AVFoundation refuses.
 
 ### Partial — the feature exists, some behaviour is missing
 
-- **Detail**: no franchise-collection row, no episode-options overlay, no `videos[].rating`.
-- **Library**: no library sort.
+- **Detail**: no franchise-collection row, no episode-options overlay.
 - **Poster options**: no series watched walk, no Trakt list management, no removal-impact
   warning.
-- **Home**: no Continue Watching toggle, no rating-visibility control, no inline trailers.
-- **Addons**: no renaming.
+- **Home**: no inline trailers.
 - **Debrid**: no stream name/description templates.
 - **Stream badges**: fixed rules instead of editable ones.
 - **Simkl**: no anime identity model, no snapshot reconciliation, no `delete-playback`.
 - **Next Up**: no watched-series projection, no dismissal.
 - **Player audio**: five controls absent.
-- **Subtitles**: no mojibake repair; no sync-by-line dialog.
+- **Subtitles**: no sync-by-line dialog.
 - **External players**: no skip-segment forwarding.
 - **Plugins**: CryptoJS legacy DES family.
 - **Localisation**: 108 strings against 2,865, 2 languages against 36.
@@ -189,11 +187,11 @@ Also: our preference keys were documented as matching the Android names, and mos
 
 1. **Poster options dialog.** Reaches library and watched state from Home, Discover, Search and
    Detail at once, and is the only route to removing a Continue Watching item.
-2. **`videos[].rating` from addon metadata.** A decoded field and a precedence rule.
-3. **Mojibake repair for subtitles.** A pure function and a test table; upstream's own tests
-   port directly.
-4. **Rating visibility, Continue Watching toggle, addon renaming, library sort.** Four small
-   settings, reinstated or newly found.
+2. ~~**`videos[].rating` from addon metadata**~~ — **shipped in 1.0.19.**
+3. ~~**Mojibake repair for subtitles**~~ — **shipped in 1.0.19**, by inverting the double
+   encoding rather than tabulating sequences.
+4. ~~**Rating visibility, Continue Watching toggle, addon renaming, library sort**~~ —
+   **shipped in 1.0.19.**
 5. **Debrid formatter and stream badge rules**, with the local HTTP server the editors need.
 6. **Simkl anime identity model** and snapshot reconciliation.
 7. **Next Up projection and dismissal.**
@@ -219,8 +217,9 @@ test that the readout never takes the remote.
 
 ## Verification
 
-- Unit suite at 1.0.18: **236 tests, 0 failures**. UI suite: **9 tests, 0 failures**.
-- Test density is comparable to upstream — 245 tests over 38k lines against 983 over 201k —
+- Unit suite at 1.0.19: **266 tests, 0 failures**. UI suite: **9 tests, 0 failures**.
+- Test density is now ahead of upstream per line — 275 tests over 38k lines against 983 over
+  201k —
   so the 1.0.12 plan's "tests too thin" framing was wrong on volume. It was right about
   *placement*: the network clients carry the least of it.
 

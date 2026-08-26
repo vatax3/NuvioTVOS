@@ -185,7 +185,9 @@ struct ContentCard: View {
     private var metaTokens: [String] {
         var tokens: [String] = []
         if let info = item.releaseLabel(fullDate: metrics.showsFullReleaseDate) { tokens.append(info) }
-        if let rating = item.imdbRating { tokens.append(String(format: "★ %.1f", rating)) }
+        if metrics.showsRatings, let rating = item.imdbRating {
+            tokens.append(String(format: "★ %.1f", rating))
+        }
         if let runtime = item.runtime?.nilIfBlank { tokens.append(runtime) }
         if let genre = item.genres.first { tokens.append(genre) }
         return tokens
@@ -333,6 +335,9 @@ struct EpisodeCard: View {
     var progress: Double = 0
     /// `blur_unwatched_episodes`: the still stays hidden until the card is focused.
     var blursUnwatched: Bool = false
+    /// `detail_imdb_ratings_visibility`: an episode score is a spoiler of its own, so the
+    /// caller resolves the rule against this episode's watched state rather than the card.
+    var showsRating: Bool = true
     var action: () -> Void
 
     @State private var isFocused = false
@@ -402,7 +407,7 @@ struct EpisodeCard: View {
                 // `released` was parsed, used to decide whether an episode had aired, and never
                 // shown, so a season of unaired episodes looked no different from an aired one.
                 if video.runtime?.nilIfBlank != nil || video.releaseLabel != nil
-                    || video.tmdbRating != nil {
+                    || (showsRating && video.displayRating != nil) {
                     HStack(spacing: NuvioTheme.spacing.md) {
                         if let runtime = video.runtime?.nilIfBlank {
                             Label(runtime, systemImage: "clock")
@@ -410,10 +415,11 @@ struct EpisodeCard: View {
                                 .nuvioText(NuvioTypography.bodySmall)
                                 .foregroundStyle(colors.textTertiary)
                         }
-                        // TMDB's score, and the star says so by not being IMDb's yellow badge.
-                        // Android shows an IMDb figure here, from a service whose address is a
-                        // build secret in its public source; this is the one we can actually get.
-                        if let rating = video.tmdbRating {
+                        // The addon's own `videos[].rating` when it publishes one, TMDB's score
+                        // otherwise. Android prefers a third source — an IMDb figure from a
+                        // service whose address is a build secret in its public source — and
+                        // falls back to the addon exactly as this does.
+                        if showsRating, let rating = video.displayRating {
                             Label(String(format: "%.1f", rating), systemImage: "star.fill")
                                 .labelStyle(.titleAndIcon)
                                 .nuvioText(NuvioTypography.bodySmall)

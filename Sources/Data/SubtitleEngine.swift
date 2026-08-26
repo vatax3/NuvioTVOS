@@ -199,6 +199,15 @@ actor SubtitleLoader {
         return cues
     }
 
+    /// Bytes to readable text: pick the encoding, then repair what the encoding cannot.
+    ///
+    /// The two halves are separate because they fail differently. Detection answers "which
+    /// codepage are these bytes", and `SubtitleMojibake` answers the case where that question
+    /// has a correct answer that still renders as `Itâ€™s` — see there for why.
+    static func decodeSubtitleText(_ data: Data) -> String {
+        SubtitleMojibake.sanitize(decoded(data))
+    }
+
     /// Community SRTs frequently omit their charset, so the bytes are the only clue.
     ///
     /// A fallback chain cannot do this, which is why the one that stood here did not: Windows-1252
@@ -207,7 +216,7 @@ actor SubtitleLoader {
     /// error — it yields confident mojibake, which is the failure a viewer actually sees.
     /// Foundation's detector weighs the whole buffer instead of taking the first encoding that
     /// does not throw.
-    static func decodeSubtitleText(_ data: Data) -> String {
+    private static func decoded(_ data: Data) -> String {
         // The byte order mark is dropped rather than decoded. Left in, it becomes a real
         // U+FEFF at the head of the string, and the first thing an SRT file contains is the cue
         // number — so the first cue of every BOM-marked track failed to parse and simply never

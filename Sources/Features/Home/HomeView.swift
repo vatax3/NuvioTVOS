@@ -88,7 +88,11 @@ struct HomeRailList: View {
     @State private var didClaimInitialFocus = false
 
     private var continueWatching: [ContinueWatchingEntry] {
-        library.continueWatching(
+        // Gated here rather than at the row, so the rail is also absent from the focus order
+        // and from `firstCardKey` — a hidden row that still takes the first press is worse than
+        // no setting at all.
+        guard settings.layout.continueWatchingEnabled else { return [] }
+        return library.continueWatching(
             threshold: settings.watchedThreshold,
             sort: settings.layout.continueWatchingSortMode,
             withinDays: settings.tracking.continueWatchingDaysCap
@@ -395,6 +399,7 @@ struct ModernHeroGradient: View {
 /// Port of the hero text column: logo (or title), metadata row, description.
 struct ModernHeroInfo: View {
     @Environment(\.nuvioColors) private var colors
+    @Environment(AppSettings.self) private var settings
     let item: MetaPreview?
     @State private var logoFailed = false
 
@@ -454,7 +459,9 @@ struct ModernHeroInfo: View {
     private func metaTokens(_ item: MetaPreview) -> [String] {
         var tokens: [String] = []
         if let info = item.releaseInfo?.nilIfBlank { tokens.append(info) }
-        if let rating = item.imdbRating { tokens.append(String(format: "★ %.1f", rating)) }
+        if settings.layout.homeRatingsVisibility.showsRatings, let rating = item.imdbRating {
+            tokens.append(String(format: "★ %.1f", rating))
+        }
         if let runtime = item.runtime?.nilIfBlank { tokens.append(runtime) }
         if let age = item.ageRating?.nilIfBlank { tokens.append(age) }
         if !item.genres.isEmpty { tokens.append(item.genres.prefix(3).joined(separator: ", ")) }

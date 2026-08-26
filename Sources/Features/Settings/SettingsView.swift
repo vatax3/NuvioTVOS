@@ -591,7 +591,21 @@ struct LayoutSettingsContent: View {
                 }
             }
 
+            SettingsCard(title: "Ratings") {
+                SettingsOptionRow(title: "On Home", selection: $layout.homeRatingsVisibility)
+                SettingsOptionRow(
+                    title: "On a title's page",
+                    subtitle: layout.detailRatingsVisibility.summary,
+                    selection: $layout.detailRatingsVisibility
+                )
+            }
+
             SettingsCard(title: "Continue Watching") {
+                SettingsToggle(
+                    title: "Show the rail",
+                    subtitle: "Off hides what you are part-way through from Home entirely",
+                    isOn: $layout.continueWatchingEnabled
+                )
                 SettingsOptionRow(title: "Card style", selection: $layout.continueWatchingCardStyle)
                 SettingsOptionRow(title: "Sort", selection: $layout.continueWatchingSortMode)
                 SettingsToggle(title: "Use episode thumbnails", isOn: $layout.useEpisodeThumbnailsInContinueWatching)
@@ -610,6 +624,10 @@ struct LayoutSettingsContent: View {
                     subtitle: "One rail per collection, after your catalogs",
                     isOn: $layout.collectionsOnHomeEnabled
                 )
+            }
+
+            SettingsCard(title: "Library") {
+                SettingsOptionRow(title: "Sort saved titles", selection: $layout.librarySortOption)
             }
 
             SettingsCard(title: "Catalogs") {

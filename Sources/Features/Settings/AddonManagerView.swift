@@ -99,7 +99,8 @@ struct AddonManagerView: View {
                         onMoveUp: { addons.moveAddon(baseUrl: record.baseUrl, by: -1) },
                         onMoveDown: { addons.moveAddon(baseUrl: record.baseUrl, by: 1) },
                         onRemove: { addons.uninstall(baseUrl: record.baseUrl) },
-                        onConfigure: { configuring = record.manifest }
+                        onConfigure: { configuring = record.manifest },
+                        onRename: { addons.rename(baseUrl: record.baseUrl, to: $0) }
                     )
                 }
             }
@@ -163,6 +164,10 @@ private struct AddonRow: View {
     let onMoveDown: () -> Void
     let onRemove: () -> Void
     let onConfigure: () -> Void
+    let onRename: (String?) -> Void
+
+    @State private var isRenaming = false
+    @State private var draftName = ""
 
     private var manifest: Addon? { record.manifest }
 
@@ -190,6 +195,10 @@ private struct AddonRow: View {
             Spacer(minLength: NuvioTheme.spacing.lg)
 
             HStack(spacing: NuvioTheme.spacing.sm) {
+                IconAction(systemImage: "pencil", tint: colors.secondary) {
+                    draftName = record.userSetName ?? manifest?.displayName ?? ""
+                    isRenaming = true
+                }
                 if isConfigurable {
                     IconAction(systemImage: "slider.horizontal.3", tint: colors.secondary, action: onConfigure)
                 }
@@ -213,6 +222,25 @@ private struct AddonRow: View {
                 .fill(colors.surface.opacity(0.6))
         }
         .opacity(record.enabled ? 1 : 0.6)
+        .sheet(isPresented: $isRenaming) {
+            RenameSheet(
+                heading: "Rename addon",
+                explanation: "Shown wherever this addon is named — rails, stream groups, settings.",
+                placeholder: "Addon name",
+                draft: $draftName,
+                onSave: {
+                    let trimmed = draftName.trimmingCharacters(in: .whitespacesAndNewlines)
+                    // The manifest's own name typed back means "no override", so refetching the
+                    // manifest keeps taking effect.
+                    onRename(trimmed.isEmpty || trimmed == manifest?.displayName ? nil : trimmed)
+                    isRenaming = false
+                },
+                onReset: {
+                    onRename(nil)
+                    isRenaming = false
+                }
+            )
+        }
     }
 
     private var logo: some View {
@@ -424,8 +452,10 @@ private struct CatalogOrderRow: View {
         }
         .opacity(entry.enabled ? 1 : 0.6)
         .sheet(isPresented: $isRenaming) {
-            CatalogRenameSheet(
-                originalTitle: label.title,
+            RenameSheet(
+                heading: "Rename rail",
+                explanation: "Shown instead of “\(label.title)” on Home.",
+                placeholder: "Rail title",
                 draft: $draftTitle,
                 onSave: saveTitle,
                 onReset: resetTitle
@@ -464,27 +494,29 @@ private struct CatalogOrderRow: View {
     }
 }
 
-/// Rename dialog for one rail. tvOS presents the system keyboard for the field, so the sheet
-/// only has to hold the field plus the two actions.
-private struct CatalogRenameSheet: View {
+/// Rename dialog, shared by rails and addons. tvOS presents the system keyboard for the field,
+/// so the sheet only has to hold the field plus the two actions.
+private struct RenameSheet: View {
     @Environment(\.nuvioColors) private var colors
 
-    let originalTitle: String
+    let heading: String
+    let explanation: String
+    let placeholder: String
     @Binding var draft: String
     let onSave: () -> Void
     let onReset: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: NuvioTheme.spacing.lg) {
-            Text("Rename rail")
+            Text(heading)
                 .nuvioText(NuvioTextStyles.headline)
                 .foregroundStyle(colors.textPrimary)
 
-            Text("Shown instead of “\(originalTitle)” on Home.")
+            Text(explanation)
                 .nuvioText(NuvioTextStyles.bodyCompact)
                 .foregroundStyle(colors.textSecondary)
 
-            TextField("Rail title", text: $draft)
+            TextField(placeholder, text: $draft)
                 .textFieldStyle(.plain)
                 .nuvioText(NuvioTextStyles.body)
                 .padding(.horizontal, NuvioTheme.spacing.lg)

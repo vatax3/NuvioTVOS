@@ -274,6 +274,10 @@ struct VideoDTO: Decodable {
     var overview: String?
     var description: String?
     var runtime: String?
+    /// A per-episode score the addon publishes itself. Upstream reads the same field; it is the
+    /// only episode rating obtainable from public source, since their IMDb service sits behind
+    /// a build-time base URL that ships blank.
+    var rating: FlexibleDouble?
     var available: FlexibleBool?
     /// Some addons never implement `/stream` and instead attach the playable links straight to
     /// the video entry in their meta response. `fetchInlineStreams` is the fallback that reads
@@ -756,7 +760,9 @@ enum StremioMapper {
             overview: dto.overview?.nilIfBlank,
             description: dto.description?.nilIfBlank,
             runtime: dto.runtime?.nilIfBlank,
-            available: dto.available?.value
+            available: dto.available?.value,
+            // Zero is how an addon says "no score", not a score of zero.
+            addonRating: dto.rating?.value.flatMap { $0 > 0 ? $0 : nil }
         )
     }
 

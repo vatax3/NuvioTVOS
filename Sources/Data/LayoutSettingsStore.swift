@@ -202,6 +202,29 @@ final class LayoutSettingsStore: PreferenceStore {
 
     // MARK: - Continue Watching
 
+    /// `continue_watching_enabled`: hides the rail outright, for a viewer who does not want a
+    /// record of what they were halfway through on the first screen of the app.
+    var continueWatchingEnabled: Bool {
+        get { bool("continue_watching_enabled", default: true) }
+        set { setBool("continue_watching_enabled", newValue) }
+    }
+
+    var homeRatingsVisibility: HomeRatingsVisibility {
+        get { option("home_imdb_ratings_visibility", default: .showAll) }
+        set { setOption("home_imdb_ratings_visibility", newValue) }
+    }
+
+    var detailRatingsVisibility: DetailRatingsVisibility {
+        get { option("detail_imdb_ratings_visibility", default: .showAll) }
+        set { setOption("detail_imdb_ratings_visibility", newValue) }
+    }
+
+    /// `library_sort_option`: how the saved-titles grid is ordered.
+    var librarySortOption: LibrarySortOption {
+        get { option("library_sort_option", default: .recentlyAdded) }
+        set { setOption("library_sort_option", newValue) }
+    }
+
     var continueWatchingCardStyle: ContinueWatchingCardStyle {
         get { option("continue_watching_card_style", default: .landscape) }
         set { setOption("continue_watching_card_style", newValue) }
