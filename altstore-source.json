@@ -40,6 +40,16 @@
       ],
       "versions": [
         {
+          "version": "1.0.26",
+          "buildVersion": "28",
+          "date": "2026-08-26",
+          "localizedDescription": "## Removing from Continue Watching now sticks\n\nIf your watch progress comes from Trakt or Simkl, removing a row from Continue\nWatching only removed it from this Apple TV. The next sync fetched the resume\npoint back from the service and the row returned, as though the removal had not\nworked.\n\nIt now removes the resume point on the service too. Nothing else on your tracking\naccount is touched — the title's own resume points and nothing beyond them.\n\nOn the default local setting nothing changes; there was never anything remote to\nbring the row back.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.26/Nuvio-1.0.26-tvOS-unsigned.ipa",
+          "size": 31723025,
+          "minOSVersion": "17.0",
+          "sha256": "975273ee4ba2fae2f199dcc9bfeb933a67316cd9f613ee183074435435d1fe6b"
+        },
+        {
           "version": "1.0.25",
           "buildVersion": "27",
           "date": "2026-08-26",
@@ -176,11 +186,11 @@
         ],
         "privacy": {}
       },
-      "version": "1.0.25",
+      "version": "1.0.26",
       "versionDate": "2026-08-26",
-      "versionDescription": "## Mark a whole series watched\n\nLong-press any series poster and the **watched** row is there now, not just for\nfilms. It marks every episode that has actually aired, and skips specials —\nseason zero is not part of the run you mean when you say you have watched a show.\nTaking it back clears everything, specials included.\n\nThe row only appears once Nuvio knows the episode list, because a control that\nreports success having marked nothing is worse than no control.\n\n## Continue Watching stops waiting\n\nNuvio used to learn a series' episode list only when you opened its page. That\nmeant a show you started from the Home rail and never opened could not be offered\nits next episode. The rail now fills that in for the shows at the front of it.\n\n## Notes\n\nMarking a series watched sends one request to Trakt or Simkl, not one per episode.",
-      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.25/Nuvio-1.0.25-tvOS-unsigned.ipa",
-      "size": 31718194,
+      "versionDescription": "## Removing from Continue Watching now sticks\n\nIf your watch progress comes from Trakt or Simkl, removing a row from Continue\nWatching only removed it from this Apple TV. The next sync fetched the resume\npoint back from the service and the row returned, as though the removal had not\nworked.\n\nIt now removes the resume point on the service too. Nothing else on your tracking\naccount is touched — the title's own resume points and nothing beyond them.\n\nOn the default local setting nothing changes; there was never anything remote to\nbring the row back.",
+      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.26/Nuvio-1.0.26-tvOS-unsigned.ipa",
+      "size": 31723025,
       "minOSVersion": "17.0"
     }
   ],
