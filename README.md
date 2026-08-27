@@ -270,6 +270,18 @@ Sources/
 Resources/        Inter / DM Sans / Open Sans variable fonts, brand marks
 ```
 
+## Licence
+
+GPL-3.0. Not a preference: this is a port of [NuvioTV for Android
+TV](https://github.com/tapframe/NuvioTV), which is GPL-3.0, so the port is a derivative work and
+carries the same terms. Full text in [`LICENSE`](LICENSE).
+
+The playback stack is linked in and keeps its own licences — libmpv, FFmpeg, libass, dav1d,
+libplacebo, MoltenVK and the rest, mostly LGPL. They are listed with their terms in
+[`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md), which also explains how the LGPL's relinking
+requirement is met: nothing binary is checked in, `Scripts/fetch-mpv.sh` fetches every framework
+at a pinned version, and replacing one in `Vendor/` and rebuilding is the whole procedure.
+
 ## Legal
 
 Nuvio is a client-side playback interface. It does not host, store or distribute media; all

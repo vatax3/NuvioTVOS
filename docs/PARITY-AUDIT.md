@@ -71,7 +71,7 @@ platform refuses the upstream approach.
 | Plugin runtime | Partial | Repository/install/settings, HTML/CSS helpers, fetch, `getStreams`. CryptoJS covers common hashes/HMAC, PBKDF2 and AES, not the legacy DES family. |
 | Player transport | Parity | In-place sources, episodes, tracks, subtitle appearance/delay, audio delay, speed, seven display modes, stream info, skip cards, post-play, still-watching, external hand-off — and, since 1.0.17, the hidden-controls seek readout. |
 | Player failure recovery | Parity at state-machine level | Decoded-first-frame detection, one bounded retry, AVFoundation→mpv fallback, live-playhead resume. |
-| Player audio controls | Parity, less two the platform refuses | Output channels, in-player amplification and — since 1.0.24 — persisted amplification, centre-mix level and downmix normalisation. Keep-original-on-downmix and forced optical passthrough cannot exist here; see *Forced*. |
+| Player audio controls | Parity, less two the platform refuses | Output channels, in-player amplification and — since 1.0.24 — persisted amplification, centre-mix level and downmix normalisation. Keep-original-on-downmix and forced optical passthrough cannot exist here as *controls*; see *Forced*, where the second entry also corrects an over-broad claim about passthrough in general. |
 | Dolby Vision profile 7 ✻ | **Adapted (in our favour)** | Upstream carries a forked Matroska extractor, a libdovi bridge, an RPU stripper and DV5→DV8.1 conversion — ~13 files — because ExoPlayer cannot play dual-layer DV. libmpv with the vendored `Libdovi`/`Libplacebo` handles it in-engine. Their five DV settings have no counterpart because they have no problem to solve here. **Unverified on hardware.** |
 | Subtitles ✻ | Partial | Addon and muxed tracks, auto-language/forced rules, style, delay, SDH stripping, charset detection, CJK fallback, and since 1.0.19 mojibake repair. Ours reverses the double encoding rather than tabulating known sequences, so it also covers the Cyrillic, Greek and Japanese cases upstream's table does not. Still no sync-by-line dialog. |
 | External players | Parity | Infuse/VLC/nPlayer/Outplayer hand-off with subtitle forwarding. Skip-segment forwarding is absent. Zidoo monitoring is Android-only. |
@@ -146,12 +146,29 @@ path and AVFoundation refuses.
 - **Episode IMDb ratings, Premiumize device auth, crash and playback reports**: build-time
   secrets, blank in public source. Guessing endpoint shapes would create silent data loss.
 - **The official discovery service**: same.
-- **Keep original audio on downmix** and **forced optical passthrough**. The first is an
-  ExoPlayer arrangement — its decoder emits a downmix while the multichannel track stays
-  selectable — and libmpv has one output chain, not two. The second needs a bitstream
-  passthrough API, and tvOS 26 has none: `AVAudioContentSource` is an *encoder* settings key
-  (`AVEncoderContentSourceKey`), not a playback path. Passthrough on this platform is what the
-  Apple TV's own audio settings decide, which is what the Audio card says.
+- **Keep original audio on downmix**. An ExoPlayer arrangement — its decoder emits a downmix
+  while the multichannel track stays selectable — and libmpv has one output chain, not two.
+- **Forced optical passthrough**, *as a control*. There is no bitstream API a custom engine can
+  drive: `AVAudioContentSource` is an *encoder* settings key (`AVEncoderContentSourceKey`), not a
+  playback path. A setting that promises to force passthrough cannot be honoured, so it stays
+  out, and the Audio card says passthrough is what the Apple TV's own settings decide.
+
+  **What this entry used to imply is wrong, and it is corrected here.** It read as though a
+  bitstream could never reach the receiver from this app. AVPlayer passes EAC3 — including the
+  JOC extension Atmos rides on — straight through, and AVPlayer is already our default engine:
+  `MPVEngineSupport.requiresMPV` sends only the containers AVFoundation cannot demux to libmpv
+  (`mkv`, `avi`, `ts`, `webm` and friends). So an MP4 may well be passing Atmos today, untested,
+  while an MKV certainly is not — mpv decodes to PCM, which is where the bitstream is lost.
+
+  The gap is therefore narrower and more specific than "no passthrough": it is **MKV**, which is
+  most of what a debrid setup serves. Closing it would mean remuxing the audio to a path AVPlayer
+  can play, not replacing the engine. Found by reading a second, independent tvOS port whose whole
+  design is FFmpeg-demux plus AVPlayer-playback, precisely to keep the bitstream intact.
+
+  Two things bound how much this matters. It is unverified — nobody has read a receiver's display.
+  And Atmos is a height format: on a 5.1 system with no height channels there is nothing for it to
+  add that the decoded 5.1 bed does not already carry, and mpv's PCM output of a lossless TrueHD or
+  DTS-HD MA track is bit-identical to what the receiver would decode itself.
 
 ## Corrections to the 1.0.15 audit
 
