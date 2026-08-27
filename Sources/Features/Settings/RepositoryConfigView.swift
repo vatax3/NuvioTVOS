@@ -17,7 +17,7 @@ struct RepositoryConfigView: View {
         NuvioScreenBackground {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
-                    Text("Plugin repositories")
+                    Text(L10n.text("settings.repos.title", fallback: "Plugin repositories"))
                         .nuvioText(NuvioTextStyles.display)
                         .foregroundStyle(colors.textPrimary)
 
@@ -35,8 +35,8 @@ struct RepositoryConfigView: View {
             set: { if !$0 { pending = nil } }
         )) {
             // Decline is first and plain; approve is the one that has to be chosen deliberately.
-            Button("Not now", role: .cancel) { Task { await settle(approved: false) } }
-            Button("Allow") { Task { await settle(approved: true) } }
+            Button(L10n.text("settings.repos.not_now", fallback: "Not now"), role: .cancel) { Task { await settle(approved: false) } }
+            Button(L10n.text("settings.repos.allow", fallback: "Allow")) { Task { await settle(approved: true) } }
         } message: {
             if let caution = pending?.caution {
                 Text(caution)
@@ -45,7 +45,7 @@ struct RepositoryConfigView: View {
     }
 
     private var editorCard: some View {
-        SettingsCard(title: "Manage on a phone") {
+        SettingsCard(title: L10n.text("settings.repos.manage_on_phone", fallback: "Manage on a phone")) {
             VStack(alignment: .leading, spacing: NuvioTheme.spacing.lg) {
                 Text(instructions)
                     .nuvioText(NuvioTextStyles.bodyCompact)
@@ -60,7 +60,7 @@ struct RepositoryConfigView: View {
                     HStack(alignment: .top, spacing: NuvioTheme.spacing.xl) {
                         qrCode(address)
                         VStack(alignment: .leading, spacing: NuvioTheme.spacing.xs) {
-                            Text("Or type this in a browser")
+                            Text(L10n.text("settings.repos.or_type", fallback: "Or type this in a browser"))
                                 .nuvioText(NuvioTextStyles.metadata)
                                 .foregroundStyle(colors.textTertiary)
                             Text(address)
@@ -70,7 +70,7 @@ struct RepositoryConfigView: View {
                         }
                     }
                 } else {
-                    Text("Starting…")
+                    Text(L10n.text("settings.repos.starting", fallback: "Starting…"))
                         .nuvioText(NuvioTextStyles.bodyCompact)
                         .foregroundStyle(colors.textTertiary)
                 }
@@ -86,10 +86,10 @@ struct RepositoryConfigView: View {
     }
 
     private var repositoriesCard: some View {
-        SettingsCard(title: "Installed") {
+        SettingsCard(title: L10n.text("settings.repos.installed", fallback: "Installed")) {
             VStack(alignment: .leading, spacing: NuvioTheme.spacing.md) {
                 if plugins.repositories.isEmpty {
-                    Text("None yet.")
+                    Text(L10n.text("settings.repos.none_yet", fallback: "None yet."))
                         .nuvioText(NuvioTextStyles.bodyCompact)
                         .foregroundStyle(colors.textTertiary)
                 } else {
@@ -160,7 +160,7 @@ struct RepositoryConfigView: View {
         // One at a time. A second request while the first is on screen would replace the prompt
         // the viewer is reading, which is how somebody approves the wrong thing.
         guard pending == nil else {
-            notice = "The Apple TV is still being asked about the last change."
+            notice = L10n.text("settings.repos.still_asking", fallback: "The Apple TV is still being asked about the last change.")
             return
         }
         guard let change = RepositoryConfigRequest.change(
@@ -186,7 +186,7 @@ struct RepositoryConfigView: View {
             let added = await plugins.addRepository(url: url)
             notice = added
                 ? change.settledNotice(approved: true)
-                : (plugins.lastError ?? "That repository could not be added.")
+                : (plugins.lastError ?? L10n.text("settings.repos.add_failed", fallback: "That repository could not be added."))
         case .remove(let id, _):
             guard let repository = plugins.repositories.first(where: { $0.id == id }) else { return }
             plugins.remove(repository)

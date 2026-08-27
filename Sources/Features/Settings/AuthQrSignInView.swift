@@ -64,7 +64,7 @@ struct AuthQrSignInView: View {
 
             Spacer().frame(height: dp(32))
 
-            Text("Watch your library, anywhere")
+            Text(L10n.text("settings.qr_signin.headline", fallback: "Watch your library, anywhere"))
                 .font(.system(size: sp(40), weight: .semibold))
                 .foregroundStyle(colors.textPrimary)
                 .frame(maxWidth: dp(440), alignment: .leading)
@@ -74,8 +74,8 @@ struct AuthQrSignInView: View {
 
             Text(
                 account.isSignedIn
-                    ? "Your account is connected on this TV."
-                    : "Use your phone to sign in with email/password. TV stays QR-only for faster login."
+                    ? L10n.text("settings.qr_signin.connected", fallback: "Your account is connected on this TV.")
+                    : L10n.text("settings.qr_signin.use_phone", fallback: "Use your phone to sign in with email/password. TV stays QR-only for faster login.")
             )
             .font(.system(size: sp(17)))
             .foregroundStyle(colors.textSecondary)
@@ -97,7 +97,7 @@ struct AuthQrSignInView: View {
         VStack(spacing: 0) {
             Spacer()
 
-            Text("Account Login")
+            Text(L10n.text("settings.qr_signin.title", fallback: "Account Login"))
                 .font(.system(size: sp(30), weight: .semibold))
                 .foregroundStyle(colors.textPrimary)
 
@@ -125,8 +125,8 @@ struct AuthQrSignInView: View {
 
     private var instruction: String {
         account.isSignedIn
-            ? "Your synced data"
-            : "Scan QR, approve in browser, then return here."
+            ? L10n.text("settings.qr_signin.your_data", fallback: "Your synced data")
+            : L10n.text("settings.qr_signin.scan_instructions", fallback: "Scan QR, approve in browser, then return here.")
     }
 
     // MARK: Code
@@ -164,14 +164,14 @@ struct AuthQrSignInView: View {
             }
 
         case .exchanging:
-            placeholder("Finishing sign in…")
+            placeholder(L10n.text("settings.qr_signin.finishing", fallback: "Finishing sign in…"))
 
         case .starting:
-            placeholder("Generating QR…")
+            placeholder(L10n.text("settings.qr_signin.generating", fallback: "Generating QR…"))
 
         case .failed(let message):
             VStack(spacing: dp(14)) {
-                placeholder("QR unavailable. Refresh to retry.")
+                placeholder(L10n.text("settings.qr_signin.unavailable", fallback: "QR unavailable. Refresh to retry."))
                 Text(message)
                     .nuvioText(NuvioTypography.labelSmall)
                     .foregroundStyle(colors.error)
@@ -180,7 +180,7 @@ struct AuthQrSignInView: View {
             }
 
         case .idle, .signedIn:
-            placeholder(account.isSignedIn ? "Signed in" : "Refresh to get a code.")
+            placeholder(account.isSignedIn ? L10n.text("settings.qr_signin.signed_in", fallback: "Signed in") : L10n.text("settings.qr_signin.refresh_hint", fallback: "Refresh to get a code."))
         }
     }
 
@@ -199,7 +199,7 @@ struct AuthQrSignInView: View {
                     RoundedRectangle(cornerRadius: dp(8), style: .continuous).fill(.white)
                 }
         } else {
-            placeholder("QR unavailable. Refresh to retry.")
+            placeholder(L10n.text("settings.qr_signin.unavailable", fallback: "QR unavailable. Refresh to retry."))
         }
     }
 
@@ -232,7 +232,7 @@ struct AuthQrSignInView: View {
             .disabled(isBusy)
             .opacity(isBusy ? NuvioTheme.effects.disabledAlpha : 1)
 
-            Button("Back") { dismiss() }
+            Button(L10n.text("settings.qr_signin.back", fallback: "Back")) { dismiss() }
                 .buttonStyle(NuvioRowButtonStyle(cornerRadius: dp(16)))
         }
     }
@@ -244,7 +244,7 @@ struct AuthQrSignInView: View {
         }
     }
 
-    private var refreshLabel: String { isBusy ? "Please wait…" : "Refresh QR" }
+    private var refreshLabel: String { isBusy ? L10n.text("settings.qr_signin.please_wait", fallback: "Please wait…") : L10n.text("settings.qr_signin.refresh", fallback: "Refresh QR") }
 
     // MARK: Helpers
 

@@ -6,7 +6,7 @@ import CoreImage.CIFilterBuiltins
 /// Stremio addons that advertise `behaviorHints.configurable` expose a `/configure` web page.
 /// tvOS ships no browser and no WKWebView, so the page cannot be opened on the device. What
 /// works is finishing the job on a phone: the URL is shown as a QR code, and the configured
-/// manifest URL comes back through the normal "add addon" field.
+/// manifest URL comes back through the normal L10n.text("settings.addon_config.add_addon", fallback: "add addon") field.
 struct AddonConfiguratorView: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(AddonStore.self) private var addons
@@ -31,7 +31,7 @@ struct AddonConfiguratorView: View {
                         .nuvioText(NuvioTextStyles.display)
                         .foregroundStyle(colors.textPrimary)
 
-                    Text("This addon is configured on its own web page. Apple TV has no browser, so scan the code with a phone, finish the setup there, then paste the configured manifest URL below.")
+                    Text(L10n.text("settings.addon_config.footnote", fallback: "This addon is configured on its own web page. Apple TV has no browser, so scan the code with a phone, finish the setup there, then paste the configured manifest URL below."))
                         .nuvioText(NuvioTextStyles.bodyCompact)
                         .foregroundStyle(colors.textSecondary)
                         .frame(maxWidth: dp(760), alignment: .leading)
@@ -40,7 +40,7 @@ struct AddonConfiguratorView: View {
                         qrCode
 
                         VStack(alignment: .leading, spacing: NuvioTheme.spacing.md) {
-                            Text("Or type it in manually")
+                            Text(L10n.text("settings.addon_config.or_manual", fallback: "Or type it in manually"))
                                 .nuvioText(NuvioTextStyles.cardTitle)
                                 .foregroundStyle(colors.textPrimary)
                             Text(configureUrl)
@@ -51,25 +51,25 @@ struct AddonConfiguratorView: View {
                     }
 
                     SettingsCard(
-                        title: "Configured manifest URL",
-                        footnote: "The configure page ends with an Install button — copy the URL it points at."
+                        title: L10n.text("settings.addon_config.manifest_url", fallback: "Configured manifest URL"),
+                        footnote: L10n.text("settings.addon_config.manifest_url_sub", fallback: "The configure page ends with an Install button — copy the URL it points at.")
                     ) {
                         SettingsTextFieldRow(
-                            title: "Manifest URL",
+                            title: L10n.text("settings.addon_config.manifest_hint", fallback: "Manifest URL"),
                             placeholder: "https://…/manifest.json",
                             text: $configuredUrl,
-                            trailingAction: (label: isInstalling ? "Installing…" : "Install", action: install)
+                            trailingAction: (label: isInstalling ? L10n.text("settings.addon_config.installing", fallback: "Installing…") : L10n.text("settings.addon_config.install", fallback: "Install"), action: install)
                         )
                     }
 
                     if let status {
                         Text(status)
                             .nuvioText(NuvioTextStyles.bodyCompact)
-                            .foregroundStyle(status.hasPrefix("Installed") ? colors.success : colors.error)
+                            .foregroundStyle(status.hasPrefix(L10n.text("settings.addon_config.installed", fallback: "Installed")) ? colors.success : colors.error)
                     }
 
                     Button(action: { dismiss() }) {
-                        Text("Done")
+                        Text(L10n.text("settings.addon_config.done", fallback: "Done"))
                             .nuvioText(NuvioTextStyles.button)
                             .padding(.horizontal, NuvioTheme.spacing.xl)
                             .frame(height: NuvioTheme.components.buttonHeight)

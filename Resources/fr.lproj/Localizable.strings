@@ -826,3 +826,234 @@
 "settings.plugins.remove" = "Retirer";
 "settings.plugins.remove_sub" = "Supprimer ce dépôt et ses scrapers";
 "settings.plugins.disabled_by_repo" = "Désactivé par le dépôt";
+
+/* CollectionManagerView.swift */
+"settings.collections.yours" = "Vos collections";
+"settings.collections.new" = "Nouvelle collection";
+"settings.collections.transfer" = "Transfert";
+"settings.collections.transfer_footnote" = "Le même JSON que les autres applications Nuvio importent et exportent.";
+"settings.collections.import" = "Importer depuis un JSON";
+"settings.collections.import_sub" = "Remplace toutes les collections de cet appareil";
+"settings.collections.export" = "Exporter en JSON";
+"settings.collections.name" = "Nom";
+"settings.collections.name_hint" = "Samedi soir";
+"settings.collections.create" = "Créer";
+"settings.collections.details" = "Détails";
+"settings.collections.pin" = "Épingler au-dessus des catalogues";
+"settings.collections.pin_sub" = "Afficher cette collection au-dessus de tous les catalogues de l’accueil. Plusieurs collections épinglées gardent leur ordre de création.";
+"settings.collections.all_tab" = "Afficher un onglet « Tout »";
+"settings.collections.all_tab_sub" = "Les éléments de tous les dossiers réunis";
+"settings.collections.folder_layout" = "Disposition des dossiers";
+"settings.collections.folders" = "Dossiers";
+"settings.collections.folders_footnote" = "Chaque dossier devient une tuile dans la rangée de cette collection sur l’accueil.";
+"settings.collections.add_folder" = "Ajouter un dossier";
+"settings.collections.order" = "Ordre";
+"settings.collections.order_footnote" = "La place de cette collection sur l’accueil.";
+"settings.collections.move_up" = "Monter";
+"settings.collections.move_down" = "Descendre";
+"settings.collections.delete" = "Supprimer la collection";
+"settings.collections.new_folder" = "Nouveau dossier";
+"settings.collections.folder_hint" = "Comédies";
+"settings.collections.add" = "Ajouter";
+"settings.collections.delete_title" = "Supprimer cette collection ?";
+"settings.collections.delete_confirm" = "Supprimer";
+"settings.collections.keep" = "Conserver";
+"settings.collections.delete_message" = "Ses dossiers et leurs sources disparaissent avec elle. Rien n’est touché dans votre bibliothèque.";
+"settings.collections.grid_tabs" = "Grille avec onglets";
+"settings.collections.rows" = "Rangées";
+"settings.collections.follow_layout" = "Suivre ma disposition";
+
+/* CollectionSourcePickers.swift */
+"settings.source.choose_catalog" = "Choisir un catalogue";
+"settings.source.choose_genre" = "Choisir un genre";
+"settings.source.genre_footnote" = "Un genre restreint le catalogue. Laissez vide pour le prendre en entier.";
+"settings.source.whole_catalog" = "Catalogue entier";
+"settings.source.tmdb_source" = "Source TMDB";
+"settings.source.tmdb_footnote" = "Ajoutez d’abord une clé d’API TMDB dans Intégrations — sans elle, cette source ne renvoie rien.";
+"settings.source.what_to_ask" = "Quoi demander";
+"settings.source.kind" = "Type";
+"settings.source.media" = "Média";
+"settings.source.sort" = "Tri";
+"settings.source.name" = "Nom";
+"settings.source.name_sub" = "Le nom de cette source dans le dossier";
+"settings.source.highest_rated" = "Les mieux notés";
+"settings.source.tmdb_id" = "Identifiant TMDB";
+"settings.source.add_source" = "Ajouter une source";
+"settings.source.hint_list" = "L’identifiant d’une liste TMDB";
+"settings.source.hint_collection" = "Une collection TMDB, p. ex. une saga";
+"settings.source.hint_studio" = "Un identifiant de studio";
+"settings.source.hint_network" = "Un identifiant de chaîne";
+"settings.source.hint_person" = "Un identifiant de personne";
+"settings.source.trakt_list" = "Liste Trakt";
+"settings.source.trakt_footnote" = "Connectez d’abord Trakt dans Intégrations — sans identifiant client, cette source ne renvoie rien.";
+"settings.source.list" = "Liste";
+"settings.source.list_footnote" = "Le nombre à la fin de l’URL de la liste sur trakt.tv.";
+"settings.source.list_hint" = "Le meilleur de 2024";
+"settings.source.list_id" = "Identifiant de liste";
+"settings.source.direction" = "Sens";
+"settings.source.import" = "Importer des collections";
+"settings.source.export" = "Exporter des collections";
+"settings.source.import_footnote" = "Collez le JSON exporté depuis une autre application Nuvio. Ceci remplace toutes les collections de cet appareil.";
+"settings.source.export_footnote" = "Copiez ceci dans l’écran d’import d’une autre application Nuvio.";
+"settings.source.import_action" = "Importer";
+"settings.source.import_empty" = "Ce JSON ne contenait aucune collection.";
+"settings.source.studio" = "Studio";
+"settings.source.network" = "Chaîne";
+"settings.source.actor" = "Acteur";
+"settings.source.director" = "Réalisateur";
+"settings.source.series" = "Séries";
+"settings.source.movies" = "Films";
+"settings.source.as_listed" = "Dans l’ordre de la liste";
+"settings.source.most_popular" = "Les plus populaires";
+"settings.source.most_voted" = "Les plus votés";
+"settings.source.newest" = "Les plus récents";
+"settings.source.newest_aired" = "Diffusés le plus récemment";
+"settings.source.ascending" = "Croissant";
+"settings.source.descending" = "Décroissant";
+
+/* CollectionFolderEditorView.swift */
+"settings.folder.title" = "Dossier";
+"settings.folder.details" = "Détails";
+"settings.folder.name" = "Nom";
+"settings.folder.cover_emoji" = "Emoji de couverture";
+"settings.folder.cover_emoji_sub" = "Affiché quand il n’y a pas d’image de couverture";
+"settings.folder.tile_shape" = "Forme de la tuile";
+"settings.folder.hide_title" = "Masquer le titre sur la tuile";
+"settings.folder.sources" = "Sources";
+"settings.folder.sources_footnote" = "Tout ce qu’elles renvoient apparaît dans ce dossier.";
+"settings.folder.remove" = "Retirer";
+"settings.folder.add_catalog" = "Ajouter un catalogue d’extension";
+"settings.folder.add_tmdb" = "Ajouter une requête TMDB";
+"settings.folder.add_trakt" = "Ajouter une liste Trakt";
+"settings.folder.artwork" = "Illustrations";
+"settings.folder.cover_url" = "URL de l’image de couverture";
+"settings.folder.backdrop_url" = "URL de l’image de fond";
+"settings.folder.logo_url" = "URL du logo du titre";
+"settings.folder.order" = "Ordre";
+"settings.folder.move_up" = "Monter";
+"settings.folder.move_down" = "Descendre";
+"settings.folder.delete" = "Supprimer le dossier";
+"settings.folder.delete_title" = "Supprimer ce dossier ?";
+"settings.folder.delete_confirm" = "Supprimer";
+"settings.folder.keep" = "Conserver";
+"settings.folder.shape_poster" = "Affiche";
+"settings.folder.shape_landscape" = "Paysage";
+"settings.folder.shape_square" = "Carré";
+
+/* AddonManagerView.swift */
+"settings.addons.cinemeta_sub" = "Catalogue et métadonnées officiels de Stremio";
+"settings.addons.opensubtitles_sub" = "Sous-titres pour films et séries";
+"settings.addons.torrentio_sub" = "Sources torrent (à configurer pour le debrid)";
+"settings.addons.publicdomain_sub" = "Classiques sous licence libre";
+"settings.addons.kitsu_sub" = "Catalogue et métadonnées d’animes";
+"settings.addons.title" = "Gestion des extensions";
+"settings.addons.install_from_url" = "Installer depuis une URL";
+"settings.addons.install_footnote" = "Collez une URL de manifeste Stremio. Le /manifest.json final est facultatif.";
+"settings.addons.installing" = "Installation…";
+"settings.addons.install" = "Installer";
+"settings.addons.none_installed" = "Aucune extension installée.";
+"settings.addons.popular" = "Extensions populaires";
+"settings.addons.installed" = "Installée";
+"settings.addons.rename" = "Renommer l’extension";
+"settings.addons.rename_footnote" = "Affiché partout où cette extension est nommée — rangées, groupes de flux, réglages.";
+"settings.addons.name_hint" = "Nom de l’extension";
+"settings.addons.no_override" = "aucun remplacement";
+"settings.addons.catalog_order" = "Ordre des catalogues";
+"settings.addons.home_rows" = "Rangées de l’accueil";
+"settings.addons.nothing_to_order" = "Rien à ordonner — installez une extension qui fournit un catalogue.";
+"settings.addons.no_longer_exists" = "N’existe plus";
+"settings.addons.rename_rail" = "Renommer la rangée";
+"settings.addons.rail_title" = "Titre de la rangée";
+"settings.addons.save" = "Enregistrer";
+"settings.addons.use_original" = "Rétablir l’original";
+
+/* RepositoryConfigView.swift */
+"settings.repos.title" = "Dépôts de plugins";
+"settings.repos.not_now" = "Pas maintenant";
+"settings.repos.allow" = "Autoriser";
+"settings.repos.manage_on_phone" = "Gérer depuis un téléphone";
+"settings.repos.or_type" = "Ou saisissez ceci dans un navigateur";
+"settings.repos.starting" = "Démarrage…";
+"settings.repos.installed" = "Installés";
+"settings.repos.none_yet" = "Aucun pour l’instant.";
+"settings.repos.still_asking" = "L’Apple TV attend encore une réponse sur la dernière modification.";
+"settings.repos.add_failed" = "Ce dépôt n’a pas pu être ajouté.";
+
+/* StreamBadgeRulesView.swift */
+"settings.badges.title" = "Règles de badges";
+"settings.badges.manage_on_phone" = "Gérer depuis un téléphone";
+"settings.badges.or_type" = "Ou saisissez ceci dans un navigateur";
+"settings.badges.starting" = "Démarrage…";
+"settings.badges.imported" = "Importés";
+"settings.badges.none_yet" = "Aucun pack pour l’instant. Les flux affichent les badges de l’application jusqu’à ce que vous en ajoutiez un.";
+"settings.badges.enter_link" = "Saisissez un lien vers un fichier de badges.";
+"settings.badges.applied" = "Pack appliqué.";
+"settings.badges.removed" = "Pack retiré.";
+
+/* AddonConfiguratorView.swift */
+"settings.addon_config.footnote" = "Cette extension se configure sur sa propre page web. L’Apple TV n’a pas de navigateur : scannez le code avec un téléphone, terminez la configuration là-bas, puis collez ci-dessous l’URL du manifeste configuré.";
+"settings.addon_config.or_manual" = "Ou saisissez-la manuellement";
+"settings.addon_config.manifest_url" = "URL du manifeste configuré";
+"settings.addon_config.manifest_url_sub" = "La page de configuration se termine par un bouton Install — copiez l’URL vers laquelle il pointe.";
+"settings.addon_config.manifest_hint" = "URL du manifeste";
+"settings.addon_config.installing" = "Installation…";
+"settings.addon_config.install" = "Installer";
+"settings.addon_config.installed" = "Installée";
+"settings.addon_config.done" = "Terminé";
+
+/* StreamFormatEditorView.swift */
+"settings.format_editor.title" = "Format des flux";
+"settings.format_editor.edit_on_phone" = "Modifier depuis un téléphone";
+"settings.format_editor.or_type" = "Ou saisissez ceci dans un navigateur";
+"settings.format_editor.starting" = "Démarrage…";
+"settings.format_editor.preview" = "Aperçu";
+
+/* AuthQrSignInView.swift */
+"settings.qr_signin.headline" = "Retrouvez votre bibliothèque partout";
+"settings.qr_signin.connected" = "Votre compte est connecté sur ce téléviseur.";
+"settings.qr_signin.use_phone" = "Utilisez votre téléphone pour vous connecter par e-mail et mot de passe. Le téléviseur reste en QR code, plus rapide.";
+"settings.qr_signin.title" = "Connexion au compte";
+"settings.qr_signin.your_data" = "Vos données synchronisées";
+"settings.qr_signin.scan_instructions" = "Scannez le QR code, approuvez dans le navigateur, puis revenez ici.";
+"settings.qr_signin.finishing" = "Finalisation de la connexion…";
+"settings.qr_signin.generating" = "Génération du QR code…";
+"settings.qr_signin.unavailable" = "QR code indisponible. Actualisez pour réessayer.";
+"settings.qr_signin.signed_in" = "Connecté";
+"settings.qr_signin.refresh_hint" = "Actualisez pour obtenir un code.";
+"settings.qr_signin.back" = "Retour";
+"settings.qr_signin.please_wait" = "Veuillez patienter…";
+"settings.qr_signin.refresh" = "Actualiser le QR code";
+
+/* AccountSettingsContent.swift */
+"settings.account.cancel" = "Annuler";
+"settings.account.code" = "Code";
+
+/* DebridSettingsContent.swift */
+"settings.debrid.cancel" = "Annuler";
+"settings.debrid.audio" = "Audio";
+"settings.debrid.languages" = "Langues";
+"settings.debrid.file_size" = "Taille du fichier";
+
+/* CollectionManagerView.swift */
+"settings.collections.title" = "Collections";
+"settings.collections.singular" = "Collection";
+
+/* CollectionSourcePickers.swift */
+"settings.source.collection" = "Collection";
+"settings.source.search" = "Recherche";
+
+/* CollectionFolderEditorView.swift */
+"settings.folder.series" = "Séries";
+"settings.folder.movies" = "Films";
+
+/* ProfilesSettingsContent.swift */
+"settings.profiles.title" = "Profils";
+"settings.profiles.sources" = "Sources";
+
+/* AddonConfiguratorView.swift */
+"settings.addon_config.add_addon" = "ajouter une extension";
+
+/* SettingsControls.swift */
+"settings.common.device_language" = "Langue de l’appareil";
+"settings.common.media_default" = "Réglage du média";
+"settings.common.none" = "Aucun";

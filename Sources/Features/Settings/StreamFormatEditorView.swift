@@ -28,7 +28,7 @@ struct StreamFormatEditorView: View {
         NuvioScreenBackground {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
-                    Text("Stream format")
+                    Text(L10n.text("settings.format_editor.title", fallback: "Stream format"))
                         .nuvioText(NuvioTextStyles.display)
                         .foregroundStyle(colors.textPrimary)
 
@@ -44,7 +44,7 @@ struct StreamFormatEditorView: View {
     }
 
     private var editorCard: some View {
-        SettingsCard(title: "Edit on a phone") {
+        SettingsCard(title: L10n.text("settings.format_editor.edit_on_phone", fallback: "Edit on a phone")) {
                 VStack(alignment: .leading, spacing: NuvioTheme.spacing.lg) {
                     Text(instructions)
                         .nuvioText(NuvioTextStyles.bodyCompact)
@@ -59,7 +59,7 @@ struct StreamFormatEditorView: View {
                         HStack(alignment: .top, spacing: NuvioTheme.spacing.xl) {
                             qrCode(address)
                             VStack(alignment: .leading, spacing: NuvioTheme.spacing.xs) {
-                                Text("Or type this in a browser")
+                                Text(L10n.text("settings.format_editor.or_type", fallback: "Or type this in a browser"))
                                     .nuvioText(NuvioTextStyles.metadata)
                                     .foregroundStyle(colors.textTertiary)
                                 Text(address)
@@ -69,7 +69,7 @@ struct StreamFormatEditorView: View {
                             }
                         }
                     } else {
-                        Text("Starting…")
+                        Text(L10n.text("settings.format_editor.starting", fallback: "Starting…"))
                             .nuvioText(NuvioTextStyles.bodyCompact)
                             .foregroundStyle(colors.textTertiary)
                     }
@@ -80,7 +80,7 @@ struct StreamFormatEditorView: View {
     }
 
     private var previewCard: some View {
-        SettingsCard(title: "Preview") {
+        SettingsCard(title: L10n.text("settings.format_editor.preview", fallback: "Preview")) {
                 VStack(alignment: .leading, spacing: NuvioTheme.spacing.sm) {
                     Text(preview.name.nilIfBlank ?? "—")
                         .nuvioText(NuvioTextStyles.cardTitle)

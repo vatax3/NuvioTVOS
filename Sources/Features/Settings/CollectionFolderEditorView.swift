@@ -49,69 +49,69 @@ struct CollectionFolderEditorView: View {
     }
 
     var body: some View {
-        SettingsSheet(title: folder?.title ?? "Folder") {
+        SettingsSheet(title: folder?.title ?? L10n.text("settings.folder.title", fallback: "Folder")) {
             if let folder {
-                SettingsCard(title: "Details") {
-                    SettingsTextFieldRow(title: "Name", text: text(\.title))
+                SettingsCard(title: L10n.text("settings.folder.details", fallback: "Details")) {
+                    SettingsTextFieldRow(title: L10n.text("settings.folder.name", fallback: "Name"), text: text(\.title))
                     SettingsTextFieldRow(
-                        title: "Cover emoji",
-                        subtitle: "Shown when there is no cover image",
+                        title: L10n.text("settings.folder.cover_emoji", fallback: "Cover emoji"),
+                        subtitle: L10n.text("settings.folder.cover_emoji_sub", fallback: "Shown when there is no cover image"),
                         placeholder: "🎬",
                         text: optionalText(\.coverEmoji)
                     )
-                    SettingsOptionRow(title: "Tile shape", selection: shape)
-                    SettingsToggle(title: "Hide the title on the tile", isOn: flag(\.hideTitle))
+                    SettingsOptionRow(title: L10n.text("settings.folder.tile_shape", fallback: "Tile shape"), selection: shape)
+                    SettingsToggle(title: L10n.text("settings.folder.hide_title", fallback: "Hide the title on the tile"), isOn: flag(\.hideTitle))
                 }
 
                 SettingsCard(
-                    title: "Sources",
-                    footnote: "Everything these return shows up in this folder."
+                    title: L10n.text("settings.folder.sources", fallback: "Sources"),
+                    footnote: L10n.text("settings.folder.sources_footnote", fallback: "Everything these return shows up in this folder.")
                 ) {
                     ForEach(folder.sources) { source in
                         SettingsRow(
                             title: describe(source),
                             subtitle: providerName(source),
                             systemImage: icon(source),
-                            trailing: { SettingsValueLabel(value: "Remove") },
+                            trailing: { SettingsValueLabel(value: L10n.text("settings.folder.remove", fallback: "Remove")) },
                             action: {
                                 collections.removeSource(source, fromFolder: folderId, in: collectionId)
                             }
                         )
                     }
-                    SettingsRow(title: "Add an addon catalog", systemImage: "square.grid.2x2", trailing: { EmptyView() }) {
+                    SettingsRow(title: L10n.text("settings.folder.add_catalog", fallback: "Add an addon catalog"), systemImage: "square.grid.2x2", trailing: { EmptyView() }) {
                         addingSource = .addon
                     }
-                    SettingsRow(title: "Add a TMDB query", systemImage: "magnifyingglass", trailing: { EmptyView() }) {
+                    SettingsRow(title: L10n.text("settings.folder.add_tmdb", fallback: "Add a TMDB query"), systemImage: "magnifyingglass", trailing: { EmptyView() }) {
                         addingSource = .tmdb
                     }
-                    SettingsRow(title: "Add a Trakt list", systemImage: "list.bullet", trailing: { EmptyView() }) {
+                    SettingsRow(title: L10n.text("settings.folder.add_trakt", fallback: "Add a Trakt list"), systemImage: "list.bullet", trailing: { EmptyView() }) {
                         addingSource = .trakt
                     }
                 }
 
                 SettingsCard(
-                    title: "Artwork",
+                    title: L10n.text("settings.folder.artwork", fallback: "Artwork"),
                     footnote: """
                     Optional. The cover is the tile; the backdrop and logo are the header of the \
                     folder's own screen.
                     """
                 ) {
-                    SettingsTextFieldRow(title: "Cover image URL", text: optionalText(\.coverImageUrl))
-                    SettingsTextFieldRow(title: "Backdrop URL", text: optionalText(\.heroBackdropUrl))
-                    SettingsTextFieldRow(title: "Title logo URL", text: optionalText(\.titleLogoUrl))
+                    SettingsTextFieldRow(title: L10n.text("settings.folder.cover_url", fallback: "Cover image URL"), text: optionalText(\.coverImageUrl))
+                    SettingsTextFieldRow(title: L10n.text("settings.folder.backdrop_url", fallback: "Backdrop URL"), text: optionalText(\.heroBackdropUrl))
+                    SettingsTextFieldRow(title: L10n.text("settings.folder.logo_url", fallback: "Title logo URL"), text: optionalText(\.titleLogoUrl))
                 }
 
-                SettingsCard(title: "Order") {
-                    SettingsRow(title: "Move up", systemImage: "arrow.up", trailing: { EmptyView() }) {
+                SettingsCard(title: L10n.text("settings.folder.order", fallback: "Order")) {
+                    SettingsRow(title: L10n.text("settings.folder.move_up", fallback: "Move up"), systemImage: "arrow.up", trailing: { EmptyView() }) {
                         collections.moveFolder(folderId, in: collectionId, by: -1)
                     }
-                    SettingsRow(title: "Move down", systemImage: "arrow.down", trailing: { EmptyView() }) {
+                    SettingsRow(title: L10n.text("settings.folder.move_down", fallback: "Move down"), systemImage: "arrow.down", trailing: { EmptyView() }) {
                         collections.moveFolder(folderId, in: collectionId, by: 1)
                     }
                 }
 
                 SettingsCard(title: nil) {
-                    SettingsRow(title: "Delete folder", systemImage: "trash", trailing: { EmptyView() }) {
+                    SettingsRow(title: L10n.text("settings.folder.delete", fallback: "Delete folder"), systemImage: "trash", trailing: { EmptyView() }) {
                         isConfirmingDelete = true
                     }
                 }
@@ -127,12 +127,12 @@ struct CollectionFolderEditorView: View {
                 TraktSourcePickerView(collectionId: collectionId, folderId: folderId)
             }
         }
-        .alert("Delete this folder?", isPresented: $isConfirmingDelete) {
-            Button("Delete", role: .destructive) {
+        .alert(L10n.text("settings.folder.delete_title", fallback: "Delete this folder?"), isPresented: $isConfirmingDelete) {
+            Button(L10n.text("settings.folder.delete_confirm", fallback: "Delete"), role: .destructive) {
                 collections.deleteFolder(folderId, from: collectionId)
                 dismiss()
             }
-            Button("Keep", role: .cancel) {}
+            Button(L10n.text("settings.folder.keep", fallback: "Keep"), role: .cancel) {}
         }
     }
 
@@ -158,9 +158,9 @@ struct CollectionFolderEditorView: View {
         case .addon(let addon):
             return addons.enabledAddons.first { $0.id == addon.addonId }?.displayName ?? addon.addonId
         case .tmdb(let tmdb):
-            return "TMDB · \(tmdb.mediaType == .tv ? "Series" : "Movies")"
+            return "TMDB · \(tmdb.mediaType == .tv ? L10n.text("settings.folder.series", fallback: "Series") : L10n.text("settings.folder.movies", fallback: "Movies"))"
         case .trakt(let trakt):
-            return "Trakt · \(trakt.mediaType == .tv ? "Series" : "Movies")"
+            return "Trakt · \(trakt.mediaType == .tv ? L10n.text("settings.folder.series", fallback: "Series") : L10n.text("settings.folder.movies", fallback: "Movies"))"
         }
     }
 
@@ -210,9 +210,9 @@ struct CollectionFolderEditorView: View {
 extension PosterShape: SettingsOption {
     var displayName: String {
         switch self {
-        case .poster: return "Poster"
-        case .landscape: return "Landscape"
-        case .square: return "Square"
+        case .poster: return L10n.text("settings.folder.shape_poster", fallback: "Poster")
+        case .landscape: return L10n.text("settings.folder.shape_landscape", fallback: "Landscape")
+        case .square: return L10n.text("settings.folder.shape_square", fallback: "Square")
         }
     }
 }

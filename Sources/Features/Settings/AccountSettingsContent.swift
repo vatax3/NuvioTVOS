@@ -441,7 +441,7 @@ struct DeviceLinkingCard: View {
                 systemImage: "arrow.clockwise",
                 action: { Task { await linking.fetchExistingCode(pin: pin) } }
             )
-            SettingsRow(title: "Cancel", systemImage: "xmark", action: { finish() })
+            SettingsRow(title: L10n.text("settings.account.cancel", fallback: "Cancel"), systemImage: "xmark", action: { finish() })
         }
     }
 
@@ -458,7 +458,7 @@ struct DeviceLinkingCard: View {
             SettingsRow(title: L10n.text("settings.account.done", fallback: "Done"), systemImage: "checkmark", action: { finish() })
         } else {
             SettingsTextFieldRow(
-                title: "Code",
+                title: L10n.text("settings.account.code", fallback: "Code"),
                 placeholder: L10n.text("settings.account.from_other_device", fallback: "From the other device"),
                 text: $code
             )
@@ -483,7 +483,7 @@ struct DeviceLinkingCard: View {
                     }
                 }
             )
-            SettingsRow(title: "Cancel", systemImage: "xmark", action: { finish() })
+            SettingsRow(title: L10n.text("settings.account.cancel", fallback: "Cancel"), systemImage: "xmark", action: { finish() })
         }
     }
 

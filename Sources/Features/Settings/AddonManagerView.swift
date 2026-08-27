@@ -14,18 +14,18 @@ struct AddonManagerView: View {
     /// Well-known community addons, offered as one-press installs because typing a URL on a
     /// remote is painful. Same list the Android onboarding suggests.
     private static let suggestions: [(name: String, detail: String, url: String)] = [
-        ("Cinemeta", "Official Stremio catalog and metadata", "https://v3-cinemeta.strem.io"),
-        ("OpenSubtitles v3", "Subtitles for movies and series", "https://opensubtitles-v3.strem.io"),
-        ("Torrentio", "Torrent sources (configure for debrid)", "https://torrentio.strem.fun"),
-        ("Public Domain Movies", "Freely licensed classics", "https://public-domain-movies.now.sh"),
-        ("Anime Kitsu", "Anime catalog and metadata", "https://anime-kitsu.strem.fun")
+        ("Cinemeta", L10n.text("settings.addons.cinemeta_sub", fallback: "Official Stremio catalog and metadata"), "https://v3-cinemeta.strem.io"),
+        ("OpenSubtitles v3", L10n.text("settings.addons.opensubtitles_sub", fallback: "Subtitles for movies and series"), "https://opensubtitles-v3.strem.io"),
+        ("Torrentio", L10n.text("settings.addons.torrentio_sub", fallback: "Torrent sources (configure for debrid)"), "https://torrentio.strem.fun"),
+        ("Public Domain Movies", L10n.text("settings.addons.publicdomain_sub", fallback: "Freely licensed classics"), "https://public-domain-movies.now.sh"),
+        ("Anime Kitsu", L10n.text("settings.addons.kitsu_sub", fallback: "Anime catalog and metadata"), "https://anime-kitsu.strem.fun")
     ]
 
     var body: some View {
         NuvioScreenBackground {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
-                    Text("Addon Manager")
+                    Text(L10n.text("settings.addons.title", fallback: "Addon Manager"))
                         .nuvioText(NuvioTextStyles.display)
                         .foregroundStyle(colors.textPrimary)
 
@@ -52,8 +52,8 @@ struct AddonManagerView: View {
 
     private var installCard: some View {
         SettingsCard(
-            title: "Install from URL",
-            footnote: "Paste a Stremio manifest URL. The trailing /manifest.json is optional."
+            title: L10n.text("settings.addons.install_from_url", fallback: "Install from URL"),
+            footnote: L10n.text("settings.addons.install_footnote", fallback: "Paste a Stremio manifest URL. The trailing /manifest.json is optional.")
         ) {
             HStack(spacing: NuvioTheme.spacing.md) {
                 TextField("https://…", text: $urlInput)
@@ -67,7 +67,7 @@ struct AddonManagerView: View {
                     }
 
                 Button(action: { Task { await install(urlInput) } }) {
-                    Text(isInstalling ? "Installing…" : "Install")
+                    Text(isInstalling ? L10n.text("settings.addons.installing", fallback: "Installing…") : L10n.text("settings.addons.install", fallback: "Install"))
                         .nuvioText(NuvioTextStyles.button)
                         .padding(.horizontal, NuvioTheme.spacing.xl)
                         .frame(height: NuvioTheme.components.buttonHeight)
@@ -85,7 +85,7 @@ struct AddonManagerView: View {
     private var installedCard: some View {
         SettingsCard(title: "Installed (\(addons.installed.count))") {
             if addons.installed.isEmpty {
-                Text("No addons installed.")
+                Text(L10n.text("settings.addons.none_installed", fallback: "No addons installed."))
                     .nuvioText(NuvioTextStyles.bodyCompact)
                     .foregroundStyle(colors.textSecondary)
                     .padding(NuvioTheme.spacing.lg)
@@ -110,7 +110,7 @@ struct AddonManagerView: View {
     // MARK: Suggestions
 
     private var suggestionsCard: some View {
-        SettingsCard(title: "Popular addons") {
+        SettingsCard(title: L10n.text("settings.addons.popular", fallback: "Popular addons")) {
             ForEach(Self.suggestions, id: \.url) { suggestion in
                 let installed = addons.installed.contains {
                     $0.baseUrl.caseInsensitiveCompare(StremioURL.canonicalize(suggestion.url)) == .orderedSame
@@ -120,7 +120,7 @@ struct AddonManagerView: View {
                     subtitle: suggestion.detail,
                     systemImage: "shippingbox.fill",
                     trailing: {
-                        Text(installed ? "Installed" : "Install")
+                        Text(installed ? L10n.text("settings.addons.installed", fallback: "Installed") : L10n.text("settings.addons.install", fallback: "Install"))
                             .nuvioText(NuvioTextStyles.metadata)
                             .foregroundStyle(installed ? colors.success : colors.secondary)
                     },
@@ -224,13 +224,13 @@ private struct AddonRow: View {
         .opacity(record.enabled ? 1 : 0.6)
         .sheet(isPresented: $isRenaming) {
             RenameSheet(
-                heading: "Rename addon",
-                explanation: "Shown wherever this addon is named — rails, stream groups, settings.",
-                placeholder: "Addon name",
+                heading: L10n.text("settings.addons.rename", fallback: "Rename addon"),
+                explanation: L10n.text("settings.addons.rename_footnote", fallback: "Shown wherever this addon is named — rails, stream groups, settings."),
+                placeholder: L10n.text("settings.addons.name_hint", fallback: "Addon name"),
                 draft: $draftName,
                 onSave: {
                     let trimmed = draftName.trimmingCharacters(in: .whitespacesAndNewlines)
-                    // The manifest's own name typed back means "no override", so refetching the
+                    // The manifest's own name typed back means L10n.text("settings.addons.no_override", fallback: "no override"), so refetching the
                     // manifest keeps taking effect.
                     onRename(trimmed.isEmpty || trimmed == manifest?.displayName ? nil : trimmed)
                     isRenaming = false
@@ -303,12 +303,12 @@ struct CatalogOrderView: View {
         NuvioScreenBackground {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
-                    Text("Catalog Order")
+                    Text(L10n.text("settings.addons.catalog_order", fallback: "Catalog Order"))
                         .nuvioText(NuvioTextStyles.display)
                         .foregroundStyle(colors.textPrimary)
 
                     SettingsCard(
-                        title: "Home rows",
+                        title: L10n.text("settings.addons.home_rows", fallback: "Home rows"),
                         footnote: """
                         Collections sit in this list alongside catalogs, so one can go anywhere \
                         between them. Disabled catalogs stay available in Discover. A collection \
@@ -318,7 +318,7 @@ struct CatalogOrderView: View {
                     ) {
                         let entries = rows
                         if entries.isEmpty {
-                            Text("Nothing to order yet — install an addon that provides a catalog.")
+                            Text(L10n.text("settings.addons.nothing_to_order", fallback: "Nothing to order yet — install an addon that provides a catalog."))
                                 .nuvioText(NuvioTextStyles.bodyCompact)
                                 .foregroundStyle(colors.textSecondary)
                                 .padding(NuvioTheme.spacing.lg)
@@ -348,7 +348,7 @@ struct CatalogOrderView: View {
     private func label(for entry: CatalogOrderEntry) -> (title: String, subtitle: String) {
         if let collectionId = entry.collectionId {
             guard let collection = collections.collection(id: collectionId) else {
-                return ("Collection", "No longer exists")
+                return ("Collection", L10n.text("settings.addons.no_longer_exists", fallback: "No longer exists"))
             }
             let count = collection.folders.count
             return (collection.title, "Collection · \(count) folder\(count == 1 ? "" : "s")")
@@ -453,9 +453,9 @@ private struct CatalogOrderRow: View {
         .opacity(entry.enabled ? 1 : 0.6)
         .sheet(isPresented: $isRenaming) {
             RenameSheet(
-                heading: "Rename rail",
+                heading: L10n.text("settings.addons.rename_rail", fallback: "Rename rail"),
                 explanation: "Shown instead of “\(label.title)” on Home.",
-                placeholder: "Rail title",
+                placeholder: L10n.text("settings.addons.rail_title", fallback: "Rail title"),
                 draft: $draftTitle,
                 onSave: saveTitle,
                 onReset: resetTitle
@@ -476,7 +476,7 @@ private struct CatalogOrderRow: View {
     private func saveTitle() {
         var titles = settings.layout.customCatalogTitles
         let trimmed = draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        // An empty field, or the original name typed back, means "no override".
+        // An empty field, or the original name typed back, means L10n.text("settings.addons.no_override", fallback: "no override").
         if trimmed.isEmpty || trimmed == label.title {
             titles.removeValue(forKey: presentationKey)
         } else {
@@ -528,7 +528,7 @@ private struct RenameSheet: View {
 
             HStack(spacing: NuvioTheme.spacing.md) {
                 Button(action: onSave) {
-                    Text("Save")
+                    Text(L10n.text("settings.addons.save", fallback: "Save"))
                         .nuvioText(NuvioTextStyles.button)
                         .padding(.horizontal, NuvioTheme.spacing.xl)
                         .frame(height: NuvioTheme.components.buttonHeight)
@@ -536,7 +536,7 @@ private struct RenameSheet: View {
                 .buttonStyle(NuvioPillButtonStyle(emphasis: .primary))
 
                 Button(action: onReset) {
-                    Text("Use original")
+                    Text(L10n.text("settings.addons.use_original", fallback: "Use original"))
                         .nuvioText(NuvioTextStyles.button)
                         .padding(.horizontal, NuvioTheme.spacing.xl)
                         .frame(height: NuvioTheme.components.buttonHeight)

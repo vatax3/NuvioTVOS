@@ -20,7 +20,7 @@ struct StreamBadgeRulesView: View {
         NuvioScreenBackground {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
-                    Text("Badge rules")
+                    Text(L10n.text("settings.badges.title", fallback: "Badge rules"))
                         .nuvioText(NuvioTextStyles.display)
                         .foregroundStyle(colors.textPrimary)
 
@@ -36,7 +36,7 @@ struct StreamBadgeRulesView: View {
     }
 
     private var editorCard: some View {
-        SettingsCard(title: "Manage on a phone") {
+        SettingsCard(title: L10n.text("settings.badges.manage_on_phone", fallback: "Manage on a phone")) {
             VStack(alignment: .leading, spacing: NuvioTheme.spacing.lg) {
                 Text(instructions)
                     .nuvioText(NuvioTextStyles.bodyCompact)
@@ -51,7 +51,7 @@ struct StreamBadgeRulesView: View {
                     HStack(alignment: .top, spacing: NuvioTheme.spacing.xl) {
                         qrCode(address)
                         VStack(alignment: .leading, spacing: NuvioTheme.spacing.xs) {
-                            Text("Or type this in a browser")
+                            Text(L10n.text("settings.badges.or_type", fallback: "Or type this in a browser"))
                                 .nuvioText(NuvioTextStyles.metadata)
                                 .foregroundStyle(colors.textTertiary)
                             Text(address)
@@ -61,7 +61,7 @@ struct StreamBadgeRulesView: View {
                         }
                     }
                 } else {
-                    Text("Starting…")
+                    Text(L10n.text("settings.badges.starting", fallback: "Starting…"))
                         .nuvioText(NuvioTextStyles.bodyCompact)
                         .foregroundStyle(colors.textTertiary)
                 }
@@ -77,7 +77,7 @@ struct StreamBadgeRulesView: View {
     }
 
     private var packsCard: some View {
-        SettingsCard(title: "Imported") {
+        SettingsCard(title: L10n.text("settings.badges.imported", fallback: "Imported")) {
             VStack(alignment: .leading, spacing: NuvioTheme.spacing.md) {
                 if rules.hasImport {
                     ForEach(rules.imports) { entry in
@@ -93,7 +93,7 @@ struct StreamBadgeRulesView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 } else {
-                    Text("No packs yet. Streams show the app's own badges until you add one.")
+                    Text(L10n.text("settings.badges.none_yet", fallback: "No packs yet. Streams show the app's own badges until you add one."))
                         .nuvioText(NuvioTextStyles.bodyCompact)
                         .foregroundStyle(colors.textTertiary)
                 }
@@ -149,7 +149,7 @@ struct StreamBadgeRulesView: View {
         switch fields["action"] {
         case "import", "refresh":
             guard !url.isEmpty else {
-                notice = "Enter a link to a badge file."
+                notice = L10n.text("settings.badges.enter_link", fallback: "Enter a link to a badge file.")
                 return
             }
             do {
@@ -170,10 +170,10 @@ struct StreamBadgeRulesView: View {
             }
         case "activate":
             settings.streamBadges.rules = settings.streamBadges.rules.settingActive(url)
-            notice = "Applied that pack."
+            notice = L10n.text("settings.badges.applied", fallback: "Applied that pack.")
         case "remove":
             settings.streamBadges.rules = settings.streamBadges.rules.removing(url)
-            notice = "Removed that pack."
+            notice = L10n.text("settings.badges.removed", fallback: "Removed that pack.")
         default:
             break
         }

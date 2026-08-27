@@ -168,7 +168,7 @@ struct DebridSettingsContent: View {
         SettingsRow(
             title: deviceAuth?.provider == provider ? "Waiting for approval…" : L10n.text("settings.debrid.sign_in_code", fallback: "Sign in with a code"),
             subtitle: deviceAuth?.provider == provider
-                ? "Cancel"
+                ? L10n.text("settings.debrid.cancel", fallback: "Cancel")
                 : L10n.text("settings.debrid.approve_on_phone", fallback: "Approve on your phone — nothing to type here"),
             systemImage: "qrcode",
             action: {
@@ -326,7 +326,7 @@ struct DebridSettingsContent: View {
                 )
             }
 
-            SettingsCard(title: "Audio") {
+            SettingsCard(title: L10n.text("settings.debrid.audio", fallback: "Audio")) {
                 SettingsMultiSelectRow(
                     title: L10n.text("settings.debrid.required_formats", fallback: "Required formats"),
                     options: DebridStreamAudioTag.defaultOrder,
@@ -362,7 +362,7 @@ struct DebridSettingsContent: View {
                 )
             }
 
-            SettingsCard(title: "Languages") {
+            SettingsCard(title: L10n.text("settings.debrid.languages", fallback: "Languages")) {
                 SettingsMultiSelectRow(
                     title: L10n.text("settings.debrid.required", fallback: "Required"),
                     selection: preferencesBinding(\.requiredLanguages)
@@ -452,7 +452,7 @@ struct DebridSettingsContent: View {
                 )
             }
 
-            SettingsCard(title: "File size") {
+            SettingsCard(title: L10n.text("settings.debrid.file_size", fallback: "File size")) {
                 SettingsStepperRow(
                     title: L10n.text("settings.debrid.min_size", fallback: "Minimum size"),
                     value: preferencesBinding(\.sizeMinGb),

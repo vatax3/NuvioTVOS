@@ -12,7 +12,7 @@ struct ProfilesSettingsContent: View {
     var body: some View {
         Group {
             SettingsCard(
-                title: "Profiles",
+                title: L10n.text("settings.profiles.title", fallback: "Profiles"),
                 footnote: L10n.text("settings.profiles.footnote", fallback: "Each profile keeps its own library, watch progress, addons and settings.")
             ) {
                 ForEach(profiles.profiles) { profile in
@@ -116,7 +116,7 @@ struct ProfileEditorView: View {
 
                     if profile?.id != ProfileScope.primaryProfileId {
                         SettingsCard(
-                            title: "Sources",
+                            title: L10n.text("settings.profiles.sources", fallback: "Sources"),
                             footnote: """
                             Share the primary profile's addons and plugins instead of keeping \
                             a separate set. The account carries this choice, so it follows the \

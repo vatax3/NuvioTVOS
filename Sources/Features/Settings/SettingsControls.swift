@@ -384,7 +384,7 @@ struct SettingsLanguageRow: View {
     let title: String
     var subtitle: String?
     var systemImage: String?
-    /// Entries that are not languages — "None", "Media default", "Device language".
+    /// Entries that are not languages — L10n.text("settings.common.none", fallback: "None"), L10n.text("settings.common.media_default", fallback: "Media default"), L10n.text("settings.common.device_language", fallback: "Device language").
     var specials: [Choice] = []
     @Binding var code: String
 

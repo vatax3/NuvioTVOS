@@ -17,7 +17,7 @@ struct AddonCatalogPickerView: View {
     @State private var chosen: (addon: Addon, catalog: CatalogDescriptor)?
 
     var body: some View {
-        SettingsSheet(title: chosen == nil ? "Choose a catalog" : "Choose a genre") {
+        SettingsSheet(title: chosen == nil ? L10n.text("settings.source.choose_catalog", fallback: "Choose a catalog") : L10n.text("settings.source.choose_genre", fallback: "Choose a genre")) {
             if let chosen {
                 genreCard(for: chosen)
             } else {
@@ -45,9 +45,9 @@ struct AddonCatalogPickerView: View {
     private func genreCard(for entry: (addon: Addon, catalog: CatalogDescriptor)) -> some View {
         SettingsCard(
             title: entry.catalog.name,
-            footnote: "A genre narrows the catalog. Leave it out to take the whole thing."
+            footnote: L10n.text("settings.source.genre_footnote", fallback: "A genre narrows the catalog. Leave it out to take the whole thing.")
         ) {
-            SettingsRow(title: "Whole catalog", systemImage: "tray.full", trailing: { EmptyView() }) {
+            SettingsRow(title: L10n.text("settings.source.whole_catalog", fallback: "Whole catalog"), systemImage: "tray.full", trailing: { EmptyView() }) {
                 add(entry: entry, genre: nil)
             }
             ForEach(entry.catalog.genreOptions, id: \.self) { genre in
@@ -106,26 +106,26 @@ struct TmdbSourcePickerView: View {
     private var needsId: Bool { kind != .discover }
 
     var body: some View {
-        SettingsSheet(title: "TMDB source") {
+        SettingsSheet(title: L10n.text("settings.source.tmdb_source", fallback: "TMDB source")) {
             if settings.tmdb.apiKey.isEmpty {
-                SettingsCard(title: nil, footnote: "Add a TMDB API key in Integrations first — without one this source returns nothing.") {
+                SettingsCard(title: nil, footnote: L10n.text("settings.source.tmdb_footnote", fallback: "Add a TMDB API key in Integrations first — without one this source returns nothing.")) {
                     EmptyView()
                 }
             }
 
-            SettingsCard(title: "What to ask for") {
-                SettingsOptionRow(title: "Kind", selection: $kind)
-                SettingsOptionRow(title: "Media", selection: $mediaType)
-                SettingsOptionRow(title: "Sort", selection: $sort)
+            SettingsCard(title: L10n.text("settings.source.what_to_ask", fallback: "What to ask for")) {
+                SettingsOptionRow(title: L10n.text("settings.source.kind", fallback: "Kind"), selection: $kind)
+                SettingsOptionRow(title: L10n.text("settings.source.media", fallback: "Media"), selection: $mediaType)
+                SettingsOptionRow(title: L10n.text("settings.source.sort", fallback: "Sort"), selection: $sort)
                 SettingsTextFieldRow(
-                    title: "Name",
-                    subtitle: "What this source is called in the folder",
-                    placeholder: "Highest rated",
+                    title: L10n.text("settings.source.name", fallback: "Name"),
+                    subtitle: L10n.text("settings.source.name_sub", fallback: "What this source is called in the folder"),
+                    placeholder: L10n.text("settings.source.highest_rated", fallback: "Highest rated"),
                     text: $title
                 )
                 if needsId {
                     SettingsTextFieldRow(
-                        title: "TMDB id",
+                        title: L10n.text("settings.source.tmdb_id", fallback: "TMDB id"),
                         subtitle: idHint,
                         placeholder: "12345",
                         text: $tmdbId
@@ -152,18 +152,18 @@ struct TmdbSourcePickerView: View {
             }
 
             SettingsCard(title: nil) {
-                SettingsRow(title: "Add source", systemImage: "plus", trailing: { EmptyView() }, action: add)
+                SettingsRow(title: L10n.text("settings.source.add_source", fallback: "Add source"), systemImage: "plus", trailing: { EmptyView() }, action: add)
             }
         }
     }
 
     private var idHint: String {
         switch kind {
-        case .list: return "The id of a TMDB list"
-        case .collection: return "A TMDB collection, e.g. a film series"
-        case .company: return "A studio id"
-        case .network: return "A network id"
-        case .person, .director: return "A person id"
+        case .list: return L10n.text("settings.source.hint_list", fallback: "The id of a TMDB list")
+        case .collection: return L10n.text("settings.source.hint_collection", fallback: "A TMDB collection, e.g. a film series")
+        case .company: return L10n.text("settings.source.hint_studio", fallback: "A studio id")
+        case .network: return L10n.text("settings.source.hint_network", fallback: "A network id")
+        case .person, .director: return L10n.text("settings.source.hint_person", fallback: "A person id")
         case .discover: return ""
         }
     }
@@ -206,26 +206,26 @@ struct TraktSourcePickerView: View {
     @State private var order: TraktSortHow = .asc
 
     var body: some View {
-        SettingsSheet(title: "Trakt list") {
+        SettingsSheet(title: L10n.text("settings.source.trakt_list", fallback: "Trakt list")) {
             if settings.tracking.traktClientId.isEmpty {
-                SettingsCard(title: nil, footnote: "Connect Trakt in Integrations first — without a client id this source returns nothing.") {
+                SettingsCard(title: nil, footnote: L10n.text("settings.source.trakt_footnote", fallback: "Connect Trakt in Integrations first — without a client id this source returns nothing.")) {
                     EmptyView()
                 }
             }
 
             SettingsCard(
-                title: "List",
-                footnote: "The number at the end of the list's URL on trakt.tv."
+                title: L10n.text("settings.source.list", fallback: "List"),
+                footnote: L10n.text("settings.source.list_footnote", fallback: "The number at the end of the list's URL on trakt.tv.")
             ) {
-                SettingsTextFieldRow(title: "Name", placeholder: "Best of 2024", text: $title)
-                SettingsTextFieldRow(title: "List id", placeholder: "1234567", text: $listId)
-                SettingsOptionRow(title: "Media", selection: $mediaType)
-                SettingsOptionRow(title: "Sort", selection: $sort)
-                SettingsOptionRow(title: "Direction", selection: $order)
+                SettingsTextFieldRow(title: L10n.text("settings.source.name", fallback: "Name"), placeholder: L10n.text("settings.source.list_hint", fallback: "Best of 2024"), text: $title)
+                SettingsTextFieldRow(title: L10n.text("settings.source.list_id", fallback: "List id"), placeholder: "1234567", text: $listId)
+                SettingsOptionRow(title: L10n.text("settings.source.media", fallback: "Media"), selection: $mediaType)
+                SettingsOptionRow(title: L10n.text("settings.source.sort", fallback: "Sort"), selection: $sort)
+                SettingsOptionRow(title: L10n.text("settings.source.direction", fallback: "Direction"), selection: $order)
             }
 
             SettingsCard(title: nil) {
-                SettingsRow(title: "Add source", systemImage: "plus", trailing: { EmptyView() }, action: add)
+                SettingsRow(title: L10n.text("settings.source.add_source", fallback: "Add source"), systemImage: "plus", trailing: { EmptyView() }, action: add)
             }
         }
     }
@@ -234,7 +234,7 @@ struct TraktSourcePickerView: View {
         guard let id = Int(listId) else { return }
         collections.addSource(
             .trakt(TraktCollectionSource(
-                title: title.nilIfBlank ?? "Trakt list",
+                title: title.nilIfBlank ?? L10n.text("settings.source.trakt_list", fallback: "Trakt list"),
                 traktListId: id,
                 mediaType: mediaType,
                 sortBy: sort.rawValue,
@@ -265,17 +265,17 @@ struct CollectionTransferView: View {
     @State private var status: String?
 
     var body: some View {
-        SettingsSheet(title: mode == .importing ? "Import collections" : "Export collections") {
+        SettingsSheet(title: mode == .importing ? L10n.text("settings.source.import", fallback: "Import collections") : L10n.text("settings.source.export", fallback: "Export collections")) {
             SettingsCard(
                 title: nil,
                 footnote: mode == .importing
-                    ? "Paste the JSON exported from another Nuvio app. This replaces every collection on this device."
-                    : "Copy this into another Nuvio app's import screen."
+                    ? L10n.text("settings.source.import_footnote", fallback: "Paste the JSON exported from another Nuvio app. This replaces every collection on this device.")
+                    : L10n.text("settings.source.export_footnote", fallback: "Copy this into another Nuvio app's import screen.")
             ) {
                 SettingsTextFieldRow(
                     title: "JSON",
                     text: $text,
-                    trailingAction: mode == .importing ? (label: "Import", action: performImport) : nil
+                    trailingAction: mode == .importing ? (label: L10n.text("settings.source.import_action", fallback: "Import"), action: performImport) : nil
                 )
                 if let status {
                     SettingsRow(title: status, trailing: { EmptyView() }, action: {})
@@ -292,7 +292,7 @@ struct CollectionTransferView: View {
         do {
             let incoming = try CollectionStore.decode(text)
             guard !incoming.isEmpty else {
-                status = "That JSON held no collections."
+                status = L10n.text("settings.source.import_empty", fallback: "That JSON held no collections.")
                 return
             }
             collections.replaceAll(with: incoming)
@@ -308,30 +308,30 @@ struct CollectionTransferView: View {
 extension TmdbSourceKind: SettingsOption {
     var displayName: String {
         switch self {
-        case .list: return "List"
-        case .collection: return "Collection"
-        case .company: return "Studio"
-        case .network: return "Network"
-        case .discover: return "Search"
-        case .person: return "Actor"
-        case .director: return "Director"
+        case .list: return L10n.text("settings.source.list", fallback: "List")
+        case .collection: return L10n.text("settings.source.collection", fallback: "Collection")
+        case .company: return L10n.text("settings.source.studio", fallback: "Studio")
+        case .network: return L10n.text("settings.source.network", fallback: "Network")
+        case .discover: return L10n.text("settings.source.search", fallback: "Search")
+        case .person: return L10n.text("settings.source.actor", fallback: "Actor")
+        case .director: return L10n.text("settings.source.director", fallback: "Director")
         }
     }
 }
 
 extension TmdbMediaType: SettingsOption {
-    var displayName: String { self == .tv ? "Series" : "Movies" }
+    var displayName: String { self == .tv ? L10n.text("settings.source.series", fallback: "Series") : L10n.text("settings.source.movies", fallback: "Movies") }
 }
 
 extension TmdbCollectionSort: SettingsOption {
     var displayName: String {
         switch self {
-        case .original: return "As listed"
-        case .popularityDesc: return "Most popular"
-        case .voteAverageDesc: return "Highest rated"
-        case .voteCountDesc: return "Most voted"
-        case .releaseDateDesc: return "Newest"
-        case .firstAirDateDesc: return "Newest aired"
+        case .original: return L10n.text("settings.source.as_listed", fallback: "As listed")
+        case .popularityDesc: return L10n.text("settings.source.most_popular", fallback: "Most popular")
+        case .voteAverageDesc: return L10n.text("settings.source.highest_rated", fallback: "Highest rated")
+        case .voteCountDesc: return L10n.text("settings.source.most_voted", fallback: "Most voted")
+        case .releaseDateDesc: return L10n.text("settings.source.newest", fallback: "Newest")
+        case .firstAirDateDesc: return L10n.text("settings.source.newest_aired", fallback: "Newest aired")
         }
     }
 }
@@ -341,5 +341,5 @@ extension TraktListSort: SettingsOption {
 }
 
 extension TraktSortHow: SettingsOption {
-    var displayName: String { self == .asc ? "Ascending" : "Descending" }
+    var displayName: String { self == .asc ? L10n.text("settings.source.ascending", fallback: "Ascending") : L10n.text("settings.source.descending", fallback: "Descending") }
 }
