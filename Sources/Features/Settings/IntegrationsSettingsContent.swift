@@ -30,25 +30,25 @@ struct TrackingSettingsContent: View {
             ) {
                 if tracking.isTraktAuthenticated {
                     SettingsInfoRow(
-                        title: "Signed in as",
-                        value: tracking.traktUsername.nilIfBlank ?? "Trakt account",
+                        title: L10n.text("settings.integrations.signed_in_as", fallback: "Signed in as"),
+                        value: tracking.traktUsername.nilIfBlank ?? L10n.text("settings.integrations.trakt_account", fallback: "Trakt account"),
                         tint: colors.success
                     )
                     SettingsToggle(
-                        title: "Scrobble playback",
-                        subtitle: "Report progress so Trakt marks episodes watched",
+                        title: L10n.text("settings.integrations.scrobble", fallback: "Scrobble playback"),
+                        subtitle: L10n.text("settings.integrations.scrobble_sub", fallback: "Report progress so Trakt marks episodes watched"),
                         systemImage: "dot.radiowaves.up.forward",
                         isOn: $tracking.traktScrobbleEnabled
                     )
                     SettingsOptionRow(
-                        title: "Anime seasons",
+                        title: L10n.text("settings.integrations.anime_seasons", fallback: "Anime seasons"),
                         subtitle: tracking.simklAnimeIdPreference.summary,
                         systemImage: "square.stack.3d.up",
                         selection: $tracking.simklAnimeIdPreference
                     )
                     SettingsRow(
-                        title: "Sign out",
-                        subtitle: "Remove the token from this device",
+                        title: L10n.text("settings.integrations.sign_out", fallback: "Sign out"),
+                        subtitle: L10n.text("settings.integrations.sign_out_sub", fallback: "Remove the token from this device"),
                         systemImage: "rectangle.portrait.and.arrow.right",
                         action: {
                             authTask?.cancel()
@@ -59,26 +59,26 @@ struct TrackingSettingsContent: View {
                     )
                 } else {
                     SettingsTextFieldRow(
-                        title: "Client ID",
-                        placeholder: "Trakt application client id",
+                        title: L10n.text("settings.integrations.client_id", fallback: "Client ID"),
+                        placeholder: L10n.text("settings.integrations.trakt_client_id_hint", fallback: "Trakt application client id"),
                         text: $tracking.traktClientId
                     )
                     SettingsTextFieldRow(
-                        title: "Client secret",
+                        title: L10n.text("settings.integrations.client_secret", fallback: "Client secret"),
                         masked: true,
                         text: $tracking.traktClientSecret
                     )
 
                     if let deviceCode {
-                        SettingsInfoRow(title: "Go to", value: deviceCode.verificationURL, tint: colors.secondary)
-                        SettingsInfoRow(title: "Enter code", value: deviceCode.userCode, tint: colors.textPrimary)
-                        SettingsInfoRow(title: "Status", value: statusMessage ?? "Waiting for approval…")
+                        SettingsInfoRow(title: L10n.text("settings.integrations.go_to", fallback: "Go to"), value: deviceCode.verificationURL, tint: colors.secondary)
+                        SettingsInfoRow(title: L10n.text("settings.integrations.enter_code", fallback: "Enter code"), value: deviceCode.userCode, tint: colors.textPrimary)
+                        SettingsInfoRow(title: L10n.text("settings.integrations.status", fallback: "Status"), value: statusMessage ?? L10n.text("settings.integrations.waiting_approval", fallback: "Waiting for approval…"))
                     } else {
                         SettingsRow(
-                            title: "Connect Trakt",
+                            title: L10n.text("settings.integrations.connect_trakt", fallback: "Connect Trakt"),
                             subtitle: tracking.canStartTraktAuth
-                                ? "Get a pairing code for trakt.tv/activate"
-                                : "Enter a client id and secret first",
+                                ? L10n.text("settings.integrations.connect_trakt_sub", fallback: "Get a pairing code for trakt.tv/activate")
+                                : L10n.text("settings.integrations.need_id_and_secret", fallback: "Enter a client id and secret first"),
                             systemImage: "link.badge.plus",
                             action: { startAuth() }
                         )
@@ -87,7 +87,7 @@ struct TrackingSettingsContent: View {
                     }
 
                     if let statusMessage, deviceCode == nil {
-                        SettingsInfoRow(title: "Status", value: statusMessage, tint: colors.error)
+                        SettingsInfoRow(title: L10n.text("settings.integrations.status", fallback: "Status"), value: statusMessage, tint: colors.error)
                     }
                 }
             }
@@ -101,19 +101,19 @@ struct TrackingSettingsContent: View {
             ) {
                 if tracking.isSimklAuthenticated {
                     SettingsInfoRow(
-                        title: "Signed in as",
-                        value: tracking.simklUsername.nilIfBlank ?? "Simkl account",
+                        title: L10n.text("settings.integrations.signed_in_as", fallback: "Signed in as"),
+                        value: tracking.simklUsername.nilIfBlank ?? L10n.text("settings.integrations.simkl_account", fallback: "Simkl account"),
                         tint: colors.success
                     )
                     SettingsToggle(
-                        title: "Report watched",
-                        subtitle: "Synchronise playback progress and history",
+                        title: L10n.text("settings.integrations.report_watched", fallback: "Report watched"),
+                        subtitle: L10n.text("settings.integrations.report_watched_sub", fallback: "Synchronise playback progress and history"),
                         systemImage: "dot.radiowaves.up.forward",
                         isOn: $tracking.simklScrobbleEnabled
                     )
                     SettingsRow(
-                        title: "Sign out",
-                        subtitle: "Remove the token from this device",
+                        title: L10n.text("settings.integrations.sign_out", fallback: "Sign out"),
+                        subtitle: L10n.text("settings.integrations.sign_out_sub", fallback: "Remove the token from this device"),
                         systemImage: "rectangle.portrait.and.arrow.right",
                         action: {
                             simklTask?.cancel()
@@ -124,21 +124,21 @@ struct TrackingSettingsContent: View {
                     )
                 } else {
                     SettingsTextFieldRow(
-                        title: "Client ID",
-                        placeholder: "Simkl application client id",
+                        title: L10n.text("settings.integrations.client_id", fallback: "Client ID"),
+                        placeholder: L10n.text("settings.integrations.simkl_client_id_hint", fallback: "Simkl application client id"),
                         text: $tracking.simklClientId
                     )
 
                     if let simklPin {
-                        SettingsInfoRow(title: "Go to", value: simklPin.verificationURL, tint: colors.secondary)
-                        SettingsInfoRow(title: "Enter code", value: simklPin.userCode, tint: colors.textPrimary)
-                        SettingsInfoRow(title: "Status", value: simklStatus ?? "Waiting for approval…")
+                        SettingsInfoRow(title: L10n.text("settings.integrations.go_to", fallback: "Go to"), value: simklPin.verificationURL, tint: colors.secondary)
+                        SettingsInfoRow(title: L10n.text("settings.integrations.enter_code", fallback: "Enter code"), value: simklPin.userCode, tint: colors.textPrimary)
+                        SettingsInfoRow(title: L10n.text("settings.integrations.status", fallback: "Status"), value: simklStatus ?? L10n.text("settings.integrations.waiting_approval", fallback: "Waiting for approval…"))
                     } else {
                         SettingsRow(
-                            title: "Connect Simkl",
+                            title: L10n.text("settings.integrations.connect_simkl", fallback: "Connect Simkl"),
                             subtitle: tracking.canStartSimklAuth
-                                ? "Get a PIN for simkl.com/pin"
-                                : "Enter a client id first",
+                                ? L10n.text("settings.integrations.connect_simkl_sub", fallback: "Get a PIN for simkl.com/pin")
+                                : L10n.text("settings.integrations.need_id", fallback: "Enter a client id first"),
                             systemImage: "link.badge.plus",
                             action: { startSimklAuth() }
                         )
@@ -147,68 +147,68 @@ struct TrackingSettingsContent: View {
                     }
 
                     if let simklStatus, simklPin == nil {
-                        SettingsInfoRow(title: "Status", value: simklStatus, tint: colors.error)
+                        SettingsInfoRow(title: L10n.text("settings.integrations.status", fallback: "Status"), value: simklStatus, tint: colors.error)
                     }
                 }
             }
 
             SettingsCard(
-                title: "Sources",
-                footnote: "Where Nuvio reads watch state and your library from."
+                title: L10n.text("settings.integrations.sources", fallback: "Sources"),
+                footnote: L10n.text("settings.integrations.sources_footnote", fallback: "Where Nuvio reads watch state and your library from.")
             ) {
                 // Only the accounts actually signed in are offered. Listing Trakt to someone who
                 // never connected it is offering a choice that silently does nothing — and the
                 // preference can also arrive from another device through account sync, which is
                 // why the readers use `settings.effective…` rather than the raw value.
                 SettingsOptionRow(
-                    title: "Watch progress",
+                    title: L10n.text("settings.integrations.watch_progress", fallback: "Watch progress"),
                     subtitle: connectedProviders.isEmpty
-                        ? "Connect Trakt or Simkl above to read progress from an account"
+                        ? L10n.text("settings.integrations.watch_progress_sub", fallback: "Connect Trakt or Simkl above to read progress from an account")
                         : nil,
                     systemImage: "clock.arrow.circlepath",
                     options: TrackingSources.availableWatchProgressSources(connected: connectedProviders),
                     selection: $tracking.watchProgressSource
                 )
                 SettingsOptionRow(
-                    title: "Library",
+                    title: L10n.text("settings.integrations.library", fallback: "Library"),
                     systemImage: "bookmark",
                     options: TrackingSources.availableLibrarySourceModes(connected: connectedProviders),
                     selection: $tracking.librarySourceMode
                 )
                 SettingsOptionRow(
-                    title: "More like this",
+                    title: L10n.text("settings.integrations.more_like_this", fallback: "More like this"),
                     systemImage: "square.stack.3d.up",
                     selection: $tracking.moreLikeThisSource
                 )
             }
 
-            SettingsCard(title: "Continue Watching") {
+            SettingsCard(title: L10n.text("settings.integrations.continue_watching", fallback: "Continue Watching")) {
                 SettingsStepperRow(
-                    title: "Drop items older than",
+                    title: L10n.text("settings.integrations.drop_older_than", fallback: "Drop items older than"),
                     value: $tracking.continueWatchingDaysCap,
                     range: 7...365, step: 7,
                     format: { "\($0) days" }
                 )
                 SettingsToggle(
-                    title: "Next up from furthest episode",
-                    subtitle: "Rather than the earliest unwatched one",
+                    title: L10n.text("settings.integrations.next_up_furthest", fallback: "Next up from furthest episode"),
+                    subtitle: L10n.text("settings.integrations.next_up_furthest_sub", fallback: "Rather than the earliest unwatched one"),
                     isOn: $tracking.nextUpFromFurthestEpisode
                 )
                 SettingsToggle(
-                    title: "Show unaired next up",
+                    title: L10n.text("settings.integrations.show_unaired", fallback: "Show unaired next up"),
                     isOn: $tracking.showUnairedNextUp
                 )
             }
 
             SettingsCard(
-                title: "Detail page",
-                footnote: "Comments are public Trakt data — a client id is enough, signing in is not required."
+                title: L10n.text("settings.integrations.detail_page", fallback: "Detail page"),
+                footnote: L10n.text("settings.integrations.comments_footnote", fallback: "Comments are public Trakt data — a client id is enough, signing in is not required.")
             ) {
                 SettingsToggle(
-                    title: "Show Trakt comments",
+                    title: L10n.text("settings.integrations.show_comments", fallback: "Show Trakt comments"),
                     subtitle: tracking.traktClientId.isEmpty
-                        ? "Needs a Trakt client id"
-                        : "Adds a Comments action to the detail screen, with spoilers hidden until revealed",
+                        ? L10n.text("settings.integrations.needs_trakt_id", fallback: "Needs a Trakt client id")
+                        : L10n.text("settings.integrations.show_comments_sub", fallback: "Adds a Comments action to the detail screen, with spoilers hidden until revealed"),
                     systemImage: "text.bubble",
                     isOn: $tracking.showMetaComments
                 )
@@ -231,7 +231,7 @@ struct TrackingSettingsContent: View {
             do {
                 let pin = try await SimklClient.shared.startPinAuth(clientId: clientId)
                 simklPin = pin
-                simklStatus = "Waiting for approval…"
+                simklStatus = L10n.text("settings.integrations.waiting_approval", fallback: "Waiting for approval…")
 
                 let token = await SimklClient.shared.pollForToken(
                     userCode: pin.userCode,
@@ -241,7 +241,7 @@ struct TrackingSettingsContent: View {
                 )
                 guard let token else {
                     simklPin = nil
-                    simklStatus = "The PIN expired. Try again."
+                    simklStatus = L10n.text("settings.integrations.pin_expired", fallback: "The PIN expired. Try again.")
                     return
                 }
                 tracking.simklAccessToken = token
@@ -267,7 +267,7 @@ struct TrackingSettingsContent: View {
             do {
                 let code = try await TraktClient.shared.startDeviceAuth(clientId: clientId)
                 deviceCode = code
-                statusMessage = "Waiting for approval…"
+                statusMessage = L10n.text("settings.integrations.waiting_approval", fallback: "Waiting for approval…")
 
                 let tokens = await TraktClient.shared.pollForToken(
                     deviceCode: code.deviceCode,
@@ -278,7 +278,7 @@ struct TrackingSettingsContent: View {
                 )
                 guard let tokens else {
                     deviceCode = nil
-                    statusMessage = "The pairing code expired. Try again."
+                    statusMessage = L10n.text("settings.integrations.code_expired", fallback: "The pairing code expired. Try again.")
                     return
                 }
                 tracking.traktAccessToken = tokens.accessToken
@@ -315,36 +315,36 @@ struct TmdbSettingsCard: View {
                 """
             ) {
                 SettingsToggle(
-                    title: "Enable TMDB enrichment",
+                    title: L10n.text("settings.integrations.enable_tmdb", fallback: "Enable TMDB enrichment"),
                     systemImage: "photo.stack",
                     isOn: $tmdb.enabled
                 )
                 if tmdb.enabled {
                     SettingsTextFieldRow(
-                        title: "API key",
-                        placeholder: "TMDB v3 API key",
+                        title: L10n.text("settings.integrations.api_key", fallback: "API key"),
+                        placeholder: L10n.text("settings.integrations.tmdb_key_hint", fallback: "TMDB v3 API key"),
                         masked: true,
                         text: $tmdb.apiKey
                     )
                     SettingsTextFieldRow(
-                        title: "Language",
-                        subtitle: "BCP-47, e.g. en-US or fr-FR",
+                        title: L10n.text("settings.integrations.language", fallback: "Language"),
+                        subtitle: L10n.text("settings.integrations.language_hint", fallback: "BCP-47, e.g. en-US or fr-FR"),
                         placeholder: "en-US",
                         text: $tmdb.language
                     )
-                    SettingsToggle(title: "Artwork and logos", isOn: $tmdb.useArtwork)
-                    SettingsToggle(title: "Overview and rating", isOn: $tmdb.useBasicInfo)
-                    SettingsToggle(title: "Runtime and details", isOn: $tmdb.useDetails)
-                    SettingsToggle(title: "Cast", isOn: $tmdb.useCredits)
-                    SettingsToggle(title: "Episode data", isOn: $tmdb.useEpisodes)
-                    SettingsToggle(title: "Trailers", isOn: $tmdb.useTrailers)
-                    SettingsToggle(title: "Networks", isOn: $tmdb.useNetworks)
-                    SettingsToggle(title: "Production companies", isOn: $tmdb.useProductions)
-                    SettingsToggle(title: "Certifications", isOn: $tmdb.useReleaseDates)
-                    SettingsToggle(title: "More like this", isOn: $tmdb.useMoreLikeThis)
+                    SettingsToggle(title: L10n.text("settings.integrations.artwork_logos", fallback: "Artwork and logos"), isOn: $tmdb.useArtwork)
+                    SettingsToggle(title: L10n.text("settings.integrations.overview_rating", fallback: "Overview and rating"), isOn: $tmdb.useBasicInfo)
+                    SettingsToggle(title: L10n.text("settings.integrations.runtime_details", fallback: "Runtime and details"), isOn: $tmdb.useDetails)
+                    SettingsToggle(title: L10n.text("settings.integrations.cast", fallback: "Cast"), isOn: $tmdb.useCredits)
+                    SettingsToggle(title: L10n.text("settings.integrations.episode_data", fallback: "Episode data"), isOn: $tmdb.useEpisodes)
+                    SettingsToggle(title: L10n.text("settings.integrations.trailers", fallback: "Trailers"), isOn: $tmdb.useTrailers)
+                    SettingsToggle(title: L10n.text("settings.integrations.networks", fallback: "Networks"), isOn: $tmdb.useNetworks)
+                    SettingsToggle(title: L10n.text("settings.integrations.production_companies", fallback: "Production companies"), isOn: $tmdb.useProductions)
+                    SettingsToggle(title: L10n.text("settings.integrations.certifications", fallback: "Certifications"), isOn: $tmdb.useReleaseDates)
+                    SettingsToggle(title: L10n.text("settings.integrations.more_like_this", fallback: "More like this"), isOn: $tmdb.useMoreLikeThis)
                     SettingsToggle(
-                        title: "Enrich Continue Watching",
-                        subtitle: "Use TMDB stills for in-progress episodes",
+                        title: L10n.text("settings.integrations.enrich_cw", fallback: "Enrich Continue Watching"),
+                        subtitle: L10n.text("settings.integrations.enrich_cw_sub", fallback: "Use TMDB stills for in-progress episodes"),
                         isOn: $tmdb.enrichContinueWatching
                     )
                 }
@@ -364,24 +364,24 @@ struct MDBListSettingsCard: View {
         VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
             SettingsCard(
                 title: "MDBList",
-                footnote: "Aggregated ratings from IMDb, TMDB, Rotten Tomatoes and others."
+                footnote: L10n.text("settings.integrations.mdblist_footnote", fallback: "Aggregated ratings from IMDb, TMDB, Rotten Tomatoes and others.")
             ) {
                 SettingsToggle(
-                    title: "Enable MDBList ratings",
+                    title: L10n.text("settings.integrations.enable_mdblist", fallback: "Enable MDBList ratings"),
                     systemImage: "star.square.on.square",
                     isOn: $mdblist.enabled
                 )
                 if mdblist.enabled {
                     SettingsTextFieldRow(
-                        title: "API key",
-                        placeholder: "mdblist.com API key",
+                        title: L10n.text("settings.integrations.api_key", fallback: "API key"),
+                        placeholder: L10n.text("settings.integrations.mdblist_key_hint", fallback: "mdblist.com API key"),
                         masked: true,
                         text: $mdblist.apiKey
                     )
                     SettingsToggle(title: "IMDb", isOn: $mdblist.showImdb)
                     SettingsToggle(title: "TMDB", isOn: $mdblist.showTmdb)
-                    SettingsToggle(title: "Rotten Tomatoes", isOn: $mdblist.showTomatoes)
-                    SettingsToggle(title: "Audience score", isOn: $mdblist.showAudience)
+                    SettingsToggle(title: L10n.text("settings.integrations.rotten_tomatoes", fallback: "Rotten Tomatoes"), isOn: $mdblist.showTomatoes)
+                    SettingsToggle(title: L10n.text("settings.integrations.audience_score", fallback: "Audience score"), isOn: $mdblist.showAudience)
                     SettingsToggle(title: "Metacritic", isOn: $mdblist.showMetacritic)
                     SettingsToggle(title: "Trakt", isOn: $mdblist.showTrakt)
                     SettingsToggle(title: "Letterboxd", isOn: $mdblist.showLetterboxd)
@@ -403,7 +403,7 @@ struct AnimeSkipSettingsCard: View {
 
         VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
             SettingsCard(
-                title: "Skip segments",
+                title: L10n.text("settings.integrations.skip_segments", fallback: "Skip segments"),
                 footnote: """
                 Nothing here needs configuring. IntroDB and AniSkip are queried together for \
                 every episode and neither wants an account — each kind of segment is taken from \
@@ -412,34 +412,34 @@ struct AnimeSkipSettingsCard: View {
                 """
             ) {
                 SettingsTextFieldRow(
-                    title: "IntroDB endpoint",
-                    subtitle: "Leave empty for the public endpoint; set one to use your own instance",
+                    title: L10n.text("settings.integrations.introdb_endpoint", fallback: "IntroDB endpoint"),
+                    subtitle: L10n.text("settings.integrations.introdb_endpoint_sub", fallback: "Leave empty for the public endpoint; set one to use your own instance"),
                     text: $skip.introDbApiUrl
                 )
                 SettingsToggle(
                     title: "Anime-Skip",
-                    subtitle: "A third source for anime; needs a client id",
+                    subtitle: L10n.text("settings.integrations.anime_skip_sub", fallback: "A third source for anime; needs a client id"),
                     systemImage: "forward.frame",
                     isOn: $skip.animeSkipEnabled
                 )
                 if skip.animeSkipEnabled {
                     SettingsTextFieldRow(
-                        title: "Anime-Skip client id",
+                        title: L10n.text("settings.integrations.anime_skip_id_hint", fallback: "Anime-Skip client id"),
                         masked: true,
                         text: $skip.animeSkipClientId
                     )
                 }
                 autoSkipToggle(
-                    .intro, title: "Skip intros automatically",
-                    subtitle: "Jump without waiting for the button"
+                    .intro, title: L10n.text("settings.integrations.skip_intros_auto", fallback: "Skip intros automatically"),
+                    subtitle: L10n.text("settings.integrations.skip_intros_auto_sub", fallback: "Jump without waiting for the button")
                 )
                 autoSkipToggle(
-                    .recap, title: "Skip recaps automatically",
-                    subtitle: "Jump past the previously-on"
+                    .recap, title: L10n.text("settings.integrations.skip_recaps_auto", fallback: "Skip recaps automatically"),
+                    subtitle: L10n.text("settings.integrations.skip_recaps_auto_sub", fallback: "Jump past the previously-on")
                 )
                 autoSkipToggle(
-                    .outro, title: "Skip outros automatically",
-                    subtitle: "Jumps to the end of the episode as the credits begin"
+                    .outro, title: L10n.text("settings.integrations.skip_outros_auto", fallback: "Skip outros automatically"),
+                    subtitle: L10n.text("settings.integrations.skip_outros_auto_sub", fallback: "Jumps to the end of the episode as the credits begin")
                 )
             }
 
@@ -471,18 +471,18 @@ struct StreamBadgeSettingsCard: View {
         @Bindable var badges = settings.streamBadges
 
         Group {
-            SettingsCard(title: "Source list") {
+            SettingsCard(title: L10n.text("settings.integrations.source_list", fallback: "Source list")) {
                 SettingsOptionRow(
-                    title: "Badge placement",
+                    title: L10n.text("settings.integrations.badge_placement", fallback: "Badge placement"),
                     systemImage: "tag",
                     selection: $badges.placement
                 )
-                SettingsToggle(title: "Addon logos", isOn: $badges.showAddonLogo)
-                SettingsToggle(title: "File size", isOn: $badges.showFileSizeBadges)
-                SettingsToggle(title: "Seeders", isOn: $badges.showSeederBadges)
-                SettingsToggle(title: "Cache status", isOn: $badges.showCacheBadges)
+                SettingsToggle(title: L10n.text("settings.integrations.addon_logos", fallback: "Addon logos"), isOn: $badges.showAddonLogo)
+                SettingsToggle(title: L10n.text("settings.integrations.file_size", fallback: "File size"), isOn: $badges.showFileSizeBadges)
+                SettingsToggle(title: L10n.text("settings.integrations.seeders", fallback: "Seeders"), isOn: $badges.showSeederBadges)
+                SettingsToggle(title: L10n.text("settings.integrations.cache_status", fallback: "Cache status"), isOn: $badges.showCacheBadges)
                 SettingsRow(
-                    title: "Badge rules",
+                    title: L10n.text("settings.integrations.badge_rules", fallback: "Badge rules"),
                     subtitle: ruleSubtitle,
                     systemImage: "checkerboard.rectangle",
                     trailing: { SettingsValueLabel(value: "") },
@@ -495,7 +495,7 @@ struct StreamBadgeSettingsCard: View {
     private var ruleSubtitle: String {
         let rules = settings.streamBadges.rules
         guard rules.hasImport else {
-            return "Import a badge pack — managed from a phone"
+            return L10n.text("settings.integrations.badge_rules_sub", fallback: "Import a badge pack — managed from a phone")
         }
         let count = rules.enabledFilterCount
         return count == 1 ? "1 rule applied" : "\(count) rules applied"

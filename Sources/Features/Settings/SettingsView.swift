@@ -411,7 +411,7 @@ struct ThemeSettingsContent: View {
         @Bindable var app = settings.app
 
         VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
-            SettingsCard(title: "Accent theme") {
+            SettingsCard(title: L10n.text("settings.appearance.accent_theme", fallback: "Accent theme")) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: NuvioTheme.spacing.md) {
                         ForEach(AppTheme.allCases) { theme in
@@ -427,11 +427,11 @@ struct ThemeSettingsContent: View {
                 .clippedHorizontalScroller()
             }
 
-            SettingsCard(title: "Typeface") {
+            SettingsCard(title: L10n.text("settings.appearance.typeface", fallback: "Typeface")) {
                 ForEach(AppFont.allCases) { font in
                     SettingsRow(
                         title: font.displayName,
-                        subtitle: font == app.font ? "Currently in use" : nil,
+                        subtitle: font == app.font ? L10n.text("settings.appearance.currently_in_use", fallback: "Currently in use") : nil,
                         trailing: {
                             Image(systemName: app.font == font ? "checkmark.circle.fill" : "circle")
                                 .font(.system(size: NuvioTheme.sizes.icons.md))
@@ -442,25 +442,25 @@ struct ThemeSettingsContent: View {
                 }
             }
 
-            SettingsCard(title: "Contrast", footnote: "AMOLED mode replaces the near-black background with pure black.") {
+            SettingsCard(title: L10n.text("settings.appearance.contrast", fallback: "Contrast"), footnote: L10n.text("settings.appearance.amoled_footnote", fallback: "AMOLED mode replaces the near-black background with pure black.")) {
                 SettingsToggle(
-                    title: "AMOLED background",
-                    subtitle: "Use pure black for the app background",
+                    title: L10n.text("settings.appearance.amoled_background", fallback: "AMOLED background"),
+                    subtitle: L10n.text("settings.appearance.amoled_background_subtitle", fallback: "Use pure black for the app background"),
                     systemImage: "circle.lefthalf.filled",
                     isOn: $app.amoledMode
                 )
                 SettingsToggle(
-                    title: "AMOLED surfaces",
-                    subtitle: "Also flatten cards and panels to pure black",
+                    title: L10n.text("settings.appearance.amoled_surfaces", fallback: "AMOLED surfaces"),
+                    subtitle: L10n.text("settings.appearance.amoled_surfaces_subtitle", fallback: "Also flatten cards and panels to pure black"),
                     systemImage: "square.stack.3d.up",
                     isOn: $app.amoledSurfaces
                 )
             }
 
-            SettingsCard(title: "Settings layout") {
+            SettingsCard(title: L10n.text("settings.appearance.settings_layout", fallback: "Settings layout")) {
                 SettingsOptionRow(
-                    title: "Presentation",
-                    subtitle: "How this screen itself is laid out",
+                    title: L10n.text("settings.appearance.presentation", fallback: "Presentation"),
+                    subtitle: L10n.text("settings.appearance.presentation_subtitle", fallback: "How this screen itself is laid out"),
                     selection: $app.settingsUIStyle
                 )
             }
@@ -516,7 +516,7 @@ struct LayoutSettingsContent: View {
         @Bindable var layout = settings.layout
 
         VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
-            SettingsCard(title: "Home layout") {
+            SettingsCard(title: L10n.text("settings.layout.home_layout", fallback: "Home layout")) {
                 ForEach(HomeLayout.allCases) { option in
                     SettingsRow(
                         title: option.displayName,
@@ -535,119 +535,119 @@ struct LayoutSettingsContent: View {
                 }
             }
 
-            SettingsCard(title: "Hero") {
-                SettingsToggle(title: "Hero section", systemImage: "rectangle.inset.filled", isOn: $layout.heroSectionEnabled)
+            SettingsCard(title: L10n.text("settings.section.hero", fallback: "Hero")) {
+                SettingsToggle(title: L10n.text("settings.layout.hero_section", fallback: "Hero section"), systemImage: "rectangle.inset.filled", isOn: $layout.heroSectionEnabled)
                 SettingsToggle(
-                    title: "Full-screen backdrop",
-                    subtitle: "Let the hero image fill the whole screen in Modern view",
+                    title: L10n.text("settings.layout.fullscreen_backdrop", fallback: "Full-screen backdrop"),
+                    subtitle: L10n.text("settings.layout.fullscreen_backdrop_subtitle", fallback: "Let the hero image fill the whole screen in Modern view"),
                     isOn: $layout.modernHeroFullScreenBackdrop
                 )
                 SettingsToggle(
-                    title: "Classic focus gradient",
-                    subtitle: "Tint the backdrop toward the focused poster",
+                    title: L10n.text("settings.layout.classic_focus_gradient", fallback: "Classic focus gradient"),
+                    subtitle: L10n.text("settings.layout.classic_focus_gradient_subtitle", fallback: "Tint the backdrop toward the focused poster"),
                     isOn: $layout.classicFocusGradientEnabled
                 )
             }
 
-            SettingsCard(title: "Sidebar") {
-                SettingsToggle(title: "Modern sidebar", systemImage: "sidebar.leading", isOn: $layout.modernSidebarEnabled)
-                SettingsToggle(title: "Glass blur", isOn: $layout.modernSidebarBlurEnabled)
-                SettingsToggle(title: "Collapsed by default", isOn: $layout.sidebarCollapsedByDefault)
-                SettingsToggle(title: "Glass side panels", isOn: $layout.glassSidePanelEnabled)
+            SettingsCard(title: L10n.text("settings.section.sidebar", fallback: "Sidebar")) {
+                SettingsToggle(title: L10n.text("settings.layout.modern_sidebar", fallback: "Modern sidebar"), systemImage: "sidebar.leading", isOn: $layout.modernSidebarEnabled)
+                SettingsToggle(title: L10n.text("settings.layout.glass_blur", fallback: "Glass blur"), isOn: $layout.modernSidebarBlurEnabled)
+                SettingsToggle(title: L10n.text("settings.layout.collapsed_by_default", fallback: "Collapsed by default"), isOn: $layout.sidebarCollapsedByDefault)
+                SettingsToggle(title: L10n.text("settings.layout.glass_side_panels", fallback: "Glass side panels"), isOn: $layout.glassSidePanelEnabled)
             }
 
             SettingsCard(
-                title: "Poster cards",
-                footnote: "Sizes are in Android dp and scale automatically to the tvOS point grid."
+                title: L10n.text("settings.layout.poster_cards", fallback: "Poster cards"),
+                footnote: L10n.text("settings.layout.poster_cards_footnote", fallback: "Sizes are in Android dp and scale automatically to the tvOS point grid.")
             ) {
-                SettingsStepperRow(title: "Width", value: $layout.posterCardWidthDp, range: 90...220, step: 2, format: { "\($0) dp" })
-                SettingsStepperRow(title: "Height", value: $layout.posterCardHeightDp, range: 120...330, step: 3, format: { "\($0) dp" })
-                SettingsStepperRow(title: "Corner radius", value: $layout.posterCardCornerRadiusDp, range: 0...28, format: { "\($0) dp" })
-                SettingsToggle(title: "Show labels", subtitle: "Title and year under each poster", isOn: $layout.posterLabelsEnabled)
-                SettingsToggle(title: "Landscape posters in Modern view", isOn: $layout.modernLandscapePostersEnabled)
+                SettingsStepperRow(title: L10n.text("settings.section.width", fallback: "Width"), value: $layout.posterCardWidthDp, range: 90...220, step: 2, format: { "\($0) dp" })
+                SettingsStepperRow(title: L10n.text("settings.section.height", fallback: "Height"), value: $layout.posterCardHeightDp, range: 120...330, step: 3, format: { "\($0) dp" })
+                SettingsStepperRow(title: L10n.text("settings.layout.corner_radius", fallback: "Corner radius"), value: $layout.posterCardCornerRadiusDp, range: 0...28, format: { "\($0) dp" })
+                SettingsToggle(title: L10n.text("settings.layout.show_labels", fallback: "Show labels"), subtitle: L10n.text("settings.layout.show_labels_subtitle", fallback: "Title and year under each poster"), isOn: $layout.posterLabelsEnabled)
+                SettingsToggle(title: L10n.text("settings.layout.landscape_posters", fallback: "Landscape posters in Modern view"), isOn: $layout.modernLandscapePostersEnabled)
             }
 
             SettingsCard(
-                title: "Focused poster",
-                footnote: "Holding focus on a card widens it into its backdrop — a Nuvio signature."
+                title: L10n.text("settings.layout.focused_poster", fallback: "Focused poster"),
+                footnote: L10n.text("settings.layout.focused_poster_footnote", fallback: "Holding focus on a card widens it into its backdrop — a Nuvio signature.")
             ) {
-                SettingsToggle(title: "Expand to backdrop", systemImage: "rectangle.expand.vertical", isOn: $layout.focusedPosterBackdropExpandEnabled)
+                SettingsToggle(title: L10n.text("settings.layout.expand_to_backdrop", fallback: "Expand to backdrop"), systemImage: "rectangle.expand.vertical", isOn: $layout.focusedPosterBackdropExpandEnabled)
                 if layout.focusedPosterBackdropExpandEnabled {
-                    SettingsStepperRow(title: "Expand after", value: $layout.focusedPosterBackdropExpandDelaySeconds, range: 0...10, format: { "\($0)s" })
+                    SettingsStepperRow(title: L10n.text("settings.layout.expand_after", fallback: "Expand after"), value: $layout.focusedPosterBackdropExpandDelaySeconds, range: 0...10, format: { "\($0)s" })
                 }
             }
 
-            SettingsCard(title: "Card depth") {
-                SettingsToggle(title: "Depth effect", systemImage: "cube.transparent", isOn: $layout.cardDepthEnabled)
+            SettingsCard(title: L10n.text("settings.layout.card_depth", fallback: "Card depth")) {
+                SettingsToggle(title: L10n.text("settings.layout.depth_effect", fallback: "Depth effect"), systemImage: "cube.transparent", isOn: $layout.cardDepthEnabled)
                 if layout.cardDepthEnabled {
-                    SettingsToggle(title: "Posters", isOn: $layout.cardDepthPostersEnabled)
-                    SettingsToggle(title: "Continue Watching", isOn: $layout.cardDepthContinueWatchingEnabled)
-                    SettingsToggle(title: "Episode cards", isOn: $layout.cardDepthEpisodeCardsEnabled)
-                    SettingsToggle(title: "Cast", isOn: $layout.cardDepthCastEnabled)
-                    SettingsToggle(title: "Trailers", isOn: $layout.cardDepthTrailersEnabled)
-                    SettingsDecimalStepperRow(title: "Edge strength", value: $layout.cardDepthEdgeStrength, range: 0...1, step: 0.05, format: { String(format: "%.0f%%", $0 * 100) })
-                    SettingsDecimalStepperRow(title: "Edge coverage", value: $layout.cardDepthEdgeCoverage, range: 0...1, step: 0.05, format: { String(format: "%.0f%%", $0 * 100) })
-                    SettingsDecimalStepperRow(title: "Sheen", value: $layout.cardDepthSheenStrength, range: 0...1, step: 0.05, format: { String(format: "%.0f%%", $0 * 100) })
+                    SettingsToggle(title: L10n.text("settings.section.posters", fallback: "Posters"), isOn: $layout.cardDepthPostersEnabled)
+                    SettingsToggle(title: L10n.text("settings.section.continue_watching", fallback: "Continue Watching"), isOn: $layout.cardDepthContinueWatchingEnabled)
+                    SettingsToggle(title: L10n.text("settings.layout.episode_cards", fallback: "Episode cards"), isOn: $layout.cardDepthEpisodeCardsEnabled)
+                    SettingsToggle(title: L10n.text("settings.section.cast", fallback: "Cast"), isOn: $layout.cardDepthCastEnabled)
+                    SettingsToggle(title: L10n.text("settings.section.trailers", fallback: "Trailers"), isOn: $layout.cardDepthTrailersEnabled)
+                    SettingsDecimalStepperRow(title: L10n.text("settings.layout.edge_strength", fallback: "Edge strength"), value: $layout.cardDepthEdgeStrength, range: 0...1, step: 0.05, format: { String(format: "%.0f%%", $0 * 100) })
+                    SettingsDecimalStepperRow(title: L10n.text("settings.layout.edge_coverage", fallback: "Edge coverage"), value: $layout.cardDepthEdgeCoverage, range: 0...1, step: 0.05, format: { String(format: "%.0f%%", $0 * 100) })
+                    SettingsDecimalStepperRow(title: L10n.text("settings.layout.sheen", fallback: "Sheen"), value: $layout.cardDepthSheenStrength, range: 0...1, step: 0.05, format: { String(format: "%.0f%%", $0 * 100) })
                 }
             }
 
-            SettingsCard(title: "Ratings") {
-                SettingsOptionRow(title: "On Home", selection: $layout.homeRatingsVisibility)
+            SettingsCard(title: L10n.text("settings.section.ratings", fallback: "Ratings")) {
+                SettingsOptionRow(title: L10n.text("settings.layout.on_home", fallback: "On Home"), selection: $layout.homeRatingsVisibility)
                 SettingsOptionRow(
-                    title: "On a title's page",
+                    title: L10n.text("settings.layout.on_detail", fallback: "On a title's page"),
                     subtitle: layout.detailRatingsVisibility.summary,
                     selection: $layout.detailRatingsVisibility
                 )
             }
 
-            SettingsCard(title: "Continue Watching") {
+            SettingsCard(title: L10n.text("settings.section.continue_watching", fallback: "Continue Watching")) {
                 SettingsToggle(
-                    title: "Show the rail",
-                    subtitle: "Off hides what you are part-way through from Home entirely",
+                    title: L10n.text("settings.layout.show_the_rail", fallback: "Show the rail"),
+                    subtitle: L10n.text("settings.layout.show_the_rail_subtitle", fallback: "Off hides what you are part-way through from Home entirely"),
                     isOn: $layout.continueWatchingEnabled
                 )
-                SettingsOptionRow(title: "Card style", selection: $layout.continueWatchingCardStyle)
-                SettingsOptionRow(title: "Sort", selection: $layout.continueWatchingSortMode)
-                SettingsToggle(title: "Use episode thumbnails", isOn: $layout.useEpisodeThumbnailsInContinueWatching)
-                SettingsToggle(title: "Blur next-up artwork", subtitle: "Avoid spoilers in the rail", isOn: $layout.blurContinueWatchingNextUp)
-                SettingsToggle(title: "Blur unwatched episode stills", isOn: $layout.blurUnwatchedEpisodes)
-                SettingsToggle(title: "Next up from furthest episode", isOn: $layout.nextUpFromFurthestEpisode)
-                SettingsToggle(title: "Show unaired next up", isOn: $layout.showUnairedNextUp)
+                SettingsOptionRow(title: L10n.text("settings.layout.card_style", fallback: "Card style"), selection: $layout.continueWatchingCardStyle)
+                SettingsOptionRow(title: L10n.text("settings.section.sort", fallback: "Sort"), selection: $layout.continueWatchingSortMode)
+                SettingsToggle(title: L10n.text("settings.layout.use_episode_thumbnails", fallback: "Use episode thumbnails"), isOn: $layout.useEpisodeThumbnailsInContinueWatching)
+                SettingsToggle(title: L10n.text("settings.layout.blur_next_up", fallback: "Blur next-up artwork"), subtitle: L10n.text("settings.layout.blur_next_up_subtitle", fallback: "Avoid spoilers in the rail"), isOn: $layout.blurContinueWatchingNextUp)
+                SettingsToggle(title: L10n.text("settings.layout.blur_unwatched", fallback: "Blur unwatched episode stills"), isOn: $layout.blurUnwatchedEpisodes)
+                SettingsToggle(title: L10n.text("settings.layout.next_up_furthest", fallback: "Next up from furthest episode"), isOn: $layout.nextUpFromFurthestEpisode)
+                SettingsToggle(title: L10n.text("settings.layout.show_unaired", fallback: "Show unaired next up"), isOn: $layout.showUnairedNextUp)
             }
 
             SettingsCard(
-                title: "Collections",
-                footnote: "Your own folders of titles, built from the Library tab."
+                title: L10n.text("settings.section.collections", fallback: "Collections"),
+                footnote: L10n.text("settings.layout.collections_footnote", fallback: "Your own folders of titles, built from the Library tab.")
             ) {
                 SettingsToggle(
-                    title: "Show on Home",
-                    subtitle: "One rail per collection, after your catalogs",
+                    title: L10n.text("settings.layout.collections_on_home", fallback: "Show on Home"),
+                    subtitle: L10n.text("settings.layout.collections_on_home_subtitle", fallback: "One rail per collection, after your catalogs"),
                     isOn: $layout.collectionsOnHomeEnabled
                 )
             }
 
-            SettingsCard(title: "Library") {
-                SettingsOptionRow(title: "Sort saved titles", selection: $layout.librarySortOption)
+            SettingsCard(title: L10n.text("settings.section.library", fallback: "Library")) {
+                SettingsOptionRow(title: L10n.text("settings.layout.sort_saved", fallback: "Sort saved titles"), selection: $layout.librarySortOption)
             }
 
-            SettingsCard(title: "Catalogs") {
-                SettingsToggle(title: "Show addon name", subtitle: "Next to each rail title", isOn: $layout.catalogAddonNameEnabled)
-                SettingsToggle(title: "Show type suffix", subtitle: "Append Movies / Series to rail titles", isOn: $layout.catalogTypeSuffixEnabled)
-                SettingsToggle(title: "Follow addon order", subtitle: "Order rails by the addon list rather than manually", isOn: $layout.followAddonsOrder)
+            SettingsCard(title: L10n.text("settings.section.catalogs", fallback: "Catalogs")) {
+                SettingsToggle(title: L10n.text("settings.layout.show_addon_name", fallback: "Show addon name"), subtitle: L10n.text("settings.layout.show_addon_name_subtitle", fallback: "Next to each rail title"), isOn: $layout.catalogAddonNameEnabled)
+                SettingsToggle(title: L10n.text("settings.layout.show_type_suffix", fallback: "Show type suffix"), subtitle: L10n.text("settings.layout.show_type_suffix_subtitle", fallback: "Append Movies / Series to rail titles"), isOn: $layout.catalogTypeSuffixEnabled)
+                SettingsToggle(title: L10n.text("settings.layout.follow_addon_order", fallback: "Follow addon order"), subtitle: L10n.text("settings.layout.follow_addon_order_subtitle", fallback: "Order rails by the addon list rather than manually"), isOn: $layout.followAddonsOrder)
             }
 
-            SettingsCard(title: "Navigation") {
-                SettingsOptionRow(title: "Discover placement", systemImage: "square.grid.2x2", selection: $layout.discoverLocation)
-                SettingsToggle(title: "Discover inside Search", isOn: $layout.searchDiscoverEnabled)
-                SettingsToggle(title: "Fast horizontal navigation", subtitle: "Skip the settle animation when holding a direction", isOn: $layout.fastHorizontalNavigationEnabled)
-                SettingsToggle(title: "Smooth bring-into-view", isOn: $layout.smoothBringIntoViewEnabled)
+            SettingsCard(title: L10n.text("settings.section.navigation", fallback: "Navigation")) {
+                SettingsOptionRow(title: L10n.text("settings.layout.discover_placement", fallback: "Discover placement"), systemImage: "square.grid.2x2", selection: $layout.discoverLocation)
+                SettingsToggle(title: L10n.text("settings.layout.discover_in_search", fallback: "Discover inside Search"), isOn: $layout.searchDiscoverEnabled)
+                SettingsToggle(title: L10n.text("settings.layout.fast_horizontal", fallback: "Fast horizontal navigation"), subtitle: L10n.text("settings.layout.fast_horizontal_subtitle", fallback: "Skip the settle animation when holding a direction"), isOn: $layout.fastHorizontalNavigationEnabled)
+                SettingsToggle(title: L10n.text("settings.layout.smooth_scroll", fallback: "Smooth bring-into-view"), isOn: $layout.smoothBringIntoViewEnabled)
             }
 
-            SettingsCard(title: "Content") {
-                SettingsToggle(title: "Hide unreleased content", isOn: $layout.hideUnreleasedContent)
-                SettingsToggle(title: "Show full release date", subtitle: "Rather than only the year", isOn: $layout.showFullReleaseDate)
-                SettingsToggle(title: "Trailer button on detail pages", isOn: $layout.detailPageTrailerButtonEnabled)
-                SettingsToggle(title: "Prefer external meta addon", subtitle: "Use a non-Cinemeta addon for details when available", isOn: $layout.preferExternalMetaAddonDetail)
+            SettingsCard(title: L10n.text("settings.section.content", fallback: "Content")) {
+                SettingsToggle(title: L10n.text("settings.layout.hide_unreleased", fallback: "Hide unreleased content"), isOn: $layout.hideUnreleasedContent)
+                SettingsToggle(title: L10n.text("settings.layout.full_release_date", fallback: "Show full release date"), subtitle: L10n.text("settings.layout.full_release_date_subtitle", fallback: "Rather than only the year"), isOn: $layout.showFullReleaseDate)
+                SettingsToggle(title: L10n.text("settings.layout.trailer_button", fallback: "Trailer button on detail pages"), isOn: $layout.detailPageTrailerButtonEnabled)
+                SettingsToggle(title: L10n.text("settings.layout.prefer_external_meta", fallback: "Prefer external meta addon"), subtitle: L10n.text("settings.layout.prefer_external_meta_subtitle", fallback: "Use a non-Cinemeta addon for details when available"), isOn: $layout.preferExternalMetaAddonDetail)
             }
         }
     }
@@ -672,8 +672,8 @@ struct ExperienceSettingsContent: View {
 
         VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
             SettingsCard(
-                title: "Experience mode",
-                footnote: "Essential hides the deep playback, debrid and integration surfaces."
+                title: L10n.text("settings.experience_mode", fallback: "Experience mode"),
+                footnote: L10n.text("settings.experience_mode_footnote", fallback: "Essential hides the deep playback, debrid and integration surfaces.")
             ) {
                 ForEach(ExperienceMode.allCases) { mode in
                     SettingsRow(
@@ -716,7 +716,7 @@ struct AboutContent: View {
         VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
             updateCard
 
-            SettingsCard(title: "Nuvio for Apple TV") {
+            SettingsCard(title: L10n.text("settings.about.app_name", fallback: "Nuvio for Apple TV")) {
                 VStack(alignment: .leading, spacing: NuvioTheme.spacing.md) {
                     Text("Nuvio")
                         .nuvioText(NuvioTextStyles.display)
@@ -755,7 +755,7 @@ struct AboutContent: View {
     @ViewBuilder
     private var updateCard: some View {
         if let update {
-            SettingsCard(title: "Update available") {
+            SettingsCard(title: L10n.text("settings.about.update_available", fallback: "Update available")) {
                 VStack(alignment: .leading, spacing: NuvioTheme.spacing.sm) {
                     Text("Version \(update.version)")
                         .nuvioText(NuvioTextStyles.cardTitle)
