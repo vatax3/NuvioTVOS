@@ -21,45 +21,45 @@ struct AdvancedSettingsContent: View {
             // Android puts the experience switch in Advanced rather than on the rail.
             ExperienceSettingsContent()
 
-            SettingsCard(title: "Performance & navigation") {
+            SettingsCard(title: L10n.text("settings.advanced.performance", fallback: "Performance & navigation")) {
                 SettingsToggle(
-                    title: "Fast horizontal navigation",
-                    subtitle: "Skip the settle animation when a direction is held",
+                    title: L10n.text("settings.advanced.fast_horizontal", fallback: "Fast horizontal navigation"),
+                    subtitle: L10n.text("settings.advanced.fast_horizontal_sub", fallback: "Skip the settle animation when a direction is held"),
                     systemImage: "forward.fill",
                     isOn: $layout.fastHorizontalNavigationEnabled
                 )
                 SettingsToggle(
-                    title: "Nuvio focus scrolling",
-                    subtitle: "Anchor the focused card instead of letting the system place it",
+                    title: L10n.text("settings.advanced.focus_scrolling", fallback: "Nuvio focus scrolling"),
+                    subtitle: L10n.text("settings.advanced.focus_scrolling_sub", fallback: "Anchor the focused card instead of letting the system place it"),
                     systemImage: "arrow.left.and.right",
                     isOn: $layout.smoothBringIntoViewEnabled
                 )
                 SettingsToggle(
-                    title: "Remember last profile",
-                    subtitle: "Reopen the profile that was active at shutdown",
+                    title: L10n.text("settings.advanced.remember_profile", fallback: "Remember last profile"),
+                    subtitle: L10n.text("settings.advanced.remember_profile_sub", fallback: "Reopen the profile that was active at shutdown"),
                     systemImage: "person.crop.circle.badge.clock",
                     isOn: $app.remembersLastProfile
                 )
             }
 
             SettingsCard(
-                title: "Diagnostics",
-                footnote: "Neither crash reporting nor playback issue reports are wired up in this client — both upload to Nuvio's own backend, whose contract belongs to the Android project. Verbose logging writes to the system log on this device instead."
+                title: L10n.text("settings.advanced.diagnostics", fallback: "Diagnostics"),
+                footnote: L10n.text("settings.advanced.diagnostics_footnote", fallback: "Neither crash reporting nor playback issue reports are wired up in this client — both upload to Nuvio's own backend, whose contract belongs to the Android project. Verbose logging writes to the system log on this device instead.")
             ) {
                 SettingsToggle(
-                    title: "Verbose playback logging",
-                    subtitle: "Write player state changes to the system log",
+                    title: L10n.text("settings.advanced.verbose_logging", fallback: "Verbose playback logging"),
+                    subtitle: L10n.text("settings.advanced.verbose_logging_sub", fallback: "Write player state changes to the system log"),
                     systemImage: "doc.text.magnifyingglass",
                     isOn: $player.verboseLoggingEnabled
                 )
             }
 
-            SettingsCard(title: "Cache") {
+            SettingsCard(title: L10n.text("settings.advanced.cache", fallback: "Cache")) {
                 SettingsRow(
-                    title: "Clear Continue Watching cache",
+                    title: L10n.text("settings.advanced.clear_cw", fallback: "Clear Continue Watching cache"),
                     subtitle: cacheCleared
-                        ? "Cache cleared"
-                        : "Remove cached artwork and episode stills for the Continue Watching rail",
+                        ? L10n.text("settings.advanced.cache_cleared", fallback: "Cache cleared")
+                        : L10n.text("settings.advanced.clear_cw_sub", fallback: "Remove cached artwork and episode stills for the Continue Watching rail"),
                     systemImage: "trash",
                     action: {
                         library.clearContinueWatchingCache()
@@ -76,17 +76,17 @@ struct AdvancedSettingsContent: View {
 
     private var networkCard: some View {
         SettingsCard(
-            title: "Network speed",
-            footnote: "Latency and download throughput, measured against Cloudflare's speed endpoint."
+            title: L10n.text("settings.advanced.network_speed", fallback: "Network speed"),
+            footnote: L10n.text("settings.advanced.network_speed_footnote", fallback: "Latency and download throughput, measured against Cloudflare's speed endpoint.")
         ) {
             SettingsInfoRow(
-                title: "Connection",
+                title: L10n.text("settings.advanced.connection", fallback: "Connection"),
                 value: speedTest.connectionDescription,
                 tint: speedTest.isOnline ? colors.success : colors.error
             )
             SettingsRow(
-                title: speedTest.isRunning ? "Running speed test…" : "Run speed test",
-                subtitle: speedTest.isRunning ? speedTest.stage : "Measure latency and download speed",
+                title: speedTest.isRunning ? L10n.text("settings.advanced.running_test", fallback: "Running speed test…") : L10n.text("settings.advanced.run_test", fallback: "Run speed test"),
+                subtitle: speedTest.isRunning ? speedTest.stage : L10n.text("settings.advanced.run_test_sub", fallback: "Measure latency and download speed"),
                 systemImage: "speedometer",
                 action: { speedTest.run() }
             )
@@ -94,13 +94,13 @@ struct AdvancedSettingsContent: View {
             .opacity(speedTest.isRunning ? NuvioTheme.effects.disabledAlpha : 1)
 
             if let latency = speedTest.latencyMilliseconds {
-                SettingsInfoRow(title: "Latency", value: "\(Int(latency)) ms")
+                SettingsInfoRow(title: L10n.text("settings.advanced.latency", fallback: "Latency"), value: "\(Int(latency)) ms")
             }
             if let throughput = speedTest.megabitsPerSecond {
-                SettingsInfoRow(title: "Download", value: String(format: "%.1f Mbps", throughput))
+                SettingsInfoRow(title: L10n.text("settings.advanced.download", fallback: "Download"), value: String(format: "%.1f Mbps", throughput))
             }
             if let error = speedTest.error {
-                SettingsInfoRow(title: "Error", value: error, tint: colors.error)
+                SettingsInfoRow(title: L10n.text("settings.advanced.error", fallback: "Error"), value: error, tint: colors.error)
             }
         }
     }
@@ -119,7 +119,7 @@ final class NetworkSpeedTester {
     private(set) var megabitsPerSecond: Double?
     private(set) var error: String?
     private(set) var isOnline = true
-    private(set) var connectionDescription = "Checking…"
+    private(set) var connectionDescription = L10n.text("settings.advanced.checking", fallback: "Checking…")
 
     private let monitor = NWPathMonitor()
 
@@ -129,13 +129,13 @@ final class NetworkSpeedTester {
                 guard let self else { return }
                 self.isOnline = path.status == .satisfied
                 if !self.isOnline {
-                    self.connectionDescription = "Offline"
+                    self.connectionDescription = L10n.text("settings.advanced.offline", fallback: "Offline")
                 } else if path.usesInterfaceType(.wiredEthernet) {
-                    self.connectionDescription = "Ethernet"
+                    self.connectionDescription = L10n.text("settings.advanced.ethernet", fallback: "Ethernet")
                 } else if path.usesInterfaceType(.wifi) {
                     self.connectionDescription = "Wi-Fi"
                 } else {
-                    self.connectionDescription = "Connected"
+                    self.connectionDescription = L10n.text("settings.advanced.connected", fallback: "Connected")
                 }
             }
         }
@@ -153,9 +153,9 @@ final class NetworkSpeedTester {
 
         Task {
             defer { isRunning = false }
-            stage = "Measuring latency"
+            stage = L10n.text("settings.advanced.measuring_latency", fallback: "Measuring latency")
             latencyMilliseconds = await measureLatency()
-            stage = "Measuring download speed"
+            stage = L10n.text("settings.advanced.measuring_download", fallback: "Measuring download speed")
             do {
                 megabitsPerSecond = try await measureDownload()
             } catch {

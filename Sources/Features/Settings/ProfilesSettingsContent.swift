@@ -13,7 +13,7 @@ struct ProfilesSettingsContent: View {
         Group {
             SettingsCard(
                 title: "Profiles",
-                footnote: "Each profile keeps its own library, watch progress, addons and settings."
+                footnote: L10n.text("settings.profiles.footnote", fallback: "Each profile keeps its own library, watch progress, addons and settings.")
             ) {
                 ForEach(profiles.profiles) { profile in
                     SettingsRow(
@@ -22,7 +22,7 @@ struct ProfilesSettingsContent: View {
                         systemImage: profile.symbol,
                         trailing: {
                             SettingsValueLabel(
-                                value: profile.id == profiles.activeProfileId ? "Current" : ""
+                                value: profile.id == profiles.activeProfileId ? L10n.text("settings.profiles.current", fallback: "Current") : ""
                             )
                         },
                         action: { editing = profile }
@@ -30,9 +30,9 @@ struct ProfilesSettingsContent: View {
                 }
             }
 
-            SettingsCard(title: "Manage") {
+            SettingsCard(title: L10n.text("settings.profiles.manage", fallback: "Manage")) {
                 SettingsRow(
-                    title: "Switch profile",
+                    title: L10n.text("settings.profiles.switch", fallback: "Switch profile"),
                     subtitle: "\(profiles.profiles.count) profile\(profiles.profiles.count == 1 ? "" : "s")",
                     systemImage: "arrow.left.arrow.right",
                     // Back to the launch chooser rather than a sheet, which is what Android's
@@ -40,8 +40,8 @@ struct ProfilesSettingsContent: View {
                     action: { profiles.requestSelection() }
                 )
                 SettingsRow(
-                    title: "Add profile",
-                    subtitle: "Create a separate library and settings",
+                    title: L10n.text("settings.profiles.add", fallback: "Add profile"),
+                    subtitle: L10n.text("settings.profiles.add_sub", fallback: "Create a separate library and settings"),
                     systemImage: "plus.circle",
                     action: { isCreating = true }
                 )
@@ -53,10 +53,10 @@ struct ProfilesSettingsContent: View {
 
     private func subtitle(for profile: Profile) -> String {
         var parts: [String] = []
-        if profile.isLocked { parts.append("PIN protected") }
-        if profile.isRestricted { parts.append("Restricted") }
-        if profile.id == ProfileScope.primaryProfileId { parts.append("Primary") }
-        return parts.isEmpty ? "No restrictions" : parts.joined(separator: " · ")
+        if profile.isLocked { parts.append(L10n.text("settings.profiles.pin_protected", fallback: "PIN protected")) }
+        if profile.isRestricted { parts.append(L10n.text("settings.profiles.restricted", fallback: "Restricted")) }
+        if profile.id == ProfileScope.primaryProfileId { parts.append(L10n.text("settings.profiles.primary", fallback: "Primary")) }
+        return parts.isEmpty ? L10n.text("settings.profiles.no_restrictions", fallback: "No restrictions") : parts.joined(separator: " · ")
     }
 }
 
@@ -85,14 +85,14 @@ struct ProfileEditorView: View {
         NuvioScreenBackground {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
-                    Text(isEditing ? "Edit profile" : "New profile")
+                    Text(isEditing ? L10n.text("settings.profiles.edit", fallback: "Edit profile") : L10n.text("settings.profiles.new", fallback: "New profile"))
                         .nuvioText(NuvioTextStyles.display)
                         .foregroundStyle(colors.textPrimary)
 
-                    SettingsCard(title: "Identity") {
+                    SettingsCard(title: L10n.text("settings.profiles.identity", fallback: "Identity")) {
                         SettingsTextFieldRow(
-                            title: "Name",
-                            placeholder: "Profile name",
+                            title: L10n.text("settings.profiles.name", fallback: "Name"),
+                            placeholder: L10n.text("settings.profiles.name_hint", fallback: "Profile name"),
                             text: $name
                         )
                         symbolPicker
@@ -100,14 +100,14 @@ struct ProfileEditorView: View {
                     }
 
                     SettingsCard(
-                        title: "Lock",
+                        title: L10n.text("settings.profiles.lock", fallback: "Lock"),
                         footnote: isPrimary
-                            ? "The primary profile can be locked, but anyone can still switch back to it from the lock screen — a profile PIN separates libraries, it is not a device passcode."
-                            : "Leave empty for no PIN. Four digits."
+                            ? L10n.text("settings.profiles.lock_footnote", fallback: "The primary profile can be locked, but anyone can still switch back to it from the lock screen — a profile PIN separates libraries, it is not a device passcode.")
+                            : L10n.text("settings.profiles.pin_hint", fallback: "Leave empty for no PIN. Four digits.")
                     ) {
                         SettingsTextFieldRow(
                             title: "PIN",
-                            subtitle: profile?.isLocked == true ? "A PIN is already set — type a new one to replace it, or clear the field to remove it." : nil,
+                            subtitle: profile?.isLocked == true ? L10n.text("settings.profiles.pin_set_hint", fallback: "A PIN is already set — type a new one to replace it, or clear the field to remove it.") : nil,
                             placeholder: "····",
                             masked: true,
                             text: $pin
@@ -124,12 +124,12 @@ struct ProfileEditorView: View {
                             """
                         ) {
                             SettingsToggle(
-                                title: "Use the primary profile's addons",
+                                title: L10n.text("settings.profiles.share_addons", fallback: "Use the primary profile's addons"),
                                 systemImage: "puzzlepiece.extension.fill",
                                 isOn: $usesPrimaryAddons
                             )
                             SettingsToggle(
-                                title: "Use the primary profile's plugins",
+                                title: L10n.text("settings.profiles.share_plugins", fallback: "Use the primary profile's plugins"),
                                 systemImage: "chevron.left.forwardslash.chevron.right",
                                 isOn: $usesPrimaryPlugins
                             )
@@ -137,11 +137,11 @@ struct ProfileEditorView: View {
                     }
 
                     SettingsCard(
-                        title: "Restrictions",
-                        footnote: "A restricted profile cannot open Playback, Debrid or Addon settings."
+                        title: L10n.text("settings.profiles.restrictions", fallback: "Restrictions"),
+                        footnote: L10n.text("settings.profiles.restrictions_footnote", fallback: "A restricted profile cannot open Playback, Debrid or Addon settings.")
                     ) {
                         SettingsToggle(
-                            title: "Restricted profile",
+                            title: L10n.text("settings.profiles.restricted_profile", fallback: "Restricted profile"),
                             systemImage: "hand.raised.fill",
                             isOn: $isRestricted
                         )
@@ -154,20 +154,20 @@ struct ProfileEditorView: View {
             .scrollClipDisabled()
         }
         .onAppear(perform: loadOnce)
-        .alert("Delete this profile?", isPresented: $isConfirmingDelete) {
-            Button("Delete", role: .destructive) {
+        .alert(L10n.text("settings.profiles.delete_title", fallback: "Delete this profile?"), isPresented: $isConfirmingDelete) {
+            Button(L10n.text("settings.profiles.delete", fallback: "Delete"), role: .destructive) {
                 if let profile { profiles.delete(profile) }
                 dismiss()
             }
-            Button("Keep", role: .cancel) {}
+            Button(L10n.text("settings.profiles.keep", fallback: "Keep"), role: .cancel) {}
         } message: {
-            Text("Its library, watch history, addons and settings are erased. This cannot be undone.")
+            Text(L10n.text("settings.profiles.delete_message", fallback: "Its library, watch history, addons and settings are erased. This cannot be undone."))
         }
     }
 
     private var symbolPicker: some View {
         VStack(alignment: .leading, spacing: NuvioTheme.spacing.sm) {
-            Text("Icon")
+            Text(L10n.text("settings.profiles.icon", fallback: "Icon"))
                 .nuvioText(NuvioTextStyles.cardTitle)
                 .foregroundStyle(colors.textPrimary)
             ScrollView(.horizontal, showsIndicators: false) {
@@ -199,7 +199,7 @@ struct ProfileEditorView: View {
 
     private var tintPicker: some View {
         VStack(alignment: .leading, spacing: NuvioTheme.spacing.sm) {
-            Text("Colour")
+            Text(L10n.text("settings.profiles.colour", fallback: "Colour"))
                 .nuvioText(NuvioTextStyles.cardTitle)
                 .foregroundStyle(colors.textPrimary)
             ScrollView(.horizontal, showsIndicators: false) {
@@ -234,7 +234,7 @@ struct ProfileEditorView: View {
     private var actions: some View {
         HStack(spacing: NuvioTheme.spacing.md) {
             Button(action: save) {
-                Text(isEditing ? "Save" : "Create")
+                Text(isEditing ? L10n.text("settings.profiles.save", fallback: "Save") : L10n.text("settings.profiles.create", fallback: "Create"))
                     .nuvioText(NuvioTextStyles.button)
                     .padding(.horizontal, NuvioTheme.spacing.xl)
                     .frame(height: NuvioTheme.components.buttonHeight)
@@ -243,7 +243,7 @@ struct ProfileEditorView: View {
             .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
 
             Button(action: { dismiss() }) {
-                Text("Cancel")
+                Text(L10n.text("settings.profiles.cancel", fallback: "Cancel"))
                     .nuvioText(NuvioTextStyles.button)
                     .padding(.horizontal, NuvioTheme.spacing.xl)
                     .frame(height: NuvioTheme.components.buttonHeight)
@@ -252,7 +252,7 @@ struct ProfileEditorView: View {
 
             if isEditing, !isPrimary {
                 Button(action: { isConfirmingDelete = true }) {
-                    Text("Delete")
+                    Text(L10n.text("settings.profiles.delete", fallback: "Delete"))
                         .nuvioText(NuvioTextStyles.button)
                         .padding(.horizontal, NuvioTheme.spacing.xl)
                         .frame(height: NuvioTheme.components.buttonHeight)

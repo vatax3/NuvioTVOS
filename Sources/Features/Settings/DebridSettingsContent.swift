@@ -12,10 +12,10 @@ struct DebridSettingsContent: View {
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .providers: return "Providers"
-            case .filters: return "Filters"
-            case .ranking: return "Ranking"
-            case .limits: return "Limits"
+            case .providers: return L10n.text("settings.debrid.tab_providers", fallback: "Providers")
+            case .filters: return L10n.text("settings.debrid.tab_filters", fallback: "Filters")
+            case .ranking: return L10n.text("settings.debrid.tab_ranking", fallback: "Ranking")
+            case .limits: return L10n.text("settings.debrid.tab_limits", fallback: "Limits")
             }
         }
     }
@@ -43,23 +43,23 @@ struct DebridSettingsContent: View {
                 """
             ) {
                 SettingsToggle(
-                    title: "Enable debrid",
+                    title: L10n.text("settings.debrid.enable", fallback: "Enable debrid"),
                     subtitle: debrid.canResolvePlayableLinks
                         ? "Resolving through \(debrid.activeResolver?.provider.displayName ?? "—")"
-                        : "Add at least one API key below",
+                        : L10n.text("settings.debrid.enable_hint", fallback: "Add at least one API key below"),
                     systemImage: "link",
                     isOn: $debrid.enabled
                 )
                 SettingsRow(
-                    title: "Stream format",
-                    subtitle: "Choose what each result is labelled — edited from a phone",
+                    title: L10n.text("settings.debrid.stream_format", fallback: "Stream format"),
+                    subtitle: L10n.text("settings.debrid.stream_format_sub", fallback: "Choose what each result is labelled — edited from a phone"),
                     systemImage: "textformat",
                     trailing: { SettingsValueLabel(value: "") },
                     action: { router.push(.streamFormat) }
                 )
             }
 
-            ChipRow(title: "Section") {
+            ChipRow(title: L10n.text("settings.debrid.section", fallback: "Section")) {
                 ForEach(Tab.allCases) { option in
                     NuvioChip(label: option.title, isSelected: tab == option, action: { tab = option })
                 }
@@ -83,49 +83,49 @@ struct DebridSettingsContent: View {
             ForEach(DebridProvider.allCases) { provider in
                 SettingsCard(title: provider.displayName) {
                     SettingsTextFieldRow(
-                        title: "API key",
+                        title: L10n.text("settings.debrid.api_key", fallback: "API key"),
                         subtitle: provider.apiKeyHint,
-                        placeholder: "Paste your key",
+                        placeholder: L10n.text("settings.debrid.paste_key", fallback: "Paste your key"),
                         masked: true,
                         text: binding(for: provider),
                         trailingAction: (
-                            label: validating == provider ? "Checking…" : "Verify",
+                            label: validating == provider ? L10n.text("settings.debrid.checking", fallback: "Checking…") : L10n.text("settings.debrid.verify", fallback: "Verify"),
                             action: { Task { await validate(provider) } }
                         )
                     )
                     if let message = validationMessages[provider] {
                         SettingsInfoRow(
-                            title: "Status",
+                            title: L10n.text("settings.debrid.status", fallback: "Status"),
                             value: message,
-                            tint: message.hasPrefix("Connected") ? colors.success : colors.error
+                            tint: message.hasPrefix(L10n.text("settings.debrid.connected", fallback: "Connected")) ? colors.success : colors.error
                         )
                     }
                     if DebridClient.supportsDeviceAuthorization(provider) {
                         deviceAuthRows(for: provider)
                     }
                     SettingsInfoRow(
-                        title: "Capabilities",
+                        title: L10n.text("settings.debrid.capabilities", fallback: "Capabilities"),
                         value: [
-                            provider.supportsCacheCheck ? "cache check" : nil,
-                            provider.supportsCloudLibrary ? "cloud library" : nil,
-                            "link resolution"
+                            provider.supportsCacheCheck ? L10n.text("settings.debrid.cap_cache", fallback: "cache check") : nil,
+                            provider.supportsCloudLibrary ? L10n.text("settings.debrid.cap_cloud", fallback: "cloud library") : nil,
+                            L10n.text("settings.debrid.cap_resolve", fallback: "link resolution")
                         ].compactMap { $0 }.joined(separator: " · ")
                     )
                 }
             }
 
             SettingsCard(
-                title: "Resolver",
-                footnote: "Which configured service turns a torrent into a playable link."
+                title: L10n.text("settings.debrid.resolver", fallback: "Resolver"),
+                footnote: L10n.text("settings.debrid.resolver_footnote", fallback: "Which configured service turns a torrent into a playable link.")
             ) {
                 if debrid.configuredCredentials.isEmpty {
-                    SettingsInfoRow(title: "Configured", value: "None yet", tint: colors.textTertiary)
+                    SettingsInfoRow(title: L10n.text("settings.debrid.configured", fallback: "Configured"), value: L10n.text("settings.debrid.none_yet", fallback: "None yet"), tint: colors.textTertiary)
                 } else {
                     ForEach(debrid.configuredCredentials) { credential in
                         SettingsRow(
                             title: credential.provider.displayName,
                             subtitle: debrid.activeResolver?.provider == credential.provider
-                                ? "Currently used for resolution" : nil,
+                                ? L10n.text("settings.debrid.currently_resolver", fallback: "Currently used for resolution") : nil,
                             trailing: {
                                 Image(systemName: debrid.activeResolver?.provider == credential.provider
                                       ? "checkmark.circle.fill" : "circle")
@@ -138,14 +138,14 @@ struct DebridSettingsContent: View {
                     }
                 }
                 SettingsToggle(
-                    title: "Cloud library",
-                    subtitle: "Show files already in your debrid account as sources",
+                    title: L10n.text("settings.debrid.cloud_library", fallback: "Cloud library"),
+                    subtitle: L10n.text("settings.debrid.cloud_library_sub", fallback: "Show files already in your debrid account as sources"),
                     systemImage: "cloud",
                     isOn: $debrid.cloudLibraryEnabled
                 )
                 SettingsStepperRow(
-                    title: "Pre-resolve top sources",
-                    subtitle: "Warm up links for the first N results so playback starts instantly",
+                    title: L10n.text("settings.debrid.preresolve", fallback: "Pre-resolve top sources"),
+                    subtitle: L10n.text("settings.debrid.preresolve_sub", fallback: "Warm up links for the first N results so playback starts instantly"),
                     value: $debrid.instantPlaybackPreparationLimit,
                     range: 0...5
                 )
@@ -158,18 +158,18 @@ struct DebridSettingsContent: View {
     @ViewBuilder
     private func deviceAuthRows(for provider: DebridProvider) -> some View {
         if let deviceAuth, deviceAuth.provider == provider {
-            SettingsInfoRow(title: "Code", value: deviceAuth.code.userCode, tint: colors.secondary)
+            SettingsInfoRow(title: L10n.text("settings.debrid.code", fallback: "Code"), value: deviceAuth.code.userCode, tint: colors.secondary)
             SettingsInfoRow(
-                title: "Enter it at",
+                title: L10n.text("settings.debrid.enter_it_at", fallback: "Enter it at"),
                 value: deviceAuth.code.friendlyVerificationURL,
                 tint: colors.textSecondary
             )
         }
         SettingsRow(
-            title: deviceAuth?.provider == provider ? "Waiting for approval…" : "Sign in with a code",
+            title: deviceAuth?.provider == provider ? "Waiting for approval…" : L10n.text("settings.debrid.sign_in_code", fallback: "Sign in with a code"),
             subtitle: deviceAuth?.provider == provider
                 ? "Cancel"
-                : "Approve on your phone — nothing to type here",
+                : L10n.text("settings.debrid.approve_on_phone", fallback: "Approve on your phone — nothing to type here"),
             systemImage: "qrcode",
             action: {
                 if deviceAuth?.provider == provider {
@@ -181,9 +181,9 @@ struct DebridSettingsContent: View {
         )
         if let deviceAuthMessage, deviceAuth?.provider == provider || deviceAuth == nil {
             SettingsInfoRow(
-                title: "Status",
+                title: L10n.text("settings.debrid.status", fallback: "Status"),
                 value: deviceAuthMessage,
-                tint: deviceAuthMessage.hasPrefix("Connected") ? colors.success : colors.error
+                tint: deviceAuthMessage.hasPrefix(L10n.text("settings.debrid.connected", fallback: "Connected")) ? colors.success : colors.error
             )
         }
     }
@@ -217,12 +217,12 @@ struct DebridSettingsContent: View {
             guard let key, !key.isEmpty else { continue }
             debrid.setApiKey(key, for: provider)
             deviceAuth = nil
-            deviceAuthMessage = "Connected"
+            deviceAuthMessage = L10n.text("settings.debrid.connected", fallback: "Connected")
             await validate(provider)
             return
         }
         deviceAuth = nil
-        deviceAuthMessage = "The code expired before it was approved."
+        deviceAuthMessage = L10n.text("settings.debrid.code_expired", fallback: "The code expired before it was approved.")
     }
 
     private func cancelDeviceAuth() {
@@ -241,7 +241,7 @@ struct DebridSettingsContent: View {
     private func validate(_ provider: DebridProvider) async {
         let key = debrid.apiKey(for: provider).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else {
-            validationMessages[provider] = "Enter a key first"
+            validationMessages[provider] = L10n.text("settings.debrid.need_key", fallback: "Enter a key first")
             return
         }
         validating = provider
@@ -261,9 +261,9 @@ struct DebridSettingsContent: View {
         @Bindable var debrid = debrid
 
         return VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
-            SettingsCard(title: "Quick filters") {
+            SettingsCard(title: L10n.text("settings.debrid.quick_filters", fallback: "Quick filters")) {
                 SettingsOptionRow(
-                    title: "Minimum quality",
+                    title: L10n.text("settings.debrid.min_quality", fallback: "Minimum quality"),
                     systemImage: "arrow.up.right.square",
                     selection: $debrid.streamMinimumQuality
                 )
@@ -278,49 +278,49 @@ struct DebridSettingsContent: View {
                     selection: $debrid.streamHdrFilter
                 )
                 SettingsOptionRow(
-                    title: "Codec",
+                    title: L10n.text("settings.debrid.codec", fallback: "Codec"),
                     systemImage: "film.stack",
                     selection: $debrid.streamCodecFilter
                 )
             }
 
             SettingsCard(
-                title: "Resolutions",
-                footnote: "Required narrows to only those; excluded removes them entirely."
+                title: L10n.text("settings.debrid.resolutions", fallback: "Resolutions"),
+                footnote: L10n.text("settings.debrid.required_footnote", fallback: "Required narrows to only those; excluded removes them entirely.")
             ) {
                 SettingsMultiSelectRow(
-                    title: "Required",
+                    title: L10n.text("settings.debrid.required", fallback: "Required"),
                     options: DebridStreamResolution.defaultOrder,
                     selection: preferencesBinding(\.requiredResolutions)
                 )
                 SettingsMultiSelectRow(
-                    title: "Excluded",
+                    title: L10n.text("settings.debrid.excluded", fallback: "Excluded"),
                     options: DebridStreamResolution.defaultOrder,
                     selection: preferencesBinding(\.excludedResolutions)
                 )
             }
 
-            SettingsCard(title: "Source quality") {
+            SettingsCard(title: L10n.text("settings.debrid.source_quality", fallback: "Source quality")) {
                 SettingsMultiSelectRow(
-                    title: "Required",
+                    title: L10n.text("settings.debrid.required", fallback: "Required"),
                     options: DebridStreamQuality.defaultOrder,
                     selection: preferencesBinding(\.requiredQualities)
                 )
                 SettingsMultiSelectRow(
-                    title: "Excluded",
+                    title: L10n.text("settings.debrid.excluded", fallback: "Excluded"),
                     options: DebridStreamQuality.defaultOrder,
                     selection: preferencesBinding(\.excludedQualities)
                 )
             }
 
-            SettingsCard(title: "Visual tags") {
+            SettingsCard(title: L10n.text("settings.debrid.visual_tags", fallback: "Visual tags")) {
                 SettingsMultiSelectRow(
-                    title: "Required",
+                    title: L10n.text("settings.debrid.required", fallback: "Required"),
                     options: DebridStreamVisualTag.defaultOrder,
                     selection: preferencesBinding(\.requiredVisualTags)
                 )
                 SettingsMultiSelectRow(
-                    title: "Excluded",
+                    title: L10n.text("settings.debrid.excluded", fallback: "Excluded"),
                     options: DebridStreamVisualTag.defaultOrder,
                     selection: preferencesBinding(\.excludedVisualTags)
                 )
@@ -328,35 +328,35 @@ struct DebridSettingsContent: View {
 
             SettingsCard(title: "Audio") {
                 SettingsMultiSelectRow(
-                    title: "Required formats",
+                    title: L10n.text("settings.debrid.required_formats", fallback: "Required formats"),
                     options: DebridStreamAudioTag.defaultOrder,
                     selection: preferencesBinding(\.requiredAudioTags)
                 )
                 SettingsMultiSelectRow(
-                    title: "Excluded formats",
+                    title: L10n.text("settings.debrid.excluded_formats", fallback: "Excluded formats"),
                     options: DebridStreamAudioTag.defaultOrder,
                     selection: preferencesBinding(\.excludedAudioTags)
                 )
                 SettingsMultiSelectRow(
-                    title: "Required channels",
+                    title: L10n.text("settings.debrid.required_channels", fallback: "Required channels"),
                     options: DebridStreamAudioChannel.defaultOrder,
                     selection: preferencesBinding(\.requiredAudioChannels)
                 )
                 SettingsMultiSelectRow(
-                    title: "Excluded channels",
+                    title: L10n.text("settings.debrid.excluded_channels", fallback: "Excluded channels"),
                     options: DebridStreamAudioChannel.defaultOrder,
                     selection: preferencesBinding(\.excludedAudioChannels)
                 )
             }
 
-            SettingsCard(title: "Encoding") {
+            SettingsCard(title: L10n.text("settings.debrid.encoding", fallback: "Encoding")) {
                 SettingsMultiSelectRow(
-                    title: "Required",
+                    title: L10n.text("settings.debrid.required", fallback: "Required"),
                     options: DebridStreamEncode.defaultOrder,
                     selection: preferencesBinding(\.requiredEncodes)
                 )
                 SettingsMultiSelectRow(
-                    title: "Excluded",
+                    title: L10n.text("settings.debrid.excluded", fallback: "Excluded"),
                     options: DebridStreamEncode.defaultOrder,
                     selection: preferencesBinding(\.excludedEncodes)
                 )
@@ -364,11 +364,11 @@ struct DebridSettingsContent: View {
 
             SettingsCard(title: "Languages") {
                 SettingsMultiSelectRow(
-                    title: "Required",
+                    title: L10n.text("settings.debrid.required", fallback: "Required"),
                     selection: preferencesBinding(\.requiredLanguages)
                 )
                 SettingsMultiSelectRow(
-                    title: "Excluded",
+                    title: L10n.text("settings.debrid.excluded", fallback: "Excluded"),
                     selection: preferencesBinding(\.excludedLanguages)
                 )
             }
@@ -383,41 +383,41 @@ struct DebridSettingsContent: View {
         return VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
             SettingsCard(
                 title: "Sort",
-                footnote: "The ranked criteria below take precedence when any are enabled."
+                footnote: L10n.text("settings.debrid.ranking_footnote", fallback: "The ranked criteria below take precedence when any are enabled.")
             ) {
                 SettingsOptionRow(
-                    title: "Simple sort",
+                    title: L10n.text("settings.debrid.simple_sort", fallback: "Simple sort"),
                     systemImage: "arrow.up.arrow.down",
                     selection: $debrid.streamSortMode
                 )
             }
 
             SettingsCard(
-                title: "Preference order",
-                footnote: "Position decides ranking — the first entry scores highest."
+                title: L10n.text("settings.debrid.preference_order", fallback: "Preference order"),
+                footnote: L10n.text("settings.debrid.preference_order_footnote", fallback: "Position decides ranking — the first entry scores highest.")
             ) {
                 SettingsPriorityListRow(
-                    title: "Resolutions",
+                    title: L10n.text("settings.debrid.resolutions", fallback: "Resolutions"),
                     order: preferencesBinding(\.preferredResolutions)
                 )
                 SettingsPriorityListRow(
-                    title: "Source quality",
+                    title: L10n.text("settings.debrid.source_quality", fallback: "Source quality"),
                     order: preferencesBinding(\.preferredQualities)
                 )
                 SettingsPriorityListRow(
-                    title: "Visual tags",
+                    title: L10n.text("settings.debrid.visual_tags", fallback: "Visual tags"),
                     order: preferencesBinding(\.preferredVisualTags)
                 )
                 SettingsPriorityListRow(
-                    title: "Audio formats",
+                    title: L10n.text("settings.debrid.audio_formats", fallback: "Audio formats"),
                     order: preferencesBinding(\.preferredAudioTags)
                 )
                 SettingsPriorityListRow(
-                    title: "Audio channels",
+                    title: L10n.text("settings.debrid.audio_channels", fallback: "Audio channels"),
                     order: preferencesBinding(\.preferredAudioChannels)
                 )
                 SettingsPriorityListRow(
-                    title: "Encoding",
+                    title: L10n.text("settings.debrid.encoding", fallback: "Encoding"),
                     order: preferencesBinding(\.preferredEncodes)
                 )
             }
@@ -430,40 +430,40 @@ struct DebridSettingsContent: View {
         @Bindable var debrid = debrid
 
         return VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
-            SettingsCard(title: "Result caps") {
+            SettingsCard(title: L10n.text("settings.debrid.result_caps", fallback: "Result caps")) {
                 SettingsStepperRow(
-                    title: "Maximum sources",
-                    subtitle: "0 shows everything the addons return",
+                    title: L10n.text("settings.debrid.max_sources", fallback: "Maximum sources"),
+                    subtitle: L10n.text("settings.debrid.max_sources_sub", fallback: "0 shows everything the addons return"),
                     value: $debrid.streamMaxResults,
                     range: 0...100, step: 5,
-                    format: { $0 == 0 ? "Unlimited" : "\($0)" }
+                    format: { $0 == 0 ? L10n.text("settings.debrid.unlimited", fallback: "Unlimited") : "\($0)" }
                 )
                 SettingsStepperRow(
-                    title: "Per resolution",
+                    title: L10n.text("settings.debrid.per_resolution", fallback: "Per resolution"),
                     value: preferencesBinding(\.maxPerResolution),
                     range: 0...20,
-                    format: { $0 == 0 ? "Unlimited" : "\($0)" }
+                    format: { $0 == 0 ? L10n.text("settings.debrid.unlimited", fallback: "Unlimited") : "\($0)" }
                 )
                 SettingsStepperRow(
-                    title: "Per quality",
+                    title: L10n.text("settings.debrid.per_quality", fallback: "Per quality"),
                     value: preferencesBinding(\.maxPerQuality),
                     range: 0...20,
-                    format: { $0 == 0 ? "Unlimited" : "\($0)" }
+                    format: { $0 == 0 ? L10n.text("settings.debrid.unlimited", fallback: "Unlimited") : "\($0)" }
                 )
             }
 
             SettingsCard(title: "File size") {
                 SettingsStepperRow(
-                    title: "Minimum size",
+                    title: L10n.text("settings.debrid.min_size", fallback: "Minimum size"),
                     value: preferencesBinding(\.sizeMinGb),
                     range: 0...100,
-                    format: { $0 == 0 ? "Any" : "\($0) GB" }
+                    format: { $0 == 0 ? L10n.text("settings.debrid.any", fallback: "Any") : "\($0) GB" }
                 )
                 SettingsStepperRow(
-                    title: "Maximum size",
+                    title: L10n.text("settings.debrid.max_size", fallback: "Maximum size"),
                     value: preferencesBinding(\.sizeMaxGb),
                     range: 0...200, step: 5,
-                    format: { $0 == 0 ? "Any" : "\($0) GB" }
+                    format: { $0 == 0 ? L10n.text("settings.debrid.any", fallback: "Any") : "\($0) GB" }
                 )
             }
         }

@@ -16,25 +16,25 @@ struct ContentDiscoverySettingsContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
             SettingsCard(
-                title: "Sources",
-                footnote: "Add-ons, plugins, catalogs and discovery sources."
+                title: L10n.text("settings.discovery.sources", fallback: "Sources"),
+                footnote: L10n.text("settings.discovery.sources_footnote", fallback: "Add-ons, plugins, catalogs and discovery sources.")
             ) {
                 SettingsRow(
-                    title: "Add-ons",
+                    title: L10n.text("settings.discovery.addons", fallback: "Add-ons"),
                     subtitle: "\(addons.installed.count) installed · \(addons.enabledAddons.count) enabled",
                     systemImage: "square.grid.2x2",
                     trailing: { SettingsValueLabel(value: "") },
                     action: { router.push(.addonManager) }
                 )
                 SettingsRow(
-                    title: "Catalog order",
-                    subtitle: "Choose which catalogs appear on Home and in what order",
+                    title: L10n.text("settings.discovery.catalog_order", fallback: "Catalog order"),
+                    subtitle: L10n.text("settings.discovery.catalog_order_sub", fallback: "Choose which catalogs appear on Home and in what order"),
                     systemImage: "list.number",
                     trailing: { SettingsValueLabel(value: "") },
                     action: { router.push(.catalogOrder) }
                 )
                 SettingsRow(
-                    title: "Collections",
+                    title: L10n.text("settings.discovery.collections", fallback: "Collections"),
                     subtitle: collectionSubtitle,
                     systemImage: "folder",
                     trailing: { SettingsValueLabel(value: "") },
@@ -42,15 +42,15 @@ struct ContentDiscoverySettingsContent: View {
                 )
                 if showsPlugins {
                     SettingsRow(
-                        title: "Plugins",
+                        title: L10n.text("settings.discovery.plugins", fallback: "Plugins"),
                         subtitle: pluginSubtitle,
                         systemImage: "wrench.and.screwdriver",
                         trailing: { SettingsValueLabel(value: "") },
                         action: { router.push(.pluginManager) }
                     )
                     SettingsRow(
-                        title: "Repositories",
-                        subtitle: "Add or remove plugin repositories from a phone",
+                        title: L10n.text("settings.discovery.repositories", fallback: "Repositories"),
+                        subtitle: L10n.text("settings.discovery.repositories_sub", fallback: "Add or remove plugin repositories from a phone"),
                         systemImage: "shippingbox",
                         trailing: { SettingsValueLabel(value: "") },
                         action: { router.push(.repositoryConfig) }
@@ -64,7 +64,7 @@ struct ContentDiscoverySettingsContent: View {
 
     private var collectionSubtitle: String {
         let count = collections.collections.count
-        guard count > 0 else { return "Folders of catalogs, TMDB searches and Trakt lists" }
+        guard count > 0 else { return L10n.text("settings.discovery.collections_sub", fallback: "Folders of catalogs, TMDB searches and Trakt lists") }
         let folders = collections.collections.reduce(0) { $0 + $1.folders.count }
         return "\(count) collection\(count == 1 ? "" : "s") · \(folders) folder\(folders == 1 ? "" : "s")"
     }
@@ -72,7 +72,7 @@ struct ContentDiscoverySettingsContent: View {
     private var pluginSubtitle: String {
         let repositories = plugins.repositories.count
         let enabled = plugins.enabledScrapers.count
-        guard repositories > 0 else { return "Local JavaScript scrapers" }
+        guard repositories > 0 else { return L10n.text("settings.discovery.plugins_sub", fallback: "Local JavaScript scrapers") }
         return "\(repositories) repositor\(repositories == 1 ? "y" : "ies") · \(enabled) scraper\(enabled == 1 ? "" : "s") active"
     }
 }
@@ -85,51 +85,51 @@ struct DiscoverySettingsCard: View {
         @Bindable var layout = settings.layout
 
         Group {
-            SettingsCard(title: "Discover") {
+            SettingsCard(title: L10n.text("settings.discovery.discover", fallback: "Discover")) {
                 SettingsOptionRow(
-                    title: "Discover placement",
+                    title: L10n.text("settings.discovery.discover_placement", fallback: "Discover placement"),
                     systemImage: "square.grid.2x2",
                     selection: $layout.discoverLocation
                 )
                 SettingsToggle(
-                    title: "Discover inside Search",
-                    subtitle: "Show the catalog browser when the search field is empty",
+                    title: L10n.text("settings.discovery.discover_in_search", fallback: "Discover inside Search"),
+                    subtitle: L10n.text("settings.discovery.discover_in_search_sub", fallback: "Show the catalog browser when the search field is empty"),
                     isOn: $layout.searchDiscoverEnabled
                 )
             }
 
-            SettingsCard(title: "Catalog titles") {
+            SettingsCard(title: L10n.text("settings.discovery.catalog_titles", fallback: "Catalog titles")) {
                 SettingsToggle(
-                    title: "Show addon name",
-                    subtitle: "Next to each rail title",
+                    title: L10n.text("settings.discovery.show_addon_name", fallback: "Show addon name"),
+                    subtitle: L10n.text("settings.discovery.show_addon_name_sub", fallback: "Next to each rail title"),
                     isOn: $layout.catalogAddonNameEnabled
                 )
                 SettingsToggle(
-                    title: "Show type suffix",
-                    subtitle: "Append Movies / Series to rail titles",
+                    title: L10n.text("settings.discovery.show_type_suffix", fallback: "Show type suffix"),
+                    subtitle: L10n.text("settings.discovery.show_type_suffix_sub", fallback: "Append Movies / Series to rail titles"),
                     isOn: $layout.catalogTypeSuffixEnabled
                 )
                 SettingsToggle(
-                    title: "Follow addon order",
-                    subtitle: "Order rails by the addon list rather than manually",
+                    title: L10n.text("settings.discovery.follow_addon_order", fallback: "Follow addon order"),
+                    subtitle: L10n.text("settings.discovery.follow_addon_order_sub", fallback: "Order rails by the addon list rather than manually"),
                     isOn: $layout.followAddonsOrder
                 )
             }
 
-            SettingsCard(title: "Content") {
+            SettingsCard(title: L10n.text("settings.discovery.content", fallback: "Content")) {
                 SettingsToggle(
-                    title: "Hide unreleased content",
-                    subtitle: "Drop titles whose release date is still in the future",
+                    title: L10n.text("settings.discovery.hide_unreleased", fallback: "Hide unreleased content"),
+                    subtitle: L10n.text("settings.discovery.hide_unreleased_sub", fallback: "Drop titles whose release date is still in the future"),
                     isOn: $layout.hideUnreleasedContent
                 )
                 SettingsToggle(
-                    title: "Show full release dates",
-                    subtitle: "Rather than just the year",
+                    title: L10n.text("settings.discovery.full_dates", fallback: "Show full release dates"),
+                    subtitle: L10n.text("settings.discovery.full_dates_sub", fallback: "Rather than just the year"),
                     isOn: $layout.showFullReleaseDate
                 )
                 SettingsToggle(
-                    title: "Prefer external metadata addon",
-                    subtitle: "Ask a dedicated metadata addon before the catalog's own",
+                    title: L10n.text("settings.discovery.prefer_external", fallback: "Prefer external metadata addon"),
+                    subtitle: L10n.text("settings.discovery.prefer_external_sub", fallback: "Ask a dedicated metadata addon before the catalog's own"),
                     isOn: $layout.preferExternalMetaAddonDetail
                 )
             }
@@ -151,7 +151,7 @@ struct IntegrationsHubContent: View {
 
         var title: String {
             switch self {
-            case .hub: return "Integrations"
+            case .hub: return L10n.text("settings.discovery.integrations", fallback: "Integrations")
             case .debrid: return "Debrid"
             case .tmdb: return "TMDB"
             case .mdblist: return "MDBList"
@@ -162,10 +162,10 @@ struct IntegrationsHubContent: View {
         var subtitle: String {
             switch self {
             case .hub: return ""
-            case .debrid: return "Real-Debrid, Premiumize and TorBox, plus stream filtering"
-            case .tmdb: return "Better artwork, logos, cast and recommendations"
-            case .mdblist: return "Aggregated ratings on the detail screen"
-            case .animeSkip: return "Skip anime intros and outros"
+            case .debrid: return L10n.text("settings.discovery.debrid_sub", fallback: "Real-Debrid, Premiumize and TorBox, plus stream filtering")
+            case .tmdb: return L10n.text("settings.discovery.tmdb_sub", fallback: "Better artwork, logos, cast and recommendations")
+            case .mdblist: return L10n.text("settings.discovery.mdblist_sub", fallback: "Aggregated ratings on the detail screen")
+            case .animeSkip: return L10n.text("settings.discovery.animeskip_sub", fallback: "Skip anime intros and outros")
             }
         }
     }
@@ -176,7 +176,7 @@ struct IntegrationsHubContent: View {
         VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
             if section != .hub {
                 SettingsRow(
-                    title: "Back to integrations",
+                    title: L10n.text("settings.discovery.back_to_integrations", fallback: "Back to integrations"),
                     systemImage: "chevron.left",
                     action: { section = .hub }
                 )
@@ -184,7 +184,7 @@ struct IntegrationsHubContent: View {
 
             switch section {
             case .hub:
-                SettingsCard(title: "Integrations") {
+                SettingsCard(title: L10n.text("settings.discovery.integrations", fallback: "Integrations")) {
                     ForEach(Section.allCases.filter { $0 != .hub }) { entry in
                         SettingsRow(
                             title: entry.title,
@@ -210,14 +210,14 @@ struct IntegrationsHubContent: View {
     private func statusLabel(for entry: Section) -> String {
         switch entry {
         case .hub: return ""
-        case .debrid: return settings.debrid.enabled && settings.debrid.activeResolver != nil ? "On" : "Off"
-        case .tmdb: return settings.tmdb.enabled && !settings.tmdb.apiKey.isEmpty ? "On" : "Off"
-        case .mdblist: return settings.mdblist.enabled && !settings.mdblist.apiKey.isEmpty ? "On" : "Off"
+        case .debrid: return settings.debrid.enabled && settings.debrid.activeResolver != nil ? L10n.text("settings.discovery.on", fallback: "On") : L10n.text("settings.discovery.off", fallback: "Off")
+        case .tmdb: return settings.tmdb.enabled && !settings.tmdb.apiKey.isEmpty ? L10n.text("settings.discovery.on", fallback: "On") : L10n.text("settings.discovery.off", fallback: "Off")
+        case .mdblist: return settings.mdblist.enabled && !settings.mdblist.apiKey.isEmpty ? L10n.text("settings.discovery.on", fallback: "On") : L10n.text("settings.discovery.off", fallback: "Off")
         case .animeSkip:
             // IntroDB and AniSkip always run, so the card is never truly "off" — what this
             // reports is whether the viewer added anything to them.
             let skip = settings.skipIntro
-            return skip.animeSkipEnabled || !skip.autoSkipSegmentKinds.isEmpty ? "On" : "Off"
+            return skip.animeSkipEnabled || !skip.autoSkipSegmentKinds.isEmpty ? L10n.text("settings.discovery.on", fallback: "On") : L10n.text("settings.discovery.off", fallback: "Off")
         }
     }
 }

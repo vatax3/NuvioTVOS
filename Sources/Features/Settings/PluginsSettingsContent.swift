@@ -14,7 +14,7 @@ struct PluginsSettingsContent: View {
 
         VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
             SettingsCard(
-                title: "Local scrapers",
+                title: L10n.text("settings.plugins.local_scrapers", fallback: "Local scrapers"),
                 footnote: """
                 Plugins are JavaScript scrapers from a repository's manifest.json. They run in a \
                 sandboxed JS engine with no access to your device, and their results appear \
@@ -22,37 +22,37 @@ struct PluginsSettingsContent: View {
                 """
             ) {
                 SettingsToggle(
-                    title: "Enable plugins",
+                    title: L10n.text("settings.plugins.enable", fallback: "Enable plugins"),
                     systemImage: "puzzlepiece.fill",
                     isOn: $player.pluginsEnabled
                 )
                 SettingsToggle(
-                    title: "Group results by repository",
-                    subtitle: "Otherwise plugin streams share one section",
+                    title: L10n.text("settings.plugins.group_by_repo", fallback: "Group results by repository"),
+                    subtitle: L10n.text("settings.plugins.group_by_repo_sub", fallback: "Otherwise plugin streams share one section"),
                     isOn: $player.groupPluginStreamsByRepository
                 )
             }
 
             SettingsCard(
-                title: "Add repository",
-                footnote: "Paste a repository URL. The trailing /manifest.json is optional."
+                title: L10n.text("settings.plugins.add_repo", fallback: "Add repository"),
+                footnote: L10n.text("settings.plugins.add_repo_footnote", fallback: "Paste a repository URL. The trailing /manifest.json is optional.")
             ) {
                 SettingsTextFieldRow(
-                    title: "Repository URL",
+                    title: L10n.text("settings.plugins.repo_url", fallback: "Repository URL"),
                     placeholder: "https://…",
                     text: $urlInput,
-                    trailingAction: (label: plugins.isBusy ? "Adding…" : "Add", action: add)
+                    trailingAction: (label: plugins.isBusy ? L10n.text("settings.plugins.adding", fallback: "Adding…") : L10n.text("settings.plugins.add", fallback: "Add"), action: add)
                 )
             }
 
             if let message = message ?? plugins.lastError {
                 Text(message)
                     .nuvioText(NuvioTextStyles.bodyCompact)
-                    .foregroundStyle(message.hasPrefix("Added") ? colors.success : colors.error)
+                    .foregroundStyle(message.hasPrefix(L10n.text("settings.plugins.added", fallback: "Added")) ? colors.success : colors.error)
             }
 
             if plugins.repositories.isEmpty {
-                Text("No plugin repositories installed.")
+                Text(L10n.text("settings.plugins.none_installed", fallback: "No plugin repositories installed."))
                     .nuvioText(NuvioTextStyles.bodyCompact)
                     .foregroundStyle(colors.textSecondary)
             } else {
@@ -69,7 +69,7 @@ struct PluginsSettingsContent: View {
         message = nil
         Task {
             if await plugins.addRepository(url: url) {
-                message = "Added."
+                message = L10n.text("settings.plugins.added_done", fallback: "Added.")
                 urlInput = ""
             }
         }
@@ -89,7 +89,7 @@ private struct RepositoryCard: View {
     var body: some View {
         SettingsCard(title: repository.name, footnote: footnote) {
             SettingsToggle(
-                title: "Enabled",
+                title: L10n.text("settings.plugins.enabled", fallback: "Enabled"),
                 subtitle: "\(scrapers.count) scraper\(scrapers.count == 1 ? "" : "s") downloaded",
                 systemImage: "power",
                 isOn: Binding(
@@ -113,14 +113,14 @@ private struct RepositoryCard: View {
             }
 
             SettingsRow(
-                title: "Refresh",
-                subtitle: "Re-read the manifest and re-download scrapers",
+                title: L10n.text("settings.plugins.refresh", fallback: "Refresh"),
+                subtitle: L10n.text("settings.plugins.refresh_sub", fallback: "Re-read the manifest and re-download scrapers"),
                 systemImage: "arrow.clockwise",
                 action: { Task { await plugins.refresh(repository) } }
             )
             SettingsRow(
-                title: "Remove",
-                subtitle: "Delete this repository and its scrapers",
+                title: L10n.text("settings.plugins.remove", fallback: "Remove"),
+                subtitle: L10n.text("settings.plugins.remove_sub", fallback: "Delete this repository and its scrapers"),
                 systemImage: "trash",
                 action: { plugins.remove(repository) }
             )
@@ -139,7 +139,7 @@ private struct RepositoryCard: View {
 
     private func scraperSubtitle(_ scraper: InstalledScraper) -> String {
         var parts: [String] = []
-        if !scraper.manifestEnabled { parts.append("Disabled by the repository") }
+        if !scraper.manifestEnabled { parts.append(L10n.text("settings.plugins.disabled_by_repo", fallback: "Disabled by the repository")) }
         if let version = scraper.version?.nilIfBlank { parts.append("v\(version)") }
         if !scraper.supportedTypes.isEmpty {
             parts.append(scraper.supportedTypes.joined(separator: ", "))

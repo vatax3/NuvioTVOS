@@ -49,7 +49,7 @@ struct AccountSettingsContent: View {
     @ViewBuilder
     private var serverCard: some View {
         SettingsCard(
-            title: "Server",
+            title: L10n.text("settings.account.server", fallback: "Server"),
             footnote: """
             Nuvio's own backend and key are already filled in — nothing to do here to use a \
             Nuvio account. A self-hosted server can be found by address instead: Nuvio reads its \
@@ -57,41 +57,41 @@ struct AccountSettingsContent: View {
             """
         ) {
             SettingsTextFieldRow(
-                title: "Publishable key",
-                subtitle: "The anon / publishable key — safe to store on the device, it is what every Nuvio client ships",
+                title: L10n.text("settings.account.publishable_key", fallback: "Publishable key"),
+                subtitle: L10n.text("settings.account.publishable_key_sub", fallback: "The anon / publishable key — safe to store on the device, it is what every Nuvio client ships"),
                 masked: true,
                 text: $publishableKey
             )
             SettingsRow(
-                title: "Save",
+                title: L10n.text("settings.account.save", fallback: "Save"),
                 systemImage: "checkmark.circle",
                 action: saveConfiguration
             )
 
             SettingsTextFieldRow(
-                title: "Self-hosted server",
-                subtitle: "Find one by address instead",
+                title: L10n.text("settings.account.self_hosted", fallback: "Self-hosted server"),
+                subtitle: L10n.text("settings.account.find_by_address", fallback: "Find one by address instead"),
                 placeholder: "example.com",
                 text: $serverAddress,
-                trailingAction: (label: isDiscovering ? "Looking…" : "Connect", action: discover)
+                trailingAction: (label: isDiscovering ? L10n.text("settings.account.looking", fallback: "Looking…") : L10n.text("settings.account.connect", fallback: "Connect"), action: discover)
             )
             if let discoveryMessage {
                 SettingsInfoRow(
-                    title: "Status",
+                    title: L10n.text("settings.account.status", fallback: "Status"),
                     value: discoveryMessage,
-                    tint: discoveryMessage.hasPrefix("Found") ? colors.success : colors.error
+                    tint: discoveryMessage.hasPrefix(L10n.text("settings.account.found", fallback: "Found")) ? colors.success : colors.error
                 )
             }
 
             SettingsTextFieldRow(
-                title: "Backend URL",
-                subtitle: "The Supabase project URL, e.g. https://xyz.supabase.co",
+                title: L10n.text("settings.account.backend_url", fallback: "Backend URL"),
+                subtitle: L10n.text("settings.account.backend_url_sub", fallback: "The Supabase project URL, e.g. https://xyz.supabase.co"),
                 placeholder: "https://…",
                 text: $backendUrl
             )
             SettingsTextFieldRow(
-                title: "Sign-in page URL",
-                subtitle: "Only if the QR code 404s — the page the phone opens, e.g. https://nuvio.tv/tv-login. Left blank Nuvio derives it from the backend.",
+                title: L10n.text("settings.account.signin_url", fallback: "Sign-in page URL"),
+                subtitle: L10n.text("settings.account.signin_url_sub", fallback: "Only if the QR code 404s — the page the phone opens, e.g. https://nuvio.tv/tv-login. Left blank Nuvio derives it from the backend."),
                 placeholder: "https://…/tv-login",
                 text: $tvLoginWebUrl
             )
@@ -103,17 +103,17 @@ struct AccountSettingsContent: View {
     @ViewBuilder
     private var signInCard: some View {
         SettingsCard(
-            title: "Sign in",
+            title: L10n.text("settings.account.sign_in", fallback: "Sign in"),
             footnote: account.isConfigured
-                ? "Scan the code with a phone, sign in there, and this device is signed in too. Your library, progress, collections, addons and settings arrive straight away."
-                : "This server has no publishable key, so there is nothing to sign in to. Fill it in below, or clear the backend URL to go back to Nuvio's."
+                ? L10n.text("settings.account.sign_in_footnote", fallback: "Scan the code with a phone, sign in there, and this device is signed in too. Your library, progress, collections, addons and settings arrive straight away.")
+                : L10n.text("settings.account.no_key_footnote", fallback: "This server has no publishable key, so there is nothing to sign in to. Fill it in below, or clear the backend URL to go back to Nuvio's.")
         ) {
             // The code itself lives on its own screen. It has to be large enough to scan from a
             // sofa, and a settings column that also holds a section rail has neither the width
             // nor — with no focusable row to scroll to — a way to bring it fully on screen.
             SettingsRow(
-                title: "Sign in with a phone",
-                subtitle: "Shows a QR code and a short code",
+                title: L10n.text("settings.account.sign_in_phone", fallback: "Sign in with a phone"),
+                subtitle: L10n.text("settings.account.sign_in_phone_sub", fallback: "Shows a QR code and a short code"),
                 systemImage: "qrcode",
                 action: { router.push(.qrSignIn) }
             )
@@ -121,19 +121,19 @@ struct AccountSettingsContent: View {
             .opacity(account.isConfigured ? 1 : NuvioTheme.effects.disabledAlpha)
 
             if case .failed(let message) = account.loginState {
-                SettingsInfoRow(title: "Error", value: message, tint: colors.error)
+                SettingsInfoRow(title: L10n.text("settings.account.error", fallback: "Error"), value: message, tint: colors.error)
             }
         }
 
         if account.isConfigured, account.configuration.supportsEmailPassword {
             SettingsCard(
-                title: "Or use email and password",
-                footnote: "The official deployment prefers phone sign-in; a self-hosted server may allow this."
+                title: L10n.text("settings.account.or_email", fallback: "Or use email and password"),
+                footnote: L10n.text("settings.account.or_email_footnote", fallback: "The official deployment prefers phone sign-in; a self-hosted server may allow this.")
             ) {
-                SettingsTextFieldRow(title: "Email", placeholder: "you@example.com", text: $email)
-                SettingsTextFieldRow(title: "Password", masked: true, text: $password)
+                SettingsTextFieldRow(title: L10n.text("settings.account.email", fallback: "Email"), placeholder: "you@example.com", text: $email)
+                SettingsTextFieldRow(title: L10n.text("settings.account.password", fallback: "Password"), masked: true, text: $password)
                 SettingsRow(
-                    title: "Sign in",
+                    title: L10n.text("settings.account.sign_in", fallback: "Sign in"),
                     systemImage: "arrow.right.circle",
                     action: {
                         Task { await account.signIn(email: email, password: password) }
@@ -148,24 +148,24 @@ struct AccountSettingsContent: View {
     // MARK: Signed in
 
     private var signedInCard: some View {
-        SettingsCard(title: "Nuvio account") {
+        SettingsCard(title: L10n.text("settings.account.nuvio_account", fallback: "Nuvio account")) {
             SettingsInfoRow(
-                title: "Signed in as",
+                title: L10n.text("settings.account.signed_in_as", fallback: "Signed in as"),
                 value: account.accountLabel,
                 tint: colors.success
             )
             if let owner = account.syncOwnerId, owner != account.session?.userId {
                 SettingsInfoRow(
-                    title: "Linked to",
+                    title: L10n.text("settings.account.linked_to", fallback: "Linked to"),
                     value: String(owner.prefix(8)),
                     tint: colors.textSecondary
                 )
             }
             SettingsRow(
-                title: isConfirmingSignOut ? "Sign out and erase — press again to confirm" : "Sign out",
+                title: isConfirmingSignOut ? L10n.text("settings.account.sign_out_confirm", fallback: "Sign out and erase — press again to confirm") : L10n.text("settings.account.sign_out", fallback: "Sign out"),
                 subtitle: isConfirmingSignOut
-                    ? "Library, watch progress, collections, profiles, addons, plugins, debrid keys and settings are removed from this Apple TV"
-                    : "Removes this account's content from this Apple TV",
+                    ? L10n.text("settings.account.sign_out_sub", fallback: "Library, watch progress, collections, profiles, addons, plugins, debrid keys and settings are removed from this Apple TV")
+                    : L10n.text("settings.account.sign_out_short", fallback: "Removes this account's content from this Apple TV"),
                 systemImage: "rectangle.portrait.and.arrow.right",
                 action: signOut
             )
@@ -191,7 +191,7 @@ struct AccountSettingsContent: View {
         @Bindable var sync = sync
 
         return SettingsCard(
-            title: "Sync",
+            title: L10n.text("settings.account.sync", fallback: "Sync"),
             footnote: """
             Library, watch progress, collections, addons, plugin repositories and settings sync \
             per profile. Watch progress resolves per item by which device watched it most \
@@ -199,12 +199,12 @@ struct AccountSettingsContent: View {
             """
         ) {
             SettingsToggle(
-                title: "Sync with my account",
+                title: L10n.text("settings.account.sync_enabled", fallback: "Sync with my account"),
                 systemImage: "arrow.triangle.2.circlepath",
                 isOn: $sync.isEnabled
             )
             SettingsRow(
-                title: "Sync now",
+                title: L10n.text("settings.account.sync_now", fallback: "Sync now"),
                 subtitle: statusText,
                 systemImage: "arrow.clockwise",
                 action: runSync
@@ -213,7 +213,7 @@ struct AccountSettingsContent: View {
             .opacity(isSyncing ? NuvioTheme.effects.disabledAlpha : 1)
 
             if case .failed(let message) = sync.status {
-                SettingsInfoRow(title: "Error", value: message, tint: colors.error)
+                SettingsInfoRow(title: L10n.text("settings.account.error", fallback: "Error"), value: message, tint: colors.error)
             }
         }
     }
@@ -225,11 +225,11 @@ struct AccountSettingsContent: View {
 
     private var statusText: String {
         switch sync.status {
-        case .idle: return "Never synced on this device"
+        case .idle: return L10n.text("settings.account.never_synced", fallback: "Never synced on this device")
         case .syncing(let stage): return "Syncing \(stage.lowercased())…"
         case .succeeded(let date):
             return "Last synced \(date.formatted(date: .abbreviated, time: .shortened))"
-        case .failed: return "Last attempt failed"
+        case .failed: return L10n.text("settings.account.last_failed", fallback: "Last attempt failed")
         }
     }
 
@@ -268,7 +268,7 @@ struct AccountSettingsContent: View {
                 account.save(configuration: discovered)
                 backendUrl = discovered.backendUrl
                 publishableKey = discovered.publishableKey
-                discoveryMessage = "Found it — sign in below."
+                discoveryMessage = L10n.text("settings.account.found_it", fallback: "Found it — sign in below.")
             } catch {
                 discoveryMessage = error.localizedDescription
             }
@@ -318,7 +318,7 @@ struct DeviceLinkingCard: View {
     var body: some View {
         Group {
             SettingsCard(
-                title: "Link another device",
+                title: L10n.text("settings.account.link_another", fallback: "Link another device"),
                 footnote: """
                 Sharing gives another device a code so it reads and writes this account's library, \
                 watch progress and settings. Joining points this device at somebody else's account \
@@ -328,14 +328,14 @@ struct DeviceLinkingCard: View {
                 switch mode {
                 case .none:
                     SettingsRow(
-                        title: "Share this account",
-                        subtitle: "Generate a code for another device",
+                        title: L10n.text("settings.account.share_account", fallback: "Share this account"),
+                        subtitle: L10n.text("settings.account.share_account_sub", fallback: "Generate a code for another device"),
                         systemImage: "square.and.arrow.up",
                         action: { start(.share) }
                     )
                     SettingsRow(
-                        title: "Join another account",
-                        subtitle: "Enter a code generated on another device",
+                        title: L10n.text("settings.account.join_account", fallback: "Join another account"),
+                        subtitle: L10n.text("settings.account.join_account_sub", fallback: "Enter a code generated on another device"),
                         systemImage: "square.and.arrow.down",
                         action: { start(.join) }
                     )
@@ -346,26 +346,26 @@ struct DeviceLinkingCard: View {
                 }
 
                 if case .working(let stage) = linking.phase {
-                    SettingsInfoRow(title: "Status", value: stage)
+                    SettingsInfoRow(title: L10n.text("settings.account.status", fallback: "Status"), value: stage)
                 }
                 if case .failed(let message) = linking.phase {
-                    SettingsInfoRow(title: "Error", value: message, tint: colors.error)
+                    SettingsInfoRow(title: L10n.text("settings.account.error", fallback: "Error"), value: message, tint: colors.error)
                 }
             }
 
             if !linking.linkedDevices.isEmpty {
                 SettingsCard(
-                    title: "Linked devices",
-                    footnote: "Unlinking stops a device writing to this account. Its local copy stays on that device."
+                    title: L10n.text("settings.account.linked_devices", fallback: "Linked devices"),
+                    footnote: L10n.text("settings.account.linked_devices_footnote", fallback: "Unlinking stops a device writing to this account. Its local copy stays on that device.")
                 ) {
                     ForEach(linking.linkedDevices) { device in
                         SettingsRow(
                             title: device.displayName,
                             subtitle: device.linkedDate.map {
                                 "Linked \(DateFormatter.nuvioMediumDate.string(from: $0))"
-                            } ?? "Linked",
+                            } ?? L10n.text("settings.account.linked", fallback: "Linked"),
                             systemImage: "tv.and.mediabox",
-                            trailing: { SettingsValueLabel(value: "Unlink") },
+                            trailing: { SettingsValueLabel(value: L10n.text("settings.account.unlink", fallback: "Unlink")) },
                             action: { confirmingUnlink = device }
                         )
                     }
@@ -374,21 +374,21 @@ struct DeviceLinkingCard: View {
         }
         .task { await linking.loadLinkedDevices(account: account) }
         .alert(
-            "Unlink \(confirmingUnlink?.displayName ?? "this device")?",
+            "Unlink \(confirmingUnlink?.displayName ?? L10n.text("settings.account.this_device", fallback: "this device"))?",
             isPresented: Binding(
                 get: { confirmingUnlink != nil },
                 set: { if !$0 { confirmingUnlink = nil } }
             )
         ) {
-            Button("Unlink", role: .destructive) {
+            Button(L10n.text("settings.account.unlink", fallback: "Unlink"), role: .destructive) {
                 if let device = confirmingUnlink {
                     Task { await linking.unlink(device, account: account) }
                 }
                 confirmingUnlink = nil
             }
-            Button("Keep", role: .cancel) { confirmingUnlink = nil }
+            Button(L10n.text("settings.account.keep", fallback: "Keep"), role: .cancel) { confirmingUnlink = nil }
         } message: {
-            Text("It stops syncing with this account. Nothing is deleted.")
+            Text(L10n.text("settings.account.unlink_message", fallback: "It stops syncing with this account. Nothing is deleted."))
         }
     }
 
@@ -398,13 +398,13 @@ struct DeviceLinkingCard: View {
     private var shareRows: some View {
         if case .generated(let generated) = linking.phase {
             VStack(alignment: .leading, spacing: NuvioTheme.spacing.sm) {
-                Text("Enter this code on the other device")
+                Text(L10n.text("settings.account.enter_code_other", fallback: "Enter this code on the other device"))
                     .nuvioText(NuvioTextStyles.metadata)
                     .foregroundStyle(colors.textTertiary)
                 Text(generated)
                     .nuvioText(NuvioTextStyles.display)
                     .foregroundStyle(colors.secondary)
-                Text("It also needs the PIN you just chose.")
+                Text(L10n.text("settings.account.needs_pin_too", fallback: "It also needs the PIN you just chose."))
                     .nuvioText(NuvioTextStyles.metadata)
                     .foregroundStyle(colors.textSecondary)
             }
@@ -412,18 +412,18 @@ struct DeviceLinkingCard: View {
             .padding(.vertical, NuvioTheme.spacing.md)
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            SettingsRow(title: "Done", systemImage: "checkmark", action: { finish() })
+            SettingsRow(title: L10n.text("settings.account.done", fallback: "Done"), systemImage: "checkmark", action: { finish() })
         } else {
             SettingsTextFieldRow(
-                title: "Choose a PIN",
-                subtitle: "At least four digits. The other device has to type it with the code.",
+                title: L10n.text("settings.account.choose_pin", fallback: "Choose a PIN"),
+                subtitle: L10n.text("settings.account.choose_pin_sub", fallback: "At least four digits. The other device has to type it with the code."),
                 placeholder: "····",
                 masked: true,
                 text: $pin
             )
             SettingsRow(
-                title: "Generate code",
-                subtitle: "Uploads this device's data first, so the other one receives a complete account",
+                title: L10n.text("settings.account.generate_code", fallback: "Generate code"),
+                subtitle: L10n.text("settings.account.generate_code_sub", fallback: "Uploads this device's data first, so the other one receives a complete account"),
                 systemImage: "number",
                 action: {
                     Task {
@@ -436,8 +436,8 @@ struct DeviceLinkingCard: View {
                 }
             )
             SettingsRow(
-                title: "Show my existing code",
-                subtitle: "If you already made one, this shows it again instead of replacing it",
+                title: L10n.text("settings.account.show_existing", fallback: "Show my existing code"),
+                subtitle: L10n.text("settings.account.show_existing_sub", fallback: "If you already made one, this shows it again instead of replacing it"),
                 systemImage: "arrow.clockwise",
                 action: { Task { await linking.fetchExistingCode(pin: pin) } }
             )
@@ -451,15 +451,15 @@ struct DeviceLinkingCard: View {
     private var joinRows: some View {
         if case .claimed = linking.phase {
             SettingsInfoRow(
-                title: "Linked",
-                value: "This device now shares that account.",
+                title: L10n.text("settings.account.linked", fallback: "Linked"),
+                value: L10n.text("settings.account.now_shared", fallback: "This device now shares that account."),
                 tint: colors.success
             )
-            SettingsRow(title: "Done", systemImage: "checkmark", action: { finish() })
+            SettingsRow(title: L10n.text("settings.account.done", fallback: "Done"), systemImage: "checkmark", action: { finish() })
         } else {
             SettingsTextFieldRow(
                 title: "Code",
-                placeholder: "From the other device",
+                placeholder: L10n.text("settings.account.from_other_device", fallback: "From the other device"),
                 text: $code
             )
             SettingsTextFieldRow(
@@ -469,8 +469,8 @@ struct DeviceLinkingCard: View {
                 text: $pin
             )
             SettingsRow(
-                title: "Link this device",
-                subtitle: "Replaces this device's library with the account's",
+                title: L10n.text("settings.account.link_this_device", fallback: "Link this device"),
+                subtitle: L10n.text("settings.account.link_this_device_sub", fallback: "Replaces this device's library with the account's"),
                 systemImage: "link",
                 action: {
                     Task {
