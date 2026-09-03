@@ -33,9 +33,15 @@ keys_in() {
 }
 
 # `L10n.text("key"` and `L10n.format("key"` — the only two entry points.
+#
+# Read with the sources joined into one stream rather than line by line: a call whose key sits on
+# its own line is the same call, and the line-oriented version reported those keys as orphans
+# while they were being used. An orphan report that is wrong is worse than none — it trains you
+# to skim the note.
 used_keys() {
-  grep -rhoE 'L10n\.(text|format)\("[^"]+"' Sources \
-    | sed -E 's/.*\("//; s/"$//' \
+  find Sources -name '*.swift' -exec cat {} + | tr '\n' ' ' \
+    | grep -oE 'L10n\.(text|format)\(\s*"[^"]+"' \
+    | sed -E 's/.*\([[:space:]]*"//; s/"$//' \
     | sort -u
 }
 

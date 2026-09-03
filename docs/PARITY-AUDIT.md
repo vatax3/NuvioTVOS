@@ -217,6 +217,25 @@ delivered as an ordinary one**. That third test is the regression. The lesson ge
 bug — a gesture is not covered by testing the policy behind it, and this codebase now has two
 features that were only ever proven by driving the remote.
 
+## Upstream moved: 0.8.9-beta → 0.8.12-beta
+
+270 commits, three releases (27 August, 29 August, 1 September). Read from a detached worktree at
+the tag, per the procedural fix above. The eight new preference keys are the useful index —
+upstream adds a key for anything a viewer can see.
+
+| Upstream | Ours |
+|---|---|
+| `player_stats_hud_enabled` — live buffer, network, bitrate, CPU, memory, thermal | **Ported in 1.0.33.** Sampling rewritten: upstream reads `/proc/self/stat` and a Linux paging counter, neither of which exists here, so CPU and memory come from `task_info` and the paging row is dropped rather than approximated. Thermal is `ProcessInfo.thermalState`, four levels, against upstream's 0–1 headroom float — mapped, not faked. |
+| `post_play_recommendations_enabled`, `post_play_movie_threshold_percent` — recommendations at the end of a *film* | Open. We have post-play for episodes only. Portable, and the largest of the remaining items. |
+| `episode_options_overlay_style` — appearance options for the episode overlay | Open, small. We shipped the overlay itself in 1.0.29. |
+| `update_channel` — stable and beta channels | Open. Our updater reads the sideloading feed, which has one channel; this needs a second feed or a flag in the existing one before the setting means anything. |
+| `confirm_exit_enabled` — "Full exit on close" | **Forced.** It terminates the process to free memory and requires a double Back to confirm. tvOS neither lets an app kill itself nor wants it to; the system reclaims a suspended app on its own. |
+| Custom launcher icon and banner | **Forced.** A tvOS app icon is a build-time asset in the bundle, not something an app rewrites at runtime. |
+| Six-character login codes; self-hosted discovery endpoint | **Forced**, same reason as every other backend contract: blank in public source. |
+| Simkl for anime id resolution in skip-intro, replacing ARM | Worth taking — we already carry the Simkl anime identity model from 1.0.22, so this is a re-point rather than a build. |
+| HLS segment 404 fallback; mpv stuck on last frame | Player robustness, both plausibly ours too. Neither reproduced here yet, so neither is claimed fixed. |
+| Player strings read from the app language, not the system one | The other half of the language picker gap recorded above. |
+
 ## Findings this pass turned up in our own tree
 
 Both are **closed in 1.0.28**, and one of them was half wrong.

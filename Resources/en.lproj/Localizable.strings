@@ -1057,3 +1057,10 @@
 "settings.common.device_language" = "Device language";
 "settings.common.media_default" = "Media default";
 "settings.common.none" = "None";
+
+/* PlaybackStatsOverlay */
+"settings.advanced.stats_overlay" = "Playback stats overlay";
+"settings.advanced.stats_overlay_sub" = "Add a Stats button to stream information, for live buffer, network, bitrate, CPU, memory and thermal readings";
+"player.stats" = "Stats";
+"player.engine" = "Player";
+"player.diagnostics" = "Diagnostics";

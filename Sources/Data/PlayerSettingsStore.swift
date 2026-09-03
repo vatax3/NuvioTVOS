@@ -81,6 +81,14 @@ final class PlayerSettingsStore: PreferenceStore {
         set { setOption("audio_output_channels", newValue) }
     }
 
+    /// `player_stats_hud_enabled`: puts a Stats button in the stream information panel, which
+    /// toggles the live overlay. Two steps rather than one because the overlay is a diagnostic —
+    /// it should be reachable during playback without being reachable by accident.
+    var statsOverlayEnabled: Bool {
+        get { bool("player_stats_hud_enabled", default: false) }
+        set { setBool("player_stats_hud_enabled", newValue) }
+    }
+
     /// Whether the in-player amplification survives the film it was set on.
     ///
     /// Off by default, as upstream has it, and the default is the right one: amplification is

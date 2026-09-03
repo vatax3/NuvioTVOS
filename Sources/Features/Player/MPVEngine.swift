@@ -746,6 +746,36 @@ final class MPVEngine {
         }
     }
 
+    /// The three readings the stats overlay needs from the engine. Everything else it draws
+    /// comes from the process itself — see `PlaybackStatsSampler`.
+    struct LiveStats {
+        var bufferSeconds: Double?
+        var networkBitsPerSecond: Double?
+        var streamBitsPerSecond: Double?
+    }
+
+    func liveStats() -> LiveStats {
+        // `cache-speed` is bytes per second; every other rate in the overlay is bits.
+        let cacheBytes = propertyDouble("cache-speed")
+        let video = propertyDouble("video-bitrate") ?? 0
+        let audio = propertyDouble("audio-bitrate") ?? 0
+        let stream = video + audio
+        return LiveStats(
+            bufferSeconds: propertyDouble("demuxer-cache-duration"),
+            networkBitsPerSecond: cacheBytes.map { $0 * 8 },
+            streamBitsPerSecond: stream > 0 ? stream : nil
+        )
+    }
+
+    private func propertyDouble(_ name: String) -> Double? {
+        guard let handle else { return nil }
+        var value: Double = 0
+        guard mpv_get_property(handle, name, MPV_FORMAT_DOUBLE, &value) >= 0, value.isFinite else {
+            return nil
+        }
+        return value
+    }
+
     private func propertyString(_ name: String) -> String? {
         guard let handle, let raw = mpv_get_property_string(handle, name) else { return nil }
         defer { mpv_free(raw) }

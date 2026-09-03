@@ -1057,3 +1057,10 @@
 "settings.common.device_language" = "Langue de l’appareil";
 "settings.common.media_default" = "Réglage du média";
 "settings.common.none" = "Aucun";
+
+/* PlaybackStatsOverlay */
+"settings.advanced.stats_overlay" = "Statistiques de lecture";
+"settings.advanced.stats_overlay_sub" = "Ajouter un bouton Stats aux informations du flux, pour le tampon, le réseau, le débit, le processeur, la mémoire et la température en direct";
+"player.stats" = "Stats";
+"player.engine" = "Lecteur";
+"player.diagnostics" = "Diagnostics";

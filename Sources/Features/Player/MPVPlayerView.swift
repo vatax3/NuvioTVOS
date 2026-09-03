@@ -99,6 +99,10 @@ struct MPVPlayerView: View {
     /// `PlayerSeekOverlayPolicy` for why a horizontal press no longer reveals the transport.
     @State private var seekReadout: PlayerSeekReadout.Model?
     @State private var seekReadoutDismiss: Task<Void, Never>?
+    /// The diagnostic overlay. Off every session: it is reached from stream information, and a
+    /// reading left on screen from last week is not a diagnostic, it is furniture.
+    @State private var showsStats = false
+    @State private var statsSampler = PlaybackStatsSampler()
     /// Android flashes the new picture mode as a pill instead of opening a menu, so the aspect
     /// button can be pressed repeatedly while watching the picture change.
     @State private var aspectFlash: String?
@@ -188,8 +192,30 @@ struct MPVPlayerView: View {
                 PlayerSeekReadout(model: seekReadout, duration: engine.duration)
             }
 
+            if showsStats && !statsSampler.readings.isEmpty {
+                PlaybackStatsOverlay(readings: statsSampler.readings)
+                    .padding(NuvioTheme.spacing.xl)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .transition(.opacity)
+            }
+
             if let picker {
                 playerPanel(picker)
+            }
+        }
+        // Sampled here rather than inside the sampler, so the loop lives and dies with the view
+        // and cannot outlive playback. One second: fast enough to watch a buffer drain, slow
+        // enough that reading the numbers is possible.
+        .task(id: showsStats) {
+            guard showsStats else { return }
+            while !Task.isCancelled {
+                let live = engine.liveStats()
+                statsSampler.sample(
+                    bufferSeconds: live.bufferSeconds,
+                    networkBitsPerSecond: live.networkBitsPerSecond,
+                    streamBitsPerSecond: live.streamBitsPerSecond
+                )
+                try? await Task.sleep(for: .seconds(1))
             }
         }
         // One focus scope for the whole player, so a focus reset has something to aim at: see
@@ -1203,7 +1229,7 @@ struct MPVPlayerView: View {
         Group {
             InPlayerPanelSection(title: "Source") {
                 if let addon = request.sourceAddonName?.nilIfBlank { InPlayerInfoRow(title: "Addon", value: addon) }
-                InPlayerInfoRow(title: "Player", value: "MPV")
+                InPlayerInfoRow(title: L10n.text("player.engine", fallback: "Player"), value: "MPV")
                 if let name = request.streamName?.nilIfBlank { InPlayerInfoRow(title: "Stream", value: name) }
                 if let filename = request.filename?.nilIfBlank { InPlayerInfoRow(title: "File", value: filename) }
                 if !request.sourceHints.isEmpty { InPlayerInfoRow(title: "Sources", value: request.sourceHints.joined(separator: " · ")) }
@@ -1222,6 +1248,21 @@ struct MPVPlayerView: View {
                 infoRow("Output", engine.streamInfo.audioOutput)
                 InPlayerInfoRow(title: L10n.text("player.audio_delay", fallback: "Audio delay"), value: delayLabel(engine.audioDelay))
                 InPlayerInfoRow(title: L10n.text("player.subtitle_delay", fallback: "Subtitle delay"), value: delayLabel(engine.subtitleDelay))
+            }
+
+            // Reached from here rather than from the transport row: the readings are a
+            // diagnostic, and the transport is where a viewer presses things by accident.
+            if settings.player.statsOverlayEnabled {
+                InPlayerPanelSection(title: L10n.text("player.diagnostics", fallback: "Diagnostics")) {
+                    InPlayerPanelRow(
+                        title: L10n.text("player.stats", fallback: "Stats"),
+                        systemImage: "chart.bar.xaxis",
+                        isSelected: showsStats
+                    ) {
+                        showsStats.toggle()
+                        if !showsStats { statsSampler.reset() }
+                    }
+                }
             }
 
             if !engine.logTail.isEmpty {

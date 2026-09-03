@@ -47,6 +47,15 @@ struct AdvancedSettingsContent: View {
                 footnote: L10n.text("settings.advanced.diagnostics_footnote", fallback: "Neither crash reporting nor playback issue reports are wired up in this client — both upload to Nuvio's own backend, whose contract belongs to the Android project. Verbose logging writes to the system log on this device instead.")
             ) {
                 SettingsToggle(
+                    title: L10n.text("settings.advanced.stats_overlay", fallback: "Playback stats overlay"),
+                    subtitle: L10n.text(
+                        "settings.advanced.stats_overlay_sub",
+                        fallback: "Add a Stats button to stream information, for live buffer, network, bitrate, CPU, memory and thermal readings"
+                    ),
+                    systemImage: "chart.bar.xaxis",
+                    isOn: $player.statsOverlayEnabled
+                )
+                SettingsToggle(
                     title: L10n.text("settings.advanced.verbose_logging", fallback: "Verbose playback logging"),
                     subtitle: L10n.text("settings.advanced.verbose_logging_sub", fallback: "Write player state changes to the system log"),
                     systemImage: "doc.text.magnifyingglass",
