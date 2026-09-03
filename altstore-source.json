@@ -40,6 +40,16 @@
       ],
       "versions": [
         {
+          "version": "1.0.35",
+          "buildVersion": "37",
+          "date": "2026-09-03",
+          "localizedDescription": "**Films now offer something when they end.**\n\nA film used to reach its last frame and stop. It now shows titles like the one you just watched,\nfrom about 90% in — adjustable in Settings → Playback.\n\n**A language picker.** Settings → Appearance → Language. Independent of the Apple TV's own\nlanguage, and it takes effect immediately. Settings are now fully translated, options included,\nalong with the first-run walkthrough.\n\n**Anime skip marks land on the right episode.** Intro and outro marks were resolved through a\nservice that maps one entry per season by position. Anime and TV numbering disagree on most long\nshows, so a second season asked for episode 1 when the anime calls it 13 — and got the wrong\nmarks, for the wrong show. Resolved through Simkl now, which knows the real mapping.\n\n**A choice of background** behind the episode options: plain, artwork, or blurred artwork.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.35/Nuvio-1.0.35-tvOS-unsigned.ipa",
+          "size": 32000377,
+          "minOSVersion": "17.0",
+          "sha256": "650ec735ec799e7c455af1d0f4981cd8d5383cfdf464e10ddff056ab14b30ede"
+        },
+        {
           "version": "1.0.34",
           "buildVersion": "36",
           "date": "2026-09-03",
@@ -266,11 +276,11 @@
         ],
         "privacy": {}
       },
-      "version": "1.0.34",
+      "version": "1.0.35",
       "versionDate": "2026-09-03",
-      "versionDescription": "**A proper app icon.**\n\nThe tvOS home screen was showing a dark square floating inside the rounded app bubble instead of\none unified icon. All three parallax layers held the same square logo file, background and all,\nshrunk and centred in a frame it did not fit.\n\nThe icon is now three layers that each fill the frame — a brand-coloured field, a soft shadow of\nthe mark, and the mark itself — so it fills its bubble and moves with depth when you focus it.",
-      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.34/Nuvio-1.0.34-tvOS-unsigned.ipa",
-      "size": 31948646,
+      "versionDescription": "**Films now offer something when they end.**\n\nA film used to reach its last frame and stop. It now shows titles like the one you just watched,\nfrom about 90% in — adjustable in Settings → Playback.\n\n**A language picker.** Settings → Appearance → Language. Independent of the Apple TV's own\nlanguage, and it takes effect immediately. Settings are now fully translated, options included,\nalong with the first-run walkthrough.\n\n**Anime skip marks land on the right episode.** Intro and outro marks were resolved through a\nservice that maps one entry per season by position. Anime and TV numbering disagree on most long\nshows, so a second season asked for episode 1 when the anime calls it 13 — and got the wrong\nmarks, for the wrong show. Resolved through Simkl now, which knows the real mapping.\n\n**A choice of background** behind the episode options: plain, artwork, or blurred artwork.",
+      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.35/Nuvio-1.0.35-tvOS-unsigned.ipa",
+      "size": 32000377,
       "minOSVersion": "17.0"
     }
   ],
