@@ -722,6 +722,34 @@ struct PlayerView: View {
                     return (segments, [])
                 }
                 guard let imdbId, let episode else { return ([], []) }
+
+                // Simkl first. ARM indexes a flat per-season array of MAL ids, which is wrong
+                // whenever anime numbering and TVDB numbering disagree — and it gets the episode
+                // number wrong the same way, so a second cour asks AniSkip about episode 1 when
+                // the anime calls it 13. Simkl answers both. See `SimklIdResolution`.
+                let simkl = await SkipIntroClient.shared.simklResolution(
+                    imdbId: imdbId,
+                    season: season ?? 1,
+                    episode: episode,
+                    clientId: settings.tracking.simklClientId
+                )
+                if let malId = simkl?.malId {
+                    let found = await SkipIntroClient.shared.segments(
+                        malId: malId,
+                        episode: simkl?.animeEpisode ?? episode,
+                        episodeLength: duration
+                    )
+                    if !found.isEmpty {
+                        return (found, await Self.animeSkipSegments(
+                            entries: await SkipIntroClient.shared.armEntries(imdbId: imdbId),
+                            season: season, episode: episode, episodeLength: duration,
+                            clientId: animeSkipClientId
+                        ))
+                    }
+                }
+
+                // Kept as the fallback rather than removed, as upstream did: the Simkl client id
+                // is the viewer's here rather than shipped, and no marks at all is worse.
                 let entries = await SkipIntroClient.shared.armEntries(imdbId: imdbId)
                 guard !entries.isEmpty else { return ([], []) }
 

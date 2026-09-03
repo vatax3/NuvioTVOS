@@ -1368,6 +1368,9 @@ actor SkipIntroClient {
     private var cache: [String: [SkipSegment]] = [:]
     /// One id mapping serves every episode of a series, so it is kept for the session.
     private var armCache: [String: [ArmEntry]] = [:]
+    /// Misses cached as an explicit nil, so a title Simkl has never heard of is asked about once.
+    private var simklRedirectCache: [String: SimklIdResolution.Redirect?] = [:]
+    private var simklEpisodeCache: [Int: [SimklIdResolution.EpisodeMapping]] = [:]
     /// Anime-Skip's own show ids, per AniList id. Misses are cached too, so a title it has never
     /// heard of is asked about once rather than on every episode.
     private var animeSkipShowCache: [String: [String]] = [:]
@@ -1664,6 +1667,112 @@ actor SkipIntroClient {
         let entries = await armEntries(imdbId: imdbId)
         return Self.malId(fromSeasonEntries: entries.map(\.myanimelist), season: season)
     }
+
+    // MARK: Simkl id mapping
+
+    /// What Simkl can answer that ARM cannot: the MAL id for *this* title, and the anime's own
+    /// episode number for a TVDB season and episode.
+    struct SimklAnimeResolution: Sendable, Equatable {
+        var malId: Int?
+        var anilistId: Int?
+        var animeEpisode: Int?
+    }
+
+    private struct SimklDetails: Decodable, Sendable {
+        struct Ids: Decodable, Sendable {
+            // Simkl has answered these as both a number and a string.
+            let mal: FlexibleInt?
+            let anilist: FlexibleInt?
+        }
+        let ids: Ids?
+    }
+
+    private struct SimklEpisode: Decodable, Sendable {
+        struct Tvdb: Decodable, Sendable {
+            let season: Int?
+            let episode: Int?
+        }
+        let episode: Int?
+        let tvdb: Tvdb?
+    }
+
+    /// Replaces the ARM lookup where a Simkl client id is available.
+    ///
+    /// ARM returns a flat array of MAL ids, one per season, and indexing it by season number is
+    /// wrong whenever anime numbering and TVDB numbering disagree — which is most long shows.
+    /// Simkl answers the real mapping instead. Upstream removed ARM outright; ours keeps it as a
+    /// fallback because the Simkl client id is supplied by the viewer here rather than shipped,
+    /// and dropping to no anime skip marks at all would be the worse failure.
+    func simklResolution(
+        imdbId: String, season: Int, episode: Int, clientId: String
+    ) async -> SimklAnimeResolution? {
+        guard !clientId.isEmpty else { return nil }
+        let cacheKey = "simkl-\(imdbId)"
+
+        let redirect: SimklIdResolution.Redirect
+        if let cached = simklRedirectCache[cacheKey], let cached { redirect = cached }
+        else if simklRedirectCache[cacheKey] != nil { return nil }
+        else {
+            let located = await Self.simklRedirect(imdbId: imdbId, clientId: clientId)
+            simklRedirectCache[cacheKey] = located
+            guard let located else { return nil }
+            redirect = located
+        }
+
+        let common = "client_id=\(clientId)"
+        let details = try? await IntegrationHTTP.get(
+            "https://api.simkl.com/\(redirect.type)/\(redirect.simklId)?extended=full&\(common)",
+            as: SimklDetails.self
+        )
+
+        var mappings = simklEpisodeCache[redirect.simklId]
+        if mappings == nil {
+            let episodes = (try? await IntegrationHTTP.get(
+                "https://api.simkl.com/\(redirect.type)/episodes/\(redirect.simklId)?\(common)",
+                as: [SimklEpisode].self
+            )) ?? []
+            mappings = SimklIdResolution.mappings(
+                from: episodes.map { ($0.episode, $0.tvdb?.season, $0.tvdb?.episode) }
+            )
+            simklEpisodeCache[redirect.simklId] = mappings
+        }
+
+        return SimklAnimeResolution(
+            malId: details?.ids?.mal?.value,
+            anilistId: details?.ids?.anilist?.value,
+            animeEpisode: SimklIdResolution.animeEpisode(
+                forTvdbSeason: season, episode: episode, in: mappings ?? []
+            )
+        )
+    }
+
+    /// Simkl answers this one with a `Location` and no body, so the redirect must not be
+    /// followed — `URLSession` would chase it to an HTML page and lose the id.
+    private nonisolated static func simklRedirect(
+        imdbId: String, clientId: String
+    ) async -> SimklIdResolution.Redirect? {
+        guard let url = URL(
+            string: "https://api.simkl.com/redirect?to=simkl&imdb=\(imdbId)&client_id=\(clientId)"
+        ) else { return nil }
+        let session = URLSession(
+            configuration: .ephemeral, delegate: NoRedirectDelegate(), delegateQueue: nil
+        )
+        defer { session.finishTasksAndInvalidate() }
+        guard let (_, response) = try? await session.data(from: url),
+              let http = response as? HTTPURLResponse,
+              let location = http.value(forHTTPHeaderField: "Location")
+        else { return nil }
+        return SimklIdResolution.parseRedirect(location: location)
+    }
+}
+
+/// Stops `URLSession` following a redirect, so the `Location` header survives to be read.
+private final class NoRedirectDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    func urlSession(
+        _ session: URLSession, task: URLSessionTask,
+        willPerformHTTPRedirection response: HTTPURLResponse,
+        newRequest request: URLRequest
+    ) async -> URLRequest? { nil }
 }
 
 // MARK: - Simkl
