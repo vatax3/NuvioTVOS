@@ -1064,3 +1064,13 @@
 "player.stats" = "Stats";
 "player.engine" = "Player";
 "player.diagnostics" = "Diagnostics";
+
+/* MovieRecommendationsOverlay */
+"postplay.because_you_watched" = "Because you watched %@";
+"postplay.recommended" = "Recommended for you";
+"postplay.return_to_player" = "Return to player";
+"settings.playback.post_play" = "When something ends";
+"settings.playback.post_play_footnote" = "Films offer recommendations at the point you choose. Episodes follow the Next episode threshold below.";
+"settings.playback.post_play_recommendations" = "Post-play recommendations";
+"settings.playback.post_play_recommendations_sub" = "Show titles like this one as a film reaches its end";
+"settings.playback.post_play_timing" = "Film recommendation timing";

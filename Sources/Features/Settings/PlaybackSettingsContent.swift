@@ -451,6 +451,32 @@ struct PlaybackSettingsContent: View {
                 }
             }
 
+            SettingsCard(
+                title: L10n.text("settings.playback.post_play", fallback: "When something ends"),
+                footnote: L10n.text(
+                    "settings.playback.post_play_footnote",
+                    fallback: "Films offer recommendations at the point you choose. Episodes follow the Next episode threshold below."
+                )
+            ) {
+                SettingsToggle(
+                    title: L10n.text("settings.playback.post_play_recommendations", fallback: "Post-play recommendations"),
+                    subtitle: L10n.text(
+                        "settings.playback.post_play_recommendations_sub",
+                        fallback: "Show titles like this one as a film reaches its end"
+                    ),
+                    systemImage: "sparkles.rectangle.stack",
+                    isOn: $player.postPlayRecommendationsEnabled
+                )
+                if player.postPlayRecommendationsEnabled {
+                    SettingsStepperRow(
+                        title: L10n.text("settings.playback.post_play_timing", fallback: "Film recommendation timing"),
+                        value: $player.postPlayMovieThresholdPercent,
+                        range: PostPlayRecommendation.thresholdRange,
+                        format: { "\($0)%" }
+                    )
+                }
+            }
+
             SettingsCard(title: L10n.text("settings.playback.next_episode", fallback: "Next episode")) {
                 SettingsToggle(
                     title: L10n.text("settings.playback.autoplay_next", fallback: "Auto-play next episode"),

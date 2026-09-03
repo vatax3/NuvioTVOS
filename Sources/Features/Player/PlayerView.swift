@@ -16,6 +16,14 @@ struct PlayerView: View {
     @Environment(LibraryStore.self) private var library
     @Environment(AppSettings.self) private var settings
     @Environment(Router.self) private var router
+    @Environment(AddonStore.self) private var addons
+
+    /// End-of-film recommendations. Fetched once, a few percent before they are due, and
+    /// dismissed for the rest of the session once the viewer sends them away.
+    @State private var movieRecommendations: [MetaPreview] = []
+    @State private var showsRecommendations = false
+    @State private var fetchedRecommendations = false
+    @State private var dismissedRecommendations = false
 
     let request: PlaybackRequest
 
@@ -246,6 +254,7 @@ struct PlayerView: View {
                     scrobble(position: position, duration: duration)
                     simklScrobble(position: position, duration: duration)
                     advanceIfDue(position: position, duration: duration)
+                    offerRecommendationsIfDue(position: position, duration: duration)
                 },
                 onFinished: {
                     persist(position: 0, duration: 0, completed: true)
@@ -259,6 +268,7 @@ struct PlayerView: View {
             skipSegmentCard
 
             postPlayOverlay
+            movieRecommendationsOverlay
             stillWatchingOverlay
             playerStatusOverlay
 
@@ -303,6 +313,7 @@ struct PlayerView: View {
                     scrobble(position: position, duration: duration)
                     simklScrobble(position: position, duration: duration)
                     advanceIfDue(position: position, duration: duration)
+                    offerRecommendationsIfDue(position: position, duration: duration)
                 },
                 onFailed: handleAVFoundationFailure,
                 onChromeChange: { engineChrome = $0 },
@@ -319,6 +330,7 @@ struct PlayerView: View {
             skipSegmentCard
 
             postPlayOverlay
+            movieRecommendationsOverlay
             stillWatchingOverlay
             playerStatusOverlay
 
@@ -908,6 +920,49 @@ struct PlayerView: View {
     // MARK: Next episode
 
     /// Honours the percent / minutes-before-end threshold from Playback settings.
+    /// The film case of post-play. Series are left to `advanceIfDue` and the next-episode card;
+    /// two overlays due at the same instant is how one gets drawn over the other.
+    private func offerRecommendationsIfDue(position: Double, duration: Double) {
+        guard settings.player.postPlayRecommendationsEnabled,
+              ContentType.from(request.contentType) == .movie,
+              !dismissedRecommendations, duration > 0
+        else { return }
+
+        let threshold = settings.player.postPlayMovieThresholdPercent
+        let progress = position / duration
+
+        if !fetchedRecommendations,
+           progress >= PostPlayRecommendation.prefetchProgress(thresholdPercent: threshold) {
+            fetchedRecommendations = true
+            Task { await loadRecommendations() }
+        }
+
+        guard !movieRecommendations.isEmpty,
+              PostPlayRecommendation.shouldShow(
+                contentType: .movie,
+                positionSeconds: position,
+                durationSeconds: duration,
+                thresholdPercent: threshold
+              )
+        else { return }
+        showsRecommendations = true
+    }
+
+    private func loadRecommendations() async {
+        // The detail screen's own view model, run headless. Reusing it rather than
+        // reimplementing the fetch is the point: "more like this" has three sources and a
+        // fallback chain, and a second copy of that would drift from the first.
+        let model = MetaDetailsViewModel()
+        await model.load(
+            request: DetailRequest(itemId: request.contentId, itemType: request.contentType),
+            addonStore: addons,
+            settings: settings
+        )
+        movieRecommendations = PostPlayRecommendation.cards(
+            from: model.moreLikeThis, excluding: request.contentId
+        )
+    }
+
     private func advanceIfDue(position: Double, duration: Double) {
         guard settings.player.autoPlayNextEpisodeEnabled, request.nextUp != nil,
               !didDeclineNextEpisode, nextEpisodeCountdown == nil, !showsStillWatchingPrompt,
@@ -949,6 +1004,29 @@ struct PlayerView: View {
         showsStillWatchingPrompt = false
         didDeclineNextEpisode = true
         PlaybackSessionStore.shared.resetAutoAdvanceCount()
+    }
+
+    @ViewBuilder
+    private var movieRecommendationsOverlay: some View {
+        if showsRecommendations && !movieRecommendations.isEmpty {
+            MovieRecommendationsOverlay(
+                title: request.title,
+                cards: movieRecommendations,
+                onPlay: { card in
+                    // Opens the title rather than starting it: a recommendation has no chosen
+                    // stream, and picking one is the stream list's job, not a card's.
+                    dismissedRecommendations = true
+                    showsRecommendations = false
+                    dismiss()
+                    router.openDetail(card)
+                },
+                onDismiss: {
+                    dismissedRecommendations = true
+                    showsRecommendations = false
+                }
+            )
+            .transition(.opacity)
+        }
     }
 
     @ViewBuilder

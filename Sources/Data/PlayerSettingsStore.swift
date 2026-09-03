@@ -81,6 +81,25 @@ final class PlayerSettingsStore: PreferenceStore {
         set { setOption("audio_output_channels", newValue) }
     }
 
+    /// `post_play_recommendations_enabled`: what to offer when a film ends. On by default, as
+    /// upstream has it — playback ending with nothing on screen is the behaviour being fixed.
+    var postPlayRecommendationsEnabled: Bool {
+        get { bool("post_play_recommendations_enabled", default: true) }
+        set { setBool("post_play_recommendations_enabled", newValue) }
+    }
+
+    /// `post_play_movie_threshold_percent`: how far into a film the cards appear. Episodes keep
+    /// following the next-episode threshold, which is a separate control.
+    var postPlayMovieThresholdPercent: Int {
+        get {
+            PostPlayRecommendation.clampThreshold(
+                int("post_play_movie_threshold_percent",
+                    default: PostPlayRecommendation.defaultThresholdPercent)
+            )
+        }
+        set { setInt("post_play_movie_threshold_percent", PostPlayRecommendation.clampThreshold(newValue)) }
+    }
+
     /// `player_stats_hud_enabled`: puts a Stats button in the stream information panel, which
     /// toggles the live overlay. Two steps rather than one because the overlay is a diagnostic —
     /// it should be reachable during playback without being reachable by accident.
