@@ -71,6 +71,17 @@ struct EpisodeOptionsDialog: View {
 
     var body: some View {
         ZStack {
+            // `episode_options_overlay_style`. The still is drawn under the scrim rather than
+            // instead of it: the dialog has to stay readable over whatever the episode looks
+            // like, and some stills are nearly white.
+            if settings.layout.episodeOptionsOverlayStyle != .none,
+               let still = video.thumbnail ?? meta.background {
+                RemoteImage(url: still, contentMode: .fill) { Color.clear }
+                    .ignoresSafeArea()
+                    .blur(radius: settings.layout.episodeOptionsOverlayStyle == .blur ? dp(28) : 0)
+                    .opacity(0.55)
+            }
+
             Color.black.opacity(0.5)
                 .ignoresSafeArea()
                 .contentShape(Rectangle())

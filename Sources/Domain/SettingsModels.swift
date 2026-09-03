@@ -20,8 +20,8 @@ enum InternalPlayerEngine: String, SettingsOption {
     var displayName: String { self == .exoplayer ? "Default (AVFoundation)" : "MPV (extended codecs)" }
     var summary: String {
         switch self {
-        case .exoplayer: return "System pipeline. Best power efficiency and HDR passthrough."
-        case .mpv: return "Software pipeline for containers AVFoundation refuses."
+        case .exoplayer: return L10n.text("option.engine_avf_sub", fallback: "System pipeline. Best power efficiency and HDR passthrough.")
+        case .mpv: return L10n.text("option.engine_mpv_sub", fallback: "Software pipeline for containers AVFoundation refuses.")
         }
     }
 }
@@ -32,9 +32,9 @@ enum PlayerPreference: String, SettingsOption {
     case askEveryTime = "ASK"
     var displayName: String {
         switch self {
-        case .internalPlayer: return "Internal player"
-        case .externalPlayer: return "External player"
-        case .askEveryTime: return "Ask every time"
+        case .internalPlayer: return L10n.text("option.internal_player", fallback: "Internal player")
+        case .externalPlayer: return L10n.text("option.external_player", fallback: "External player")
+        case .askEveryTime: return L10n.text("option.ask_every_time", fallback: "Ask every time")
         }
     }
 }
@@ -48,11 +48,11 @@ enum ResizeMode: String, SettingsOption {
     case fixedHeight = "FIXED_HEIGHT"
     var displayName: String {
         switch self {
-        case .fit: return "Fit"
-        case .fill: return "Stretch to fill"
-        case .zoom: return "Zoom to fill"
-        case .fixedWidth: return "Fixed width"
-        case .fixedHeight: return "Fixed height"
+        case .fit: return L10n.text("option.fit", fallback: "Fit")
+        case .fill: return L10n.text("option.fill", fallback: "Stretch to fill")
+        case .zoom: return L10n.text("option.zoom", fallback: "Zoom to fill")
+        case .fixedWidth: return L10n.text("option.fixed_width", fallback: "Fixed width")
+        case .fixedHeight: return L10n.text("option.fixed_height", fallback: "Fixed height")
         }
     }
 }
@@ -66,17 +66,17 @@ enum FrameRateMatchingMode: String, SettingsOption {
 
     var displayName: String {
         switch self {
-        case .off: return "Off"
-        case .start: return "On playback start"
-        case .startStop: return "Start and stop"
+        case .off: return L10n.text("option.off", fallback: "Off")
+        case .start: return L10n.text("option.on_start", fallback: "On playback start")
+        case .startStop: return L10n.text("option.start_stop", fallback: "Start and stop")
         }
     }
 
     var summary: String {
         switch self {
-        case .off: return "Leave the display in whatever mode tvOS is using"
-        case .start: return "Switch the panel to the film's frame rate and stay there"
-        case .startStop: return "Switch for playback, then restore the previous mode"
+        case .off: return L10n.text("option.afr_off_sub", fallback: "Leave the display in whatever mode tvOS is using")
+        case .start: return L10n.text("option.afr_start_sub", fallback: "Switch the panel to the film's frame rate and stay there")
+        case .startStop: return L10n.text("option.afr_startstop_sub", fallback: "Switch for playback, then restore the previous mode")
         }
     }
 }
@@ -96,21 +96,21 @@ enum MpvHardwareDecodeMode: String, SettingsOption {
 
     var displayName: String {
         switch self {
-        case .legacyDirectCopy: return "Legacy (direct, then copy)"
-        case .autoSafe: return "Auto (safe)"
-        case .hardwareCopy: return "Hardware (copy)"
-        case .hardwareDirect: return "Hardware (direct)"
-        case .disabled: return "Disabled (software)"
+        case .legacyDirectCopy: return L10n.text("option.hwdec_legacy", fallback: "Legacy (direct, then copy)")
+        case .autoSafe: return L10n.text("option.hwdec_autosafe", fallback: "Auto (safe)")
+        case .hardwareCopy: return L10n.text("option.hwdec_copy", fallback: "Hardware (copy)")
+        case .hardwareDirect: return L10n.text("option.hwdec_direct", fallback: "Hardware (direct)")
+        case .disabled: return L10n.text("option.hwdec_off", fallback: "Disabled (software)")
         }
     }
 
     var summary: String {
         switch self {
-        case .legacyDirectCopy: return "Tries direct mapping first, falls back to a copy"
-        case .autoSafe: return "Lets mpv pick whatever it considers safe"
-        case .hardwareCopy: return "VideoToolbox decode, frames copied back through system memory"
-        case .hardwareDirect: return "Zero-copy VideoToolbox. The fast path on Apple TV."
-        case .disabled: return "Software decode. Slowest, but always draws."
+        case .legacyDirectCopy: return L10n.text("option.hwdec_legacy_sub", fallback: "Tries direct mapping first, falls back to a copy")
+        case .autoSafe: return L10n.text("option.hwdec_autosafe_sub", fallback: "Lets mpv pick whatever it considers safe")
+        case .hardwareCopy: return L10n.text("option.hwdec_copy_sub", fallback: "VideoToolbox decode, frames copied back through system memory")
+        case .hardwareDirect: return L10n.text("option.hwdec_direct_sub", fallback: "Zero-copy VideoToolbox. The fast path on Apple TV.")
+        case .disabled: return L10n.text("option.hwdec_off_sub", fallback: "Software decode. Slowest, but always draws.")
         }
     }
 
@@ -142,7 +142,7 @@ enum MpvAudioOutput: String, SettingsOption {
 
     var displayName: String {
         switch self {
-        case .automatic: return "Automatic"
+        case .automatic: return L10n.text("option.automatic", fallback: "Automatic")
         case .avfoundation: return "AVFoundation"
         case .audiounit: return "AudioUnit"
         }
@@ -150,9 +150,9 @@ enum MpvAudioOutput: String, SettingsOption {
 
     var summary: String {
         switch self {
-        case .automatic: return "Try AVFoundation, then AudioUnit"
-        case .avfoundation: return "AVSampleBufferAudioRenderer — the supported path on Apple TV"
-        case .audiounit: return "RemoteIO — works on iOS, refused by some Apple TV routes"
+        case .automatic: return L10n.text("option.ao_auto_sub", fallback: "Try AVFoundation, then AudioUnit")
+        case .avfoundation: return L10n.text("option.ao_avf_sub", fallback: "AVSampleBufferAudioRenderer — the supported path on Apple TV")
+        case .audiounit: return L10n.text("option.ao_au_sub", fallback: "RemoteIO — works on iOS, refused by some Apple TV routes")
         }
     }
 
@@ -173,8 +173,8 @@ enum AudioOutputChannels: String, SettingsOption {
     case surround71 = "SURROUND_7_1"
     var displayName: String {
         switch self {
-        case .auto: return "Auto"
-        case .stereo: return "Stereo"
+        case .auto: return L10n.text("option.auto", fallback: "Auto")
+        case .stereo: return L10n.text("option.stereo", fallback: "Stereo")
         case .surround51: return "5.1"
         case .surround71: return "7.1"
         }
@@ -191,10 +191,10 @@ enum AudioOutputChannels: String, SettingsOption {
 
     var summary: String {
         switch self {
-        case .auto: return "Follow whatever layout the Apple TV reports it can take"
-        case .stereo: return "Always downmix — the layout every television accepts"
-        case .surround51: return "Send 5.1 to the receiver"
-        case .surround71: return "Send 7.1 to the receiver"
+        case .auto: return L10n.text("option.ch_auto_sub", fallback: "Follow whatever layout the Apple TV reports it can take")
+        case .stereo: return L10n.text("option.ch_stereo_sub", fallback: "Always downmix — the layout every television accepts")
+        case .surround51: return L10n.text("option.ch_51_sub", fallback: "Send 5.1 to the receiver")
+        case .surround71: return L10n.text("option.ch_71_sub", fallback: "Send 7.1 to the receiver")
         }
     }
 }
@@ -214,17 +214,17 @@ enum SubtitleStyleOverride: String, SettingsOption {
 
     var displayName: String {
         switch self {
-        case .respect: return "Keep the file's own style"
-        case .scale: return "Apply size and position only"
-        case .force: return "Apply my style to everything"
+        case .respect: return L10n.text("option.ass_respect", fallback: "Keep the file's own style")
+        case .scale: return L10n.text("option.ass_scale", fallback: "Apply size and position only")
+        case .force: return L10n.text("option.ass_force", fallback: "Apply my style to everything")
         }
     }
 
     var summary: String {
         switch self {
-        case .respect: return "ASS/SSA subtitles keep their fonts, colours and sign placement"
-        case .scale: return "Resize and reposition styled subtitles, leave their colours alone"
-        case .force: return "Override styled subtitles too — signs and karaoke lose their placement"
+        case .respect: return L10n.text("option.ass_respect_sub", fallback: "ASS/SSA subtitles keep their fonts, colours and sign placement")
+        case .scale: return L10n.text("option.ass_scale_sub", fallback: "Resize and reposition styled subtitles, leave their colours alone")
+        case .force: return L10n.text("option.ass_force_sub", fallback: "Override styled subtitles too — signs and karaoke lose their placement")
         }
     }
 
@@ -244,9 +244,9 @@ enum SubtitleOrganizationMode: String, SettingsOption {
     case flat = "FLAT"
     var displayName: String {
         switch self {
-        case .byLanguage: return "Group by language"
-        case .byAddon: return "Group by addon"
-        case .flat: return "Flat list"
+        case .byLanguage: return L10n.text("option.group_language", fallback: "Group by language")
+        case .byAddon: return L10n.text("option.group_addon", fallback: "Group by addon")
+        case .flat: return L10n.text("option.group_flat", fallback: "Flat list")
         }
     }
 }
@@ -260,10 +260,10 @@ enum StreamAutoPlayMode: String, SettingsOption {
     case preferredQuality = "PREFERRED_QUALITY"
     var displayName: String {
         switch self {
-        case .off: return "Off — always show the source list"
-        case .first: return "First available source"
-        case .matchRegex: return "First source matching a pattern"
-        case .preferredQuality: return "Best match for preferred quality"
+        case .off: return L10n.text("option.autoplay_off", fallback: "Off — always show the source list")
+        case .first: return L10n.text("option.autoplay_first", fallback: "First available source")
+        case .matchRegex: return L10n.text("option.autoplay_regex", fallback: "First source matching a pattern")
+        case .preferredQuality: return L10n.text("option.autoplay_quality", fallback: "Best match for preferred quality")
         }
     }
 }
@@ -274,9 +274,9 @@ enum StreamAutoPlaySource: String, SettingsOption {
     case cachedOnly = "CACHED_ONLY"
     var displayName: String {
         switch self {
-        case .anyAddon: return "Any source"
-        case .debridOnly: return "Debrid sources only"
-        case .cachedOnly: return "Cached sources only"
+        case .anyAddon: return L10n.text("option.any_source", fallback: "Any source")
+        case .debridOnly: return L10n.text("option.debrid_only", fallback: "Debrid sources only")
+        case .cachedOnly: return L10n.text("option.cached_only", fallback: "Cached sources only")
         }
     }
 }
@@ -304,10 +304,10 @@ enum LibrarySortOption: String, SettingsOption, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .recentlyAdded: return "Recently added"
-        case .firstAdded: return "First added"
-        case .titleAscending: return "Title, A–Z"
-        case .titleDescending: return "Title, Z–A"
+        case .recentlyAdded: return L10n.text("option.recently_added", fallback: "Recently added")
+        case .firstAdded: return L10n.text("option.first_added", fallback: "First added")
+        case .titleAscending: return L10n.text("option.title_asc", fallback: "Title, A–Z")
+        case .titleDescending: return L10n.text("option.title_desc", fallback: "Title, Z–A")
         }
     }
 }
@@ -336,8 +336,8 @@ enum HomeRatingsVisibility: String, SettingsOption {
 
     var displayName: String {
         switch self {
-        case .showAll: return "Show ratings"
-        case .hideAll: return "Hide ratings"
+        case .showAll: return L10n.text("option.ratings_show", fallback: "Show ratings")
+        case .hideAll: return L10n.text("option.ratings_hide", fallback: "Hide ratings")
         }
     }
 
@@ -357,19 +357,19 @@ enum DetailRatingsVisibility: String, SettingsOption {
 
     var displayName: String {
         switch self {
-        case .showAll: return "Show everything"
-        case .hideUnwatchedEpisodes: return "Hide until watched"
-        case .hideEpisodes: return "Hide episode scores"
-        case .hideAll: return "Hide ratings"
+        case .showAll: return L10n.text("option.ratings_all", fallback: "Show everything")
+        case .hideUnwatchedEpisodes: return L10n.text("option.ratings_until_watched", fallback: "Hide until watched")
+        case .hideEpisodes: return L10n.text("option.ratings_hide_episodes", fallback: "Hide episode scores")
+        case .hideAll: return L10n.text("option.ratings_hide", fallback: "Hide ratings")
         }
     }
 
     var summary: String {
         switch self {
-        case .showAll: return "Titles and episodes both show their score"
-        case .hideUnwatchedEpisodes: return "An episode score appears once you have watched it"
-        case .hideEpisodes: return "Only the title keeps its score"
-        case .hideAll: return "No score anywhere on the screen"
+        case .showAll: return L10n.text("option.ratings_all_sub", fallback: "Titles and episodes both show their score")
+        case .hideUnwatchedEpisodes: return L10n.text("option.ratings_until_watched_sub", fallback: "An episode score appears once you have watched it")
+        case .hideEpisodes: return L10n.text("option.ratings_hide_episodes_sub", fallback: "Only the title keeps its score")
+        case .hideAll: return L10n.text("option.ratings_hide_sub", fallback: "No score anywhere on the screen")
         }
     }
 
@@ -400,9 +400,9 @@ enum DiscoverLocation: String, SettingsOption {
     case off = "OFF"
     var displayName: String {
         switch self {
-        case .sidebar: return "Its own sidebar entry"
-        case .searchTab: return "Inside Search"
-        case .off: return "Hidden"
+        case .sidebar: return L10n.text("option.discover_sidebar", fallback: "Its own sidebar entry")
+        case .searchTab: return L10n.text("option.discover_search", fallback: "Inside Search")
+        case .off: return L10n.text("option.hidden", fallback: "Hidden")
         }
     }
 }
@@ -413,8 +413,8 @@ enum ContinueWatchingSortMode: String, SettingsOption {
     case alphabetical = "ALPHA"
     var displayName: String {
         switch self {
-        case .recentlyWatched: return "Recently watched"
-        case .recentlyAdded: return "Recently added"
+        case .recentlyWatched: return L10n.text("option.recently_watched", fallback: "Recently watched")
+        case .recentlyAdded: return L10n.text("option.recently_added", fallback: "Recently added")
         case .alphabetical: return "A–Z"
         }
     }
@@ -452,7 +452,7 @@ enum WatchProgressSource: String, SettingsOption {
     case simkl = "SIMKL"
     var displayName: String {
         switch self {
-        case .local: return "This device"
+        case .local: return L10n.text("option.this_device", fallback: "This device")
         case .trakt: return "Trakt"
         case .simkl: return "Simkl"
         }
@@ -465,9 +465,9 @@ enum LibrarySourceMode: String, SettingsOption {
     case simkl = "SIMKL"
     var displayName: String {
         switch self {
-        case .local: return "This device"
-        case .trakt: return "Trakt collection"
-        case .simkl: return "Simkl list"
+        case .local: return L10n.text("option.this_device", fallback: "This device")
+        case .trakt: return L10n.text("option.trakt_collection", fallback: "Trakt collection")
+        case .simkl: return L10n.text("option.simkl_list", fallback: "Simkl list")
         }
     }
 }
@@ -478,7 +478,7 @@ enum MoreLikeThisSource: String, SettingsOption {
     case trakt = "TRAKT"
     var displayName: String {
         switch self {
-        case .addonCatalog: return "Addon catalog"
+        case .addonCatalog: return L10n.text("option.addon_catalog", fallback: "Addon catalog")
         case .tmdb: return "TMDB"
         case .trakt: return "Trakt"
         }
@@ -493,9 +493,9 @@ enum StreamBadgePlacement: String, SettingsOption {
     case hidden = "HIDDEN"
     var displayName: String {
         switch self {
-        case .inline: return "Inline with the title"
-        case .belowTitle: return "On their own line"
-        case .hidden: return "Hidden"
+        case .inline: return L10n.text("option.badge_inline", fallback: "Inline with the title")
+        case .belowTitle: return L10n.text("option.badge_below", fallback: "On their own line")
+        case .hidden: return L10n.text("option.hidden", fallback: "Hidden")
         }
     }
 }
@@ -509,10 +509,10 @@ enum DebridStreamSortMode: String, SettingsOption {
     case sizeAsc = "SIZE_ASC"
     var displayName: String {
         switch self {
-        case .default: return "Addon order"
-        case .qualityDesc: return "Highest quality first"
-        case .sizeDesc: return "Largest file first"
-        case .sizeAsc: return "Smallest file first"
+        case .default: return L10n.text("option.sort_default", fallback: "Addon order")
+        case .qualityDesc: return L10n.text("option.sort_quality", fallback: "Highest quality first")
+        case .sizeDesc: return L10n.text("option.sort_size_desc", fallback: "Largest file first")
+        case .sizeAsc: return L10n.text("option.sort_size_asc", fallback: "Smallest file first")
         }
     }
 }
@@ -541,9 +541,9 @@ enum DebridStreamFeatureFilter: String, SettingsOption {
     case only = "ONLY"
     var displayName: String {
         switch self {
-        case .any: return "Allow"
-        case .exclude: return "Exclude"
-        case .only: return "Only"
+        case .any: return L10n.text("option.filter_allow", fallback: "Allow")
+        case .exclude: return L10n.text("option.filter_exclude", fallback: "Exclude")
+        case .only: return L10n.text("option.filter_only", fallback: "Only")
         }
     }
 }
@@ -555,7 +555,7 @@ enum DebridStreamCodecFilter: String, SettingsOption {
     case av1 = "AV1"
     var displayName: String {
         switch self {
-        case .any: return "Any codec"
+        case .any: return L10n.text("option.any_codec", fallback: "Any codec")
         case .h264: return "H.264 / AVC"
         case .hevc: return "HEVC"
         case .av1: return "AV1"
@@ -567,7 +567,7 @@ enum DebridStreamResolution: String, SettingsOption {
     case p2160 = "P2160", p1440 = "P1440", p1080 = "P1080", p720 = "P720"
     case p576 = "P576", p480 = "P480", p360 = "P360", unknown = "UNKNOWN"
 
-    var displayName: String { self == .unknown ? "Unknown" : "\(value)p" }
+    var displayName: String { self == .unknown ? L10n.text("option.unknown", fallback: "Unknown") : "\(value)p" }
 
     var value: Int {
         switch self {
@@ -604,7 +604,7 @@ enum DebridStreamQuality: String, SettingsOption {
         case .ts: return "TS"
         case .tc: return "TC"
         case .scr: return "SCR"
-        case .unknown: return "Unknown"
+        case .unknown: return L10n.text("option.unknown", fallback: "Unknown")
         }
     }
 
@@ -636,7 +636,7 @@ enum DebridStreamVisualTag: String, SettingsOption {
         case .sdr: return "SDR"
         case .hou: return "H-OU"
         case .hsbs: return "H-SBS"
-        case .unknown: return "Unknown"
+        case .unknown: return L10n.text("option.unknown", fallback: "Unknown")
         }
     }
 
@@ -665,7 +665,7 @@ enum DebridStreamAudioTag: String, SettingsOption {
         case .opus: return "OPUS"
         case .flac: return "FLAC"
         case .aac: return "AAC"
-        case .unknown: return "Unknown"
+        case .unknown: return L10n.text("option.unknown", fallback: "Unknown")
         }
     }
 
@@ -682,7 +682,7 @@ enum DebridStreamAudioChannel: String, SettingsOption {
         case .ch51: return "5.1"
         case .ch61: return "6.1"
         case .ch71: return "7.1"
-        case .unknown: return "Unknown"
+        case .unknown: return L10n.text("option.unknown", fallback: "Unknown")
         }
     }
     static let defaultOrder: [DebridStreamAudioChannel] = [.ch71, .ch61, .ch51, .ch20, .unknown]
@@ -697,7 +697,7 @@ enum DebridStreamEncode: String, SettingsOption {
         case .avc: return "AVC"
         case .xvid: return "XviD"
         case .divx: return "DivX"
-        case .unknown: return "Unknown"
+        case .unknown: return L10n.text("option.unknown", fallback: "Unknown")
         }
     }
     static let defaultOrder: [DebridStreamEncode] = [.av1, .hevc, .avc, .xvid, .divx, .unknown]
@@ -708,21 +708,21 @@ enum DebridStreamLanguage: String, SettingsOption {
 
     var displayName: String {
         switch self {
-        case .en: return "English"
-        case .hi: return "Hindi"
-        case .it: return "Italian"
-        case .es: return "Spanish"
-        case .fr: return "French"
-        case .de: return "German"
-        case .pt: return "Portuguese"
-        case .pl: return "Polish"
-        case .cs: return "Czech"
+        case .en: return L10n.text("option.lang_en", fallback: "English")
+        case .hi: return L10n.text("option.lang_hi", fallback: "Hindi")
+        case .it: return L10n.text("option.lang_it", fallback: "Italian")
+        case .es: return L10n.text("option.lang_es", fallback: "Spanish")
+        case .fr: return L10n.text("option.lang_fr", fallback: "French")
+        case .de: return L10n.text("option.lang_de", fallback: "German")
+        case .pt: return L10n.text("option.lang_pt", fallback: "Portuguese")
+        case .pl: return L10n.text("option.lang_pl", fallback: "Polish")
+        case .cs: return L10n.text("option.lang_cs", fallback: "Czech")
         case .la: return "Latino"
-        case .ja: return "Japanese"
-        case .ko: return "Korean"
-        case .zh: return "Chinese"
+        case .ja: return L10n.text("option.lang_ja", fallback: "Japanese")
+        case .ko: return L10n.text("option.lang_ko", fallback: "Korean")
+        case .zh: return L10n.text("option.lang_zh", fallback: "Chinese")
         case .multi: return "Multi"
-        case .unknown: return "Unknown"
+        case .unknown: return L10n.text("option.unknown", fallback: "Unknown")
         }
     }
 }
@@ -734,15 +734,15 @@ enum DebridStreamSortKey: String, SettingsOption {
 
     var displayName: String {
         switch self {
-        case .resolution: return "Resolution"
-        case .quality: return "Quality"
-        case .visualTag: return "Visual tag"
+        case .resolution: return L10n.text("option.resolution", fallback: "Resolution")
+        case .quality: return L10n.text("option.quality", fallback: "Quality")
+        case .visualTag: return L10n.text("option.visual_tag", fallback: "Visual tag")
         case .audioTag: return "Audio"
-        case .audioChannel: return "Audio channel"
-        case .encode: return "Encode"
-        case .size: return "Size"
-        case .language: return "Language"
-        case .releaseGroup: return "Release group"
+        case .audioChannel: return L10n.text("option.audio_channel", fallback: "Audio channel")
+        case .encode: return L10n.text("option.encode", fallback: "Encode")
+        case .size: return L10n.text("option.size", fallback: "Size")
+        case .language: return L10n.text("option.language", fallback: "Language")
+        case .releaseGroup: return L10n.text("option.release_group", fallback: "Release group")
         }
     }
 }
@@ -814,7 +814,7 @@ struct DebridStreamPreferences: Codable, Hashable {
 
 /// A settings option whose `UNKNOWN` case means "the parser found nothing", not a value.
 ///
-/// Every stream attribute carries one, and a template that printed "Unknown" wherever a release
+/// Every stream attribute carries one, and a template that printed L10n.text("option.unknown", fallback: "Unknown") wherever a release
 /// name omitted the codec would be worse than printing nothing — so the templates read through
 /// this rather than `displayName`.
 protocol StreamAttributeOption: SettingsOption {

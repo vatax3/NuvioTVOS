@@ -10,6 +10,12 @@ final class LayoutSettingsStore: PreferenceStore {
 
     // MARK: - Layout choice
 
+    /// `episode_options_overlay_style`: what sits behind the episode options dialog.
+    var episodeOptionsOverlayStyle: EpisodeOptionsOverlayStyle {
+        get { option("episode_options_overlay_style", default: .blur) }
+        set { setOption("episode_options_overlay_style", newValue) }
+    }
+
     var selectedLayout: HomeLayout {
         get { option("selected_layout", default: .modern) }
         set { setOption("selected_layout", newValue) }

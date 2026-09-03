@@ -87,6 +87,18 @@ final class SettingsStore: PreferenceStore {
         set { setOption("settings_ui_style", newValue) }
     }
 
+    /// `app_language`: the interface language, independent of the television's.
+    ///
+    /// Writing it also swaps the bundle `L10n` resolves against, so the change takes effect
+    /// without a relaunch — which matters, because a tvOS app cannot relaunch itself.
+    var language: AppLanguage {
+        get { AppLanguage.from(string("app_language", default: "")) }
+        set {
+            setString("app_language", newValue.rawValue)
+            L10n.use(newValue)
+        }
+    }
+
     var experienceMode: ExperienceMode {
         get { option("experience_mode", default: .advanced) }
         set { setOption("experience_mode", newValue) }

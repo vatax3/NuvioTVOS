@@ -77,6 +77,10 @@ private struct ProfileScopedRoot: View {
 
     var body: some View {
         RootView()
+            // Rebuilt on the language, because `L10n.text` is a static lookup that no view
+            // observes: without this the tables swap and the screen keeps its old strings.
+            .id(settings.app.language)
+            .task { L10n.use(settings.app.language) }
             .environment(settings)
             .environment(addons)
             .environment(library)

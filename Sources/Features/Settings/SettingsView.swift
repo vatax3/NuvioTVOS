@@ -457,6 +457,28 @@ struct ThemeSettingsContent: View {
                 )
             }
 
+            SettingsCard(
+                title: L10n.text("settings.appearance.language", fallback: "Language"),
+                footnote: L10n.text(
+                    "settings.appearance.language_footnote",
+                    fallback: "Independent of the Apple TV's own language. Only languages Nuvio ships are listed."
+                )
+            ) {
+                ForEach(AppLanguage.allCases) { language in
+                    SettingsRow(
+                        title: language.displayName,
+                        systemImage: "globe",
+                        trailing: {
+                            if app.language == language {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(colors.secondary)
+                            }
+                        },
+                        action: { app.language = language }
+                    )
+                }
+            }
+
             SettingsCard(title: L10n.text("settings.appearance.settings_layout", fallback: "Settings layout")) {
                 SettingsOptionRow(
                     title: L10n.text("settings.appearance.presentation", fallback: "Presentation"),
@@ -575,6 +597,17 @@ struct LayoutSettingsContent: View {
                 if layout.focusedPosterBackdropExpandEnabled {
                     SettingsStepperRow(title: L10n.text("settings.layout.expand_after", fallback: "Expand after"), value: $layout.focusedPosterBackdropExpandDelaySeconds, range: 0...10, format: { "\($0)s" })
                 }
+            }
+
+            SettingsCard(title: L10n.text("settings.layout.episode_overlay", fallback: "Episode options overlay")) {
+                SettingsOptionRow(
+                    title: L10n.text("settings.layout.episode_overlay_style", fallback: "Appearance"),
+                    subtitle: L10n.text(
+                        "settings.layout.episode_overlay_style_sub",
+                        fallback: "What sits behind the options when you hold an episode"
+                    ),
+                    selection: $layout.episodeOptionsOverlayStyle
+                )
             }
 
             SettingsCard(title: L10n.text("settings.layout.card_depth", fallback: "Card depth")) {

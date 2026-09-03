@@ -34,20 +34,20 @@ struct FirstRunView: View {
 
         var title: String {
             switch self {
-            case .experience: return "How much do you want to see?"
-            case .layout: return "Choose your home screen"
-            case .addons: return "Add your sources"
+            case .experience: return L10n.text("firstrun.experience_title", fallback: "How much do you want to see?")
+            case .layout: return L10n.text("firstrun.layout_title", fallback: "Choose your home screen")
+            case .addons: return L10n.text("firstrun.addons_title", fallback: "Add your sources")
             }
         }
 
         var subtitle: String {
             switch self {
             case .experience:
-                return "Essential keeps Settings short. Advanced opens the playback, debrid and integration surfaces. You can change this later."
+                return L10n.text("firstrun.experience_sub", fallback: "Essential keeps Settings short. Advanced opens the playback, debrid and integration surfaces. You can change this later.")
             case .layout:
-                return "All three show the same catalogues — they differ in how much room the artwork gets."
+                return L10n.text("firstrun.layout_sub", fallback: "All three show the same catalogues — they differ in how much room the artwork gets.")
             case .addons:
-                return "Nuvio has no catalogue of its own: add-ons provide everything you browse and play. Cinemeta and OpenSubtitles are already installed."
+                return L10n.text("firstrun.addons_sub", fallback: "Nuvio has no catalogue of its own: add-ons provide everything you browse and play. Cinemeta and OpenSubtitles are already installed.")
             }
         }
     }
@@ -61,9 +61,9 @@ struct FirstRunView: View {
 
     /// The same list the Add-on Manager offers, minus the two that ship installed.
     private static let suggestions: [(name: String, detail: String, url: String)] = [
-        ("Torrentio", "Torrent sources — configure it for debrid afterwards", "https://torrentio.strem.fun"),
-        ("Anime Kitsu", "Anime catalogue and metadata", "https://anime-kitsu.strem.fun"),
-        ("Public Domain Movies", "Freely licensed classics, nothing to configure", "https://public-domain-movies.now.sh")
+        ("Torrentio", L10n.text("firstrun.torrentio_sub", fallback: "Torrent sources — configure it for debrid afterwards"), "https://torrentio.strem.fun"),
+        ("Anime Kitsu", L10n.text("firstrun.kitsu_sub", fallback: "Anime catalogue and metadata"), "https://anime-kitsu.strem.fun"),
+        ("Public Domain Movies", L10n.text("firstrun.publicdomain_sub", fallback: "Freely licensed classics, nothing to configure"), "https://public-domain-movies.now.sh")
     ]
 
     var body: some View {
@@ -176,7 +176,7 @@ struct FirstRunView: View {
             }
 
             Button(action: advance) {
-                Text(step == .addons ? "Start watching" : "Skip")
+                Text(step == .addons ? L10n.text("firstrun.start_watching", fallback: "Start watching") : "Skip")
                     .nuvioText(NuvioTextStyles.button)
                     .padding(.horizontal, NuvioTheme.spacing.xl)
                     .padding(.vertical, NuvioTheme.spacing.md)
@@ -202,7 +202,7 @@ struct FirstRunView: View {
 
     private func statusLine(for suggestion: (name: String, detail: String, url: String)) -> String {
         if installed.contains(suggestion.url) { return "Installed" }
-        if failed.contains(suggestion.url) { return "Could not be reached — try again from Settings later" }
+        if failed.contains(suggestion.url) { return L10n.text("firstrun.unreachable", fallback: "Could not be reached — try again from Settings later") }
         return suggestion.detail
     }
 
