@@ -40,6 +40,16 @@
       ],
       "versions": [
         {
+          "version": "1.0.34",
+          "buildVersion": "36",
+          "date": "2026-09-03",
+          "localizedDescription": "**A proper app icon.**\n\nThe tvOS home screen was showing a dark square floating inside the rounded app bubble instead of\none unified icon. All three parallax layers held the same square logo file, background and all,\nshrunk and centred in a frame it did not fit.\n\nThe icon is now three layers that each fill the frame — a brand-coloured field, a soft shadow of\nthe mark, and the mark itself — so it fills its bubble and moves with depth when you focus it.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.34/Nuvio-1.0.34-tvOS-unsigned.ipa",
+          "size": 31948646,
+          "minOSVersion": "17.0",
+          "sha256": "4e897044c5e352fc43aeef1fca5b334bc5051bfa91937e0c5b75d4cfa5dc5ba4"
+        },
+        {
           "version": "1.0.33",
           "buildVersion": "35",
           "date": "2026-09-03",
@@ -256,11 +266,11 @@
         ],
         "privacy": {}
       },
-      "version": "1.0.33",
+      "version": "1.0.34",
       "versionDate": "2026-09-03",
-      "versionDescription": "**A playback stats overlay, ported from the Android app's latest releases.**\n\nTurn it on in Settings → Advanced, then open **Stream information** during playback and press\n**Stats**. It shows, live:\n\n- **buffer** — how many seconds are ahead of the playhead, with a running average\n- **network** — what the connection is actually delivering\n- **bitrate** — what the file needs\n- **cpu**, **memory**, **thermal** — the three reasons an Apple TV stutters\n\nNetwork below bitrate is why something is buffering. A thermal reading that goes orange or red is\nwhy an otherwise fine stream started stuttering twenty minutes in.\n\nOff by default, and behind two steps rather than one — it is a diagnostic, not furniture.",
-      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.33/Nuvio-1.0.33-tvOS-unsigned.ipa",
-      "size": 31918647,
+      "versionDescription": "**A proper app icon.**\n\nThe tvOS home screen was showing a dark square floating inside the rounded app bubble instead of\none unified icon. All three parallax layers held the same square logo file, background and all,\nshrunk and centred in a frame it did not fit.\n\nThe icon is now three layers that each fill the frame — a brand-coloured field, a soft shadow of\nthe mark, and the mark itself — so it fills its bubble and moves with depth when you focus it.",
+      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.34/Nuvio-1.0.34-tvOS-unsigned.ipa",
+      "size": 31948646,
       "minOSVersion": "17.0"
     }
   ],
