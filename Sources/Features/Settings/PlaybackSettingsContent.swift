@@ -162,11 +162,14 @@ struct PlaybackSettingsContent: View {
         return VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
             SettingsCard(
                 title: L10n.text("settings.playback.display_matching", fallback: "Display matching"),
-                footnote: """
-                Apple TV Settings → Video and Audio → Match Content decides whether the \
-                panel may change mode at all; this decides whether Nuvio asks it to. Both \
-                have to be on for 23.976 fps film to play without judder.
-                """
+                footnote: L10n.text(
+                    "settings.playback.display_matching_footnote",
+                    fallback: """
+                    Apple TV Settings → Video and Audio → Match Content decides whether the \
+                    panel may change mode at all; this decides whether Nuvio asks it to. Both \
+                    have to be on for 23.976 fps film to play without judder.
+                    """
+                )
             ) {
                 SettingsOptionRow(
                     title: L10n.text("settings.playback.framerate_range", fallback: "Frame rate & dynamic range"),
@@ -323,18 +326,27 @@ struct PlaybackSettingsContent: View {
         @Bindable var player = player
         return VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
             SettingsCard(title: L10n.text("settings.playback.languages", fallback: "Languages")) {
+                // "Device language" was offered for audio and not for subtitles, so the one
+                // choice a viewer actually wants here — the language the television is in —
+                // could not be made at all. Reported as always landing on Finnish.
                 SettingsLanguageRow(
                     title: L10n.text("settings.playback.preferred_subtitle", fallback: "Preferred subtitle language"),
                     subtitle: L10n.text("settings.playback.preferred_subtitle_sub", fallback: "Chosen automatically when the file or an addon offers it"),
                     systemImage: "captions.bubble",
-                    specials: [.init(code: "", name: "None")],
+                    specials: [
+                        .init(code: "", name: L10n.text("settings.common.none", fallback: "None")),
+                        .init(code: "device", name: L10n.text("settings.playback.device_language", fallback: "Device language"))
+                    ],
                     code: $player.subtitlePreferredLanguage
                 )
                 SettingsLanguageRow(
                     title: L10n.text("settings.playback.fallback_subtitle", fallback: "Fallback subtitle language"),
                     subtitle: L10n.text("settings.playback.fallback_subtitle_sub", fallback: "Used when the preferred one is not available"),
                     systemImage: "captions.bubble",
-                    specials: [.init(code: "", name: "None")],
+                    specials: [
+                        .init(code: "", name: L10n.text("settings.common.none", fallback: "None")),
+                        .init(code: "device", name: L10n.text("settings.playback.device_language", fallback: "Device language"))
+                    ],
                     code: $player.subtitleSecondaryLanguage
                 )
                 SettingsToggle(

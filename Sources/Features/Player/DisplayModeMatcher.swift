@@ -53,6 +53,18 @@ enum DisplayModeMatcher {
         displayManager?.preferredDisplayCriteria = nil
     }
 
+    /// Whether the Apple TV will act on what we hand it.
+    ///
+    /// `preferredDisplayCriteria` is documented as *"only honored when user settings allow it"* —
+    /// Settings → Video and Audio → Match Content, which has its own switches for frame rate and
+    /// dynamic range. The API exposes no way to read or target those two halves separately, so
+    /// this is the whole answer: matching is on, or it is not. Surfaced in the player's stream
+    /// information, because "I enabled it in the app and nothing changed" has two possible
+    /// causes and the viewer cannot tell them apart.
+    static var isMatchingAllowedByTheSystem: Bool {
+        displayManager?.isDisplayCriteriaMatchingEnabled ?? false
+    }
+
     private static var displayManager: AVDisplayManager? {
         UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }

@@ -229,6 +229,7 @@ struct PlayerView: View {
                 audioMix: settings.playerAudioMix,
                 audioLanguages: settings.audioTrackLanguages,
                 subtitleLanguages: settings.subtitleTrackLanguages,
+                prefersForcedSubtitles: settings.player.subtitleUseForcedSubtitles,
                 subtitleStyle: settings.subtitleStyle,
                 seekTarget: requestedSeek,
                 onSeekApplied: { requestedSeek = nil },
@@ -428,7 +429,9 @@ struct PlayerView: View {
         if subtitles.selected == nil,
            let automatic = SubtitleSelector.autoSelection(
                ordered,
-               preferred: settings.player.subtitlePreferredLanguage,
+               // Resolved, not raw: the stored value may be the `device` placeholder, which
+               // matches no track's language tag and would silently select nothing.
+               preferred: settings.subtitleTrackLanguages.first ?? "",
                // The track mpv will pick, which is what decides whether a full subtitle track
                // would be repeating dialogue the viewer can already understand.
                audioLanguage: settings.audioTrackLanguages.first,

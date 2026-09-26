@@ -235,6 +235,11 @@
 "player.preparing" = "Preparing stream";
 "player.audio_no_video" = "Audio is playing but no picture is being drawn";
 "player.frame_rate" = "Frame rate";
+"player.source_range" = "Source range";
+"player.output_range" = "Output range";
+"player.display_matching" = "Display matching";
+"player.display_matching_allowed" = "Allowed by tvOS";
+"player.display_matching_blocked" = "Off in Apple TV settings";
 "player.audio_and_subtitles" = "Audio & subtitles";
 "player.recent_log" = "Recent player log";
 "player.content_guide" = "Content guide";
@@ -386,6 +391,7 @@
 "settings.playback.still_watching_subtitle" = "Pause auto-play after a run of episodes";
 "settings.playback.episodes_before_asking" = "Episodes before asking";
 "settings.playback.display_matching" = "Display matching";
+"settings.playback.display_matching_footnote" = "Apple TV Settings → Video and Audio → Match Content decides whether the panel may change mode at all; this decides whether Nuvio asks it to. Both have to be on for 23.976 fps film to play without judder.";
 "settings.playback.framerate_range" = "Frame rate & dynamic range";
 "settings.playback.hdr_dv" = "HDR & Dolby Vision";
 "settings.playback.dv_hdr_output" = "Dolby Vision & HDR output";

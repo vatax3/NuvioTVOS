@@ -372,6 +372,112 @@ comment explaining the hazard; watch progress and addons were each written witho
 is now used in all three places in `NuvioSyncService`, and anything added to that file should be
 read against it.
 
+## The player, reviewed against the platform and against four more reports
+
+Prompted by a viewer's reports in September 2026 and a review of the engine against Infuse, the
+official apps and the platform's own limits. Shipped in 1.0.38.
+
+### Display matching was off by default, and that was a parity bug rather than parity
+
+`frameRateMatchingMode` defaulted to `.off`. On Apple TV the criteria handed to `AVDisplayManager`
+are the **only** way the system learns what is about to play — its frame rate *and* its dynamic
+range, which `AVDisplayCriteria` carries together in one object. Off meant we told it nothing:
+23.976 fps film ran at whatever the panel was already doing, and no HDR mode was ever requested.
+
+Worse, the AVPlayer path passed that same `off` straight into
+`appliesPreferredDisplayCriteriaAutomatically`, which AVKit sets to `true` by itself. **The default
+actively switched off something Apple gives for free.**
+
+Android's equivalent is off by default too, which is where the value came from. Copying the value
+rather than the intent is what made this a defect: the mechanism it gates is not the same one.
+
+Two things were checked in the SDK before changing anything. `preferredDisplayCriteria` is
+documented as *"only honored when user settings allow it"*, so sending criteria is safe whatever
+the viewer has set — there is no case where this default does harm. And the API exposes **no way
+to separate frame rate from dynamic range**: the two switches in Apple TV Settings are applied by
+tvOS, not by us, and `isDisplayCriteriaMatchingEnabled` answers only whether matching is allowed
+at all. So the plan to split our setting in two was wrong and was dropped; the fix is to stop
+suppressing the one we have. Default now `.start` — matching on the way in, leaving the panel
+there, which avoids a second mode change and a second black frame on every exit.
+
+### A diagnostic, because the HDR complaint is not otherwise observable
+
+A viewer reported Dolby Vision and HDR looking wrong — *"too dark or too bright"*, varying by
+scene, **on both engines**, and still wrong with frame-rate matching enabled. That last detail
+rules out the default above as the whole story.
+
+The remaining suspect is ours and is in the mpv options: `tone-mapping=auto` with
+`hdr-compute-peak=yes`. If MoltenVK's swapchain does not advertise HDR, libplacebo tone-maps PQ to
+SDR — and `hdr-compute-peak` measures each frame's peak to adapt the curve, which is exactly a
+brightness that changes with the scene. On an Apple TV pinned to Dolby Vision output the result is
+then converted a second time. That is a hypothesis with the right shape, and **it must not be
+acted on blind**: the wrong values here degrade the picture as surely as the current ones.
+
+So 1.0.38 ships the measurement instead of a guess. The player's stream information now shows the
+source colorimetry against `video-target-params` — what libplacebo is actually presenting — plus
+whether tvOS is allowing display matching at all. Equal ranges mean the picture reaches the panel
+as authored; different ones mean it is being converted on the way, and the report becomes a fact.
+
+### Subtitles landed on whatever the file listed first
+
+Reported as always selecting Finnish, one row above a French forced track the file itself marked
+as default. Two causes:
+
+- `subtitle_preferred_language` defaulted to empty, so **no `slang` list ever reached mpv**;
+- and we had overridden `subs-fallback` to `yes`, which widens the fallback to *any* track when
+  the language preference finds nothing. mpv's own default, `default`, falls back only to a track
+  the file marked as default — which is the French one.
+
+Underneath both: **"Device language" was offered for audio and not for subtitles.** The code to
+resolve the placeholder already existed; the choice simply was not in the picker, so the one thing
+the viewer wanted could not be selected. Now offered, and the default. An explicit "None" still
+works — it stores `""`, which is a value and not an absence.
+
+`subtitle_use_forced_subtitles` also reached the engine for the first time, as
+`subs-fallback-forced`. mpv's `yes` is exactly what that setting means: a forced track when the
+audio is already in the subtitle language, because a full track would repeat audible dialogue.
+
+One trap worth recording, because it was nearly shipped: `device` is a placeholder, not a language
+tag. `SubtitleSelector.autoSelection` was being handed the raw stored value, so the new default
+would have matched no track at all — the same symptom, a different cause. It takes the resolved
+list now, and a test pins it.
+
+### Two reports that were investigated and not reproduced
+
+Both are recorded rather than quietly dropped.
+
+**"The player controls disappear while you are using them."** Every restart path is already
+covered: button actions, focus movement across the transport (`onChange(of: controlFocus)`), and
+scrubbing, which calls `wakeControls` precisely so the bar *"does not vanish mid-scrub"*. And our
+timeout is **five** seconds against upstream's **three**, so it is already more generous than
+parity. No mechanism found; the value is not being changed on a hunch. Needs a reproduction naming
+the control and the gesture.
+
+**"Search bar text is not vertically centred."** Measured from a screenshot rather than judged:
+cap tops at row 71, baseline at 119, so the optical centre is 95 against a capsule centre of 93.5
+— **one and a half pixels** on a 157-pixel field. Not reproduced in the default state. The capture
+harness was removed rather than left behind as a test that asserts nothing.
+
+### What the review settled about the engine itself
+
+The platform ceiling applies to everyone and is worth stating once: **the Apple TV has no
+bitstream passthrough.** Multichannel leaves as LPCM and Atmos is delivered as Dolby MAT over
+LPCM, so TrueHD Atmos and DTS:X cannot reach a receiver intact from any app — Infuse included,
+which decodes them to LPCM and says so. The only Atmos path is E-AC-3 with JOC, and AVFoundation
+takes the MAT route only when the `dec3` box carries the TS 103 420 type-A extension.
+
+Our gap is therefore narrow and specific: **E-AC-3 JOC inside an MKV**, which routes to mpv and is
+decoded to PCM, losing the height objects. The same stream in an MP4 goes to AVPlayer and should
+produce Atmos. Closing it means remuxing to fMP4 for AVPlayer rather than replacing the engine —
+the architecture Aether's `PrismCore` publishes, which rebuilds the `dec3` box that FFmpeg's own
+muxer omits. Not attempted here; recorded as a decision, and moot on a 5.1 system, where Atmos has
+no height channels to place.
+
+Against that, two places the engine is ahead of every tvOS alternative: **AV1**, which dav1d
+decodes where the A15 has no hardware path and AVFoundation refuses, and **Dolby Vision profile
+7**, handled in-engine where ExoPlayer needs a thirteen-file workaround stack. Both remain
+unverified on hardware.
+
 ## Findings this pass turned up in our own tree
 
 Both are **closed in 1.0.28**, and one of them was half wrong.

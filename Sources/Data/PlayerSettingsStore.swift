@@ -40,11 +40,26 @@ final class PlayerSettingsStore: PreferenceStore {
     /// Android stores the mode alongside the older boolean and derives one from the other, so a
     /// profile written by either version resolves to the same behaviour.  Kept identical here
     /// because these keys are synced between devices.
+    ///
+    /// **The default diverges from Android deliberately, and this is why.** On Apple TV the
+    /// criteria we hand `AVDisplayManager` are the only way the system learns what is about to
+    /// play — its frame rate *and* its dynamic range, which `AVDisplayCriteria` carries together
+    /// and which tvOS then applies according to the viewer's own Match Content switches. Off
+    /// meant we told it nothing: 23.976 fps film ran at whatever the panel was already doing, and
+    /// no HDR mode was ever requested. Worse, on the AVPlayer path we passed that same `off`
+    /// straight into `appliesPreferredDisplayCriteriaAutomatically`, which AVKit sets to `true`
+    /// by itself — so the default actively switched off something Apple gives for free.
+    ///
+    /// Android's equivalent is off by default because it drives a different mechanism there.
+    /// Copying the value rather than the intent is what made this a parity bug rather than parity.
+    ///
+    /// `.start` rather than `.startStop`: matching on the way in and leaving the panel there
+    /// avoids a second mode change, and a second black frame, every time the viewer steps out.
     var frameRateMatchingMode: FrameRateMatchingMode {
         get {
             option(
                 "frame_rate_matching_mode",
-                default: bool("frame_rate_matching", default: false) ? .startStop : .off
+                default: bool("frame_rate_matching", default: true) ? .start : .off
             )
         }
         set {
@@ -143,8 +158,15 @@ final class PlayerSettingsStore: PreferenceStore {
 
     // MARK: - Subtitles
 
+    /// Defaults to the television's own language, where Android defaults to nothing.
+    ///
+    /// Empty meant we never handed mpv an `slang` list at all, so track selection fell through to
+    /// whatever the file listed first — a viewer with a French television reported landing on
+    /// Finnish every time, one row above the French forced track the file even marked as default.
+    /// An explicit "None" is still storable and still honoured: it writes `""`, which reads back
+    /// as `""` rather than as absent.
     var subtitlePreferredLanguage: String {
-        get { string("subtitle_preferred_language", default: "") }
+        get { string("subtitle_preferred_language", default: "device") }
         set { setString("subtitle_preferred_language", newValue) }
     }
 

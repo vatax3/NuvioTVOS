@@ -235,6 +235,11 @@
 "player.preparing" = "Préparation du flux";
 "player.audio_no_video" = "Le son est là mais aucune image ne s’affiche";
 "player.frame_rate" = "Fréquence d’images";
+"player.source_range" = "Plage source";
+"player.output_range" = "Plage en sortie";
+"player.display_matching" = "Adaptation de l’écran";
+"player.display_matching_allowed" = "Autorisée par tvOS";
+"player.display_matching_blocked" = "Désactivée dans les réglages Apple TV";
 "player.audio_and_subtitles" = "Audio et sous-titres";
 "player.recent_log" = "Journal récent du lecteur";
 "player.content_guide" = "Guide de contenu";
@@ -386,6 +391,7 @@
 "settings.playback.still_watching_subtitle" = "Interrompre la lecture auto après une série d’épisodes";
 "settings.playback.episodes_before_asking" = "Épisodes avant de demander";
 "settings.playback.display_matching" = "Correspondance d’affichage";
+"settings.playback.display_matching_footnote" = "Réglages Apple TV → Vidéo et audio → Adapter le contenu décide si le téléviseur peut changer de mode ; ceci décide si Nuvio le lui demande. Les deux doivent être actifs pour qu’un film en 23,976 ips joue sans saccade.";
 "settings.playback.framerate_range" = "Fréquence d’images et plage dynamique";
 "settings.playback.hdr_dv" = "HDR et Dolby Vision";
 "settings.playback.dv_hdr_output" = "Sortie Dolby Vision et HDR";

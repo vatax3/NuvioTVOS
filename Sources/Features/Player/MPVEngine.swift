@@ -64,6 +64,14 @@ final class MPVEngine {
         var videoCodec: String?
         var resolution: String?
         var frameRate: String?
+        /// `video-params/gamma` and `primaries`: the colorimetry of the **source**.
+        var sourceRange: String?
+        /// `video-target-params/…`: the colorimetry libplacebo is actually **presenting**, after
+        /// tone-mapping. When this differs from the source the picture is being converted, which
+        /// is the difference between "HDR reaching the panel" and "HDR flattened to SDR first" —
+        /// and it is not otherwise observable from the sofa. Reported as the light being wrong,
+        /// too dark or too bright, and varying by scene.
+        var outputRange: String?
         var audioCodec: String?
         var audioChannels: String?
         var audioOutput: String?
@@ -170,6 +178,7 @@ final class MPVEngine {
         audioMix: PlayerAudioMix.Options = .init(),
         audioLanguages: [String] = [],
         subtitleLanguages: [String] = [],
+        prefersForcedSubtitles: Bool = true,
         subtitleStyle: SubtitleStyle,
         initialAspectMode: AspectMode = .fit,
         layer: MPVMetalLayer
@@ -240,7 +249,15 @@ final class MPVEngine {
         if !audioLanguages.isEmpty { setOption("alang", audioLanguages.joined(separator: ",")) }
         if !subtitleLanguages.isEmpty { setOption("slang", subtitleLanguages.joined(separator: ",")) }
         setOption("subs-match-os-language", "yes")
-        setOption("subs-fallback", "yes")
+        // mpv's own default, restored. `yes` widened the fallback to *any* subtitle track when
+        // the language preference found nothing, which is how a French television ended up on a
+        // Finnish track sitting one row above the French one. `default` falls back only to a
+        // track the file itself marked as default, which is the track the viewer expects.
+        setOption("subs-fallback", "default")
+        // `subtitle_use_forced_subtitles` read by the engine at last. mpv's `yes` is exactly what
+        // the setting means: a forced track when the audio is already in the subtitle language,
+        // because a full track would then be repeating dialogue the viewer can hear.
+        setOption("subs-fallback-forced", prefersForcedSubtitles ? "yes" : "no")
         // HDR: hand the display the source colorimetry and let libplacebo tone-map what the
         // panel cannot show.
         setOption("target-colorspace-hint", "yes")
@@ -728,6 +745,14 @@ final class MPVEngine {
             videoCodec: codec,
             resolution: width.flatMap { width in height.map { "\(width) × \($0)" } },
             frameRate: fps.map { String(format: "%.3g fps", $0) },
+            sourceRange: Self.colorimetry(
+                gamma: propertyString("video-params/gamma"),
+                primaries: propertyString("video-params/primaries")
+            ),
+            outputRange: Self.colorimetry(
+                gamma: propertyString("video-target-params/gamma"),
+                primaries: propertyString("video-target-params/primaries")
+            ),
             audioCodec: propertyString("audio-codec-name") ?? propertyString("audio-codec"),
             audioChannels: propertyString("audio-params/channel-count"),
             audioOutput: audioOutput
@@ -744,6 +769,17 @@ final class MPVEngine {
                 matrix: propertyString("video-params/colormatrix")
             )
         }
+    }
+
+    /// One line out of mpv's two colorimetry vocabularies, or nil when it knows neither.
+    ///
+    /// `video-target-params` is absent on engines or builds that do not expose it, so a missing
+    /// answer has to read as "unknown" rather than as "same as the source" — claiming the output
+    /// matches when we cannot see it is exactly the wrong way for this diagnostic to fail.
+    nonisolated static func colorimetry(gamma: String?, primaries: String?) -> String? {
+        let parts = [gamma?.nilIfBlank, primaries?.nilIfBlank].compactMap { $0 }
+        guard !parts.isEmpty else { return nil }
+        return parts.joined(separator: " · ")
     }
 
     /// The three readings the stats overlay needs from the engine. Everything else it draws

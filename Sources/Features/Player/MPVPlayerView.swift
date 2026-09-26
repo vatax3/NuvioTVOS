@@ -30,6 +30,7 @@ struct MPVPlayerView: View {
     let audioMix: PlayerAudioMix.Options
     let audioLanguages: [String]
     let subtitleLanguages: [String]
+    let prefersForcedSubtitles: Bool
     let subtitleStyle: SubtitleStyle
     let seekTarget: Double?
     let onSeekApplied: () -> Void
@@ -144,6 +145,7 @@ struct MPVPlayerView: View {
                             audioOutput: audioOutput, audioChannels: audioChannels,
                             audioMix: audioMix,
                             audioLanguages: audioLanguages, subtitleLanguages: subtitleLanguages,
+                            prefersForcedSubtitles: prefersForcedSubtitles,
                             subtitleStyle: subtitleStyle, initialAspectMode: initialAspectMode)
                 .ignoresSafeArea()
 
@@ -1239,6 +1241,17 @@ struct MPVPlayerView: View {
                 infoRow("Codec", engine.streamInfo.videoCodec)
                 infoRow("Resolution", engine.streamInfo.resolution)
                 infoRow(L10n.text("player.frame_rate", fallback: "Frame rate"), engine.streamInfo.frameRate)
+                // Source against output. Equal means the picture reaches the panel as authored;
+                // different means it is being converted on the way, which is what "the HDR looks
+                // wrong" turns out to be. See `StreamInfo.outputRange`.
+                infoRow(L10n.text("player.source_range", fallback: "Source range"), engine.streamInfo.sourceRange)
+                infoRow(L10n.text("player.output_range", fallback: "Output range"), engine.streamInfo.outputRange)
+                InPlayerInfoRow(
+                    title: L10n.text("player.display_matching", fallback: "Display matching"),
+                    value: DisplayModeMatcher.isMatchingAllowedByTheSystem
+                        ? L10n.text("player.display_matching_allowed", fallback: "Allowed by tvOS")
+                        : L10n.text("player.display_matching_blocked", fallback: "Off in Apple TV settings")
+                )
                 InPlayerInfoRow(title: "Display", value: engine.aspectMode.label)
             }
 
@@ -1640,6 +1653,7 @@ private struct MPVMetalSurface: UIViewControllerRepresentable {
     let audioMix: PlayerAudioMix.Options
     let audioLanguages: [String]
     let subtitleLanguages: [String]
+    let prefersForcedSubtitles: Bool
     let subtitleStyle: SubtitleStyle
     let initialAspectMode: MPVEngine.AspectMode
 
@@ -1649,6 +1663,7 @@ private struct MPVMetalSurface: UIViewControllerRepresentable {
             verboseLogging: verboseLogging, hardwareDecoding: hardwareDecoding,
             audioOutput: audioOutput, audioChannels: audioChannels, audioMix: audioMix,
             audioLanguages: audioLanguages, subtitleLanguages: subtitleLanguages,
+            prefersForcedSubtitles: prefersForcedSubtitles,
             subtitleStyle: subtitleStyle, initialAspectMode: initialAspectMode
         )
     }
@@ -1669,6 +1684,7 @@ final class MPVMetalViewController: UIViewController {
     private let audioMix: PlayerAudioMix.Options
     private let audioLanguages: [String]
     private let subtitleLanguages: [String]
+    private let prefersForcedSubtitles: Bool
     private let subtitleStyle: SubtitleStyle
     private let initialAspectMode: MPVEngine.AspectMode
 
@@ -1687,6 +1703,7 @@ final class MPVMetalViewController: UIViewController {
         audioMix: PlayerAudioMix.Options,
         audioLanguages: [String],
         subtitleLanguages: [String],
+        prefersForcedSubtitles: Bool,
         subtitleStyle: SubtitleStyle,
         initialAspectMode: MPVEngine.AspectMode
     ) {
@@ -1700,6 +1717,7 @@ final class MPVMetalViewController: UIViewController {
         self.audioMix = audioMix
         self.audioLanguages = audioLanguages
         self.subtitleLanguages = subtitleLanguages
+        self.prefersForcedSubtitles = prefersForcedSubtitles
         self.subtitleStyle = subtitleStyle
         self.initialAspectMode = initialAspectMode
         super.init(nibName: nil, bundle: nil)
@@ -1736,6 +1754,7 @@ final class MPVMetalViewController: UIViewController {
             audioMix: audioMix,
             audioLanguages: audioLanguages,
             subtitleLanguages: subtitleLanguages,
+            prefersForcedSubtitles: prefersForcedSubtitles,
             subtitleStyle: subtitleStyle,
             initialAspectMode: initialAspectMode,
             layer: metalLayer
