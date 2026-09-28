@@ -40,6 +40,16 @@
       ],
       "versions": [
         {
+          "version": "1.0.41",
+          "buildVersion": "43",
+          "date": "2026-09-28",
+          "localizedDescription": "## Install this one rather than 1.0.40\n\n1.0.40 moved your library and your resume points into storage the Apple TV cannot\nclear — and left a gap: the protected copy was only written the next time you added\nor removed something. If you had not touched your library in a while, it stayed\nunprotected.\n\nIt is now written the first time the app opens. Everything else is as 1.0.40.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.41/Nuvio-1.0.41-tvOS-unsigned.ipa",
+          "size": 32190139,
+          "minOSVersion": "17.0",
+          "sha256": "88b2e6e62023874ce52743410960fbbf383d731ad3a6b6619840bf7d9e3bd491"
+        },
+        {
           "version": "1.0.40",
           "buildVersion": "42",
           "date": "2026-09-28",
@@ -326,11 +336,11 @@
         ],
         "privacy": {}
       },
-      "version": "1.0.40",
+      "version": "1.0.41",
       "versionDate": "2026-09-28",
-      "versionDescription": "## Your library now survives a storage clean-up\n\nApple TV is allowed to delete an app's cache when it needs space, and that is where\nyour library and your resume points were kept. If you use a Nuvio account they came\nback on the next sync. **If you do not, they were gone for good.**\n\nWhat you saved and where you stopped are now stored somewhere the system cannot\nreclaim. Artwork still lives in the cache — it can always be fetched again — so a\ntitle recovered this way may show without its poster until you next open it.\n\nNothing to turn on, and nothing to do.\n\n## Subtitle timing you can actually fix\n\nTwo things, and the first explains why the second was worth doing.\n\n**The subtitle delay was not reaching addon subtitles.** It adjusted subtitles built\ninto the file and nothing else — which is not where most subtitles come from. It now\napplies to both.\n\n**And you can point at a line instead of counting.** In the player's subtitle panel,\n*Sync to a line* lists the lines around where you are. Pick the one being spoken and\nthe timing snaps to it. A file that is four seconds out took eighteen presses of the\nstepper; it now takes one.\n\n## A theme of your own\n\nSettings → Appearance → a new *Custom* swatch. Scan the code with your phone, pick a\ncolour there — your phone's own colour picker, not a D-pad — and the pressed shade,\nthe focus ring and the card background follow from it.\n\nThe Apple TV shows a preview, and that is the screen to judge it on: a colour that\nlooks good on a phone can vanish against the picture from across a room. Watch the\nfocus ring in particular — it is what tells you where you are.\n\n## Search suggests titles now\n\nTyping \"juras\" offers *Jurassic Park*, not just what you searched for last week.\nThe suggestions come from what your addons already returned, so there are no extra\nrequests and no waiting.\n\n## A launch screen, if you want one\n\nSettings → Appearance → Startup. Off by default. It only appears on a launch heading\nfor the home screen — never in front of a title you opened from Top Shelf or a\ncontinue-watching tile.\n\n## Still looking for\n\nTwo reports remain open and would be helped by details:\n\n- **Player controls disappearing while in use** — which control, and what you pressed.\n- **Search field text not centred** — a photo of the screen.",
-      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.40/Nuvio-1.0.40-tvOS-unsigned.ipa",
-      "size": 32190885,
+      "versionDescription": "## Install this one rather than 1.0.40\n\n1.0.40 moved your library and your resume points into storage the Apple TV cannot\nclear — and left a gap: the protected copy was only written the next time you added\nor removed something. If you had not touched your library in a while, it stayed\nunprotected.\n\nIt is now written the first time the app opens. Everything else is as 1.0.40.",
+      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.41/Nuvio-1.0.41-tvOS-unsigned.ipa",
+      "size": 32190139,
       "minOSVersion": "17.0"
     }
   ],
