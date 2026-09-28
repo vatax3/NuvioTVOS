@@ -168,6 +168,13 @@ struct DiscoverBrowser: View {
     private var columns: [GridItem] { metrics.gridColumns() }
 
     var body: some View {
+        // Discover has no key of its own upstream. It draws the same addon catalogs as
+        // Home, and a viewer who saw rated posters on one and not the other would read
+        // that as a bug rather than a setting, so it follows Home.
+        posterScopedContent.customPosterScreen(.home, settings: settings)
+    }
+
+    @ViewBuilder private var posterScopedContent: some View {
         VStack(alignment: .leading, spacing: NuvioTheme.spacing.xl) {
             typeChips
             catalogChips

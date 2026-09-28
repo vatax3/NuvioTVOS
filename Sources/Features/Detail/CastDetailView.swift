@@ -13,6 +13,11 @@ struct CastDetailView: View {
     @State private var model = CastDetailViewModel()
 
     var body: some View {
+    // A person's credits are part of the detail surface, which is the screen key they share.
+        posterScopedContent.customPosterScreen(.details, settings: settings)
+    }
+
+    @ViewBuilder private var posterScopedContent: some View {
         NuvioScreenBackground {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: NuvioTheme.spacing.xxl) {

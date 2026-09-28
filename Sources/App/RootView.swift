@@ -165,6 +165,8 @@ struct RootView: View {
             StreamBadgeRulesView()
         case .repositoryConfig:
             RepositoryConfigView()
+        case .customPoster:
+            CustomPosterView()
         case .catalogOrder:
             CatalogOrderView()
         case .themeSettings:

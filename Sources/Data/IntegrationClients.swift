@@ -1821,24 +1821,33 @@ actor SkipIntroClient {
         )
     }
 
-    /// Simkl answers this one with a `Location` and no body, so the redirect must not be
-    /// followed — `URLSession` would chase it to an HTML page and lose the id.
     private nonisolated static func simklRedirect(
         imdbId: String, clientId: String
     ) async -> SimklIdResolution.Redirect? {
-        guard let url = URL(
-            string: "https://api.simkl.com/redirect?to=simkl&imdb=\(imdbId)&client_id=\(clientId)"
-        ) else { return nil }
-        let session = URLSession(
-            configuration: .ephemeral, delegate: NoRedirectDelegate(), delegateQueue: nil
-        )
-        defer { session.finishTasksAndInvalidate() }
-        guard let (_, response) = try? await session.data(from: url),
-              let http = response as? HTTPURLResponse,
-              let location = http.value(forHTTPHeaderField: "Location")
-        else { return nil }
-        return SimklIdResolution.parseRedirect(location: location)
+        await simklRedirectLookup(imdbId: imdbId, clientId: clientId)
     }
+}
+
+/// An IMDb id traded for the `(type, simklId)` pair every other Simkl endpoint is addressed by.
+///
+/// Simkl answers this one with a `Location` and no body, so the redirect must not be followed —
+/// `URLSession` would chase it to an HTML page and lose the id. Shared between the anime-identity
+/// lookup and *More like this*, which need the same pair for different reasons.
+func simklRedirectLookup(
+    imdbId: String, clientId: String
+) async -> SimklIdResolution.Redirect? {
+    guard let url = URL(
+        string: "https://api.simkl.com/redirect?to=simkl&imdb=\(imdbId)&client_id=\(clientId)"
+    ) else { return nil }
+    let session = URLSession(
+        configuration: .ephemeral, delegate: NoRedirectDelegate(), delegateQueue: nil
+    )
+    defer { session.finishTasksAndInvalidate() }
+    guard let (_, response) = try? await session.data(from: url),
+          let http = response as? HTTPURLResponse,
+          let location = http.value(forHTTPHeaderField: "Location")
+    else { return nil }
+    return SimklIdResolution.parseRedirect(location: location)
 }
 
 /// Stops `URLSession` following a redirect, so the `Location` header survives to be read.
@@ -1868,6 +1877,17 @@ actor SimklClient {
     static let shared = SimklClient()
     private let base = "https://api.simkl.com"
     private let log = Logger(subsystem: "com.nuvio.tvos", category: "Simkl")
+
+    /// `RELATED_LIMIT` and `RELATED_CACHE_TTL_MS`. A recommendation row is browsed with a remote,
+    /// so the twenty-first card is one nobody reaches; ten minutes is long enough that walking
+    /// back into a title does not re-ask, short enough that it is not a session-long snapshot.
+    private static let relatedLimit = 20
+    private static let relatedCacheTTL: TimeInterval = 10 * 60
+    private var relatedCache: [String: (items: [MetaPreview], updatedAt: Date)] = [:]
+    /// Held separately and without a TTL: an IMDb id's Simkl identity does not change, and a
+    /// stored `nil` is the answer "Simkl does not know this title" — worth remembering so the
+    /// next visit to the same screen does not pay for the lookup again.
+    private var relatedRedirectCache: [String: SimklIdResolution.Redirect?] = [:]
 
     struct PinCode: Sendable {
         let userCode: String
@@ -2094,7 +2114,9 @@ actor SimklClient {
             guard let value = ids[key]?.nilIfBlank else { continue }
             return key == "imdb" ? value : "\(key):\(value)"
         }
-        for key in ["tmdb", "tvdb", "mal", "kitsu"] {
+        // `anilist` is reachable only from the recommendation payloads — the library rows never
+        // carry one — and sits last of the real databases because the fewest addons declare it.
+        for key in ["tmdb", "tvdb", "mal", "kitsu", "anilist"] {
             if let value = ids[key]?.nilIfBlank { return "\(key):\(value)" }
         }
         if let value = (ids["simkl"] ?? ids["simkl_id"])?.nilIfBlank { return "simkl:\(value)" }
@@ -2113,6 +2135,103 @@ actor SimklClient {
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
             .nilIfBlank else { return nil }
         return "https://wsrv.nl/?url=https://simkl.in/posters/\(normalized)_m.webp&q=90"
+    }
+
+    // MARK: More like this
+
+    /// `users_recommendations` and `similar` for one title — Simkl's answer to *More like this*.
+    ///
+    /// Port of `SimklRelatedService`. Two choices in it are worth stating:
+    ///
+    /// - **The viewer's recommendations come first, then `similar` deduplicated behind them.**
+    ///   Simkl's `similar` is computed from genre and cast and reads like a catalogue row; the
+    ///   recommendations are what people who watched this went on to watch, which is the row a
+    ///   viewer opened this screen hoping for.
+    /// - **Unlike Trakt's `related`, these carry artwork.** Ours builds portrait posters through
+    ///   the same helper as every other Simkl preview rather than upstream's landscape crop:
+    ///   this row is drawn among poster rows, and one landscape row inside them reads as a bug.
+    ///
+    /// Needs no account — `simkl-api-key` alone answers it — so it works for a viewer who has
+    /// entered a client id and never signed in.
+    func related(
+        imdbId: String,
+        clientId: String,
+        animePreference: SimklAnimeIdPreference = .imdb
+    ) async -> [MetaPreview] {
+        guard !clientId.isEmpty, !imdbId.isEmpty else { return [] }
+
+        struct Item: Decodable, Sendable {
+            let title: String?
+            let en_title: String?
+            let year: Int?
+            let poster: String?
+            let type: String?
+            let anime_type: String?
+            let ids: [String: FlexibleID]?
+        }
+        struct Payload: Decodable, Sendable {
+            let similar: [Item]?
+            let users_recommendations: [Item]?
+        }
+
+        let redirect: SimklIdResolution.Redirect
+        if let cached = relatedRedirectCache[imdbId] {
+            guard let cached else { return [] }
+            redirect = cached
+        } else {
+            let located = await simklRedirectLookup(imdbId: imdbId, clientId: clientId)
+            relatedRedirectCache[imdbId] = located
+            guard let located else { return [] }
+            redirect = located
+        }
+
+        let cacheKey = "\(redirect.type)|\(redirect.simklId)"
+        if let cached = relatedCache[cacheKey],
+           Date().timeIntervalSince(cached.updatedAt) <= Self.relatedCacheTTL {
+            return cached.items
+        }
+
+        // `extended=full` where upstream sends the bare path: a superset costs nothing here,
+        // since both arrays are optional and unknown keys are ignored either way.
+        guard let payload = try? await IntegrationHTTP.get(
+            "\(base)/\(redirect.type)/\(redirect.simklId)?extended=full&client_id=\(clientId)",
+            as: Payload.self
+        ) else { return [] }
+
+        var seen = Set<String>()
+        var ordered: [Item] = []
+        for item in (payload.users_recommendations ?? []) + (payload.similar ?? []) {
+            let key = item.ids?["simkl"]?.value ?? item.ids?["slug"]?.value ?? item.title ?? ""
+            guard !key.isEmpty, seen.insert(key).inserted else { continue }
+            ordered.append(item)
+            if ordered.count >= Self.relatedLimit { break }
+        }
+
+        var keys = Set<String>()
+        let items: [MetaPreview] = ordered.compactMap { item in
+            guard let name = (item.en_title?.nilIfBlank ?? item.title?.nilIfBlank),
+                  let ids = item.ids,
+                  let id = Self.canonicalContentId(ids, preference: animePreference)
+            else { return nil }
+            // Simkl calls anime films `anime` with `anime_type: movie`; everything else that is
+            // not a movie is a series as far as an addon is concerned.
+            let type: ContentType = item.type?.lowercased() == "movie"
+                || item.anime_type?.lowercased() == "movie" ? .movie : .series
+            guard keys.insert("\(type.apiString()):\(id)").inserted else { return nil }
+            return MetaPreview(
+                id: id,
+                type: type,
+                rawType: type.apiString(),
+                name: name,
+                poster: Self.posterURL(item.poster),
+                background: Self.posterURL(item.poster),
+                releaseInfo: item.year.map(String.init),
+                imdbId: ids["imdb"]?.value.nilIfBlank,
+                slug: ids["slug"]?.value.nilIfBlank
+            )
+        }
+        relatedCache[cacheKey] = (items, Date())
+        return items
     }
 
     // MARK: Auth

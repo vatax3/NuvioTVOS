@@ -66,12 +66,19 @@ final class MetaDetailsViewModel {
         }
 
         if fromFurthest {
-            // Anchor on the last episode with any recorded progress, then take what follows.
-            let touched = watchable.lastIndex { library.progress(forVideoId: $0.id) != nil }
-            if let touched {
-                if !isWatched(watchable[touched]) { return watchable[touched] }
-                let next = watchable.index(after: touched)
-                return next < watchable.count ? watchable[next] : watchable[touched]
+            // Anchor on the last episode with any recorded progress — unless something is still
+            // in progress and at least as recent, which outranks it. See `NextUpAnchor`.
+            let entries = watchable.compactMap { library.progress(forVideoId: $0.id) }
+            let furthest = watchable.last { library.progress(forVideoId: $0.id) != nil }
+            let anchor = NextUpAnchor.resolve(
+                furthest: furthest.flatMap { library.progress(forVideoId: $0.id) },
+                entries: entries,
+                threshold: threshold
+            )
+            if let anchor, let index = watchable.firstIndex(where: { $0.id == anchor.videoId }) {
+                if !isWatched(watchable[index]) { return watchable[index] }
+                let next = watchable.index(after: index)
+                return next < watchable.count ? watchable[next] : watchable[index]
             }
         }
         return watchable.first { !isWatched($0) } ?? watchable.first
@@ -264,7 +271,7 @@ final class MetaDetailsViewModel {
     /// Port of `MoreLikeThisSection`, now honouring `more_like_this_source`.
     ///
     /// The preference had a picker in Tracking settings and no reader: every viewer got the
-    /// addon-catalog behaviour whichever of the three they chose. TMDB and Trakt fall back to
+    /// addon-catalog behaviour whichever one they chose. TMDB, Trakt and Simkl all fall back to
     /// the catalog rather than leaving the row empty, because an empty row reads as "nothing is
     /// like this" rather than "that account is not connected".
     private func loadMoreLikeThis(addonStore: AddonStore, meta: Meta, settings: AppSettings) async {
@@ -279,6 +286,20 @@ final class MetaDetailsViewModel {
             if !clientId.isEmpty, let imdbId = meta.imdbId ?? idIfImdb(meta.id) {
                 let items = await TraktClient.shared.related(
                     imdbId: imdbId, type: meta.type, clientId: clientId
+                )
+                if !items.isEmpty {
+                    moreLikeThis = items.filter { $0.id != meta.id }
+                    return
+                }
+            }
+            await loadMoreLikeThisFromCatalog(addonStore: addonStore, meta: meta)
+        case .simkl:
+            let clientId = settings.tracking.simklClientId
+            if !clientId.isEmpty, let imdbId = meta.imdbId ?? idIfImdb(meta.id) {
+                let items = await SimklClient.shared.related(
+                    imdbId: imdbId,
+                    clientId: clientId,
+                    animePreference: settings.tracking.simklAnimeIdPreference
                 )
                 if !items.isEmpty {
                     moreLikeThis = items.filter { $0.id != meta.id }

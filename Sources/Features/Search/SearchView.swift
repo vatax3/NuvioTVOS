@@ -185,6 +185,10 @@ struct SearchView: View {
     }
 
     var body: some View {
+        posterScopedContent.customPosterScreen(.search, settings: settings)
+    }
+
+    @ViewBuilder private var posterScopedContent: some View {
         @Bindable var model = model
 
         ScrollView(.vertical, showsIndicators: false) {

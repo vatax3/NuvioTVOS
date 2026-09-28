@@ -552,6 +552,7 @@ private struct ThemeSwatch: View {
 struct LayoutSettingsContent: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(AppSettings.self) private var settings
+    @Environment(Router.self) private var router
 
     var body: some View {
         @Bindable var layout = settings.layout
@@ -606,6 +607,20 @@ struct LayoutSettingsContent: View {
                 SettingsStepperRow(title: L10n.text("settings.layout.corner_radius", fallback: "Corner radius"), value: $layout.posterCardCornerRadiusDp, range: 0...28, format: { "\($0) dp" })
                 SettingsToggle(title: L10n.text("settings.layout.show_labels", fallback: "Show labels"), subtitle: L10n.text("settings.layout.show_labels_subtitle", fallback: "Title and year under each poster"), isOn: $layout.posterLabelsEnabled)
                 SettingsToggle(title: L10n.text("settings.layout.landscape_posters", fallback: "Landscape posters in Modern view"), isOn: $layout.modernLandscapePostersEnabled)
+                SettingsRow(
+                    title: L10n.text("settings.layout.custom_poster", fallback: "Poster artwork"),
+                    subtitle: L10n.text(
+                        "settings.layout.custom_poster_sub",
+                        fallback: "Fetch posters from your own URL instead of the addon's"
+                    ),
+                    systemImage: "photo.on.rectangle.angled",
+                    trailing: {
+                        SettingsValueLabel(value: layout.customPosterUrlPattern.isEmpty
+                            ? L10n.text("settings.poster.off", fallback: "Off")
+                            : L10n.text("settings.poster.on", fallback: "On"))
+                    },
+                    action: { router.push(.customPoster) }
+                )
             }
 
             SettingsCard(

@@ -54,6 +54,11 @@ struct LibraryView: View {
     }
 
     var body: some View {
+    // The library's own rows. The tracker list screens below have their own bodies.
+        posterScopedContent.customPosterScreen(.library, settings: settings)
+    }
+
+    @ViewBuilder private var posterScopedContent: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: NuvioTheme.spacing.xl) {
                 Text(L10n.text("navigation.library"))
@@ -187,6 +192,11 @@ struct CatalogSeeAllView: View {
     }
 
     var body: some View {
+        // The same catalog the Home rail came from, so it keeps Home's key.
+        posterScopedContent.customPosterScreen(.home, settings: settings)
+    }
+
+    @ViewBuilder private var posterScopedContent: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: NuvioTheme.spacing.xl) {
                 Text(request.title)

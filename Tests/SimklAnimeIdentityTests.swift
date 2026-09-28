@@ -43,6 +43,22 @@ final class SimklAnimeIdentityTests: XCTestCase {
         XCTAssertEqual(SimklClient.canonicalContentId(["simkl_id": "1234"]), "simkl:1234")
     }
 
+    /// `anilist` reaches this only from the *More like this* payloads — no library row carries
+    /// one — and it has to beat Simkl's own id, which nothing but Simkl can resolve.
+    func testAnAniListIdIsPreferredOverSimklsOwn() {
+        XCTAssertEqual(
+            SimklClient.canonicalContentId(["anilist": "101922", "simkl": "1234"]),
+            "anilist:101922"
+        )
+    }
+
+    /// And it stays behind every database an addon is more likely to declare.
+    func testAniListSitsLastOfTheRealDatabases() {
+        let ids = ["kitsu": "41982", "anilist": "101922"]
+
+        XCTAssertEqual(SimklClient.canonicalContentId(ids), "kitsu:41982")
+    }
+
     func testNoUsableIdAtAll() {
         XCTAssertNil(SimklClient.canonicalContentId([:]))
         XCTAssertNil(SimklClient.canonicalContentId(["imdb": "  "]))

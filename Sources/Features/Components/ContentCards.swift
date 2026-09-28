@@ -5,6 +5,7 @@ import SwiftUI
 struct ContentCard: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(\.posterMetrics) private var metrics
+    @Environment(\.customPosterPattern) private var posterPattern
     @Environment(Router.self) private var router
 
     let item: MetaPreview
@@ -26,6 +27,13 @@ struct ContentCard: View {
     @State private var logoFailed = false
     @State private var expandTask: Task<Void, Never>?
 
+    /// The title with any custom poster applied, used for the artwork and nothing else.
+    ///
+    /// Deliberately not swapped in everywhere: the poster-options dialog and the library write
+    /// take `item`, so what gets saved is the addon's own poster rather than a URL that depends
+    /// on a service subscription still being valid.
+    private var artworkItem: MetaPreview { item.withCustomPoster(pattern: posterPattern) }
+
     private var showLabels: Bool { metrics.showsLabels }
     private var backdropExpandEnabled: Bool { allowsBackdropExpand && metrics.backdropExpandEnabled }
     private var cornerRadius: CGFloat { metrics.cornerRadius }
@@ -38,9 +46,16 @@ struct ContentCard: View {
     /// A landscape rail already shows the backdrop, so it never falls back to the poster.
     private var imageURL: String? {
         if isExpanded || shape == .landscape {
-            return item.backdropUrl ?? item.poster
+            return artworkItem.backdropUrl ?? artworkItem.poster
         }
-        return item.poster
+        return artworkItem.poster
+    }
+
+    /// The addon's own artwork, when a custom poster pattern replaced it. Only reachable if the
+    /// replacement fails to load — see `RemoteImage.fallbackURL`.
+    private var artworkFallbackURL: String? {
+        guard posterPattern.isEmpty == false else { return nil }
+        return artworkItem.rawPosterUrl
     }
 
     var body: some View {
@@ -91,7 +106,7 @@ struct ContentCard: View {
 
     private var artwork: some View {
         ZStack(alignment: .topTrailing) {
-            RemoteImage(url: imageURL, contentMode: .fill) {
+            RemoteImage(url: imageURL, fallbackURL: artworkFallbackURL, contentMode: .fill) {
                 PosterPlaceholder()
             }
             .frame(width: cardWidth, height: baseHeight)
@@ -231,6 +246,7 @@ struct ContentCard: View {
 struct ContinueWatchingCard: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(\.posterMetrics) private var metrics
+    @Environment(\.customPosterPattern) private var posterPattern
     @Environment(Router.self) private var router
 
     let entry: ContinueWatchingEntry
@@ -256,13 +272,19 @@ struct ContinueWatchingCard: View {
         style == .landscape ? tokens.height : metrics.height
     }
 
+    /// The rail draws the episode still where it has one, and that is the addon's own artwork
+    /// whatever the pattern says — these services publish posters for titles, not for episodes.
+    private var artworkPreview: MetaPreview {
+        entry.preview.withCustomPoster(pattern: posterPattern)
+    }
+
     private var artworkURL: String? {
         if usesEpisodeThumbnail, let thumbnail = entry.episodeThumbnail?.nilIfBlank {
             return thumbnail
         }
         return style == .landscape
-            ? (entry.preview.backdropUrl ?? entry.preview.poster)
-            : (entry.preview.poster ?? entry.preview.backdropUrl)
+            ? (artworkPreview.backdropUrl ?? artworkPreview.poster)
+            : (artworkPreview.poster ?? artworkPreview.backdropUrl)
     }
 
     /// Only blur what the viewer has not begun — a resumed episode is not a spoiler.
@@ -278,7 +300,11 @@ struct ContinueWatchingCard: View {
                 action()
             }) {
                 ZStack(alignment: .bottom) {
-                    RemoteImage(url: artworkURL, contentMode: .fill) {
+                    RemoteImage(
+                        url: artworkURL,
+                        fallbackURL: posterPattern.isEmpty ? nil : artworkPreview.rawPosterUrl,
+                        contentMode: .fill
+                    ) {
                         PosterPlaceholder()
                     }
                     .frame(width: cardWidth, height: cardHeight)

@@ -762,7 +762,8 @@ enum StremioMapper {
             runtime: dto.runtime?.nilIfBlank,
             available: dto.available?.value,
             // Zero is how an addon says "no score", not a score of zero.
-            addonRating: dto.rating?.value.flatMap { $0 > 0 ? $0 : nil }
+            addonRating: dto.rating?.value.flatMap { $0 > 0 ? $0 : nil },
+            hasEmbeddedStreams: !(dto.streams ?? []).compacted().isEmpty
         )
     }
 

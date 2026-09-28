@@ -196,6 +196,10 @@ struct HomeRailList: View {
                     },
                     cardFocus: $focusedCardKey
                 )
+                // Continue Watching is gated separately from the catalog rows below it: it is
+                // the one rail a viewer sees on every launch, so it is also the one whose extra
+                // requests to a rate-limited service are hardest to justify.
+                .customPosterScreen(.continueWatching, settings: settings)
             }
 
             ForEach(pinnedCollections) { collection in
@@ -204,6 +208,7 @@ struct HomeRailList: View {
                     focusBinding: $focusedCardKey,
                     onFocusItem: { model.focusedItem = $0 }
                 )
+                .customPosterScreen(.collections, settings: settings)
             }
 
             ForEach(displayRows) { entry in
@@ -234,6 +239,9 @@ struct HomeRailList: View {
                 }
             }
         }
+        // The catalog rails. The two above override this for their own screens; an environment
+        // value set closer to the leaf wins, so the order of these two modifiers is not a race.
+        .customPosterScreen(.home, settings: settings)
         // Claim focus for the content the moment there is a card to hold it. Without this the
         // sidebar pill — the only focusable view while the catalogs load — keeps focus and the
         // panel stays bloomed open, which is not how the app starts on Android.

@@ -74,6 +74,14 @@ private extension UIImage {
 /// and a `failed` signal so heroes can fall back from a logo to a text title.
 struct RemoteImage<Placeholder: View>: View {
     let url: String?
+    /// Loaded instead when `url` fails, and only then.
+    ///
+    /// Stands in for upstream's Coil interceptor, which retries a failed request against the
+    /// original poster held in the request's cache-key extras. The custom poster URL is what makes
+    /// this necessary: those services answer for a subset of titles and 404 for the rest, so
+    /// without a fallback a viewer who sets a pattern gets placeholder cards wherever the service
+    /// has no artwork — worse than the posters they replaced.
+    var fallbackURL: String? = nil
     var contentMode: ContentMode = .fill
     var transition: Bool = true
     var onFailure: (() -> Void)?
@@ -86,6 +94,15 @@ struct RemoteImage<Placeholder: View>: View {
     private var resolvedURL: URL? {
         guard let url, let trimmed = url.nilIfBlank else { return nil }
         return URL(string: trimmed)
+    }
+
+    /// Never the same request twice: a pattern that resolved to the poster it was replacing would
+    /// otherwise be fetched, fail, and be fetched again.
+    private var resolvedFallbackURL: URL? {
+        guard let fallbackURL, let trimmed = fallbackURL.nilIfBlank,
+              trimmed != url, let candidate = URL(string: trimmed), candidate != resolvedURL
+        else { return nil }
+        return candidate
     }
 
     var body: some View {
@@ -124,17 +141,31 @@ struct RemoteImage<Placeholder: View>: View {
         if let loaded {
             withAnimation(NuvioMotion.quickTween) { image = loaded }
             loadedURL = resolvedURL
-        } else {
-            didFail = true
-            onFailure?()
+            return
         }
+
+        if let fallback = resolvedFallbackURL,
+           let recovered = await ImageLoader.shared.image(for: fallback) {
+            guard !Task.isCancelled, resolvedURL == self.resolvedURL else { return }
+            withAnimation(NuvioMotion.quickTween) { image = recovered }
+            // Keyed on the URL that was *asked* for, so the recovery is not repeated on every
+            // redraw — and so a later change of `url` still re-runs.
+            loadedURL = resolvedURL
+            return
+        }
+
+        didFail = true
+        onFailure?()
     }
 }
 
 extension RemoteImage where Placeholder == AnyView {
     /// Convenience initialiser using the standard poster placeholder surface.
-    init(url: String?, contentMode: ContentMode = .fill, background: Color) {
-        self.init(url: url, contentMode: contentMode, transition: true, onFailure: nil) {
+    init(url: String?, fallbackURL: String? = nil, contentMode: ContentMode = .fill, background: Color) {
+        self.init(
+            url: url, fallbackURL: fallbackURL, contentMode: contentMode,
+            transition: true, onFailure: nil
+        ) {
             AnyView(background)
         }
     }

@@ -97,6 +97,34 @@ final class LayoutSettingsStore: PreferenceStore {
         set { setBool("modern_landscape_posters_enabled", newValue) }
     }
 
+    // MARK: - Custom poster artwork
+
+    /// A URL the viewer wrote, with `{imdb_id}`-style placeholders. Empty means the addon's own
+    /// artwork, which is the default and the only thing most viewers will ever see.
+    ///
+    /// Typed on a phone rather than with the remote — see `LocalConfigServer`. A URL with a query
+    /// string and half a dozen braces is the clearest case yet for that hand-off.
+    var customPosterUrlPattern: String {
+        get { string("custom_poster_url_pattern", default: "") }
+        set { setString("custom_poster_url_pattern", newValue) }
+    }
+
+    /// Which screens the pattern applies to. Empty means all of them — see `CustomPosterScreen`.
+    var customPosterEnabledScreens: [String] {
+        get { stringList("custom_poster_enabled_screens") }
+        set { setStringList("custom_poster_enabled_screens", newValue) }
+    }
+
+    /// The pattern to use on one screen, or empty if it is switched off there. Reading it this way
+    /// rather than checking the set at each call site means a disabled screen never resolves a URL
+    /// it is about to discard.
+    func customPosterPattern(for screen: CustomPosterScreen) -> String {
+        let pattern = customPosterUrlPattern
+        guard !pattern.isEmpty else { return "" }
+        return CustomPosterScreen.from(keys: customPosterEnabledScreens).contains(screen)
+            ? pattern : ""
+    }
+
     // MARK: - Focused poster expansion
 
     var focusedPosterBackdropExpandEnabled: Bool {

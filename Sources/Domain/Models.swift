@@ -367,6 +367,10 @@ struct Video: Codable, Hashable, Identifiable, Sendable {
     /// source the viewer chose, and it is describing this exact episode rather than a title
     /// TMDB matched by id.
     var addonRating: Double?
+    /// Some addons never implement `/stream` and hang the playable links off the video entry
+    /// instead; `fetchInlineStreams` reads them. Carried so `PlaybackAvailability` does not grey
+    /// out a title whose streams are already in hand — the manifests would say nothing serves it.
+    var hasEmbeddedStreams: Bool = false
 
     /// The score to draw, whichever survived.
     var displayRating: Double? { addonRating ?? tmdbRating }

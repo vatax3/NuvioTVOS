@@ -114,6 +114,10 @@ struct CollectionFolderView: View {
     }
 
     var body: some View {
+        posterScopedContent.customPosterScreen(.collections, settings: settings)
+    }
+
+    @ViewBuilder private var posterScopedContent: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: NuvioTheme.spacing.xl) {
                 header

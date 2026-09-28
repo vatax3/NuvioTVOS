@@ -140,3 +140,51 @@ struct NextUpOptions: Equatable {
     /// `dismissed_next_up_keys`.
     var dismissedKeys: [String] = []
 }
+
+/// Which recorded position the *Play* button on a series should resume from.
+///
+/// Port of `resolveNextToWatchLatestProgress`, added upstream on 25 September and describing a
+/// defect we shipped too. `next_up_from_furthest_episode` anchors on the **deepest episode the
+/// viewer has touched**, which is the right answer for the case it was written for — a rewatch
+/// of an early episode should not drag a series backwards — and the wrong one as soon as the
+/// deepest touched episode is *finished*:
+///
+/// > Watch S05E01 to the end, then start S02E03 and stop halfway. The furthest anchor is still
+/// > S05E01, it is watched, so *Play* offers S05E02 — and the episode actually in progress is
+/// > not reachable from the button at all.
+///
+/// The fix is to let an in-progress episode outrank the positional anchor when it is at least as
+/// recent. Both halves of that matter: recency alone would break the rewatch case the preference
+/// exists for, and position alone is the bug above.
+enum NextUpAnchor {
+    /// Below this a position is a mis-press or a few seconds of a title card, not a place to
+    /// resume from. Matches the floor the Continue Watching rail already applies.
+    static let resumeFloor: Double = 0.02
+
+    static func isResumable(_ progress: WatchProgress, threshold: Double) -> Bool {
+        !progress.isFinished(threshold: threshold) && progress.fraction >= resumeFloor
+    }
+
+    /// - Parameters:
+    ///   - furthest: the deepest touched episode's row, whatever its state.
+    ///   - entries: every recorded row for this series.
+    static func resolve(
+        furthest: WatchProgress?,
+        entries: [WatchProgress],
+        threshold: Double
+    ) -> WatchProgress? {
+        // Ties go to the deeper episode: two rows written in the same second are a binge, and
+        // the later episode is the one the viewer got to.
+        let resumable = entries
+            .filter { isResumable($0, threshold: threshold) }
+            .max {
+                ($0.updatedAt, $0.season ?? 0, $0.episode ?? 0)
+                    < ($1.updatedAt, $1.season ?? 0, $1.episode ?? 0)
+            }
+        guard let resumable else { return furthest }
+        guard let furthest else { return resumable }
+        // A finished anchor has nothing left to resume, so anything in progress beats it.
+        guard isResumable(furthest, threshold: threshold) else { return resumable }
+        return resumable.updatedAt >= furthest.updatedAt ? resumable : furthest
+    }
+}

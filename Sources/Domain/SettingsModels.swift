@@ -476,11 +476,13 @@ enum MoreLikeThisSource: String, SettingsOption {
     case addonCatalog = "ADDON"
     case tmdb = "TMDB"
     case trakt = "TRAKT"
+    case simkl = "SIMKL"
     var displayName: String {
         switch self {
         case .addonCatalog: return L10n.text("option.addon_catalog", fallback: "Addon catalog")
         case .tmdb: return "TMDB"
         case .trakt: return "Trakt"
+        case .simkl: return "Simkl"
         }
     }
 }

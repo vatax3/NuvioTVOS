@@ -8,6 +8,7 @@ struct MetaDetailsView: View {
     @Environment(LibraryStore.self) private var library
     @Environment(AppSettings.self) private var settings
     @Environment(Router.self) private var router
+    @Environment(PluginStore.self) private var plugins
 
     let request: DetailRequest
 
@@ -44,6 +45,8 @@ struct MetaDetailsView: View {
         }
         .ignoresSafeArea()
         .background(colors.background)
+        // More like this, the franchise row and the cast rail.
+        .customPosterScreen(.details, settings: settings)
         .task { await model.load(request: request, addonStore: addons, settings: settings) }
         // The episode list is what lets Continue Watching offer the *next* episode once one is
         // finished, and the rail is drawn before any addon could answer. Cached here rather than
@@ -243,8 +246,44 @@ struct MetaDetailsView: View {
     private func actionRow(_ meta: Meta) -> some View {
         VStack(alignment: .leading, spacing: NuvioTheme.spacing.sm) {
             actionButtons(meta)
+            playbackUnavailableBanner(meta)
             trackingWriteBanner
         }
+    }
+
+    /// Whether anything installed could answer a stream request for this title.
+    ///
+    /// `isLoaded` is keyed on a manifest having arrived rather than on the store having run:
+    /// `AddonStore.init` always produces a list — two defaults at worst — but a purged manifest
+    /// cache leaves those records with no `resources` to read, and an empty read must not be
+    /// mistaken for "nothing serves this".
+    private var availability: PlaybackAvailability {
+        let manifests = addons.addons
+        return PlaybackAvailability(
+            addons: manifests,
+            scrapers: plugins.enabledScrapers,
+            isLoaded: !manifests.isEmpty
+        )
+    }
+
+    /// The video *Play* would open, so the button can be judged on what it would actually do.
+    private func playTarget(_ meta: Meta) -> Video? {
+        guard meta.type == .series else { return nil }
+        return model.nextUpEpisode(
+            library: library,
+            threshold: settings.watchedThreshold,
+            fromFurthest: settings.layout.nextUpFromFurthestEpisode,
+            includeUnaired: settings.layout.showUnairedNextUp
+        )
+    }
+
+    private func canPlay(_ meta: Meta) -> Bool {
+        let target = playTarget(meta)
+        return availability.canStream(
+            type: meta.apiType,
+            videoId: target?.id ?? meta.id,
+            video: target
+        )
     }
 
     private func actionButtons(_ meta: Meta) -> some View {
@@ -259,6 +298,11 @@ struct MetaDetailsView: View {
                 .frame(height: NuvioTheme.components.buttonHeight)
             }
             .buttonStyle(NuvioPillButtonStyle(emphasis: .primary))
+            // Safe to disable because the row never consists of this button alone — Add to
+            // Library is unconditional, so focus always has somewhere to land. The episode
+            // cards below are deliberately *not* disabled for the same reason inverted: they
+            // are the whole row, and an unfocusable rail is how 1.0.37 lost every catalog.
+            .disabled(!canPlay(meta))
 
             Button(action: { toggleLibrary(meta) }) {
                 HStack(spacing: NuvioTheme.spacing.sm) {
@@ -335,6 +379,25 @@ struct MetaDetailsView: View {
         Task { await trackingWrites.library(preview, added: added, settings: settings) }
     }
 
+    /// Says why *Play* is greyed out. A disabled button with no explanation reads as a bug in
+    /// the app rather than as a missing addon, which is the one thing the viewer can fix.
+    @ViewBuilder
+    private func playbackUnavailableBanner(_ meta: Meta) -> some View {
+        if !canPlay(meta) {
+            Label(
+                L10n.text(
+                    "detail.playback_unavailable",
+                    fallback: "No enabled addon or scraper can serve streams for this title."
+                ),
+                systemImage: "exclamationmark.triangle"
+            )
+            .nuvioText(NuvioTextStyles.bodyCompact)
+            .foregroundStyle(colors.textSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: dp(620), alignment: .leading)
+        }
+    }
+
     /// Only ever shown for a remote failure. A write that went exactly where it was asked to
     /// needs no announcement.
     @ViewBuilder
@@ -406,6 +469,10 @@ struct MetaDetailsView: View {
 
     private func playEpisode(_ video: Video) {
         guard let meta = model.meta else { return }
+        // The cards stay focusable when nothing can serve them, so the gate lives on the action.
+        // Silent is acceptable here and only here: the banner above the episodes already says
+        // why, since `idPrefixes` are declared per series and not per episode.
+        guard availability.canStream(type: meta.apiType, videoId: video.id, video: video) else { return }
         library.cache(meta.preview())
         router.openStreams(streamRequest(for: video, meta: meta))
     }
