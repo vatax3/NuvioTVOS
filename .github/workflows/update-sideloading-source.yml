@@ -14,6 +14,15 @@ on:
 permissions:
   contents: write
 
+# `gh release create` with an asset fires `published` and then `edited` seconds apart, so two runs
+# race for the same push and the loser reports a red run that means nothing. A red run that means
+# nothing is worse than no check at all — this is the guard the release process reads to decide
+# whether a build actually reached anyone. Serialised rather than cancelled: the second run then
+# checks out a branch that already carries the feed commit, finds no diff, and exits green.
+concurrency:
+  group: sideloading-source
+  cancel-in-progress: false
+
 jobs:
   update:
     if: github.event_name != 'push'
@@ -57,6 +66,9 @@ jobs:
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add altstore-source.json
           git commit -m "Update sideloading source for ${RELEASE_TAG:-manual run}"
+          # Insurance beyond the concurrency group, which only serialises *this* workflow: a
+          # person pushing to main while a release is being cut would otherwise fail the run.
+          git pull --rebase --quiet origin main
           git push
 
   validate:

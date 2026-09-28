@@ -85,3 +85,10 @@ gh run list --workflow "Update sideloading source" --limit 1
 Green now means the release is in the feed — the run asserts its own tag is present, which is the
 check the six silent successes did not have. If it is red, the message names what is wrong: a
 missing asset lists the names it did find, and a version mismatch names both numbers.
+
+> **One release fires the workflow twice.** `gh release create` with an asset emits `published`
+> and then `edited` a couple of seconds apart. Until 1.0.40 the two raced for the same push and the
+> loser went red with `cannot lock ref` — a failure that meant the feed was already correct, which
+> is the worst kind of red on a check whose whole job is to be believed. The workflow is serialised
+> now, so the second run finds no diff and exits green. If you see two runs for one tag, that is
+> expected; both should be green.
