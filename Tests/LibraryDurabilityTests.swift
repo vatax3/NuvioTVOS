@@ -212,6 +212,28 @@ final class LibraryReclaimRecoveryTests: XCTestCase {
         XCTAssertFalse(reopened.library.contains { $0.preview.id == "tt1375666" })
     }
 
+    /// The gap this nearly shipped with. On the first launch after the upgrade the durable copy
+    /// does not exist, and nothing would write it until the viewer next added or removed a title —
+    /// so a library saved months ago stayed unprotected for as long as nobody touched it, which is
+    /// precisely the library this feature exists for.
+    func testAnExistingLibraryIsProtectedOnTheFirstLaunchAfterUpgrading() {
+        let store = emptyStore()
+        let preview = MetaPreview(id: "tt0068646", type: .movie, rawType: "movie", name: "The Godfather")
+        store.toggleLibrary(preview)
+
+        // Stand in for an upgrade: the durable copy is gone, the purgeable one is not.
+        JSONFileStore<[LibraryEntryRef]>(
+            filename: "library-identity.json", durability: .critical
+        ).delete()
+
+        _ = LibraryStore()
+        let durable = JSONFileStore<[LibraryEntryRef]>(
+            filename: "library-identity.json", durability: .critical
+        ).load() ?? []
+
+        XCTAssertTrue(durable.contains { $0.id == "tt0068646" })
+    }
+
     /// A resume point is what a viewer notices vanishing.
     func testAResumePointSurvivesANewStore() {
         let store = emptyStore()

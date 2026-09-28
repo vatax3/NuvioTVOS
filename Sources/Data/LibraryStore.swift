@@ -497,6 +497,26 @@ final class LibraryStore {
     /// performs the removal, so a title taken out of the library is gone from both.
     private func restoreFromDurableCopies() {
         let refs = libraryIdentityFile.load() ?? []
+        // First launch after the upgrade: the durable copies do not exist yet, and nothing would
+        // write them until the viewer next added or removed something. That left the library
+        // unprotected for exactly as long as nobody touched it — which, for someone who saved
+        // forty titles last year and has been watching them since, is indefinitely.
+        //
+        // Seeding here rather than lazily also means the protection starts at the first launch of
+        // the version that promises it, instead of at some later moment the viewer cannot see.
+        if refs.isEmpty, !library.isEmpty {
+            libraryIdentityFile.save(
+                DurableLibraryBudget.fitting(library.map(LibraryEntryRef.init))
+            )
+        }
+        if resumeIdentityFile.load() == nil, !progress.isEmpty {
+            resumeIdentityFile.save(
+                DurableLibraryBudget.fitting(
+                    progress.values.filter { $0.fraction > 0.01 && $0.fraction < 1 }
+                )
+            )
+        }
+
         if !refs.isEmpty {
             let present = Set(library.map(\.preview.rowKey))
             let restored = refs
