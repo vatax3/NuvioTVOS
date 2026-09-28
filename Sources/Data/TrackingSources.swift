@@ -10,12 +10,14 @@ import Foundation
 enum TrackingProviderId: String, Hashable, Sendable, CaseIterable {
     case trakt
     case simkl
+    case mdblist
 
     /// How the service writes its own name, which is what a warning about it has to use.
     var displayName: String {
         switch self {
         case .trakt: return "Trakt"
         case .simkl: return "Simkl"
+        case .mdblist: return "MDBList"
         }
     }
 }
@@ -27,6 +29,7 @@ extension WatchProgressSource {
         case .local: return nil
         case .trakt: return .trakt
         case .simkl: return .simkl
+        case .mdblist: return .mdblist
         }
     }
 }
@@ -37,6 +40,7 @@ extension LibrarySourceMode {
         case .local: return nil
         case .trakt: return .trakt
         case .simkl: return .simkl
+        case .mdblist: return .mdblist
         }
     }
 }
@@ -66,6 +70,7 @@ enum TrackingSources {
         var out: [WatchProgressSource] = [.local]
         if connected.contains(.trakt) { out.append(.trakt) }
         if connected.contains(.simkl) { out.append(.simkl) }
+        if connected.contains(.mdblist) { out.append(.mdblist) }
         return out
     }
 
@@ -75,6 +80,7 @@ enum TrackingSources {
         var out: [LibrarySourceMode] = [.local]
         if connected.contains(.trakt) { out.append(.trakt) }
         if connected.contains(.simkl) { out.append(.simkl) }
+        if connected.contains(.mdblist) { out.append(.mdblist) }
         return out
     }
 }

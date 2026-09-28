@@ -113,6 +113,8 @@ struct LibraryView: View {
             TraktLibraryContent(typeFilter: remoteTypeFilter)
         } else if settings.effectiveLibrarySourceMode == .simkl {
             SimklLibraryContent(typeFilter: remoteTypeFilter)
+        } else if settings.effectiveLibrarySourceMode == .mdblist {
+            MDBListLibraryContent(typeFilter: remoteTypeFilter)
         } else if filter == .collections {
             collectionsContent
         } else if savedItems.isEmpty {

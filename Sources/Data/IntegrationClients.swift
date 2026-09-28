@@ -48,6 +48,33 @@ enum IntegrationHTTP {
         return try JSONDecoder().decode(T.self, from: data)
     }
 
+    /// A form-encoded POST returning the status alongside the body, throwing only on a transport
+    /// failure.
+    ///
+    /// Both halves are needed for MDBList's OAuth. Its device flow is `application/x-www-form-
+    /// urlencoded` rather than JSON, and the polling loop reads its answer *out of the error
+    /// body*: `authorization_pending` and `slow_down` both arrive as 4xx, and treating a non-2xx
+    /// as a failure would abandon the flow on the first poll — which is every poll before the
+    /// viewer has finished typing the code.
+    static func postForm(
+        _ url: String, headers: [String: String] = [:], fields: [String: String]
+    ) async throws -> (status: Int, data: Data) {
+        guard let url = URL(string: url) else { throw StremioError.invalidURL(url) }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        for (key, value) in headers { request.setValue(value, forHTTPHeaderField: key) }
+        var components = URLComponents()
+        components.queryItems = fields.map { URLQueryItem(name: $0.key, value: $0.value) }
+        // `URLComponents` leaves `+` alone in a query, where a form body reads it as a space —
+        // and a device code or a token can contain one.
+        request.httpBody = (components.percentEncodedQuery ?? "")
+            .replacingOccurrences(of: "+", with: "%2B")
+            .data(using: .utf8)
+        let (data, response) = try await session.data(for: request)
+        return ((response as? HTTPURLResponse)?.statusCode ?? 0, data)
+    }
+
     /// Used for removing a remote resume point, which both Trakt and Simkl spell
     /// `DELETE /sync/playback/{id}`. No body either way, and no response worth decoding — the
     /// status is the whole answer.
@@ -734,42 +761,6 @@ struct MDBListRatings: Hashable, Sendable {
         [imdb, tmdb, tomatoes, audience, metacritic, trakt, letterboxd, mal].allSatisfy { $0 == nil }
     }
 }
-
-actor MDBListClient {
-    static let shared = MDBListClient()
-    private var cache: [String: MDBListRatings] = [:]
-
-    func ratings(imdbId: String, apiKey: String) async -> MDBListRatings? {
-        guard !apiKey.isEmpty, !imdbId.isEmpty else { return nil }
-        if let hit = cache[imdbId] { return hit }
-
-        guard let response = try? await IntegrationHTTP.get(
-            "https://api.mdblist.com/?apikey=\(apiKey)&i=\(imdbId)",
-            as: MDBListResponse.self
-        ) else { return nil }
-
-        var ratings = MDBListRatings()
-        for entry in response.ratings ?? [] {
-            guard let source = entry.source?.lowercased(), let value = entry.value else { continue }
-            switch source {
-            case "imdb": ratings.imdb = value
-            case "tmdb": ratings.tmdb = value
-            case "tomatoes": ratings.tomatoes = value
-            case "audience": ratings.audience = value
-            case "metacritic": ratings.metacritic = value
-            case "trakt": ratings.trakt = value
-            case "letterboxd": ratings.letterboxd = value
-            case "myanimelist", "mal": ratings.mal = value
-            default: break
-            }
-        }
-        cache[imdbId] = ratings
-        return ratings
-    }
-}
-
-private struct MDBListRatingEntry: Decodable { let source: String?; let value: Double? }
-private struct MDBListResponse: Decodable { let ratings: [MDBListRatingEntry]? }
 
 // MARK: - Trakt (port of TraktAuthService / TraktScrobbleService)
 

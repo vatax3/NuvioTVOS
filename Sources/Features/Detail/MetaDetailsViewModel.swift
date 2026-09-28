@@ -258,9 +258,17 @@ final class MetaDetailsViewModel {
         }
     }
 
+    /// A connected MDBList account now serves the ratings row too, so a viewer who signed in no
+    /// longer has to go and fetch an API key as well. The key still wins where there is one — see
+    /// `MDBListClient.ratings`.
     private func loadRatings(meta: Meta, settings: AppSettings) async {
-        guard settings.mdblist.isUsable, let imdbId = meta.imdbId ?? idIfImdb(meta.id) else { return }
-        ratings = await MDBListClient.shared.ratings(imdbId: imdbId, apiKey: settings.mdblist.apiKey)
+        guard settings.mdblist.enabled, let imdbId = meta.imdbId ?? idIfImdb(meta.id) else { return }
+        let apiKey = settings.mdblist.apiKey.trimmingCharacters(in: .whitespaces)
+        let token = apiKey.isEmpty ? (await MDBListSession.token(settings.tracking) ?? "") : ""
+        guard !apiKey.isEmpty || !token.isEmpty else { return }
+        ratings = await MDBListClient.shared.ratings(
+            imdbId: imdbId, contentType: meta.type, apiKey: apiKey, token: token
+        )
     }
 
     /// Cinemeta ids are IMDb ids; other addons prefix their own namespace.

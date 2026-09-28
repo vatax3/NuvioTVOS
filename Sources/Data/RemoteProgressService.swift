@@ -40,7 +40,7 @@ final class RemoteProgressService {
         force: Bool = false
     ) async {
         let source = settings.effectiveWatchProgressSource
-        guard source == .trakt || source == .simkl else { return }
+        guard source != .local else { return }
         if !force, let last = lastRefresh, Date().timeIntervalSince(last) < Self.minimumInterval {
             return
         }
@@ -61,6 +61,15 @@ final class RemoteProgressService {
                    let preview = await preview(for: item, addons: addons) {
                     library.cache(preview)
                 }
+            }
+        } else if source == .mdblist {
+            guard let token = await MDBListSession.token(settings.tracking) else { return }
+            for item in await MDBListClient.shared.playback(token: token) {
+                guard let entry = Self.progress(from: item) else { continue }
+                if adopt(entry, into: library) { adopted.insert(entry.videoId) }
+                // MDBList's playback rows carry no artwork, so unlike the Simkl branch there is
+                // nothing to seed a preview from. The rail falls back to whatever the addon
+                // cached when the title was last opened.
             }
         } else {
             let clientId = settings.tracking.simklClientId
@@ -144,6 +153,34 @@ final class RemoteProgressService {
                     sessionId: id, clientId: clientId, token: token
                 )
             }
+        case .mdblist:
+            guard let token = await MDBListSession.token(settings.tracking) else { return }
+            let sessions = await MDBListClient.shared.playback(token: token)
+                .compactMap { item -> RemoteResumePointRemoval.Session? in
+                    guard let playbackId = item.playbackId else { return nil }
+                    return .init(
+                        sessionId: playbackId, contentId: item.contentId,
+                        season: item.season, episode: item.episode
+                    )
+                }
+            for id in RemoteResumePointRemoval.sessions(
+                in: sessions, contentId: contentId, season: season, episode: episode
+            ) {
+                await MDBListClient.shared.deletePlayback(id: id, token: token)
+            }
+            // The resume point and the scrobble session are separate records: deleting one and
+            // leaving the other means the next sync writes the row back. Same defect Simkl's
+            // `delete-playback` fixed in 1.0.26.
+            await MDBListClient.shared.clearScrobble(
+                contentId: contentId,
+                contentType: ContentType.from(
+                    season != nil ? ContentType.series.apiString() : ContentType.movie.apiString()
+                ),
+                imdbId: contentId.hasPrefix("tt") ? contentId : nil,
+                season: season,
+                episode: episode,
+                token: token
+            )
         default:
             return
         }
@@ -186,6 +223,28 @@ final class RemoteProgressService {
             positionSeconds: min(100, max(0, item.progress)),
             durationSeconds: 100,
             updatedAt: item.pausedAt ?? Date()
+        )
+    }
+
+    /// MDBList reports a percentage like Trakt does, so the same nominal duration applies: the
+    /// rail only reads `fraction`, and the player resumes from what this device recorded.
+    nonisolated static func progress(from item: MDBListClient.PlaybackEntry) -> WatchProgress? {
+        guard item.progressPercent > 0 else { return nil }
+        let videoId: String
+        if item.contentType == .series, let episode = item.episode {
+            videoId = "\(item.contentId):\(item.season ?? 0):\(episode)"
+        } else {
+            videoId = item.contentId
+        }
+        return WatchProgress(
+            contentId: item.contentId,
+            contentType: item.contentType.rawValue,
+            videoId: videoId,
+            season: item.season,
+            episode: item.episode,
+            positionSeconds: min(100, max(0, item.progressPercent)),
+            durationSeconds: 100,
+            updatedAt: item.updatedAt ?? Date()
         )
     }
 

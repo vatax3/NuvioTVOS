@@ -177,6 +177,14 @@
 "cloud.empty_title" = "Aucun fichier trouvé";
 "cloud.empty_body" = "Votre fournisseur n’a renvoyé aucun fichier enregistré.";
 "cloud.no_playable" = "Aucun fichier lisible";
+"library.refresh" = "Actualiser";
+"library.refreshing" = "Actualisation…";
+"mdblist.title" = "Bibliothèque MDBList";
+"mdblist.subtitle" = "Votre liste à voir et les listes statiques que vous y conservez";
+"mdblist.disconnected" = "Connectez MDBList dans Réglages → Intégrations pour parcourir ses listes.";
+"mdblist.session_expired" = "Cette session MDBList a expiré. Reconnectez-vous dans Réglages → Intégrations.";
+"mdblist.empty" = "Aucun élément MDBList n’a été trouvé.";
+"library.mdblist_watchlist" = "À voir";
 "library.continue_watching" = "Reprendre";
 "library.nothing_in_progress" = "Rien en cours";
 "library.nothing_in_progress_body" = "Les titres que vous commencez apparaissent ici.";
@@ -518,6 +526,12 @@
 "settings.playback.ask_each_time_sub" = "Choisir au moment de la lecture";
 
 /* IntegrationsSettingsContent.swift */
+"option.mdblist_list" = "Liste MDBList";
+"settings.integrations.mdblist_account" = "Compte MDBList";
+"settings.integrations.mdblist_client_id_hint" = "Identifiant client de l’application MDBList";
+"settings.integrations.connect_mdblist" = "Connecter MDBList";
+"settings.integrations.connect_mdblist_sub" = "Obtenir un code pour mdblist.com";
+"settings.integrations.code_expired" = "Le code a expiré ou a été refusé. Réessayez.";
 "settings.integrations.signed_in_as" = "Connecté en tant que";
 "settings.integrations.trakt_account" = "Compte Trakt";
 "settings.integrations.scrobble" = "Signaler la lecture";
@@ -559,7 +573,6 @@
 "settings.integrations.needs_trakt_id" = "Nécessite un identifiant client Trakt";
 "settings.integrations.show_comments_sub" = "Ajoute une action Commentaires à la fiche, avec les spoilers masqués jusqu’à révélation";
 "settings.integrations.pin_expired" = "Le code PIN a expiré. Réessayez.";
-"settings.integrations.code_expired" = "Le code d’appairage a expiré. Réessayez.";
 "settings.integrations.enable_tmdb" = "Activer l’enrichissement TMDB";
 "settings.integrations.api_key" = "Clé d’API";
 "settings.integrations.tmdb_key_hint" = "Clé d’API TMDB v3";

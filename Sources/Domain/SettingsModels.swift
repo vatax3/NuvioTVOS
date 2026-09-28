@@ -450,11 +450,13 @@ enum WatchProgressSource: String, SettingsOption {
     case local = "LOCAL"
     case trakt = "TRAKT"
     case simkl = "SIMKL"
+    case mdblist = "MDBLIST"
     var displayName: String {
         switch self {
         case .local: return L10n.text("option.this_device", fallback: "This device")
         case .trakt: return "Trakt"
         case .simkl: return "Simkl"
+        case .mdblist: return "MDBList"
         }
     }
 }
@@ -463,11 +465,13 @@ enum LibrarySourceMode: String, SettingsOption {
     case local = "LOCAL"
     case trakt = "TRAKT"
     case simkl = "SIMKL"
+    case mdblist = "MDBLIST"
     var displayName: String {
         switch self {
         case .local: return L10n.text("option.this_device", fallback: "This device")
         case .trakt: return L10n.text("option.trakt_collection", fallback: "Trakt collection")
         case .simkl: return L10n.text("option.simkl_list", fallback: "Simkl list")
+        case .mdblist: return L10n.text("option.mdblist_list", fallback: "MDBList list")
         }
     }
 }

@@ -177,6 +177,14 @@
 "cloud.empty_title" = "No cloud files found";
 "cloud.empty_body" = "Your connected provider did not return any saved files.";
 "cloud.no_playable" = "No playable files";
+"library.refresh" = "Refresh";
+"library.refreshing" = "Refreshing…";
+"mdblist.title" = "MDBList library";
+"mdblist.subtitle" = "Your watchlist and the static lists you keep there";
+"mdblist.disconnected" = "Connect MDBList in Settings → Integrations to browse its lists.";
+"mdblist.session_expired" = "That MDBList session expired. Sign in again in Settings → Integrations.";
+"mdblist.empty" = "No MDBList items were found.";
+"library.mdblist_watchlist" = "Watchlist";
 "library.continue_watching" = "Continue Watching";
 "library.nothing_in_progress" = "Nothing in progress";
 "library.nothing_in_progress_body" = "Titles you start watching show up here.";
@@ -518,6 +526,12 @@
 "settings.playback.ask_each_time_sub" = "Choose at the moment of playback";
 
 /* IntegrationsSettingsContent.swift */
+"option.mdblist_list" = "MDBList list";
+"settings.integrations.mdblist_account" = "MDBList account";
+"settings.integrations.mdblist_client_id_hint" = "MDBList application client id";
+"settings.integrations.connect_mdblist" = "Connect MDBList";
+"settings.integrations.connect_mdblist_sub" = "Get a code for mdblist.com";
+"settings.integrations.code_expired" = "The code expired or was declined. Try again.";
 "settings.integrations.signed_in_as" = "Signed in as";
 "settings.integrations.trakt_account" = "Trakt account";
 "settings.integrations.scrobble" = "Scrobble playback";
@@ -559,7 +573,6 @@
 "settings.integrations.needs_trakt_id" = "Needs a Trakt client id";
 "settings.integrations.show_comments_sub" = "Adds a Comments action to the detail screen, with spoilers hidden until revealed";
 "settings.integrations.pin_expired" = "The PIN expired. Try again.";
-"settings.integrations.code_expired" = "The pairing code expired. Try again.";
 "settings.integrations.enable_tmdb" = "Enable TMDB enrichment";
 "settings.integrations.api_key" = "API key";
 "settings.integrations.tmdb_key_hint" = "TMDB v3 API key";

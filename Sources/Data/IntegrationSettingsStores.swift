@@ -151,7 +151,10 @@ final class TrackingSettingsStore: PreferenceStore {
     init() { super.init(namespace: "tracking") }
 
     override var secureKeys: Set<String> {
-        ["trakt_client_secret", "trakt_access_token", "trakt_refresh_token", "simkl_access_token"]
+        [
+            "trakt_client_secret", "trakt_access_token", "trakt_refresh_token",
+            "simkl_access_token", "mdblist_access_token", "mdblist_refresh_token"
+        ]
     }
 
     var watchProgressSource: WatchProgressSource {
@@ -265,6 +268,56 @@ final class TrackingSettingsStore: PreferenceStore {
     func clearSimklSession() {
         simklAccessToken = ""
         simklUsername = ""
+    }
+
+    // MARK: - MDBList
+
+    /// Registered by the viewer at mdblist.com, the way the Trakt and Simkl ids are.
+    ///
+    /// Upstream reads theirs from `BuildConfig.MDBLIST_CLIENT_ID`, which is blank in public source
+    /// — their own `local.example.properties` calls it a *public* client id, so this is a
+    /// distribution difference and not a capability one: the same OAuth flow, addressed by an id
+    /// the viewer owns. Same arrangement as Premiumize.
+    var mdbListClientId: String {
+        get { string("mdblist_client_id", default: "") }
+        set { setString("mdblist_client_id", newValue) }
+    }
+
+    var mdbListAccessToken: String {
+        get { secureString("mdblist_access_token", default: "") }
+        set { setSecureString("mdblist_access_token", newValue) }
+    }
+
+    var mdbListRefreshToken: String {
+        get { secureString("mdblist_refresh_token", default: "") }
+        set { setSecureString("mdblist_refresh_token", newValue) }
+    }
+
+    /// When the access token stops working. MDBList's expire, unlike Simkl's, so this is read
+    /// before every authenticated call rather than waiting for a 401.
+    var mdbListTokenExpiry: Double {
+        get { double("mdblist_token_expiry", default: 0) }
+        set { setDouble("mdblist_token_expiry", newValue) }
+    }
+
+    var mdbListUsername: String {
+        get { string("mdblist_username", default: "") }
+        set { setString("mdblist_username", newValue) }
+    }
+
+    var mdbListScrobbleEnabled: Bool {
+        get { bool("mdblist_scrobble_enabled", default: true) }
+        set { setBool("mdblist_scrobble_enabled", newValue) }
+    }
+
+    var isMDBListAuthenticated: Bool { !mdbListAccessToken.isEmpty }
+    var canStartMDBListAuth: Bool { !mdbListClientId.isEmpty }
+
+    func clearMDBListSession() {
+        mdbListAccessToken = ""
+        mdbListRefreshToken = ""
+        mdbListTokenExpiry = 0
+        mdbListUsername = ""
     }
 }
 

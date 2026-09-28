@@ -12,6 +12,9 @@ struct TrackingSettingsContent: View {
     @State private var simklPin: SimklClient.PinCode?
     @State private var simklTask: Task<Void, Never>?
     @State private var simklStatus: String?
+    @State private var mdbListCode: MDBListClient.DeviceCode?
+    @State private var mdbListTask: Task<Void, Never>?
+    @State private var mdbListStatus: String?
 
     private var tracking: TrackingSettingsStore { settings.tracking }
     private var connectedProviders: Set<TrackingProviderId> { settings.connectedTrackingProviders }
@@ -153,6 +156,64 @@ struct TrackingSettingsContent: View {
             }
 
             SettingsCard(
+                title: "MDBList",
+                footnote: """
+                Create an application at mdblist.com/preferences and paste its client id. Your \
+                watchlist and static lists then appear in the Library, and playback can be \
+                reported back. The ratings key above is separate: an account serves those too, \
+                but a key you have already pasted keeps priority.
+                """
+            ) {
+                if tracking.isMDBListAuthenticated {
+                    SettingsInfoRow(
+                        title: L10n.text("settings.integrations.signed_in_as", fallback: "Signed in as"),
+                        value: tracking.mdbListUsername.nilIfBlank
+                            ?? L10n.text("settings.integrations.mdblist_account", fallback: "MDBList account"),
+                        tint: colors.success
+                    )
+                    SettingsToggle(
+                        title: L10n.text("settings.integrations.report_watched", fallback: "Report watched"),
+                        subtitle: L10n.text("settings.integrations.report_watched_sub", fallback: "Synchronise playback progress and history"),
+                        systemImage: "dot.radiowaves.up.forward",
+                        isOn: $tracking.mdbListScrobbleEnabled
+                    )
+                    SettingsRow(
+                        title: L10n.text("settings.integrations.sign_out", fallback: "Sign out"),
+                        subtitle: L10n.text("settings.integrations.sign_out_sub", fallback: "Remove the token from this device"),
+                        systemImage: "rectangle.portrait.and.arrow.right",
+                        action: { signOutOfMDBList() }
+                    )
+                } else {
+                    SettingsTextFieldRow(
+                        title: L10n.text("settings.integrations.client_id", fallback: "Client ID"),
+                        placeholder: L10n.text("settings.integrations.mdblist_client_id_hint", fallback: "MDBList application client id"),
+                        text: $tracking.mdbListClientId
+                    )
+
+                    if let mdbListCode {
+                        SettingsInfoRow(title: L10n.text("settings.integrations.go_to", fallback: "Go to"), value: mdbListCode.verificationURL, tint: colors.secondary)
+                        SettingsInfoRow(title: L10n.text("settings.integrations.enter_code", fallback: "Enter code"), value: mdbListCode.userCode, tint: colors.textPrimary)
+                        SettingsInfoRow(title: L10n.text("settings.integrations.status", fallback: "Status"), value: mdbListStatus ?? L10n.text("settings.integrations.waiting_approval", fallback: "Waiting for approval…"))
+                    } else {
+                        SettingsRow(
+                            title: L10n.text("settings.integrations.connect_mdblist", fallback: "Connect MDBList"),
+                            subtitle: tracking.canStartMDBListAuth
+                                ? L10n.text("settings.integrations.connect_mdblist_sub", fallback: "Get a code for mdblist.com")
+                                : L10n.text("settings.integrations.need_id", fallback: "Enter a client id first"),
+                            systemImage: "link.badge.plus",
+                            action: { startMDBListAuth() }
+                        )
+                        .disabled(!tracking.canStartMDBListAuth)
+                        .opacity(tracking.canStartMDBListAuth ? 1 : NuvioTheme.effects.disabledAlpha)
+                    }
+
+                    if let mdbListStatus, mdbListCode == nil {
+                        SettingsInfoRow(title: L10n.text("settings.integrations.status", fallback: "Status"), value: mdbListStatus, tint: colors.error)
+                    }
+                }
+            }
+
+            SettingsCard(
                 title: L10n.text("settings.integrations.sources", fallback: "Sources"),
                 footnote: L10n.text("settings.integrations.sources_footnote", fallback: "Where Nuvio reads watch state and your library from.")
             ) {
@@ -220,6 +281,56 @@ struct TrackingSettingsContent: View {
             authTask?.cancel()
             simklTask?.cancel()
         }
+    }
+
+    /// Device authorisation, the same shape as Trakt's: MDBList hands back a short code, the
+    /// viewer types it on mdblist.com, and this polls until they have.
+    private func startMDBListAuth() {
+        let clientId = tracking.mdbListClientId.trimmingCharacters(in: .whitespaces)
+        mdbListStatus = nil
+
+        mdbListTask?.cancel()
+        mdbListTask = Task {
+            do {
+                let code = try await MDBListClient.shared.startDeviceAuth(clientId: clientId)
+                mdbListCode = code
+                mdbListStatus = L10n.text("settings.integrations.waiting_approval", fallback: "Waiting for approval…")
+
+                let tokens = await MDBListClient.shared.pollForToken(
+                    deviceCode: code.deviceCode,
+                    clientId: clientId,
+                    interval: code.interval,
+                    expiresIn: code.expiresIn
+                )
+                guard let tokens else {
+                    mdbListCode = nil
+                    mdbListStatus = L10n.text("settings.integrations.code_expired", fallback: "The code expired or was declined. Try again.")
+                    return
+                }
+                MDBListSession.store(tokens, in: tracking)
+                tracking.mdbListUsername = await MDBListClient.shared.username(
+                    token: tokens.accessToken
+                ) ?? ""
+                mdbListCode = nil
+                mdbListStatus = nil
+            } catch {
+                mdbListCode = nil
+                mdbListStatus = error.localizedDescription
+            }
+        }
+    }
+
+    /// Tells MDBList to forget the token as well as forgetting it here. Local state is cleared
+    /// either way — a viewer who signed out must not stay signed in because the network was down.
+    private func signOutOfMDBList() {
+        mdbListTask?.cancel()
+        mdbListCode = nil
+        mdbListStatus = nil
+        let refreshToken = tracking.mdbListRefreshToken
+        let clientId = tracking.mdbListClientId
+        tracking.clearMDBListSession()
+        guard !refreshToken.isEmpty, !clientId.isEmpty else { return }
+        Task { await MDBListClient.shared.revoke(refreshToken: refreshToken, clientId: clientId) }
     }
 
     private func startSimklAuth() {

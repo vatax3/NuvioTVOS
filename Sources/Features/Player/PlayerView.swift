@@ -30,6 +30,7 @@ struct PlayerView: View {
     @State private var didScrobbleStart = false
     @State private var lastScrobbleProgress: Double = 0
     @State private var simklSessionActive = false
+    @State private var mdbListSessionActive = false
     @State private var didSendTrackingStop = false
     @State private var subtitles = SubtitleTrackController()
     /// AniSkip intervals are deliberately owned by the player rather than the detail screen:
@@ -254,6 +255,7 @@ struct PlayerView: View {
                     persist(position: position, duration: duration, completed: completed)
                     scrobble(position: position, duration: duration)
                     simklScrobble(position: position, duration: duration)
+                    mdbListScrobble(position: position, duration: duration)
                     advanceIfDue(position: position, duration: duration)
                     offerRecommendationsIfDue(position: position, duration: duration)
                 },
@@ -313,6 +315,7 @@ struct PlayerView: View {
                     persist(position: position, duration: duration, completed: completed)
                     scrobble(position: position, duration: duration)
                     simklScrobble(position: position, duration: duration)
+                    mdbListScrobble(position: position, duration: duration)
                     advanceIfDue(position: position, duration: duration)
                     offerRecommendationsIfDue(position: position, duration: duration)
                 },
@@ -592,8 +595,10 @@ struct PlayerView: View {
             schedulePauseOverlay(paused: paused)
             if paused, !isRouteChangePause {
                 simklPause()
+                mdbListPause()
             } else if !paused {
                 simklScrobble(position: playbackPosition, duration: playbackDuration)
+                mdbListScrobble(position: playbackPosition, duration: playbackDuration)
             }
         }
         if paused, !wasPaused, isRouteChangePause { resumeAfterRouteChange() }
@@ -910,7 +915,8 @@ struct PlayerView: View {
             guard playbackDuration > 0 else { return 0 }
             return min(100, max(0, playbackPosition / playbackDuration * 100))
         }()
-        guard didScrobbleStart || simklSessionActive || percent >= 80 else { return }
+        guard didScrobbleStart || simklSessionActive || mdbListSessionActive || percent >= 80
+        else { return }
         didSendTrackingStop = true
         if let credentials = traktCredentials, let imdbId = request.imdbId {
             Task {
@@ -934,7 +940,11 @@ struct PlayerView: View {
                 )
             }
         }
+        if mdbListScrobbleAllowed {
+            Task { await sendMDBListScrobble(.stop, percent: percent) }
+        }
         simklSessionActive = false
+        mdbListSessionActive = false
     }
 
     // MARK: Simkl
@@ -981,6 +991,53 @@ struct PlayerView: View {
                 clientId: credentials.clientId, token: credentials.token
             )
         }
+    }
+
+    // MARK: MDBList
+
+    /// MDBList's scrobble follows Simkl's shape rather than Trakt's: one `start` per session, a
+    /// `pause` when playback stops, and a `stop` at the end.
+    ///
+    /// The token is fetched rather than read — MDBList's expire, and a scrobble against a dead one
+    /// reports nothing while reporting success. See `MDBListSession`.
+    private var mdbListScrobbleAllowed: Bool {
+        let tracking = settings.tracking
+        return tracking.mdbListScrobbleEnabled && tracking.isMDBListAuthenticated
+            && !request.contentId.isEmpty
+    }
+
+    private func mdbListScrobble(position: Double, duration: Double) {
+        guard !didSendTrackingStop, !mdbListSessionActive, duration > 0, mdbListScrobbleAllowed
+        else { return }
+        let percent = min(100, max(0, position / duration * 100))
+        // As with Simkl: resuming something already past the completion threshold must not write
+        // a second history entry for it.
+        guard percent < 80 else { return }
+        mdbListSessionActive = true
+        Task { await sendMDBListScrobble(.start, percent: percent) }
+    }
+
+    private func mdbListPause() {
+        guard mdbListSessionActive, playbackDuration > 0, mdbListScrobbleAllowed else { return }
+        mdbListSessionActive = false
+        let percent = min(100, max(0, playbackPosition / playbackDuration * 100))
+        Task { await sendMDBListScrobble(.pause, percent: percent) }
+    }
+
+    private func sendMDBListScrobble(
+        _ action: MDBListClient.ScrobbleAction, percent: Double
+    ) async {
+        guard let token = await MDBListSession.token(settings.tracking) else { return }
+        await MDBListClient.shared.scrobble(
+            action,
+            contentId: request.contentId,
+            contentType: ContentType.from(request.contentType),
+            imdbId: request.imdbId,
+            season: request.season,
+            episode: request.episode,
+            progressPercent: percent,
+            token: token
+        )
     }
 
     // MARK: Next episode

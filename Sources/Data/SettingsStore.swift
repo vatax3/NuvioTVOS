@@ -150,6 +150,7 @@ final class AppSettings {
         var out: Set<TrackingProviderId> = []
         if tracking.isTraktAuthenticated { out.insert(.trakt) }
         if tracking.isSimklAuthenticated { out.insert(.simkl) }
+        if tracking.isMDBListAuthenticated { out.insert(.mdblist) }
         return out
     }
 

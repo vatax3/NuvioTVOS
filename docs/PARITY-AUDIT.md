@@ -1,4 +1,4 @@
-# Functional parity audit — tvOS 1.0.36 vs Android TV 1.0.0
+# Functional parity audit — tvOS 1.0.39 vs Android TV 1.1.0-beta.2
 
 Audit date: 2026-08-25, re-derived against 1.0.31 on 2026-08-26, tracked forward since.
 Supersedes the audit published with 1.0.15. Twenty releases landed while it was open, so the
@@ -63,6 +63,7 @@ platform refuses the upstream approach.
 | Collections | Parity | Data shape, live folder sources, ordering, sync. `focusGifUrl`/`heroVideoUrl` retained but not rendered. |
 | Local library/progress ✻ | Parity | Save/remove, Continue Watching, watched threshold, per-profile persistence, account sync, removal from Continue Watching (1.0.18) and a sort control (1.0.19). **Until 1.0.36 neither a removal nor an un-marking survived an account sync** — see the 1.0.0 triage below. |
 | Trakt | Parity | OAuth, progress, list reads, comments, related titles, scrobbling, `sync/watchlist` and `sync/history` writes. Upstream has no `sync/collection`; neither do we. |
+| MDBList | Parity for the viewer-visible surface | Was ratings only. Since 1.0.39 a third tracking account: device authorisation, watchlist and static lists in the Library, resume points, watched marks, watchlist writes and scrobbling — and the ratings now come from the account when no API key is set. Upstream's snapshot-and-journal delta engine is not ported; see below. |
 | Simkl | Parity | Five list states, remote resume points, scrobbling, `add-to-list`/`history` writes, the anime identity model since 1.0.22, and playback-session deletion since 1.0.26. Snapshot reconciliation does not apply here; see *Differences assumed*. |
 | Next Up from trackers ✻ | Parity | Since 1.0.21 a series whose last episode was finished is offered its next one, with the airing rules, both anchor modes and per-series dismissal. Previously the rail held only half-watched episodes, so finishing one removed the series from Home entirely. Since 1.0.25 the episode list is seeded from Continue Watching rather than waiting on a detail-screen visit, bounded to the front of the rail. Since 1.0.29 sibling ids are reconciled where rows are emitted: two addons keying one show differently produced two rows in the rail, each offering a different next episode. Bridged on the IMDb id, which the metadata carries even when the addon's own id is in another namespace. |
 | Debrid providers ✻ | Parity | Validation, cache checks, resolution, file choice, cloud libraries for all three, TorBox device sign-in, and since 1.0.20 the stream name/description template language with its editor. The DSL is ported rather than reinvented, so a format written on Android pastes in and produces the same rows. |
@@ -94,7 +95,7 @@ First run · profiles and PIN · Nuvio account, QR sign-in, device codes, linked
 navigation · the three home layouts and the hero · search and its history · discover with
 pagination · collections and live folder sources · Trakt end to end including list writes ·
 stream filtering and the ranking matrix · the player transport and its seven display modes ·
-player failure recovery · external player hand-off · Top Shelf · parental guidance · MDBList ·
+player failure recovery · external player hand-off · Top Shelf · parental guidance ·
 AniSkip · addon catalog ordering.
 
 Two areas where we are ahead, both consequences of the engine: **Dolby Vision profile 7**
@@ -573,9 +574,113 @@ vertical answers with the transport, horizontal with the readout. The test was r
 `testEveryDirectionAnswersWhileTheTransportIsDown` and now asserts both halves, plus a second
 test that the readout never takes the remote.
 
+## Upstream moved a third time: 1.0.0 → 1.1.0-beta.2
+
+218 commits over six days (19–25 September), 298 files, +21,859 lines. Read from a detached
+worktree at the tag, per the procedural fix above — the local snapshot was still checked out at
+`0.8.9-beta`, which made a first pass read the window as deletions.
+
+**Three quarters of the volume is N/A here.** Around twenty commits are RTL layout and text
+direction, which stays N/A while the app ships English and French. The translations are theirs.
+And roughly fifteen are Compose focus restoration on the detail screen — season chips, the
+remembered studio logo, a Crossfade remounting — which our SwiftUI focus model does not share.
+
+What is left is short:
+
+| Upstream | Ours |
+|---|---|
+| **MDBList as a third tracking account** — device authorisation, incremental watched and playback sync, a cached progress projection, scrobbling, watchlist and static lists in the Library, account management on the Tracking page, and ratings through the connected account with the API key as an override. ~35 files, the largest single addition of the window. | **Ported in 1.0.39**, and deliberately not line for line — see below. |
+| **Custom poster URL** (RPDB and relatives) — a URL pattern with placeholder tokens plus per-screen toggles | **Ported in 1.0.39.** Never audited before because it did not exist before this window. |
+| **`PlaybackAvailability`** — grey out *Play* when nothing installed can serve a stream | **Ported in 1.0.39.** Was already the top of our own open list against 1.0.0. |
+| **Simkl as a third *More like this* source** | **Ported in 1.0.39.** The client was already here; it is a branch in `loadRelated`. |
+| *"Prefer in-progress resume over furthest next-to-watch"* | **The same defect was ours.** Ported in 1.0.39 as `NextUpAnchor` — see below. |
+| A disk **VOD cache** in the player, plus buffer retuning and three migration flags | Open, and probably moot: mpv has `cache-on-disk` and `demuxer-max-bytes`. The question transfers, the mechanism is already here. Worth a read before anything is built. |
+| Grouping streams by plugin repository | Open, and small. |
+| Custom theme previews, recomposition profiling, moov caching, chunk eviction | **N/A.** Compose and ExoPlayer internals. |
+
+### The resume anchor, which was our defect too
+
+`next_up_from_furthest_episode` anchors the *Play* button on the deepest episode the viewer has
+touched. That is the right answer for the case the preference exists for — a rewatch of an early
+episode should not drag a series backwards — and the wrong one the moment that episode is
+finished:
+
+> Watch S05E01 to the end, then start S02E03 and stop halfway. The furthest anchor is still
+> S05E01, it is watched, so *Play* offers S05E02 — and the episode actually in progress cannot be
+> reached from the button at all.
+
+Fixed by letting an in-progress episode outrank the positional anchor when it is at least as
+recent. Both halves matter: recency alone would break the rewatch case the preference was written
+for, and position alone is the bug. `NextUpAnchor`, nine tests.
+
+### What was left out of MDBList, and why
+
+Upstream holds a durable snapshot of watched rows, resume points and list contents, and keeps it
+current by polling `/sync/last_activities` for a watermark, replaying `/sync/journal` deltas
+against it, and falling back to a full resync when the journal answers 409. That is most of the
+thirty-five files.
+
+**It serves their cached-snapshot design, and we do not have one.** Our Trakt and Simkl screens
+fetch when they appear — the decision already recorded under *Differences assumed* — so there is
+no snapshot for a journal to be applied to, and the delta engine would be bookkeeping for a cache
+we do not keep. Everything a viewer can see is ported: the account, the lists, the resume points,
+the watched marks, the writes and the scrobble.
+
+One distribution difference, not a capability one. Upstream reads its client id from
+`BuildConfig.MDBLIST_CLIENT_ID`, blank in public source — and their own `local.example.properties`
+calls it a *public* client id. So the viewer registers one at mdblist.com and pastes it next to the
+Trakt and Simkl ids, which is the same arrangement as Premiumize and Trakt itself.
+
+Two things this window's MDBList work settled that are worth recording:
+
+- **A pasted API key beats a connected account for ratings.** It reads backwards until you take
+  the viewer's side: both work, and the key is the one they went and fetched on purpose. Silently
+  preferring the account would make the field they filled in do nothing. Before this, connecting an
+  account did not help the ratings row at all.
+- **Removing a title from MDBList warns about nothing.** `…/items/remove` is a list operation; the
+  watched history is `/sync/history/remove`, a different endpoint this call does not reach. Same
+  answer as Trakt, the opposite of Simkl — checked against our own writes rather than assumed from
+  the fact that it is a tracker.
+
+### The custom poster URL, and the one thing that makes it a type
+
+The feature is artwork from a rating-overlay service in place of the addon's own, and the whole of
+it is substituting ids into a URL. What makes it more than `String.replacing` is that **a pattern
+this title cannot satisfy has to produce nothing**: a title with no TMDB id must keep the addon's
+poster rather than request `…/movie-.jpg`, 404, and draw a placeholder where a poster used to be.
+Hence required `{tmdb_id}`, optional `{tmdb_id?}`, and `{imdb_id|tmdb_id}` for a service declaring
+which namespaces it accepts.
+
+Typed on a phone through `LocalConfigServer` — its fourth page, and the clearest case for that
+hand-off yet, since the remote's keyboard has no `{`. The page shows the pattern resolved against
+two real titles, one of which deliberately fails, because on the television an unresolvable
+pattern is indistinguishable from one being ignored.
+
+Two adaptations. It is applied **in the card** rather than where lists are produced, so a change
+takes effect at once; that is free in the common case because the resolver returns on an empty
+pattern before looking at anything. And `RemoteImage` gained a fallback URL, standing in for
+upstream's Coil interceptor: these services answer for a subset of titles, and without it a
+configured pattern means placeholder cards wherever they do not.
+
+Discover and *See All* follow Home's key. Upstream has none for them, but they draw the same
+catalog rows, and a viewer seeing rated posters on one and not the other would read that as a bug.
+
+### Greying out *Play*, and the trap in it
+
+`PlaybackAvailability` reads the gate a stream request already passes — `Addon.handles` — ahead of
+time, plus the scrapers, which answer for a type rather than an id. Two properties carry more
+weight than the rule. `isLoaded` exists so an empty read is never mistaken for a negative one: our
+`AddonStore` always produces a list, two defaults at worst, so an empty state arrives as records
+whose manifest cache was purged. And **the hero button is disabled while the episode cards are
+not** — a disabled card row would be unfocusable, which is exactly how 1.0.37 lost every catalog.
+The cards gate the action instead, and the banner above them says why.
+
+`Video` gained `hasEmbeddedStreams` along the way: some addons never implement `/stream` and hang
+the links off the meta entry. Judged by manifests alone those titles are unplayable, and they play.
+
 ## Verification
 
-- Unit suite at 1.0.32: **476 tests, 0 failures**. UI suite: **12 tests, 0 failures**.
+- Unit suite at 1.0.39: **631 tests, 0 failures**. UI suite: **12 tests, 0 failures**.
 - Test density is ahead of upstream per line — 485 tests over ~43k lines against 983 over 201k —
   so the 1.0.12 plan's "tests too thin" framing was wrong on volume. It was right about
   *placement*: the network clients still carry the least of it, though every release since

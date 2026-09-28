@@ -95,6 +95,21 @@ final class TrackingWriteService {
                     clientId: settings.tracking.simklClientId,
                     token: settings.tracking.simklAccessToken
                 )
+            case .mdblist:
+                // The watchlist, which is MDBList's equivalent of Trakt's: a list operation that
+                // leaves the watched history alone. See `TrackingRemovalImpact`.
+                guard let token = await MDBListSession.token(settings.tracking) else {
+                    throw TrackingWriteError.notSignedIn
+                }
+                let accepted = await MDBListClient.shared.setMembership(
+                    inList: .watchlist,
+                    contentId: preview.id,
+                    contentType: preview.type,
+                    imdbId: preview.imdbId,
+                    isMember: added,
+                    token: token
+                )
+                guard accepted else { throw TrackingWriteError.notRecognised }
             }
         }
     }
@@ -153,6 +168,21 @@ final class TrackingWriteService {
                     clientId: settings.tracking.simklClientId,
                     token: settings.tracking.simklAccessToken
                 )
+            case .mdblist:
+                guard let token = await MDBListSession.token(settings.tracking) else {
+                    throw TrackingWriteError.notSignedIn
+                }
+                let accepted = await MDBListClient.shared.setWatched(
+                    contentId: trackingIds["imdb"] ?? imdbId,
+                    contentType: type,
+                    imdbId: imdbId,
+                    season: season,
+                    episode: episode,
+                    isWatched: !removing,
+                    watchedAt: Date(),
+                    token: token
+                )
+                guard accepted else { throw TrackingWriteError.notRecognised }
             }
         }
     }
@@ -179,11 +209,16 @@ enum TrackingWriteError: Error {
     /// The request succeeded and the provider recognised nothing in it. Trakt answers 201 for
     /// this, so a status-code check alone would call it a success.
     case notRecognised
+    /// The session could not be renewed. MDBList's access tokens expire, so this is reachable
+    /// without the viewer having signed out — and saying so is the difference between "sign in
+    /// again" and a write that appears to have worked.
+    case notSignedIn
 
     var message: String {
         switch self {
         case .noUsableId: return "This title has no id the account recognises"
         case .notRecognised: return "The account did not recognise this title"
+        case .notSignedIn: return "That account needs signing in again"
         }
     }
 }

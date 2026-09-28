@@ -12,6 +12,10 @@ import Foundation
 ///   library erases every episode you had marked. Irreversible.
 /// - **Trakt** removes with `sync/watchlist` remove, which touches the watchlist and nothing
 ///   else. History and ratings stay. Nothing to warn about.
+/// - **MDBList** removes with `…/items/remove`, which is a list operation. Its watched history is
+///   a different endpoint entirely — `/sync/history/remove` — and this call does not reach it, so
+///   there is nothing to warn about either. Checked against our own writes, like the two above,
+///   rather than assumed from the fact that it is a tracker.
 enum TrackingRemovalImpact {
     enum Loss: Equatable {
         case watchedHistory
@@ -21,7 +25,7 @@ enum TrackingRemovalImpact {
     static func losses(removingFrom provider: TrackingProviderId?) -> [Loss] {
         switch provider {
         case .simkl: return [.watchedHistory]
-        case .trakt, nil: return []
+        case .trakt, .mdblist, nil: return []
         }
     }
 
