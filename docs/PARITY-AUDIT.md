@@ -82,7 +82,7 @@ platform refuses the upstream approach.
 | External players | Parity | Infuse/VLC/nPlayer/Outplayer hand-off with subtitle forwarding. Skip-segment forwarding is absent. Zidoo monitoring is Android-only. |
 | Top Shelf / launcher | Adapted | Publishes Continue Watching with deep links. Android channel fingerprinting is N/A. |
 | In-app updater | Parity | Shipped in 1.0.24, on the About screen. Reads the sideloading feed rather than the releases API — the feed is the artefact that has to be right for anyone to install an update at all, so a check that reads it fails loudly when it is wrong. Versions compare numerically, because `1.0.9` sorts after `1.0.23` as a string. It tells and does not install: nothing sideloaded on tvOS can replace itself. |
-| Localisation ✻ | Partial | 231 keys in 2 languages against **2,865 strings in 36 languages**. Since 1.0.31 the whole viewing surface is translated — home, search, discover, library, detail, comments, streams, the player chrome and its overlays, profiles — and `Scripts/check-localisation-keys.sh` fails the build on a key missing from either table, present in only one, or defined twice. What remains is **571 literals in `Sources/Features/Settings`** and 46 scattered elsewhere, most of the latter interpolated. **Closed in 1.0.35.** Settings, every settings *option value*, and first run are translated — 1,116 keys in each table against 231 when this audit opened. The **in-app language picker** shipped with it: `L10n` resolves against a chosen bundle, so switching takes effect in place, where upstream restarts its activity and a tvOS app cannot restart itself. What is left in English is brand names, format specifiers and the HTML the three on-TV configuration pages serve to a phone. Previously recorded as missing: Upstream's `ThemeSettingsScreen` holds a language dialog, stores `locale_tag` in an `app_locale` preference and applies it in `MainActivity.attachBaseContext`. This audit previously treated language as a platform matter — tvOS takes it from the system — which is true of tvOS and beside the point about the app being matched. Found by comparing against a second, independent tvOS port that ported it. |
+| Localisation ✻ | Parity for two languages | 231 keys in 2 languages against **2,865 strings in 36 languages**. Since 1.0.31 the whole viewing surface is translated — home, search, discover, library, detail, comments, streams, the player chrome and its overlays, profiles — and `Scripts/check-localisation-keys.sh` fails the build on a key missing from either table, present in only one, or defined twice. What remains is **571 literals in `Sources/Features/Settings`** and 46 scattered elsewhere, most of the latter interpolated. **Closed in 1.0.35.** Settings, every settings *option value*, and first run are translated — 1,116 keys in each table against 231 when this audit opened. The **in-app language picker** shipped with it: `L10n` resolves against a chosen bundle, so switching takes effect in place, where upstream restarts its activity and a tvOS app cannot restart itself. What is left in English is brand names, format specifiers and the HTML the three on-TV configuration pages serve to a phone. Previously recorded as missing: Upstream's `ThemeSettingsScreen` holds a language dialog, stores `locale_tag` in an `app_locale` preference and applies it in `MainActivity.attachBaseContext`. This audit previously treated language as a platform matter — tvOS takes it from the system — which is true of tvOS and beside the point about the app being matched. Found by comparing against a second, independent tvOS port that ported it. |
 | Supporter perks | Missing by decision | Monetisation belongs to the official project. |
 | Crash/diagnostic reporting ✻ | **Forced** | Sentry DSN, the auth-diagnostic and playback-report endpoints are build-time secrets, blank in public source. |
 | Episode IMDb ratings ✻ | **Forced** | Served by `api/shows/{id}/season-ratings` on two hosts read from `IMDB_RATINGS_API_BASE_URL` and `IMDB_TAPFRAME_API_BASE_URL` — both blank in public source, same as `PREMIUMIZE_CLIENT_ID`. We substitute TMDB episode scores. |
@@ -115,9 +115,13 @@ path and AVFoundation refuses.
 - **Subtitles**: no sync-by-line dialog.
 - **External players**: no skip-segment forwarding.
 - **Plugins**: CryptoJS legacy DES family.
-- **Localisation**: the viewing surface is translated as of **1.0.31** — 231 keys in 2
-  languages against 2,865 in 36. What is left is Settings, ~570 literals, and 46 scattered
-  elsewhere. Nothing a viewer reads while finding or watching something is still English.
+- ~~**Localisation**~~ — closed in **1.0.35**. The viewing surface was translated in 1.0.31;
+  Settings, every settings *option value* and first run followed, with an in-app language
+  picker. **1,161 keys in each of two tables** against the 231 this audit opened with. What is
+  left in English is brand names, format specifiers and the HTML the three on-TV configuration
+  pages serve to a phone. *This entry read `Partial` with the pre-1.0.35 numbers until 1.0.39;
+  the table row above was stale in the same way.* The remaining gap is **languages, not
+  coverage**: two against upstream's thirty-six.
 
 ### Missing — nothing implemented
 
@@ -257,7 +261,7 @@ needed none, and in a sync fix that only added bookkeeping keys.
 | `progress_upserts` / `progress_deletes` / `watched_upserts` / `watched_deletes` — an offline queue of watch-state mutations | **The matching defect was ours, and worse.** See below. Fixed in 1.0.36; the queue itself is not ported — our sync pushes deletions and reconciles by timestamp rather than replaying a mutation log. |
 | `custom_theme_colors` — a three-colour custom theme with a hex dialog and colour picker | Open. We ship seven preset palettes and AMOLED; this adds a viewer-defined one. A colour picker driven by a remote is the bulk of the work, not the palette derivation. |
 | `startup_splash_enabled` — a branded splash gated by destination | Open, and small. Worth doing with the icon work rather than alone. |
-| `PlaybackAvailability` — grey out *Play* when no enabled addon or scraper can serve a stream for that id | Open. A genuine improvement: it reads `resources`/`idPrefixes` off installed addons, which we already parse. |
+| `PlaybackAvailability` — grey out *Play* when no enabled addon or scraper can serve a stream for that id | **Ported in 1.0.39.** Reads `resources`/`idPrefixes` off installed addons, which we already parsed. |
 | `mpv_hi10p_gnext_software_fallback_enabled` — force software decoding for 10-bit H.264 | Open, and **unverified**. Their heuristic matches `hi10`/`10bit` against the stream *name*, which is guesswork; VideoToolbox also refuses H.264 High 10, but mpv's `hwdec` fallback may already cover it in-engine. Needs a Hi10p file on the real device before anything is added. |
 | Letterbox left transparent so HDR bars stay true black | Open, **unverified**, and hardware-only. Their fix is for an ExoPlayer SurfaceView; ours is an mpv Metal layer, so the question transfers but the answer does not. |
 | Stream dedup no longer collapsing two differently-named streams on one URL | **N/A.** We do not dedup streams at all — the dedup in `StreamsView` is for subtitle tracks. Their fix repairs machinery we never built. |
@@ -550,11 +554,10 @@ is which guesses about effort were right — and several were not.
    capped below the bitrate, only more connections help. FFmpeg's HTTP is single-connection with
    no option to change that, so the shape here would be a local proxy mpv streams from.
    Still gated on measuring a real per-connection ceiling on actual hardware.
-2. **Localisation.** The viewing surface is done as of 1.0.31 — everything a viewer reads
-   while finding and watching something. What is left is Settings: 571 literals, and the work
-   in them is writing 571 French strings rather than converting them, which is why it is its
-   own job rather than the tail of this one. A build guard now fails on any key missing from
-   either table, so the coverage cannot quietly rot.
+2. ~~**Localisation.**~~ — **closed in 1.0.35.** Both tables now carry 1,161 keys and the
+   build guard fails on any key missing from either, so the coverage cannot quietly rot. What
+   is genuinely still open is *more languages*, which is translation work rather than
+   engineering: two against upstream's thirty-six.
 3. ~~**In-app update banner**~~ — **shipped in 1.0.24**, on the About screen and reading the
    sideloading feed rather than the releases API: it is the artefact that has to be right for
    anyone to install an update at all. It tells and does not install, because a sideloaded app
@@ -680,8 +683,8 @@ the links off the meta entry. Judged by manifests alone those titles are unplaya
 
 ## Verification
 
-- Unit suite at 1.0.39: **631 tests, 0 failures**. UI suite: **12 tests, 0 failures**.
-- Test density is ahead of upstream per line — 485 tests over ~43k lines against 983 over 201k —
+- Unit suite at 1.0.39: **631 tests, 0 failures**. UI suite: **14 tests, 0 failures**.
+- Test density is ahead of upstream per line — 645 tests over ~48k lines against 983 over 201k —
   so the 1.0.12 plan's "tests too thin" framing was wrong on volume. It was right about
   *placement*: the network clients still carry the least of it, though every release since
   1.0.22 has added a testable policy type in front of one.
