@@ -69,14 +69,37 @@ final class LibraryStore {
     private let libraryFile = JSONFileStore<[SavedLibraryItem]>(filename: "library.json")
     private let previewFile = JSONFileStore<[String: MetaPreview]>(filename: "preview-cache.json")
     private let thumbnailFile = JSONFileStore<[String: String]>(filename: "episode-thumbnails.json")
-    private let deletionFile = JSONFileStore<[String]>(filename: "library-deletions.json")
-    /// Durable, unlike its sibling above: a purged deletion queue silently resurrects the rows
-    /// it was holding, which is the bug this queue exists to prevent. `library-deletions.json`
-    /// has the same weakness, but flipping it now would strand any queue already written to the
-    /// purgeable location — the legacy migration only reads the pre-split path — so that one
-    /// wants its own change with a migration read, not a drive-by here.
+    /// Both deletion queues are durable: a purged queue silently resurrects exactly the rows it
+    /// was holding, which is the bug they exist to prevent.
+    ///
+    /// The library one was left purgeable in 1.0.36 because flipping it would have stranded any
+    /// queue already written to Caches — `JSONFileStore`'s own migration only reads the
+    /// pre-split Application Support path. `migrateDeletionQueue()` is that missing read, so the
+    /// note deferring this is now paid off rather than repeated.
+    private let deletionFile = JSONFileStore<[String]>(
+        filename: "library-deletions.json", durability: .critical
+    )
+    /// Where the library queue used to live, read once so a pending removal survives the upgrade.
+    private let legacyDeletionFile = JSONFileStore<[String]>(filename: "library-deletions.json")
     private let progressDeletionFile = JSONFileStore<[String]>(
         filename: "progress-deletions.json", durability: .critical
+    )
+
+    // MARK: Surviving a storage reclaim
+
+    /// The viewer's saved titles, reduced to what cannot be fetched again.
+    ///
+    /// `library.json` above lives in Caches and holds whole previews. That is the right place for
+    /// artwork and the wrong one for the fact that a title was saved at all: tvOS may reclaim it,
+    /// and a viewer with no Nuvio account has nothing to rebuild it from. See `LibraryEntryRef`.
+    private let libraryIdentityFile = JSONFileStore<[LibraryEntryRef]>(
+        filename: "library-identity.json", durability: .critical
+    )
+    /// Resume points, which are what a viewer notices vanishing. **Unfinished rows only** — the
+    /// watched marks are the bulk of this store and would not fit the durable budget, and losing
+    /// one costs a tick on an episode rather than a place in a film.
+    private let resumeIdentityFile = JSONFileStore<[WatchProgress]>(
+        filename: "resume-points.json", durability: .critical
     )
     private let episodeFile = JSONFileStore<[String: [SeriesEpisodeRef]]>(filename: "series-episodes.json")
 
@@ -92,6 +115,8 @@ final class LibraryStore {
         seriesEpisodes = episodeFile.load() ?? [:]
         pendingLibraryDeletions = deletionFile.load() ?? []
         pendingProgressDeletions = progressDeletionFile.load() ?? []
+        migrateDeletionQueue()
+        restoreFromDurableCopies()
         refreshTopShelf()
     }
 
@@ -445,12 +470,68 @@ final class LibraryStore {
 
     private func persistProgress() {
         progressFile.save(progress)
+        // Only what a viewer would notice losing. `fraction > 0.01` is the same floor the
+        // Continue Watching rail applies, so this is exactly the rail plus nothing.
+        resumeIdentityFile.save(
+            DurableLibraryBudget.fitting(progress.values.filter { $0.fraction > 0.01 && $0.fraction < 1 })
+        )
         refreshTopShelf()
     }
 
     private func persistLibrary() {
         libraryFile.save(library)
+        libraryIdentityFile.save(DurableLibraryBudget.fitting(library.map(LibraryEntryRef.init)))
         refreshTopShelf()
+    }
+
+    // MARK: Reclaim recovery
+
+    /// Puts back anything the durable copies still know about after Caches was emptied.
+    ///
+    /// Additive on purpose. The purgeable file is the fuller record while it survives — it has the
+    /// artwork — so it wins wherever both have a row, and the durable copy only supplies what is
+    /// missing. That also makes this a no-op on every launch where nothing was reclaimed, which is
+    /// almost all of them.
+    ///
+    /// A removal cannot be undone by this: the durable copy is rewritten on the same write that
+    /// performs the removal, so a title taken out of the library is gone from both.
+    private func restoreFromDurableCopies() {
+        let refs = libraryIdentityFile.load() ?? []
+        if !refs.isEmpty {
+            let present = Set(library.map(\.preview.rowKey))
+            let restored = refs
+                .filter { !present.contains($0.rowKey) }
+                .map { $0.restored(preview: previewCache[$0.rowKey]) }
+            if !restored.isEmpty {
+                library.append(contentsOf: restored)
+                library.sort { $0.addedAt > $1.addedAt }
+                libraryFile.save(library)
+            }
+        }
+
+        let resumePoints = resumeIdentityFile.load() ?? []
+        var recovered = false
+        for row in resumePoints where progress[row.videoId] == nil {
+            // Never over a queued deletion: the queue is the record of an intent the account has
+            // not been told about yet, and restoring past it is the resurrection bug inverted.
+            guard !pendingProgressDeletions.contains(row.videoId) else { continue }
+            progress[row.videoId] = row
+            recovered = true
+        }
+        if recovered { progressFile.save(progress) }
+    }
+
+    /// Reads the library deletion queue out of its old purgeable home, once.
+    ///
+    /// Merged rather than replaced, and the old file is left where it is: this build may not be
+    /// the one the viewer keeps, and a downgrade that found the queue gone would re-adopt every
+    /// row it was holding.
+    private func migrateDeletionQueue() {
+        guard let stranded = legacyDeletionFile.load(), !stranded.isEmpty else { return }
+        let fresh = stranded.filter { !pendingLibraryDeletions.contains($0) }
+        guard !fresh.isEmpty else { return }
+        pendingLibraryDeletions.append(contentsOf: fresh)
+        deletionFile.save(pendingLibraryDeletions)
     }
 
     private func persistThumbnails() {

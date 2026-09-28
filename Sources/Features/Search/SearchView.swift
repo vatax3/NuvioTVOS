@@ -128,9 +128,20 @@ final class SearchViewModel {
         }
     }
 
+    /// Recent searches when the field is empty; title completions once it is not.
+    ///
+    /// The completions come from what the search has already returned rather than from a second
+    /// round of requests — see `SearchSuggestions`. Recents stay as the fallback for the moment
+    /// before any addon has answered, which is exactly when a strip that empties itself would be
+    /// most annoying.
     var suggestions: [String] {
         let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !term.isEmpty else { return recentSearches }
+        let completions = SearchSuggestions.ranked(
+            names: SearchSuggestions.merged(byCatalog: results.map { $0.items.map(\.name) }),
+            query: term
+        )
+        guard completions.isEmpty else { return completions }
         return recentSearches.filter { $0.localizedCaseInsensitiveContains(term) }
     }
 

@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - Theme identity (port of AppTheme / AppFont)
 
 enum AppTheme: String, SettingsOption {
-    case crimson, ocean, violet, emerald, amber, rose, white
+    case crimson, ocean, violet, emerald, amber, rose, white, custom
 
     var displayName: String {
         switch self {
@@ -14,6 +14,7 @@ enum AppTheme: String, SettingsOption {
         case .amber: return "Amber"
         case .rose: return "Rose"
         case .white: return "White"
+        case .custom: return L10n.text("settings.appearance.custom_theme", fallback: "Custom")
         }
     }
 }
@@ -126,8 +127,10 @@ enum ThemeColors {
         backgroundCard: NuvioPrimitives.neutral850
     )
 
-    static func palette(for theme: AppTheme) -> ThemeColorPalette {
+    /// `accentHex` is only read for the custom theme; the presets ignore it.
+    static func palette(for theme: AppTheme, accentHex: String = "") -> ThemeColorPalette {
         switch theme {
+        case .custom: return CustomThemePalette.palette(accentHex: accentHex)
         case .crimson: return crimson
         case .ocean: return ocean
         case .violet: return violet

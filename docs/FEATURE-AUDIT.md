@@ -155,3 +155,25 @@ done
 It reports 73 against the 1.0.4 tree and nothing against this one. The build-phase script is the
 same idea with the binding distinction added, which is what separates an inert control from a
 field with no UI at all.
+
+## What happened since
+
+This file is a record of one investigation, not a live status — that is
+[PARITY-AUDIT.md](PARITY-AUDIT.md). Two things since are worth appending, because both bear on
+whether the mechanism above actually stayed closed.
+
+**It did not, once, and the guard caught it.** In 1.0.37 every `+`/`−` stepper in the app turned
+out to be inert — 23 call sites, since the settings screens were written. The build-phase script
+had not fired because the fields *were* read; what was broken was the control, not the wiring. On
+tvOS the contents of a `Button`'s label are not focusable, so a row whose accessory is itself
+interactive has to be built without the outer button. The lesson is narrower than the original
+one and worth stating on its own: **a guard that proves a value is read does not prove a control
+can be pressed.** `UITests/SettingsStepperUITests` is the one that can.
+
+**And it fired properly in 1.0.39.** Adding MDBList declared three settings — the scrobble switch
+and two auth flags — before anything read them, and the build failed naming all three. That is
+the script working as designed, on the exact failure mode this document was written about.
+
+A third guard joined it since: `Scripts/check-localisation-keys.sh`, which fails on a key missing
+from either table, present in only one, or defined twice. The pattern is the same in all three —
+**drift that a reviewer would have to notice is turned into a build failure instead.**

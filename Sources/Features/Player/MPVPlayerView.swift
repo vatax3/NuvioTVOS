@@ -32,6 +32,15 @@ struct MPVPlayerView: View {
     let subtitleLanguages: [String]
     let prefersForcedSubtitles: Bool
     let subtitleStyle: SubtitleStyle
+    /// The addon subtitle track the host is drawing, if any, plus where it is being read.
+    ///
+    /// Handed in rather than owned because `SubtitleTrackController` belongs to the host: it
+    /// draws for both engines, and mpv's own delay reaches only the tracks mpv renders.
+    var addonCues: [SubtitleCue] = []
+    var addonCueClock: Double = 0
+    /// Reports the delay after any change, so the host can move the cues it draws itself by the
+    /// same amount. Called for the stepper and the reset as well as for a synced line.
+    var onSubtitleDelayChange: ((Double) -> Void)?
     let seekTarget: Double?
     let onSeekApplied: () -> Void
     let pauseRequest: PlaybackTransportRequest?
@@ -132,7 +141,7 @@ struct MPVPlayerView: View {
     }
 
     private enum TrackPicker: String, Identifiable {
-        case audio, subtitles, subtitleAppearance, speed, streamInfo, sources, episodes
+        case audio, subtitles, subtitleAppearance, subtitleSync, speed, streamInfo, sources, episodes
         var id: String { rawValue }
     }
 
@@ -947,6 +956,8 @@ struct MPVPlayerView: View {
             }
         case .subtitleAppearance:
             subtitleAppearancePanel
+        case .subtitleSync:
+            subtitleSyncDialog
         case .speed:
             speedDialog
         case .audio:
@@ -1055,8 +1066,8 @@ struct MPVPlayerView: View {
                     ),
                     canDecrease: engine.subtitleDelay > -MPVEngine.subtitleDelayLimit,
                     canIncrease: engine.subtitleDelay < MPVEngine.subtitleDelayLimit,
-                    onDecrease: { engine.adjustSubtitleDelay(by: -0.1) },
-                    onIncrease: { engine.adjustSubtitleDelay(by: 0.1) }
+                    onDecrease: { applySubtitleDelay(engine.subtitleDelay - 0.1) },
+                    onIncrease: { applySubtitleDelay(engine.subtitleDelay + 0.1) }
                 )
 
                 PlayerRailCard(
@@ -1064,8 +1075,66 @@ struct MPVPlayerView: View {
                     subtitle: L10n.text("player.subtitle_appearance_detail")
                 ) { picker = .subtitleAppearance }
 
+                // Only offered where it can do anything: it works by pointing at a parsed line,
+                // and the parsed lines are the addon track the host draws. A muxed track is
+                // rendered inside mpv and its text never reaches this process.
+                if !addonCues.isEmpty {
+                    PlayerRailCard(
+                        title: L10n.text("player.sync_to_line", fallback: "Sync to a line"),
+                        subtitle: L10n.text(
+                            "player.sync_to_line_detail",
+                            fallback: "Pick the line being spoken now"
+                        )
+                    ) { picker = .subtitleSync }
+                }
+
                 PlayerRailCard(title: L10n.text("player.reset_subtitle_delay")) {
-                    engine.setSubtitleDelay(0)
+                    applySubtitleDelay(0)
+                }
+            }
+        }
+    }
+
+    /// The one place the subtitle delay is written, so mpv's renderer and the host's stay level.
+    private func applySubtitleDelay(_ seconds: Double) {
+        engine.setSubtitleDelay(seconds)
+        onSubtitleDelayChange?(engine.subtitleDelay)
+    }
+
+    /// Correcting the timing by pointing at a line rather than nudging a number.
+    ///
+    /// The lines are found at the *cue clock* — playback minus the delay already applied — so the
+    /// list does not walk away from the viewer by exactly the amount they are correcting. See
+    /// `SubtitleSyncByLine`.
+    private var subtitleSyncDialog: some View {
+        let found = SubtitleSyncByLine.candidates(in: addonCues, cueClock: addonCueClock)
+        return PlayerCenteredDialog(
+            title: L10n.text("player.sync_to_line", fallback: "Sync to a line"),
+            onDismiss: closePicker
+        ) {
+            if found.lines.isEmpty {
+                PlayerRailCard(
+                    title: L10n.text("player.sync_no_lines", fallback: "No lines near this point")
+                ) { closePicker() }
+            } else {
+                ForEach(Array(found.lines.enumerated()), id: \.element.id) { index, cue in
+                    PlayerRailCard(
+                        title: cue.text.replacingOccurrences(of: "\n", with: " "),
+                        subtitle: SubtitleSyncByLine.offsetLabel(
+                            for: cue, at: addonCueClock + engine.subtitleDelay
+                        ),
+                        isSelected: index == found.currentIndex,
+                        requestsInitialFocus: index == found.currentIndex
+                    ) {
+                        applySubtitleDelay(
+                            SubtitleSyncByLine.delay(
+                                toPlay: cue,
+                                at: addonCueClock + engine.subtitleDelay,
+                                limit: MPVEngine.subtitleDelayLimit
+                            )
+                        )
+                        closePicker()
+                    }
                 }
             }
         }

@@ -223,6 +223,7 @@ enum Route: Hashable {
     case streamBadgeRules
     case repositoryConfig
     case customPoster
+    case customTheme
     case themeSettings
     case layoutSettings
     case playbackSettings

@@ -1,4 +1,4 @@
-# Functional parity audit — tvOS 1.0.39 vs Android TV 1.1.0-beta.2
+# Functional parity audit — tvOS 1.0.40 vs Android TV 1.1.0-beta.2
 
 Audit date: 2026-08-25, re-derived against 1.0.31 on 2026-08-26, tracked forward since.
 Supersedes the audit published with 1.0.15. Twenty releases landed while it was open, so the
@@ -78,7 +78,7 @@ platform refuses the upstream approach.
 | Player failure recovery | Parity at state-machine level | Decoded-first-frame detection, one bounded retry, AVFoundation→mpv fallback, live-playhead resume. |
 | Player audio controls | Parity, less two the platform refuses | Output channels, in-player amplification and — since 1.0.24 — persisted amplification, centre-mix level and downmix normalisation. Keep-original-on-downmix and forced optical passthrough cannot exist here as *controls*; see *Forced*, where the second entry also corrects an over-broad claim about passthrough in general. |
 | Dolby Vision profile 7 ✻ | **Adapted (in our favour)** | Upstream carries a forked Matroska extractor, a libdovi bridge, an RPU stripper and DV5→DV8.1 conversion — ~13 files — because ExoPlayer cannot play dual-layer DV. libmpv with the vendored `Libdovi`/`Libplacebo` handles it in-engine. Their five DV settings have no counterpart because they have no problem to solve here. **Unverified on hardware.** |
-| Subtitles ✻ | Partial | Addon and muxed tracks, auto-language/forced rules, style, delay, SDH stripping, charset detection, CJK fallback, and since 1.0.19 mojibake repair. Ours reverses the double encoding rather than tabulating known sequences, so it also covers the Cyrillic, Greek and Japanese cases upstream's table does not. Still no sync-by-line dialog. |
+| Subtitles ✻ | Parity | Addon and muxed tracks, auto-language/forced rules, style, delay, SDH stripping, charset detection, CJK fallback, and since 1.0.19 mojibake repair. Ours reverses the double encoding rather than tabulating known sequences, so it also covers the Cyrillic, Greek and Japanese cases upstream's table does not. Since 1.0.40 the timing can be corrected by pointing at a line, and the delay reaches the addon-supplied tracks as well as the muxed ones — it had only ever reached the muxed ones, which are not the tracks most viewers use. |
 | External players | Parity | Infuse/VLC/nPlayer/Outplayer hand-off with subtitle forwarding. Skip-segment forwarding is absent. Zidoo monitoring is Android-only. |
 | Top Shelf / launcher | Adapted | Publishes Continue Watching with deep links. Android channel fingerprinting is N/A. |
 | In-app updater | Parity | Shipped in 1.0.24, on the About screen. Reads the sideloading feed rather than the releases API — the feed is the artefact that has to be right for anyone to install an update at all, so a check that reads it fails loudly when it is wrong. Versions compare numerically, because `1.0.9` sorts after `1.0.23` as a string. It tells and does not install: nothing sideloaded on tvOS can replace itself. |
@@ -112,7 +112,6 @@ path and AVFoundation refuses.
   `Partial` for it until 1.0.36; that status was stale from the day this line was written.*
 - ~~**Player audio**~~ — three of the five shipped in **1.0.24**; the other two moved to
   *Forced*, having no tvOS equivalent to build.
-- **Subtitles**: no sync-by-line dialog.
 - **External players**: no skip-segment forwarding.
 - **Plugins**: CryptoJS legacy DES family.
 - ~~**Localisation**~~ — closed in **1.0.35**. The viewing surface was translated in 1.0.31;
@@ -259,8 +258,8 @@ needed none, and in a sync fix that only added bookkeeping keys.
 | Post-play film recommendations fired from the credits instead of a percentage | **Ported in 1.0.36.** This replaces what 1.0.35 shipped. Credits run from ninety seconds to eight minutes, so a flat 90% lands deep inside them on a long film and before the last scene on a short one. A marked post-credits scene now holds the card until the scene has *played*. |
 | Post-credits detection extended to series outros | **Declined, deliberately.** Their series route cannot return an explicit `post_credits` mark, so on series the change is a five-second-tail heuristic and nothing else — and almost every episode has more than five seconds of black, a studio card or a next-episode preview after its ending. Ported for films, where a tail past the credits does mean something. |
 | `progress_upserts` / `progress_deletes` / `watched_upserts` / `watched_deletes` — an offline queue of watch-state mutations | **The matching defect was ours, and worse.** See below. Fixed in 1.0.36; the queue itself is not ported — our sync pushes deletions and reconciles by timestamp rather than replaying a mutation log. |
-| `custom_theme_colors` — a three-colour custom theme with a hex dialog and colour picker | Open. We ship seven preset palettes and AMOLED; this adds a viewer-defined one. A colour picker driven by a remote is the bulk of the work, not the palette derivation. |
-| `startup_splash_enabled` — a branded splash gated by destination | Open, and small. Worth doing with the icon work rather than alone. |
+| `custom_theme_colors` — a three-colour custom theme with a hex dialog and colour picker | **Ported in 1.0.40**, as one accent with the rest derived. The picker is declined, not deferred: the hex goes to a phone through `LocalConfigServer`. |
+| `startup_splash_enabled` — a branded splash gated by destination | **Ported in 1.0.40**, off by default. |
 | `PlaybackAvailability` — grey out *Play* when no enabled addon or scraper can serve a stream for that id | **Ported in 1.0.39.** Reads `resources`/`idPrefixes` off installed addons, which we already parsed. |
 | `mpv_hi10p_gnext_software_fallback_enabled` — force software decoding for 10-bit H.264 | Open, and **unverified**. Their heuristic matches `hi10`/`10bit` against the stream *name*, which is guesswork; VideoToolbox also refuses H.264 High 10, but mpv's `hwdec` fallback may already cover it in-engine. Needs a Hi10p file on the real device before anything is added. |
 | Letterbox left transparent so HDR bars stay true black | Open, **unverified**, and hardware-only. Their fix is for an ExoPlayer SurfaceView; ours is an mpv Metal layer, so the question transfers but the answer does not. |
@@ -270,7 +269,7 @@ needed none, and in a sync fix that only added bookkeeping keys.
 | A watched tick on episodes in the in-player panel | **Ported in 1.0.36**, adapted: their tick sits on the still and ours has no still, so the leading icon carries three states instead of one. |
 | Turning subtitles off by long-pressing the selected track | **N/A.** Their track list has no *Off* row and ours does. |
 | RTL layout and text direction, ~25 commits | **N/A** while the app ships English and French. Becomes real the day a RTL table is added. |
-| Search suggestions and catalog paging tied to the search run | Open. Worth a read on its own; roughly a dozen focus fixes ride along with it. |
+| Search suggestions and catalog paging tied to the search run | **Suggestions ported in 1.0.40**, ranked from what the search already returned rather than from a second round of requests. The paging half was already ours. |
 | Custom theme previews, recomposition profiling, moov caching, chunk eviction, memory budget | **N/A.** Compose and ExoPlayer internals, and most of the memory work serves the parallel chunked downloader we declined. |
 
 ### The defect this window exposed in our tree
@@ -566,6 +565,9 @@ is which guesses about effort were right — and several were not.
    the five are mpv options, and the other two are ExoPlayer and Android AudioTrack concepts
    with no tvOS equivalent. They moved to *Forced* rather than being built.
 5. **Visual snapshot tests.** Current UI tests prove navigation and focus, not appearance.
+6. ~~**`library-deletions.json` durability.**~~ — **closed in 1.0.40**, together with the larger
+   problem it was a corner of: the library and the resume points themselves were in purgeable
+   storage. See *What 1.0.40 closed*.
 
 ### Resolved since this document was written
 
@@ -598,7 +600,7 @@ What is left is short:
 | **Simkl as a third *More like this* source** | **Ported in 1.0.39.** The client was already here; it is a branch in `loadRelated`. |
 | *"Prefer in-progress resume over furthest next-to-watch"* | **The same defect was ours.** Ported in 1.0.39 as `NextUpAnchor` — see below. |
 | A disk **VOD cache** in the player, plus buffer retuning and three migration flags | Open, and probably moot: mpv has `cache-on-disk` and `demuxer-max-bytes`. The question transfers, the mechanism is already here. Worth a read before anything is built. |
-| Grouping streams by plugin repository | Open, and small. |
+| Grouping streams by plugin repository | **Already shipped** as `group_plugin_streams_by_repository`; listed as open here by mistake and struck after checking. |
 | Custom theme previews, recomposition profiling, moov caching, chunk eviction | **N/A.** Compose and ExoPlayer internals. |
 
 ### The resume anchor, which was our defect too
@@ -681,10 +683,72 @@ The cards gate the action instead, and the banner above them says why.
 `Video` gained `hasEmbeddedStreams` along the way: some addons never implement `/stream` and hang
 the links off the meta entry. Judged by manifests alone those titles are unplayable, and they play.
 
+## What 1.0.40 closed, and one of it was ours alone
+
+Three things, and the first was not on any upstream list.
+
+### The library lived in storage tvOS may empty
+
+`library.json` and `watch-progress.json` are written to Caches, which the system is documented as
+free to reclaim under pressure. For a viewer signed into a Nuvio account that is survivable — the
+next sync brings the rows back. **For a viewer who never connected one, a reclaim took their entire
+library and there was nothing to rebuild it from.**
+
+This is the defect the addon list had until 1.0.37, and it takes the same shape of fix: separate
+what the viewer *made* from what can be fetched again, and put only the first somewhere durable.
+`AddonChoice` was the precedent; `LibraryEntryRef` is the same idea for saved titles.
+
+The constraint that made it look unfixable is real: tvOS leaves one durable place, `UserDefaults`,
+read wholesale on access and therefore budgeted. A whole `MetaPreview` per title would not fit. Four
+fields do — and the artwork, which is the large part, is exactly the part that can be fetched again.
+
+Resume points get the same treatment and watched marks deliberately do not: the marks are the bulk
+of that store, they would not fit, and losing one costs a tick on an episode rather than a place in
+a film.
+
+One trap worth recording. `JSONFileStore` **refuses an over-budget write and logs rather than
+throws**, so a store that quietly outgrows its budget simply stops persisting — worse than the
+purgeable location it was moved out of. Nothing reaches a durable store un-bounded:
+`DurableLibraryBudget` trims oldest-first, by binary search rather than one at a time, because this
+runs on the main actor on every library write.
+
+And the deferred note from 1.0.36 is now paid rather than repeated: `library-deletions.json` is
+durable, with the migration read out of its old purgeable home that the deferral was waiting for.
+
+### The subtitle delay never reached the subtitles most people use
+
+mpv's `sub-delay` moves the tracks *mpv* renders — the muxed ones. Addon subtitles are parsed and
+drawn by this process, on both engines, and the delay had never been applied to them at all. The
+control was reachable, looked like it worked, and did nothing for the majority of files.
+
+With that fixed, the sync-by-line dialog becomes worth having — our oldest P2, and upstream
+corrected their own on 27 September, which gave a reference. The rule is one subtraction; the part
+that needs care is *which* lines to offer. They come from the **cue clock** — playback minus the
+delay already applied — or the list walks away from the viewer by exactly the amount they are
+trying to correct. That is what upstream's fix was.
+
+### The small tier
+
+- **Custom theme**, from one accent rather than three. The palette is a port; the on-screen colour
+  picker is declined — choosing a hue with a D-pad is why such controls go untouched. The hex goes
+  to a phone, and the other colours are derived, which is the relationship the seven presets
+  already have.
+- **Search suggestions** are title completions now, not just the viewer's own history. Ranked
+  exact → prefix → substring → words-out-of-order, ties keeping the addon's relevance order —
+  upstream records sorting those alphabetically putting five titles ahead of *Jurassic Park* for
+  "juras". Ours ranks what the search already returned rather than issuing a second round of
+  requests per keystroke.
+- **Startup splash**, off by default: a sideloaded app is opened by someone who knows what they
+  installed. Gated so it never covers a deep link or first run, and so Home's own loader does not
+  run behind it.
+- **Grouping streams by plugin repository** was on the plan and is struck from it: it already
+  shipped, as `group_plugin_streams_by_repository`. Recorded because a re-implementation would
+  have been the expensive kind of mistake.
+
 ## Verification
 
-- Unit suite at 1.0.39: **631 tests, 0 failures**. UI suite: **14 tests, 0 failures**.
-- Test density is ahead of upstream per line — 645 tests over ~48k lines against 983 over 201k —
+- Unit suite at 1.0.40: **689 tests, 0 failures**. UI suite: **14 tests, 0 failures**.
+- Test density is ahead of upstream per line — 703 tests over ~49k lines against 983 over 201k —
   so the 1.0.12 plan's "tests too thin" framing was wrong on volume. It was right about
   *placement*: the network clients still carry the least of it, though every release since
   1.0.22 has added a testable policy type in front of one.

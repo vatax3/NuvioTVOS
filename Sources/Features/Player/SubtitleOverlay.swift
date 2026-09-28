@@ -15,6 +15,17 @@ final class SubtitleTrackController {
     /// Current playback position, updated at cue resolution rather than the 5s persistence tick.
     var currentTime: Double = 0
 
+    /// Seconds to hold the drawn cues back by, positive meaning "later".
+    ///
+    /// The same sign convention as mpv's `sub-delay`, and it exists because the delay control has
+    /// never reached these cues at all: mpv's option adjusts what *mpv* renders — muxed tracks —
+    /// while addon subtitles are parsed and drawn here. Those are the ones most viewers use, so
+    /// the control appeared to do nothing for most of the files it was reached from.
+    ///
+    /// Not persisted: a delay corrects one release's timing against one subtitle file, and
+    /// carrying it into the next thing played would be a mystery rather than a convenience.
+    var delay: Double = 0
+
     /// Set from the viewer's subtitle settings. Changing it re-filters what is already loaded
     /// rather than forcing the track to be fetched again.
     var stripsSDH = false {
@@ -23,6 +34,15 @@ final class SubtitleTrackController {
             applyFilters()
         }
     }
+
+    #if DEBUG
+    /// Loads a track without a network, so the delay and the sync rules can be exercised against
+    /// a real controller rather than a reimplementation of one.
+    func adoptForTesting(_ cues: [SubtitleCue]) {
+        rawCues = cues
+        applyFilters()
+    }
+    #endif
 
     private var loadTask: Task<Void, Never>?
     /// The track as it was parsed. `cues` is what is drawn, which is this filtered.
@@ -38,8 +58,13 @@ final class SubtitleTrackController {
     /// held over dialogue — and returning a single cue silently dropped the other. Missing
     /// dialogue does not look like a bug on screen, which is how it went unnoticed.
     var activeCues: [SubtitleCue] {
-        Self.showing(cues, at: currentTime, longestCue: longestCue)
+        Self.showing(cues, at: currentTime - delay, longestCue: longestCue)
     }
+
+    /// The position the cue list is being read at, which is the playback clock *minus* the delay.
+    /// Upstream writes it `VideoMs − subtitleDelayMs`; it is the number every sync decision here
+    /// is made against, so it is named once rather than recomputed.
+    var cueClock: Double { currentTime - delay }
 
     /// Extracted from the property so it can be checked on its own: which cues are on screen at
     /// an instant is arithmetic over a sorted list, and proving it right should not need a

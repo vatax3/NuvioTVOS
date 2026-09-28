@@ -425,6 +425,7 @@ struct AboutView: View {
 struct ThemeSettingsContent: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(AppSettings.self) private var settings
+    @Environment(Router.self) private var router
 
     var body: some View {
         @Bindable var app = settings.app
@@ -436,6 +437,7 @@ struct ThemeSettingsContent: View {
                         ForEach(AppTheme.allCases) { theme in
                             ThemeSwatch(
                                 theme: theme,
+                                accentHex: app.customThemeAccentHex,
                                 isSelected: app.theme == theme,
                                 action: { app.theme = theme }
                             )
@@ -444,6 +446,19 @@ struct ThemeSettingsContent: View {
                     .padding(.vertical, NuvioTheme.spacing.xs)
                 }
                 .clippedHorizontalScroller()
+
+                if app.theme == .custom {
+                    SettingsRow(
+                        title: L10n.text("settings.appearance.custom_colour", fallback: "Accent colour"),
+                        subtitle: L10n.text(
+                            "settings.appearance.custom_colour_sub",
+                            fallback: "Set the hex value from a phone"
+                        ),
+                        systemImage: "paintpalette",
+                        trailing: { SettingsValueLabel(value: "#\(app.customThemeAccentHex)") },
+                        action: { router.push(.customTheme) }
+                    )
+                }
             }
 
             SettingsCard(title: L10n.text("settings.appearance.typeface", fallback: "Typeface")) {
@@ -459,6 +474,24 @@ struct ThemeSettingsContent: View {
                         action: { app.font = font }
                     )
                 }
+            }
+
+            SettingsCard(
+                title: L10n.text("settings.appearance.startup", fallback: "Startup"),
+                footnote: L10n.text(
+                    "settings.appearance.startup_footnote",
+                    fallback: "Shown only on a launch heading for Home — never in front of a title you opened directly."
+                )
+            ) {
+                SettingsToggle(
+                    title: L10n.text("settings.appearance.splash", fallback: "Launch screen"),
+                    subtitle: L10n.text(
+                        "settings.appearance.splash_subtitle",
+                        fallback: "Show the Nuvio mark while the app starts"
+                    ),
+                    systemImage: "sparkles",
+                    isOn: $app.startupSplashEnabled
+                )
             }
 
             SettingsCard(title: L10n.text("settings.appearance.contrast", fallback: "Contrast"), footnote: L10n.text("settings.appearance.amoled_footnote", fallback: "AMOLED mode replaces the near-black background with pure black.")) {
@@ -512,10 +545,13 @@ struct ThemeSettingsContent: View {
 private struct ThemeSwatch: View {
     @Environment(\.nuvioColors) private var colors
     let theme: AppTheme
+    var accentHex: String = ""
     let isSelected: Bool
     let action: () -> Void
 
-    private var palette: ThemeColorPalette { ThemeColors.palette(for: theme) }
+    private var palette: ThemeColorPalette {
+        ThemeColors.palette(for: theme, accentHex: accentHex)
+    }
 
     var body: some View {
         Button(action: action) {

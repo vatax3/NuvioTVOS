@@ -62,18 +62,23 @@ card is 252 pt here and occupies the identical fraction of the screen.
 
 ## Upstream parity
 
-Reconciled through NuvioTV **`0.8.9-beta`** (2026-08-25). That means every upstream release up to
-that tag has been read and each change ported, judged not applicable, or declined with a reason —
-not that the two apps have the same feature set, which they cannot. The version lines are
-independent on purpose: see [docs/UPSTREAM-PARITY.md](docs/UPSTREAM-PARITY.md) for the table and
-for how to move the marker forward.
+Reconciled through NuvioTV **`1.1.0-beta.2`** (2026-09-25). That means every upstream release up
+to that tag has been read and each change ported, judged not applicable, or declined with a reason
+— not that the two apps have the same feature set, which they cannot. The version lines are
+independent on purpose.
+
+- [docs/UPSTREAM-PARITY.md](docs/UPSTREAM-PARITY.md) — the marker, the pre-0.8.9 tables, and the
+  full list of **what was declined on purpose and why**.
+- [docs/PARITY-AUDIT.md](docs/PARITY-AUDIT.md) — the live status by product area, plus a section
+  per release window since 0.8.9.
 
 ## What is ported
 
 **Design system** — a 1:1 port of `ui/theme/`:
 
 - `NuvioPrimitives` (full neutral ramp + status/source colors)
-- All 7 accent palettes (Crimson, Ocean, Violet, Emerald, Amber, Rose, White) with AMOLED variants
+- All 7 accent palettes (Crimson, Ocean, Violet, Emerald, Amber, Rose, White) with AMOLED variants,
+  plus a custom one derived from an accent colour you set from your phone
 - Spacing, radii, shapes, sizes, component, stroke, elevation, effect, layout and media tokens
 - Motion durations and the four Compose easing curves, incl. the sidebar's distinct in/out timings
 - Typography: the same **Inter / DM Sans / Open Sans** variable fonts as the Android app, with the
@@ -122,10 +127,16 @@ metadata) and the marquee-on-focus card titles.
   magnet → HTTP resolution with file selection. The stream filter engine parses resolution,
   quality, HDR/DV, audio format and channels, encode, language, release group, size and seeders,
   then applies the required/excluded/preferred matrix, per-bucket caps and ranked sorting.
-- **Tracking** — Trakt (device-code OAuth, scrobbling, progress and collection sources, comments)
-  and Simkl (PIN auth, library lists, remote resume points and start/pause/stop scrobbling).
+- **Tracking** — three accounts, any of which can be the source for your library and your watch
+  progress: Trakt (device-code OAuth, scrobbling, progress and collection sources, comments),
+  Simkl (PIN auth, library lists, remote resume points, start/pause/stop scrobbling) and MDBList
+  (device-code OAuth, watchlist and static lists, resume points, watched marks and scrobbling).
 - **Metadata** — TMDB enrichment (artwork, logos, cast, certifications, recommendations, networks,
-  studios), MDBList aggregated ratings, AniSkip intro/outro segments.
+  studios), MDBList aggregated ratings — from a pasted API key, or from a connected account when
+  there is none — and AniSkip intro/outro segments.
+- **Artwork** — optionally fetched from a URL of your own instead of each addon's, for a
+  rating-overlay service such as RatingPosterDB, with a per-screen switch and a fall back to the
+  addon's own poster for any title the pattern cannot address.
 - **Subtitles** — external SubRip/WebVTT tracks from every `subtitles` addon, language-ordered and
   auto-selected, drawn with the configured size, weight, colours, outline and offset.
 - **Plugins** — local JS scrapers in JavaScriptCore, matching the Android runtime's `getStreams`
@@ -191,18 +202,22 @@ that cannot be closed by simply porting another Swift view are:
    covers WordArray, the common hashes/HMACs, PBKDF2 and AES CBC/ECB/GCM. Less common algorithms
    such as DES/TripleDES and unimplemented npm surface still fail explicitly.
 
-Smaller player gaps, all in the mpv transport: no sync-by-line subtitle timing dialog, no
-playback issue reporting, and no torrent progress overlay. Startup and sustained-stall recovery now share
-one bounded retry policy and resume from the live playhead. Frame-rate and dynamic-range matching
-is wired to `AVDisplayManager` on both engines but has only been exercised on the simulator, which
-has no display modes to switch between.
+Smaller player gaps: no playback issue reporting and no torrent progress overlay. Subtitle timing
+can now be corrected by pointing at a line rather than nudging a number, and that delay reaches the
+addon-supplied subtitles as well as the muxed ones — it had only ever reached the muxed ones, which
+are not the tracks most viewers use. Startup and sustained-stall recovery share one bounded retry
+policy and resume from the live playhead. Frame-rate and dynamic-range matching is wired to
+`AVDisplayManager` on both engines and is on by default, but has only been exercised on the
+simulator, which has no display modes to switch between.
 
-**Configuring from a phone.** tvOS has no web view and no usable keyboard, so anything that
-needs typing is handed to a phone on the same network. The addon configurator renders the
-addon's own configure URL as a QR code and takes the resulting manifest URL back. The stream
-format editor goes further: the Apple TV serves the form itself over HTTP, and whatever the
-phone saves lands straight in settings — which is the only sane way to enter a line like
-`{stream.size::>0["{stream.size::bytes} "||""]}`.
+**Configuring from a phone.** tvOS has no web view and no usable keyboard, so anything that needs
+typing is handed to a phone on the same network. The addon configurator renders the addon's own
+configure URL as a QR code and takes the resulting manifest URL back. Beyond that the Apple TV
+serves the form itself over HTTP and whatever the phone saves lands straight in settings — which is
+the only sane way to enter a line like `{stream.size::>0["{stream.size::bytes} "||""]}`. Five pages
+now: the stream format editor, the stream badge rules, the plugin repositories, the custom poster
+URL, and the custom theme's accent colour — the last of which uses the phone's own colour picker,
+because choosing a hue with a D-pad is the reason such controls go untouched.
 
 ## Verification status
 
@@ -215,6 +230,12 @@ Trakt, Simkl, TMDB, MDBList and Nuvio-account clients are written against the re
 layer against the Android source itself, so endpoints, RPC names and row shapes match — but have
 **not** been run against live accounts or a live backend, because no credentials were available.
 Treat those paths as untested.
+
+Two claims in this file are architectural rather than measured, and they are the largest untested
+assertions here: **Dolby Vision profile 7**, handled in-engine where ExoPlayer needs a thirteen-file
+workaround stack, and **AV1**, decoded by dav1d where the A15 has no hardware path and AVFoundation
+refuses. Both follow from what libmpv and the vendored libraries do; neither has been watched on a
+television.
 
 ## Build & run
 

@@ -16,6 +16,16 @@ struct RootView: View {
     /// Latched once at appearance rather than recomputed: the walk-through must not vanish
     /// under the viewer the moment they install their first add-on in step three.
     @State private var showsFirstRun: Bool?
+    /// Latched the first time the shell settles, so the splash is a launch event rather than
+    /// something that can return when a later refresh happens to empty the rails.
+    @State private var startupComplete = false
+
+    /// Where this launch is heading, as the splash rule reads it.
+    private var splashDestination: StartupSplashPolicy.Destination {
+        if showsFirstRun == true { return .setup }
+        if showsFirstRun == nil { return .loading }
+        return router.path.isEmpty ? .home : .content
+    }
 
     var body: some View {
         @Bindable var router = router
@@ -30,6 +40,22 @@ struct RootView: View {
         }
 
         .background(colors.background)
+        .overlay {
+            if StartupSplashPolicy.showsSplash(
+                enabled: settings.app.startupSplashEnabled,
+                isComplete: startupComplete,
+                destination: splashDestination
+            ) {
+                StartupSplashView()
+                    .transition(.opacity)
+            }
+        }
+        .task {
+            // Ends on the first frame the shell has something to show, or after a bound — a
+            // splash that waits on a dead network is a logo the viewer cannot get past.
+            try? await Task.sleep(for: .milliseconds(650))
+            withAnimation(NuvioMotion.mediumTween) { startupComplete = true }
+        }
         .fullScreenCover(isPresented: Binding(
             get: { showsFirstRun == true },
             set: { if !$0 { showsFirstRun = false } }
@@ -167,6 +193,8 @@ struct RootView: View {
             RepositoryConfigView()
         case .customPoster:
             CustomPosterView()
+        case .customTheme:
+            CustomThemeView()
         case .catalogOrder:
             CatalogOrderView()
         case .themeSettings:
@@ -203,5 +231,29 @@ struct NuvioScreenBackground<Content: View>: View {
         // ownership for the screens that live inside it; this keeps a pushed screen in step with
         // them. Vertical is left alone.
         .ignoresSafeArea(edges: .horizontal)
+    }
+}
+
+/// The branded launch screen, gated by `StartupSplashPolicy`.
+///
+/// Deliberately plain: it stands in front of the app for well under a second, and anything that
+/// animates in that window reads as a stutter rather than as polish. The accent follows the
+/// viewer's theme so the very first frame is already their app rather than a stock one.
+struct StartupSplashView: View {
+    @Environment(\.nuvioColors) private var colors
+
+    var body: some View {
+        ZStack {
+            colors.background.ignoresSafeArea()
+            VStack(spacing: NuvioTheme.spacing.lg) {
+                Image(systemName: "play.square.stack.fill")
+                    .font(.system(size: dp(88), weight: .semibold))
+                    .foregroundStyle(colors.secondary)
+                Text("Nuvio")
+                    .nuvioText(NuvioTextStyles.display)
+                    .foregroundStyle(colors.textPrimary)
+            }
+        }
+        .accessibilityIdentifier("startup.splash")
     }
 }

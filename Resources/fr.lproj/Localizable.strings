@@ -6,6 +6,9 @@
 "navigation.settings" = "Réglages";
 
 /* Player */
+"player.sync_to_line" = "Caler sur une réplique";
+"player.sync_to_line_detail" = "Choisissez la réplique prononcée à l’instant";
+"player.sync_no_lines" = "Aucune réplique près de ce point";
 "player.audio" = "Piste audio";
 "player.subtitles" = "Sous-titres";
 "player.sources" = "Sources";
@@ -113,6 +116,7 @@
 "licenses.native_body" = "Rendu des sous-titres, gestion des couleurs, décodage AV1 et couche Vulkan-sur-Metal qui dessine l'image. Chacun conserve sa licence d'origine — ISC, LGPL, BSD et Apache 2.0 respectivement.";
 
 /* Fiche & diagnostics du lecteur */
+"detail.play" = "Lire";
 "detail.trailers" = "Bandes-annonces";
 "detail.trailer" = "Bande-annonce";
 "player.no_audio_device" = "Aucune sortie audio";
@@ -275,6 +279,22 @@
 "shell.switch_profile" = "Changer de profil";
 
 /* SettingsView.swift */
+"settings.appearance.startup" = "Démarrage";
+"settings.appearance.startup_footnote" = "Affiché uniquement au lancement vers l’accueil — jamais devant un titre ouvert directement.";
+"settings.appearance.splash" = "Écran de lancement";
+"settings.appearance.splash_subtitle" = "Afficher la marque Nuvio pendant le démarrage";
+"settings.appearance.custom_theme" = "Personnalisé";
+"settings.appearance.custom_colour" = "Couleur d’accent";
+"settings.appearance.custom_colour_sub" = "Définir la valeur hexadécimale depuis un téléphone";
+"settings.appearance.set_on_phone" = "Définir depuis un téléphone";
+"settings.appearance.custom_instructions" = "Cette Apple TV sert une page sur votre réseau. Scannez le code avec un téléphone sur le même Wi-Fi et choisissez-y une couleur. Le reste de la palette en découle, comme pour chaque thème intégré.";
+"settings.appearance.custom_preview" = "Aperçu";
+"settings.appearance.custom_preview_footnote" = "C’est l’anneau de focus qu’il faut juger — c’est lui qui vous dit où vous êtes.";
+"settings.appearance.swatch_accent" = "Accent";
+"settings.appearance.swatch_pressed" = "Appuyé";
+"settings.appearance.swatch_focus" = "Focus";
+"settings.appearance.swatch_card" = "Carte";
+"settings.appearance.swatch_focused" = "Sélectionné";
 "settings.appearance.accent_theme" = "Thème d’accentuation";
 "settings.appearance.typeface" = "Police";
 "settings.appearance.currently_in_use" = "Actuellement utilisée";

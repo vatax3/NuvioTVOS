@@ -3,16 +3,23 @@
 Nuvio for Apple TV is a port of [NuvioMedia/NuvioTV](https://github.com/NuvioMedia/NuvioTV), the
 Android TV app. This file records how far the port has been reconciled against it.
 
-**Reconciled through: `0.8.9-beta` (2026-08-25).**
+**Reconciled through: `1.1.0-beta.2` (2026-09-25).**
+
+> The per-release tables below stop at `0.8.9-beta`. Everything after it is reconciled in
+> [PARITY-AUDIT.md](PARITY-AUDIT.md), window by window — 0.8.12-beta, 1.0.0 and 1.1.0-beta.2 each
+> have a section there with the same three verdicts. The tables were not backfilled because two
+> documents answering one question is how a status goes stale, which this project has now had
+> happen three times. **This file owns the marker and the pre-0.8.9 history; the audit owns
+> everything since.**
 
 That sentence is the whole point of this file, and it is deliberately not "we have the same
 features as 0.8.7". A shared version number would claim an equality that cannot exist: roughly a
 third of every upstream release is ExoPlayer, Compose or Android TV platform work with no tvOS
 counterpart. What is claimed here is narrower and checkable — **every upstream release up to and
-including 0.8.9 has been read, and each change in it was ported, judged not applicable, or
+including 1.1.0-beta.2 has been read, and each change in it was ported, judged not applicable, or
 declined for a stated reason.**
 
-The two version lines are therefore independent. Ours is `1.0.x`; theirs is `0.8.x-beta`. They
+The two version lines are therefore independent. Ours is `1.0.x`; theirs is `1.1.x-beta`. They
 ship roughly twice a week from about ten contributors, so a lockstep number would be wrong within
 a week of being set, and would force empty releases to keep it true.
 
@@ -20,8 +27,13 @@ a week of being set, and would force empty releases to keep it true.
 
 1. `gh release list --repo NuvioMedia/NuvioTV` and read every release published after the tag
    named above.
-2. Put each changelog line into one of the three tables below.
-3. Port what belongs in the first table, then move the marker.
+2. **Read from a detached worktree at the tag**, not from the local snapshot. The snapshot sits at
+   whatever was last checked out, and reading a newer tag against it shows every intervening change
+   as a deletion — which is how one pass in September reported a release window backwards.
+3. Put each changelog line into one of the three verdicts: ported, not applicable, or declined.
+   Before 0.8.9 those are the tables below; since then they are a section in
+   [PARITY-AUDIT.md](PARITY-AUDIT.md).
+4. Port what belongs in the first, then move the marker at the top of this file.
 
 A line that is genuinely hard to classify usually belongs in **declined** with the doubt written
 down, not in **ported** with an optimistic guess.
@@ -104,3 +116,20 @@ Not ported, on purpose.
 | Keep poster art when episode thumbnails are off | 0.8.5 | Same. |
 | Redesign episode options overlay | 0.8.7 | Our in-player panels were designed against the iOS and macOS apps and already diverge deliberately. |
 | Localization updates | 0.8.5, 0.8.7 | Our strings are our own; `Resources/*.lproj` is not generated from theirs. |
+
+## Declined since 0.8.9
+
+The same verdict, for the three windows the audit covers. Each is argued at length in
+[PARITY-AUDIT.md](PARITY-AUDIT.md); this is the list.
+
+| Upstream | Window | Why |
+|---|---|---|
+| **TorrServer, and its replacement by their own torrent engine** | 1.0.0, 1.1.0-beta.2 | Not a choice about engines. Upstream ships a native binary and starts it with `ProcessBuilder`; tvOS allows neither a subprocess nor downloaded executable code, so the design cannot be carried across whichever engine is inside it. Debrid is declared a requirement in the README. |
+| **The parallel chunked downloader** | 0.8.12-beta, extended since | 1,352 lines whose only product is throughput, shipped **off by default** upstream with a speed tester to justify enabling it. mpv's cache cannot close the gap — a cache smooths variability, it does not raise a per-connection ceiling — so the shape here would be a local proxy. Gated on measuring a real ceiling on hardware, which has not been done. |
+| **Post-credits detection extended to series outros** | 1.0.0 | Ported for films and declined for series. Their series route cannot return an explicit `post_credits` mark, so on series the change is a five-second-tail heuristic alone — and almost every episode has more than five seconds of black, a studio card or a next-episode preview after its ending. It would relabel most endings as leading to a scene that is not there. |
+| **MDBList's snapshot-and-journal delta engine** | 1.1.0-beta.2 | Most of the thirty-five files: a durable snapshot kept current by an activities watermark, journal replay and a 409 full-resync. It serves their cached-snapshot design; our tracker screens fetch when they appear, so there is no snapshot for a journal to be applied against. Everything a viewer can see *is* ported. |
+| **A three-colour custom theme with an on-screen colour picker** | 1.0.0 | The palette is ported; the picker is not. Choosing a hue with a D-pad is slow and imprecise, and is the reason such controls go untouched. The hex goes to a phone through `LocalConfigServer` instead, and the other two colours are derived — which is the relationship the seven presets already have. |
+| **Stable and beta update channels** | 1.0.0 | Blocked rather than refused: our updater reads the sideloading feed, and the feed has one channel. Needs a second feed or a flag in the existing one before the setting could mean anything. |
+| **RTL layout and text direction** (~20 commits) | 1.1.0-beta.2 | N/A while the app ships English and French. Becomes real the day a right-to-left table is added. |
+| **Their localisation updates** | every window | Same as above: our strings are our own. The gap that remains is *languages* — two against thirty-six — which is translation work, not engineering. |
+| **Supporter perks** | 0.8.7 | Monetisation belongs to the upstream project. |

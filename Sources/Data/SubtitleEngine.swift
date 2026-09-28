@@ -348,3 +348,57 @@ enum SubtitleSelector {
         }
     }
 }
+
+// MARK: - Syncing by line
+
+/// Correcting subtitle timing by pointing at a line instead of nudging a number.
+///
+/// Port of upstream's `SubtitleTimingDialog`, and the reason it is worth having is that the
+/// alternative does not work on a remote: a subtitle file that is four and a half seconds out
+/// takes eighteen presses of a 0.25s step to correct, with the picture obscured by the panel the
+/// whole time. Pointing at the line being spoken is one press.
+///
+/// The arithmetic is one subtraction, which upstream's fix wrote as `VideoMs − subtitleDelayMs`.
+/// The part that needs care is *which* lines to offer: they have to be found at the position the
+/// cue list is currently being read at, not at the playback clock, or the list walks away from
+/// the viewer by exactly the delay they are trying to correct.
+enum SubtitleSyncByLine {
+    /// How many lines to show either side of the current one. Enough to find the line just spoken
+    /// on a badly-timed file, few enough to stay on one screen at remote-reading distance.
+    static let radius = 6
+
+    /// The delay that would put `cue` on screen at `videoTime`.
+    ///
+    /// Positive means later, matching mpv's `sub-delay`. Clamped to the same limit the stepper
+    /// uses, so the two controls cannot disagree about what is reachable.
+    static func delay(
+        toPlay cue: SubtitleCue, at videoTime: Double, limit: Double
+    ) -> Double {
+        min(limit, max(-limit, videoTime - cue.start))
+    }
+
+    /// The lines to offer, and which of them is the current one.
+    ///
+    /// - Parameter cueClock: the playback position *minus* the delay already applied — the point
+    ///   in the subtitle file currently being read. Passing the raw playback clock instead is the
+    ///   bug upstream fixed on 27 September.
+    static func candidates(
+        in cues: [SubtitleCue], cueClock: Double, radius: Int = radius
+    ) -> (lines: [SubtitleCue], currentIndex: Int) {
+        guard !cues.isEmpty else { return ([], 0) }
+        let ordered = cues.sorted { $0.start < $1.start }
+        // The line being spoken, or the next one due — never the last one that finished, because
+        // on a file that is running early that is already the wrong answer.
+        let anchor = ordered.firstIndex { $0.end > cueClock } ?? ordered.count - 1
+        let lower = max(0, anchor - radius)
+        let upper = min(ordered.count - 1, anchor + radius)
+        return (Array(ordered[lower...upper]), anchor - lower)
+    }
+
+    /// How the offer reads on screen: the line, and what choosing it would do.
+    static func offsetLabel(for cue: SubtitleCue, at videoTime: Double) -> String {
+        let seconds = videoTime - cue.start
+        if abs(seconds) < 0.05 { return "0.0s" }
+        return String(format: "%+.1fs", seconds)
+    }
+}

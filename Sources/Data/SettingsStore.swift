@@ -53,9 +53,25 @@ final class SettingsStore: PreferenceStore {
         set { setOption("selected_theme", newValue) }
     }
 
+    /// `custom_theme_colors`, as one accent rather than three. Read only when `theme` is
+    /// `.custom`; see `CustomThemePalette` for why the other two are derived rather than asked
+    /// for, and why the value is typed on a phone.
+    var customThemeAccentHex: String {
+        get { string("custom_theme_accent", default: CustomThemePalette.defaultHex) }
+        set { setString("custom_theme_accent", newValue) }
+    }
+
     var font: AppFont {
         get { option("selected_font", default: .inter) }
         set { setOption("selected_font", newValue) }
+    }
+
+    /// `startup_splash_enabled`. Off by default, unlike upstream's: a sideloaded app is opened
+    /// by someone who already knows what they installed, and a logo between them and Home is a
+    /// delay rather than a welcome. Offered because it is a taste, not because it is a default.
+    var startupSplashEnabled: Bool {
+        get { bool("startup_splash_enabled", default: false) }
+        set { setBool("startup_splash_enabled", newValue) }
     }
 
     var amoledMode: Bool {
@@ -114,7 +130,7 @@ final class SettingsStore: PreferenceStore {
 
     var colors: NuvioColorScheme {
         NuvioColorScheme(
-            palette: ThemeColors.palette(for: theme),
+            palette: ThemeColors.palette(for: theme, accentHex: customThemeAccentHex),
             amoledMode: amoledMode,
             amoledSurfaces: amoledSurfaces
         )

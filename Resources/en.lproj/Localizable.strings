@@ -6,6 +6,9 @@
 "navigation.settings" = "Settings";
 
 /* Player */
+"player.sync_to_line" = "Sync to a line";
+"player.sync_to_line_detail" = "Pick the line being spoken now";
+"player.sync_no_lines" = "No lines near this point";
 "player.audio" = "Audio";
 "player.subtitles" = "Subtitles";
 "player.sources" = "Sources";
@@ -113,6 +116,7 @@
 "licenses.native_body" = "Subtitle rendering, colour management, AV1 decoding and the Vulkan-on-Metal layer that draws the picture. Each retains its upstream licence — ISC, LGPL, BSD and Apache 2.0 respectively.";
 
 /* Detail & player diagnostics */
+"detail.play" = "Play";
 "detail.trailers" = "Trailers";
 "detail.trailer" = "Trailer";
 "player.no_audio_device" = "No audio device";
@@ -275,6 +279,22 @@
 "shell.switch_profile" = "Switch profile";
 
 /* SettingsView.swift */
+"settings.appearance.startup" = "Startup";
+"settings.appearance.startup_footnote" = "Shown only on a launch heading for Home — never in front of a title you opened directly.";
+"settings.appearance.splash" = "Launch screen";
+"settings.appearance.splash_subtitle" = "Show the Nuvio mark while the app starts";
+"settings.appearance.custom_theme" = "Custom";
+"settings.appearance.custom_colour" = "Accent colour";
+"settings.appearance.custom_colour_sub" = "Set the hex value from a phone";
+"settings.appearance.set_on_phone" = "Set from a phone";
+"settings.appearance.custom_instructions" = "This Apple TV is serving a page on your network. Scan the code with a phone on the same Wi-Fi and pick a colour there. The rest of the palette follows from it, the way each built-in theme's does.";
+"settings.appearance.custom_preview" = "Preview";
+"settings.appearance.custom_preview_footnote" = "The focus ring is the one to judge — it is what tells you where you are.";
+"settings.appearance.swatch_accent" = "Accent";
+"settings.appearance.swatch_pressed" = "Pressed";
+"settings.appearance.swatch_focus" = "Focus";
+"settings.appearance.swatch_card" = "Card";
+"settings.appearance.swatch_focused" = "Focused";
 "settings.appearance.accent_theme" = "Accent theme";
 "settings.appearance.typeface" = "Typeface";
 "settings.appearance.currently_in_use" = "Currently in use";

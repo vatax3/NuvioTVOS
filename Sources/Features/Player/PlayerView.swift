@@ -232,6 +232,12 @@ struct PlayerView: View {
                 subtitleLanguages: settings.subtitleTrackLanguages,
                 prefersForcedSubtitles: settings.player.subtitleUseForcedSubtitles,
                 subtitleStyle: settings.subtitleStyle,
+                addonCues: subtitles.cues,
+                addonCueClock: subtitles.cueClock,
+                // One viewer-facing number, two renderers: mpv's `sub-delay` moves the tracks mpv
+                // draws, `subtitles.delay` moves the addon track this process draws. The engine
+                // applies its own half and reports the number here, so the two cannot drift.
+                onSubtitleDelayChange: { subtitles.delay = $0 },
                 seekTarget: requestedSeek,
                 onSeekApplied: { requestedSeek = nil },
                 pauseRequest: requestedPause,
