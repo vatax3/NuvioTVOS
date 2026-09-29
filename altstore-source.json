@@ -40,6 +40,16 @@
       ],
       "versions": [
         {
+          "version": "1.0.42",
+          "buildVersion": "44",
+          "date": "2026-09-29",
+          "localizedDescription": "## The Episodes button no longer crashes\n\nThe in-player Episodes panel — the list icon next to play/pause — quit the app\ninstead of opening, for every series, and had done since it was added. A season\nnumber was being formatted as if it were text.\n\n## Stream information can be scrolled now\n\nThe panel opened and then refused to move: everything past the first screenful was\nunreachable, including the colour-range rows added in 1.0.38. Press Down from the\nclose button and the rows scroll as you go.\n\nIf you are chasing an HDR problem, this is the screen that answers it — compare\n**Source range** with **Output range**. The same means the picture reaches your\ntelevision as it was made; different means something converted it on the way.\n\n## A French rail no longer says \"Films Movies\"\n\nThe word Nuvio adds after a catalog name was hardcoded in English. It follows the\napp's language now.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.42/Nuvio-1.0.42-tvOS-unsigned.ipa",
+          "size": 32193142,
+          "minOSVersion": "17.0",
+          "sha256": "361023fd0b329c42e9b9525e9c2a5a5d4baef5b8fd892aa216b1d6a18a599335"
+        },
+        {
           "version": "1.0.41",
           "buildVersion": "43",
           "date": "2026-09-28",
@@ -336,11 +346,11 @@
         ],
         "privacy": {}
       },
-      "version": "1.0.41",
-      "versionDate": "2026-09-28",
-      "versionDescription": "## Install this one rather than 1.0.40\n\n1.0.40 moved your library and your resume points into storage the Apple TV cannot\nclear — and left a gap: the protected copy was only written the next time you added\nor removed something. If you had not touched your library in a while, it stayed\nunprotected.\n\nIt is now written the first time the app opens. Everything else is as 1.0.40.",
-      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.41/Nuvio-1.0.41-tvOS-unsigned.ipa",
-      "size": 32190139,
+      "version": "1.0.42",
+      "versionDate": "2026-09-29",
+      "versionDescription": "## The Episodes button no longer crashes\n\nThe in-player Episodes panel — the list icon next to play/pause — quit the app\ninstead of opening, for every series, and had done since it was added. A season\nnumber was being formatted as if it were text.\n\n## Stream information can be scrolled now\n\nThe panel opened and then refused to move: everything past the first screenful was\nunreachable, including the colour-range rows added in 1.0.38. Press Down from the\nclose button and the rows scroll as you go.\n\nIf you are chasing an HDR problem, this is the screen that answers it — compare\n**Source range** with **Output range**. The same means the picture reaches your\ntelevision as it was made; different means something converted it on the way.\n\n## A French rail no longer says \"Films Movies\"\n\nThe word Nuvio adds after a catalog name was hardcoded in English. It follows the\napp's language now.",
+      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.42/Nuvio-1.0.42-tvOS-unsigned.ipa",
+      "size": 32193142,
       "minOSVersion": "17.0"
     }
   ],
