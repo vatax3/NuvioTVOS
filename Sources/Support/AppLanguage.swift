@@ -55,7 +55,17 @@ extension L10n {
         NSLocalizedString(key, bundle: table, value: fallback ?? key, comment: "")
     }
 
-    static func format(_ key: String, fallback: String, _ arguments: CVarArg...) -> String {
+    /// A localised string with values substituted into it.
+    ///
+    /// **`String` rather than `CVarArg`, and that is the whole point of this signature.** With
+    /// `CVarArg` the compiler accepts an `Int` for a `%@`, and `String(format:)` then reads the
+    /// integer as an object pointer and crashes — which is what the in-player Episodes panel did
+    /// for every series, from the day it shipped, because it passed a season number to
+    /// `"Season %@"`. Requiring `String` turns that into a compile error.
+    ///
+    /// The tables therefore use `%@` and nothing else, which is also the kinder contract for a
+    /// translator: one specifier to recognise, and no way to reorder it into a type mismatch.
+    static func format(_ key: String, fallback: String, _ arguments: String...) -> String {
         String(format: text(key, fallback: fallback), locale: .current, arguments: arguments)
     }
 }

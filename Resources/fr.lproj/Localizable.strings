@@ -1,3 +1,8 @@
+"catalog.suffix_movies" = "Films";
+"catalog.suffix_series" = "Séries";
+"catalog.suffix_channels" = "Chaînes";
+"catalog.suffix_tv" = "TV";
+"catalog.suffix_anime" = "Animes";
 /* Application shell */
 "navigation.home" = "Accueil";
 "navigation.discover" = "Découvrir";
@@ -94,7 +99,7 @@
 "player.reset_subtitle_delay" = "Réinitialiser le décalage";
 "player.amplification" = "Amplification (PCM)";
 "player.delay_range" = "Plage : %@ à %@";
-"player.amplification_range" = "Plage : %d dB à %d dB";
+"player.amplification_range" = "Plage : %@ dB à %@ dB";
 "player.audio_default_only" = "Ce fichier ne contient qu'une seule piste audio.";
 
 /* À propos & licences */

@@ -76,8 +76,19 @@ struct InPlayerPanel<Content: View>: View {
                     // Every player panel is vertically scrollable.  This is critical on tvOS:
                     // focus scrolls the list automatically as the viewer moves down tracks,
                     // sources, or picture modes with the Siri Remote.
+                    //
+                    // **Which means the content has to be focusable, and that was an assumption
+                    // rather than a rule.** Stream information is read-only text, so the only
+                    // focusable view in that panel was the close button — nothing could take
+                    // focus downward, so nothing scrolled, and everything below the fold was
+                    // unreachable. `InPlayerInfoRow` is focusable for this reason alone.
+                    //
+                    // `VStack`, not `LazyVStack`: a row that has not been realised yet is not a
+                    // focus target either, which is the same deadlock from the other end — it is
+                    // how 1.0.37 made every catalog rail unreachable. A panel holds tens of rows,
+                    // so there is nothing to gain by deferring them.
                     ScrollView(.vertical, showsIndicators: true) {
-                        LazyVStack(alignment: .leading, spacing: NuvioTheme.spacing.md) {
+                        VStack(alignment: .leading, spacing: NuvioTheme.spacing.md) {
                             content()
                         }
                         .padding(NuvioTheme.spacing.lg)
@@ -243,8 +254,19 @@ struct InPlayerPanelRow: View {
     }
 }
 
+/// A label and a value, and — on tvOS — a focus target.
+///
+/// Focusable despite doing nothing when pressed, because on this platform a scroll view only
+/// moves when focus moves into it. A panel made of these had exactly one focusable view, its own
+/// close button, so the rows below the fold could not be reached at all. That is what hid the
+/// colorimetry rows added in 1.0.38 — the diagnostic was shipped and then made unreadable.
+///
+/// The focus treatment is a surface rather than the row style used by the actionable rows: this
+/// one is a reading position, and drawing it like a button would promise a press that does
+/// nothing.
 struct InPlayerInfoRow: View {
     @Environment(\.nuvioColors) private var colors
+    @FocusState private var focused: Bool
     let title: String
     let value: String
 
@@ -262,6 +284,15 @@ struct InPlayerInfoRow: View {
         }
         .padding(.horizontal, NuvioTheme.spacing.md)
         .padding(.vertical, NuvioTheme.spacing.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: NuvioTheme.radii.md, style: .continuous)
+                .fill(focused ? colors.surfaceVariant.opacity(0.55) : .clear)
+        }
+        .focusable()
+        .focusEffectDisabled()
+        .focused($focused)
+        .animation(NuvioMotion.quickTween, value: focused)
     }
 }
 

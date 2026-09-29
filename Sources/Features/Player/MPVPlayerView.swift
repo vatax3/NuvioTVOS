@@ -1014,8 +1014,8 @@ struct MPVPlayerView: View {
                     title: L10n.text("player.amplification"),
                     value: "\(engine.amplificationDb) dB",
                     helper: L10n.format(
-                        "player.amplification_range", fallback: "Range: %d dB to %d dB",
-                        0, MPVEngine.amplificationLimitDb
+                        "player.amplification_range", fallback: "Range: %@ dB to %@ dB",
+                        "0", String(MPVEngine.amplificationLimitDb)
                     ),
                     canDecrease: engine.amplificationDb > 0,
                     canIncrease: engine.amplificationDb < MPVEngine.amplificationLimitDb,

@@ -34,7 +34,7 @@ struct InPlayerEpisodesView: View {
                     HStack(spacing: NuvioTheme.spacing.xs) {
                         ForEach(seasons, id: \.self) { season in
                             Button(action: { selectedSeason = season }) {
-                                Text(L10n.format("player.season_format", fallback: "Season %@", season))
+                                Text(L10n.format("player.season_format", fallback: "Season %@", String(season)))
                                     .nuvioText(NuvioTextStyles.metadata)
                                     .foregroundStyle(selectedSeason == season ? colors.textPrimary : colors.textSecondary)
                                     .padding(.horizontal, NuvioTheme.spacing.md)
@@ -57,7 +57,7 @@ struct InPlayerEpisodesView: View {
                     InPlayerInfoRow(title: L10n.text("common.unavailable"), value: error)
                 }
             } else {
-                InPlayerPanelSection(title: L10n.format("player.season_format", fallback: "Season %@", selectedSeason)) {
+                InPlayerPanelSection(title: L10n.format("player.season_format", fallback: "Season %@", String(selectedSeason))) {
                     ForEach(Array(episodes.enumerated()), id: \.element.id) { index, episode in
                         InPlayerPanelRow(
                             title: episodeLabel(episode),

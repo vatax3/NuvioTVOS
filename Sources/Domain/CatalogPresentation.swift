@@ -30,13 +30,19 @@ struct CatalogPresentation: Equatable {
         showsAddonName ? addon.displayName : nil
     }
 
+    /// Localised, unlike the rest of this file's output — every other string here is a name the
+    /// addon published, and this is the one word the app adds itself. Left in English it turned a
+    /// French rail into "Sorties numériques - Films Movies".
+    ///
+    /// The `default` branch stays untranslated on purpose: it is an addon's own type string, and
+    /// inventing a translation for a namespace we have never seen would be worse than echoing it.
     private func typeSuffix(for apiType: String) -> String? {
         switch apiType.lowercased() {
-        case "movie": return "Movies"
-        case "series": return "Series"
-        case "channel": return "Channels"
-        case "tv": return "TV"
-        case "anime": return "Anime"
+        case "movie": return L10n.text("catalog.suffix_movies", fallback: "Movies")
+        case "series": return L10n.text("catalog.suffix_series", fallback: "Series")
+        case "channel": return L10n.text("catalog.suffix_channels", fallback: "Channels")
+        case "tv": return L10n.text("catalog.suffix_tv", fallback: "TV")
+        case "anime": return L10n.text("catalog.suffix_anime", fallback: "Anime")
         default: return apiType.isEmpty ? nil : apiType.capitalized
         }
     }

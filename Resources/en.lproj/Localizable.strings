@@ -1,3 +1,8 @@
+"catalog.suffix_movies" = "Movies";
+"catalog.suffix_series" = "Series";
+"catalog.suffix_channels" = "Channels";
+"catalog.suffix_tv" = "TV";
+"catalog.suffix_anime" = "Anime";
 /* Application shell */
 "navigation.home" = "Home";
 "navigation.discover" = "Discover";
@@ -94,7 +99,7 @@
 "player.reset_subtitle_delay" = "Reset subtitle delay";
 "player.amplification" = "Amplification (PCM)";
 "player.delay_range" = "Range: %@ to %@";
-"player.amplification_range" = "Range: %d dB to %d dB";
+"player.amplification_range" = "Range: %@ dB to %@ dB";
 "player.audio_default_only" = "This file carries a single audio track.";
 
 /* About & licences */
