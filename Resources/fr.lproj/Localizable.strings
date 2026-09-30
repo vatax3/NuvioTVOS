@@ -11,6 +11,7 @@
 "navigation.settings" = "Réglages";
 
 /* Player */
+"player.range_unreported" = "Non communiqué par mpv";
 "player.sync_to_line" = "Caler sur une réplique";
 "player.sync_to_line_detail" = "Choisissez la réplique prononcée à l’instant";
 "player.sync_no_lines" = "Aucune réplique près de ce point";

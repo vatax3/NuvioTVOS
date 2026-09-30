@@ -11,6 +11,7 @@
 "navigation.settings" = "Settings";
 
 /* Player */
+"player.range_unreported" = "Not reported by mpv";
 "player.sync_to_line" = "Sync to a line";
 "player.sync_to_line_detail" = "Pick the line being spoken now";
 "player.sync_no_lines" = "No lines near this point";

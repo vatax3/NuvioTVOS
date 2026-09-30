@@ -577,6 +577,15 @@ final class MPVEngine {
             // proves the decoder produced a video configuration for the renderer; setting the
             // flag at load time made the first-frame watchdog permanently blind.
             hasRenderedFrame = true
+            // And it is the first moment `video-params` carries a colorimetry, which the
+            // file-loaded pass above reads a beat too early — the comment two lines up says why.
+            //
+            // That cost more than a blank row. `videoFormat` is built in the same call, so the
+            // criteria handed to `AVDisplayManager` carried a frame rate and **no transfer
+            // function**: 1.0.38 stopped suppressing display matching, and the dynamic range we
+            // then sent was empty anyway. `videoFormat` is observed, so re-reading it here
+            // re-applies the criteria with what the decoder actually reported.
+            refreshStreamInfo()
 
         case MPV_EVENT_END_FILE:
             guard let data = event.pointee.data else { return }

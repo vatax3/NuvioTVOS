@@ -1313,8 +1313,22 @@ struct MPVPlayerView: View {
                 // Source against output. Equal means the picture reaches the panel as authored;
                 // different means it is being converted on the way, which is what "the HDR looks
                 // wrong" turns out to be. See `StreamInfo.outputRange`.
-                infoRow(L10n.text("player.source_range", fallback: "Source range"), engine.streamInfo.sourceRange)
-                infoRow(L10n.text("player.output_range", fallback: "Output range"), engine.streamInfo.outputRange)
+                // Always drawn, unlike every other row here, and `infoRow` would hide them.
+                //
+                // A missing reading is the answer, not the absence of one: it means mpv is not
+                // exposing the property, and on the panel that is indistinguishable from the
+                // diagnostic never having been built. This one has now failed to diagnose twice
+                // — once because the panel would not scroll, once because it hid itself.
+                InPlayerInfoRow(
+                    title: L10n.text("player.source_range", fallback: "Source range"),
+                    value: engine.streamInfo.sourceRange
+                        ?? L10n.text("player.range_unreported", fallback: "Not reported by mpv")
+                )
+                InPlayerInfoRow(
+                    title: L10n.text("player.output_range", fallback: "Output range"),
+                    value: engine.streamInfo.outputRange
+                        ?? L10n.text("player.range_unreported", fallback: "Not reported by mpv")
+                )
                 InPlayerInfoRow(
                     title: L10n.text("player.display_matching", fallback: "Display matching"),
                     value: DisplayModeMatcher.isMatchingAllowedByTheSystem
