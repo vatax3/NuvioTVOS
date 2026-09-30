@@ -40,6 +40,16 @@
       ],
       "versions": [
         {
+          "version": "1.0.43",
+          "buildVersion": "45",
+          "date": "2026-09-30",
+          "localizedDescription": "## The colour ranges were read too early to exist\n\nThe stream information panel showed no **Source range** or **Output range** at all.\nThey were not blank — they were absent, which on screen looks the same as a feature\nthat was never built.\n\nBoth are read the moment the file opens, which is before the decoder has worked out\nwhat the picture is. They are read again once it has.\n\n**The same reading builds what Nuvio tells your television about the picture.** So\nthe frame rate was being sent and the dynamic range may well have been empty — which\nis the thing 1.0.38 claimed to fix. That is the real repair here; the missing rows\nwere only what made it visible.\n\nThe two rows are now always drawn, and say \"Not reported by mpv\" when there is\nnothing to report. That is an answer too.\n\n## Your Apple TV is ignoring all of it\n\nYour panel says **Adaptation de l'écran: Désactivée dans les réglages Apple TV**.\nNuvio asks; tvOS declines, because content matching is switched off on the device.\n\nRéglages → Vidéo et audio → **Adapter le contenu** → both switches on. Nothing in the\napp can override that, by design — it is the viewer's setting, not ours.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.43/Nuvio-1.0.43-tvOS-unsigned.ipa",
+          "size": 32193245,
+          "minOSVersion": "17.0",
+          "sha256": "f7a09ba9d3fe4784f71972cb3e7ac763db3ffa4ac31adb3e53ed62ccda941757"
+        },
+        {
           "version": "1.0.42",
           "buildVersion": "44",
           "date": "2026-09-29",
@@ -346,11 +356,11 @@
         ],
         "privacy": {}
       },
-      "version": "1.0.42",
-      "versionDate": "2026-09-29",
-      "versionDescription": "## The Episodes button no longer crashes\n\nThe in-player Episodes panel — the list icon next to play/pause — quit the app\ninstead of opening, for every series, and had done since it was added. A season\nnumber was being formatted as if it were text.\n\n## Stream information can be scrolled now\n\nThe panel opened and then refused to move: everything past the first screenful was\nunreachable, including the colour-range rows added in 1.0.38. Press Down from the\nclose button and the rows scroll as you go.\n\nIf you are chasing an HDR problem, this is the screen that answers it — compare\n**Source range** with **Output range**. The same means the picture reaches your\ntelevision as it was made; different means something converted it on the way.\n\n## A French rail no longer says \"Films Movies\"\n\nThe word Nuvio adds after a catalog name was hardcoded in English. It follows the\napp's language now.",
-      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.42/Nuvio-1.0.42-tvOS-unsigned.ipa",
-      "size": 32193142,
+      "version": "1.0.43",
+      "versionDate": "2026-09-30",
+      "versionDescription": "## The colour ranges were read too early to exist\n\nThe stream information panel showed no **Source range** or **Output range** at all.\nThey were not blank — they were absent, which on screen looks the same as a feature\nthat was never built.\n\nBoth are read the moment the file opens, which is before the decoder has worked out\nwhat the picture is. They are read again once it has.\n\n**The same reading builds what Nuvio tells your television about the picture.** So\nthe frame rate was being sent and the dynamic range may well have been empty — which\nis the thing 1.0.38 claimed to fix. That is the real repair here; the missing rows\nwere only what made it visible.\n\nThe two rows are now always drawn, and say \"Not reported by mpv\" when there is\nnothing to report. That is an answer too.\n\n## Your Apple TV is ignoring all of it\n\nYour panel says **Adaptation de l'écran: Désactivée dans les réglages Apple TV**.\nNuvio asks; tvOS declines, because content matching is switched off on the device.\n\nRéglages → Vidéo et audio → **Adapter le contenu** → both switches on. Nothing in the\napp can override that, by design — it is the viewer's setting, not ours.",
+      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.43/Nuvio-1.0.43-tvOS-unsigned.ipa",
+      "size": 32193245,
       "minOSVersion": "17.0"
     }
   ],
