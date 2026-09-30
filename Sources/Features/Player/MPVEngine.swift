@@ -179,6 +179,7 @@ final class MPVEngine {
         audioLanguages: [String] = [],
         subtitleLanguages: [String] = [],
         prefersForcedSubtitles: Bool = true,
+        hdrPeakDetection: HDRPeakDetection = .automatic,
         subtitleStyle: SubtitleStyle,
         initialAspectMode: AspectMode = .fit,
         layer: MPVMetalLayer
@@ -260,9 +261,21 @@ final class MPVEngine {
         setOption("subs-fallback-forced", prefersForcedSubtitles ? "yes" : "no")
         // HDR: hand the display the source colorimetry and let libplacebo tone-map what the
         // panel cannot show.
+        //
+        // A reading from a real Apple TV settled what this used to be guesswork about. On a
+        // Dolby Vision HEVC file the panel reported `pq · bt.2020` for **both** the source and
+        // the presented output — so `target-colorspace-hint` is working and the picture is not
+        // being flattened to SDR, which had been the standing suspect for a viewer's report of
+        // light that was "too dark or too bright, and varies by scene".
+        //
+        // What remains is below: we forced `hdr-compute-peak` to `yes` where mpv's own default
+        // is `auto`. Measuring every frame's peak in a path that is not converting lets the
+        // presented brightness follow the content, which is the right shape for that complaint.
+        // The override is gone; the value is the viewer's to try, because it cannot be judged
+        // from here. See `HDRPeakDetection`.
         setOption("target-colorspace-hint", "yes")
         setOption("tone-mapping", "auto")
-        setOption("hdr-compute-peak", "yes")
+        setOption("hdr-compute-peak", hdrPeakDetection.mpvValue)
         // Keep the file open at EOF so the end is a state change, not a teardown.
         setOption("keep-open", "yes")
         setOption("force-window", "no")

@@ -181,12 +181,22 @@ struct PlaybackSettingsContent: View {
 
             SettingsCard(
                 title: L10n.text("settings.playback.hdr_dv", fallback: "HDR & Dolby Vision"),
-                footnote: """
-                tvOS owns tone mapping and the Dolby Vision path. The MPV engine hands the \
-                display the source colorimetry and lets libplacebo map anything the panel \
-                cannot show.
-                """
+                footnote: L10n.text(
+                    "settings.playback.hdr_dv_footnote",
+                    fallback: """
+                    tvOS owns tone mapping and the Dolby Vision path. The MPV engine hands the \
+                    display the source colorimetry and lets libplacebo map anything the panel \
+                    cannot show. The player's stream information shows what is actually being \
+                    presented, which is the only place this is observable.
+                    """
+                )
             ) {
+                SettingsOptionRow(
+                    title: L10n.text("settings.playback.hdr_peak", fallback: "HDR peak detection"),
+                    subtitle: player.hdrPeakDetection.summary,
+                    systemImage: "sun.max",
+                    selection: $player.hdrPeakDetection
+                )
                 SettingsInfoRow(
                     title: L10n.text("settings.playback.dv_hdr_output", fallback: "Dolby Vision & HDR output"),
                     value: L10n.text("settings.playback.managed_by_tvos", fallback: "Managed by tvOS"),

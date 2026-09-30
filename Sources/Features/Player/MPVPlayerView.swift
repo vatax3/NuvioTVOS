@@ -31,6 +31,9 @@ struct MPVPlayerView: View {
     let audioLanguages: [String]
     let subtitleLanguages: [String]
     let prefersForcedSubtitles: Bool
+    /// `hdr-compute-peak`. Threaded rather than read here because the engine is also built by
+    /// the recovery path, and a retry must use the same options as the attempt it replaces.
+    let hdrPeakDetection: HDRPeakDetection
     let subtitleStyle: SubtitleStyle
     /// The addon subtitle track the host is drawing, if any, plus where it is being read.
     ///
@@ -155,6 +158,7 @@ struct MPVPlayerView: View {
                             audioMix: audioMix,
                             audioLanguages: audioLanguages, subtitleLanguages: subtitleLanguages,
                             prefersForcedSubtitles: prefersForcedSubtitles,
+            hdrPeakDetection: hdrPeakDetection,
                             subtitleStyle: subtitleStyle, initialAspectMode: initialAspectMode)
                 .ignoresSafeArea()
 
@@ -1737,6 +1741,7 @@ private struct MPVMetalSurface: UIViewControllerRepresentable {
     let audioLanguages: [String]
     let subtitleLanguages: [String]
     let prefersForcedSubtitles: Bool
+    let hdrPeakDetection: HDRPeakDetection
     let subtitleStyle: SubtitleStyle
     let initialAspectMode: MPVEngine.AspectMode
 
@@ -1747,6 +1752,7 @@ private struct MPVMetalSurface: UIViewControllerRepresentable {
             audioOutput: audioOutput, audioChannels: audioChannels, audioMix: audioMix,
             audioLanguages: audioLanguages, subtitleLanguages: subtitleLanguages,
             prefersForcedSubtitles: prefersForcedSubtitles,
+            hdrPeakDetection: hdrPeakDetection,
             subtitleStyle: subtitleStyle, initialAspectMode: initialAspectMode
         )
     }
@@ -1768,6 +1774,7 @@ final class MPVMetalViewController: UIViewController {
     private let audioLanguages: [String]
     private let subtitleLanguages: [String]
     private let prefersForcedSubtitles: Bool
+    private let hdrPeakDetection: HDRPeakDetection
     private let subtitleStyle: SubtitleStyle
     private let initialAspectMode: MPVEngine.AspectMode
 
@@ -1787,6 +1794,7 @@ final class MPVMetalViewController: UIViewController {
         audioLanguages: [String],
         subtitleLanguages: [String],
         prefersForcedSubtitles: Bool,
+        hdrPeakDetection: HDRPeakDetection,
         subtitleStyle: SubtitleStyle,
         initialAspectMode: MPVEngine.AspectMode
     ) {
@@ -1801,6 +1809,7 @@ final class MPVMetalViewController: UIViewController {
         self.audioLanguages = audioLanguages
         self.subtitleLanguages = subtitleLanguages
         self.prefersForcedSubtitles = prefersForcedSubtitles
+        self.hdrPeakDetection = hdrPeakDetection
         self.subtitleStyle = subtitleStyle
         self.initialAspectMode = initialAspectMode
         super.init(nibName: nil, bundle: nil)
@@ -1838,6 +1847,7 @@ final class MPVMetalViewController: UIViewController {
             audioLanguages: audioLanguages,
             subtitleLanguages: subtitleLanguages,
             prefersForcedSubtitles: prefersForcedSubtitles,
+            hdrPeakDetection: hdrPeakDetection,
             subtitleStyle: subtitleStyle,
             initialAspectMode: initialAspectMode,
             layer: metalLayer

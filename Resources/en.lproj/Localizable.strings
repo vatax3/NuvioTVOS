@@ -412,6 +412,8 @@
 "settings.about.update_available" = "Update available";
 
 /* PlaybackSettingsContent.swift */
+"settings.playback.hdr_peak" = "HDR peak detection";
+"settings.playback.hdr_dv_footnote" = "tvOS owns tone mapping and the Dolby Vision path. The MPV engine hands the display the source colorimetry and lets libplacebo map anything the panel cannot show. The player's stream information shows what is actually being presented, which is the only place this is observable.";
 "settings.playback.tab_general" = "General";
 "settings.playback.tab_video" = "Video";
 "settings.playback.tab_audio" = "Audio";
@@ -552,6 +554,10 @@
 "settings.playback.ask_each_time_sub" = "Choose at the moment of playback";
 
 /* IntegrationsSettingsContent.swift */
+"option.on" = "On";
+"option.hdr_peak_auto_sub" = "Let libplacebo decide — measure only when converting";
+"option.hdr_peak_on_sub" = "Always measure. Brightness can follow the scene.";
+"option.hdr_peak_off_sub" = "Never measure. Steady, and may clip highlights.";
 "option.mdblist_list" = "MDBList list";
 "settings.integrations.mdblist_account" = "MDBList account";
 "settings.integrations.mdblist_client_id_hint" = "MDBList application client id";

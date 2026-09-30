@@ -412,6 +412,8 @@
 "settings.about.update_available" = "Mise à jour disponible";
 
 /* PlaybackSettingsContent.swift */
+"settings.playback.hdr_peak" = "Détection du pic HDR";
+"settings.playback.hdr_dv_footnote" = "tvOS pilote le tone mapping et le chemin Dolby Vision. Le moteur MPV transmet à l’écran la colorimétrie source et laisse libplacebo adapter ce que la dalle ne peut pas montrer. Les informations du flux, dans le lecteur, montrent ce qui est réellement présenté — le seul endroit où c’est observable.";
 "settings.playback.tab_general" = "Général";
 "settings.playback.tab_video" = "Vidéo";
 "settings.playback.tab_audio" = "Audio";
@@ -552,6 +554,10 @@
 "settings.playback.ask_each_time_sub" = "Choisir au moment de la lecture";
 
 /* IntegrationsSettingsContent.swift */
+"option.on" = "Activé";
+"option.hdr_peak_auto_sub" = "Laisser libplacebo décider — mesurer seulement en cas de conversion";
+"option.hdr_peak_on_sub" = "Toujours mesurer. La luminosité peut suivre la scène.";
+"option.hdr_peak_off_sub" = "Ne jamais mesurer. Stable, peut écrêter les hautes lumières.";
 "option.mdblist_list" = "Liste MDBList";
 "settings.integrations.mdblist_account" = "Compte MDBList";
 "settings.integrations.mdblist_client_id_hint" = "Identifiant client de l’application MDBList";

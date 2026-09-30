@@ -166,6 +166,48 @@ enum MpvAudioOutput: String, SettingsOption {
     }
 }
 
+/// Whether libplacebo measures each frame's peak brightness before deciding how to present it.
+///
+/// mpv's own default is `auto`: detect a peak only when it is actually tone-mapping. Nuvio forced
+/// `yes`, which is the override worth questioning — a stream whose source and target colorimetry
+/// already match is not being converted, and measuring it anyway lets the presented brightness
+/// follow the content from scene to scene. That is the shape of the complaint this setting exists
+/// to let a viewer test: *too dark or too bright, and it changes with the picture.*
+///
+/// Offered rather than chosen because it cannot be judged from here. The measurement that ruled
+/// out the larger suspect — a PQ source flattened to SDR — also showed the ranges matching, so
+/// turning detection off can no longer collapse the picture; the worst case is a highlight
+/// clipping on a panel dimmer than the master.
+enum HDRPeakDetection: String, SettingsOption {
+    case automatic = "AUTO"
+    case on = "ON"
+    case off = "OFF"
+
+    var displayName: String {
+        switch self {
+        case .automatic: return L10n.text("option.automatic", fallback: "Automatic")
+        case .on: return L10n.text("option.on", fallback: "On")
+        case .off: return L10n.text("option.off", fallback: "Off")
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .automatic: return L10n.text("option.hdr_peak_auto_sub", fallback: "Let libplacebo decide — measure only when converting")
+        case .on: return L10n.text("option.hdr_peak_on_sub", fallback: "Always measure. Brightness can follow the scene.")
+        case .off: return L10n.text("option.hdr_peak_off_sub", fallback: "Never measure. Steady, and may clip highlights.")
+        }
+    }
+
+    var mpvValue: String {
+        switch self {
+        case .automatic: return "auto"
+        case .on: return "yes"
+        case .off: return "no"
+        }
+    }
+}
+
 enum AudioOutputChannels: String, SettingsOption {
     case auto = "AUTO"
     case stereo = "STEREO"

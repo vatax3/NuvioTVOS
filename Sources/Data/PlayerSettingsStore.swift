@@ -84,6 +84,13 @@ final class PlayerSettingsStore: PreferenceStore {
 
     /// Which libmpv audio driver to use. See `MpvAudioOutput` — the default is not cosmetic,
     /// it is the difference between sound and silence on Apple TV hardware.
+    /// `hdr-compute-peak`. Default `auto`, which is mpv's own — see `HDRPeakDetection` for why
+    /// forcing `yes` was the thing worth removing rather than a value worth guessing at.
+    var hdrPeakDetection: HDRPeakDetection {
+        get { option("mpv_hdr_peak_detection", default: .automatic) }
+        set { setOption("mpv_hdr_peak_detection", newValue) }
+    }
+
     var mpvAudioOutput: MpvAudioOutput {
         get { option("mpv_audio_output", default: .automatic) }
         set { setOption("mpv_audio_output", newValue) }

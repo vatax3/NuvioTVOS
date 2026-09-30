@@ -231,6 +231,7 @@ struct PlayerView: View {
                 audioLanguages: settings.audioTrackLanguages,
                 subtitleLanguages: settings.subtitleTrackLanguages,
                 prefersForcedSubtitles: settings.player.subtitleUseForcedSubtitles,
+                hdrPeakDetection: settings.player.hdrPeakDetection,
                 subtitleStyle: settings.subtitleStyle,
                 addonCues: subtitles.cues,
                 addonCueClock: subtitles.cueClock,
