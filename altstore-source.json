@@ -40,6 +40,16 @@
       ],
       "versions": [
         {
+          "version": "1.0.44",
+          "buildVersion": "46",
+          "date": "2026-09-30",
+          "localizedDescription": "## HDR peak detection is now yours to choose\n\nRéglages → Lecture → HDR et Dolby Vision → **Détection du pic HDR**.\n\nNuvio forced this on. mpv's own default is to decide for itself, and that is what\nNuvio now does unless you say otherwise.\n\n**Why it might matter to you.** With detection on, the player measures how bright\neach frame is and adjusts what it presents accordingly — so the picture's brightness\ncan follow the scene. If you have seen HDR look too dark in one shot and too bright\nin the next, try **Off** and compare the same scene.\n\n**Automatic** is the new default and is the right answer for most people. **Off**\nnever measures: steadier, and a very bright highlight may clip on a panel dimmer than\nthe master. **On** is what the previous versions did.\n\n## What the measurement said\n\nOn a Dolby Vision file, the player's stream information now reports the source and\nthe presented output as the same thing — `pq · bt.2020` both sides. The picture is\nnot being flattened to SDR on the way to your television, which is what we had\nassumed was wrong. That assumption is dead, and this setting is what is left.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.44/Nuvio-1.0.44-tvOS-unsigned.ipa",
+          "size": 32198203,
+          "minOSVersion": "17.0",
+          "sha256": "8a27fcd95d2532e7229b045410eb28e72745dcd4de48e941ef0321e9c553d59b"
+        },
+        {
           "version": "1.0.43",
           "buildVersion": "45",
           "date": "2026-09-30",
@@ -356,11 +366,11 @@
         ],
         "privacy": {}
       },
-      "version": "1.0.43",
+      "version": "1.0.44",
       "versionDate": "2026-09-30",
-      "versionDescription": "## The colour ranges were read too early to exist\n\nThe stream information panel showed no **Source range** or **Output range** at all.\nThey were not blank — they were absent, which on screen looks the same as a feature\nthat was never built.\n\nBoth are read the moment the file opens, which is before the decoder has worked out\nwhat the picture is. They are read again once it has.\n\n**The same reading builds what Nuvio tells your television about the picture.** So\nthe frame rate was being sent and the dynamic range may well have been empty — which\nis the thing 1.0.38 claimed to fix. That is the real repair here; the missing rows\nwere only what made it visible.\n\nThe two rows are now always drawn, and say \"Not reported by mpv\" when there is\nnothing to report. That is an answer too.\n\n## Your Apple TV is ignoring all of it\n\nYour panel says **Adaptation de l'écran: Désactivée dans les réglages Apple TV**.\nNuvio asks; tvOS declines, because content matching is switched off on the device.\n\nRéglages → Vidéo et audio → **Adapter le contenu** → both switches on. Nothing in the\napp can override that, by design — it is the viewer's setting, not ours.",
-      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.43/Nuvio-1.0.43-tvOS-unsigned.ipa",
-      "size": 32193245,
+      "versionDescription": "## HDR peak detection is now yours to choose\n\nRéglages → Lecture → HDR et Dolby Vision → **Détection du pic HDR**.\n\nNuvio forced this on. mpv's own default is to decide for itself, and that is what\nNuvio now does unless you say otherwise.\n\n**Why it might matter to you.** With detection on, the player measures how bright\neach frame is and adjusts what it presents accordingly — so the picture's brightness\ncan follow the scene. If you have seen HDR look too dark in one shot and too bright\nin the next, try **Off** and compare the same scene.\n\n**Automatic** is the new default and is the right answer for most people. **Off**\nnever measures: steadier, and a very bright highlight may clip on a panel dimmer than\nthe master. **On** is what the previous versions did.\n\n## What the measurement said\n\nOn a Dolby Vision file, the player's stream information now reports the source and\nthe presented output as the same thing — `pq · bt.2020` both sides. The picture is\nnot being flattened to SDR on the way to your television, which is what we had\nassumed was wrong. That assumption is dead, and this setting is what is left.",
+      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.44/Nuvio-1.0.44-tvOS-unsigned.ipa",
+      "size": 32198203,
       "minOSVersion": "17.0"
     }
   ],
