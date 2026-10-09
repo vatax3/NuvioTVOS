@@ -40,6 +40,16 @@
       ],
       "versions": [
         {
+          "version": "1.0.46",
+          "buildVersion": "48",
+          "date": "2026-10-09",
+          "localizedDescription": "## Subtitles sit where they should\n\nThey were about a tenth of the picture too high — both the player's own subtitles\nand the ones from addons. Each was permanently leaving room for the transport bar,\nwhich is hidden almost all of the time.\n\nThat room is now made only while the bar is actually on screen. At rest the line\nsits where virtually every other player puts it.\n\n## The position control actually moves them\n\n\"Bottom / Raised / High\" barely did anything, and on the MPV engine it did about\nhalf of the little it did elsewhere: the same stored number meant two different\ndistances to the two renderers.\n\nIt is one distance now, and the same on both. In the player's subtitle panel,\n**Monter** and **Descendre** move the line ten points a press and show you where it\nis. Réglages → Lecture → Décalage vertical does the same in larger steps.\n\nZero is the standard position. Positive lifts.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.46/Nuvio-1.0.46-tvOS-unsigned.ipa",
+          "size": 32210557,
+          "minOSVersion": "17.0",
+          "sha256": "d847466ad8e3892b6afe1f4bd3249abbc6142313d56042bb803a0c850f410095"
+        },
+        {
           "version": "1.0.45",
           "buildVersion": "47",
           "date": "2026-10-09",
@@ -376,11 +386,11 @@
         ],
         "privacy": {}
       },
-      "version": "1.0.45",
+      "version": "1.0.46",
       "versionDate": "2026-10-09",
-      "versionDescription": "## The next episode starts without the wait\n\nPressing the next-episode card asked every one of your addons from scratch, so the\nsource list you had been looking at a minute earlier was rebuilt while you waited.\n\nNuvio now fetches them quietly two minutes before the episode ends, and the card\nplays from what it already has. Réglages → Lecture → Épisode suivant → **Précharger\nl'épisode suivant**, on by default.\n\nA refresh still goes out to the addons — asking for the list again means asking for\na fresh one.\n\n## Playback errors say what to do about it\n\nWhen the MPV engine gave up it printed its own words: \"unrecognized file format\" and\nsimilar. True, in English, and no help at all.\n\nIt now says which of three things happened — the source sent something unplayable,\nthe file needs a decoder this engine does not have, or it never opened — and what is\nworth trying next. mpv's own text is still underneath, for when you want to tell\nsomeone about it.",
-      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.45/Nuvio-1.0.45-tvOS-unsigned.ipa",
-      "size": 32210432,
+      "versionDescription": "## Subtitles sit where they should\n\nThey were about a tenth of the picture too high — both the player's own subtitles\nand the ones from addons. Each was permanently leaving room for the transport bar,\nwhich is hidden almost all of the time.\n\nThat room is now made only while the bar is actually on screen. At rest the line\nsits where virtually every other player puts it.\n\n## The position control actually moves them\n\n\"Bottom / Raised / High\" barely did anything, and on the MPV engine it did about\nhalf of the little it did elsewhere: the same stored number meant two different\ndistances to the two renderers.\n\nIt is one distance now, and the same on both. In the player's subtitle panel,\n**Monter** and **Descendre** move the line ten points a press and show you where it\nis. Réglages → Lecture → Décalage vertical does the same in larger steps.\n\nZero is the standard position. Positive lifts.",
+      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.46/Nuvio-1.0.46-tvOS-unsigned.ipa",
+      "size": 32210557,
       "minOSVersion": "17.0"
     }
   ],
