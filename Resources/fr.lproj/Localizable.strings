@@ -11,6 +11,9 @@
 "navigation.settings" = "Réglages";
 
 /* Player */
+"player.error_invalid_content" = "Cette source n’a pas envoyé de fichier lisible. Essayez-en une autre.";
+"player.error_unsupported_format" = "Ce fichier utilise un format que le lecteur ne sait pas décoder. Essayez l’autre moteur, ou une autre source.";
+"player.error_stream_unavailable" = "Cette source n’a pas pu être ouverte. Elle a peut-être expiré — essayez-en une autre.";
 "player.range_unreported" = "Non communiqué par mpv";
 "player.sync_to_line" = "Caler sur une réplique";
 "player.sync_to_line_detail" = "Choisissez la réplique prononcée à l’instant";
@@ -412,6 +415,8 @@
 "settings.about.update_available" = "Mise à jour disponible";
 
 /* PlaybackSettingsContent.swift */
+"settings.playback.preload_next" = "Précharger l’épisode suivant";
+"settings.playback.preload_next_sub" = "Demander ses sources aux addons avant que vous n’appuyiez sur lecture";
 "settings.playback.hdr_peak" = "Détection du pic HDR";
 "settings.playback.hdr_dv_footnote" = "tvOS pilote le tone mapping et le chemin Dolby Vision. Le moteur MPV transmet à l’écran la colorimétrie source et laisse libplacebo adapter ce que la dalle ne peut pas montrer. Les informations du flux, dans le lecteur, montrent ce qui est réellement présenté — le seul endroit où c’est observable.";
 "settings.playback.tab_general" = "Général";

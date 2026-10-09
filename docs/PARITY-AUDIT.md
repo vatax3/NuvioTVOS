@@ -1,4 +1,4 @@
-# Functional parity audit — tvOS 1.0.40 vs Android TV 1.1.0-beta.2
+# Functional parity audit — tvOS 1.0.45 vs Android TV 1.1.0-beta.5
 
 Audit date: 2026-08-25, re-derived against 1.0.31 on 2026-08-26, tracked forward since.
 Supersedes the audit published with 1.0.15. Twenty releases landed while it was open, so the
@@ -745,9 +745,59 @@ trying to correct. That is what upstream's fix was.
   shipped, as `group_plugin_streams_by_repository`. Recorded because a re-implementation would
   have been the expensive kind of mistake.
 
+## Upstream moved a fourth time: 1.1.0-beta.2 → 1.1.0-beta.5
+
+280 commits over twelve days (25 September – 7 October), 339 files, +35,311 lines. Three tags in
+the window. Read from a detached worktree at `1.1.0-beta.5`.
+
+The largest window yet, and most of its weight is in two places that do not transfer. A
+**settings reorganisation** splits their Layout and Playback screens into focused sections with
+shared value rows and pickers — Compose structure for screens ours already splits differently.
+And **i18n**: Bengali, Hebrew, Croatian, Polish, Turkish, with the RTL plumbing those need.
+
+| Upstream | Ours |
+|---|---|
+| **Automatic subtitle sync** — `AutomaticSubtitleSync`, `AutoSyncTimelineRetime`, `EmbeddedSubtitleTimelineLoader` and eleven more files, ~7,800 lines. Aligns an addon subtitle against the *embedded* track's timeline and retimes it. | Open, and the largest single item they have ever shipped in one window. Adjacent to what 1.0.40 built — our sync-by-line is the manual form of the same correction. Needs the muxed track's cue timings, which mpv does not hand out as text; that question has to be answered before any of it can be scoped. |
+| **`preload_next_episode_sources`** — fetch the next episode's streams before the card appears | **Ported in 1.0.45**, and it needed a cache first: `StremioClient` had none, so pressing the next-episode card re-asked every addon from nothing. |
+| **libmpv failure causes on the error screen** | **Ported in 1.0.45** as `MPVPlaybackFailure`. Ours showed `mpv_error_string` verbatim. |
+| **MDBList follow-ups** — external lists in the library, choosing which lists appear, sorting by release date, ratings on the hero and Continue Watching with a sortable provider order | Open. Extends 1.0.39 and is the obvious next lot. |
+| `random_episode_enabled`, stable shuffle targets in Continue Watching | Open, and small. |
+| `always_show_landscape_clearlogo`, global landscape poster mode | Open, and small. |
+| Press-and-hold on the audio-delay buttons | Open, and small. We own that area since 1.0.37. |
+| **`transparent_letterbox`** — a device-local toggle for true black HDR bars | **Declined, and the doubt is resolved.** This was our open "unverified" line since 1.0.0. Upstream's own implementation excludes the mpv engine (`internalPlayerEngine != MVP_PLAYER`): it works by letting an ExoPlayer SurfaceView punch through the window background. Ours is an mpv Metal layer over a window tvOS paints itself, so there is nothing to punch through to. |
+| **Torrent engine replacing TorrServer** | **N/A**, and the replacement changes nothing: the blocker was never which engine, it is that tvOS allows neither a subprocess nor downloaded executable code. |
+| More work on the parallel chunked downloader | **Still declined.** Unchanged reasoning; still gated on measuring a per-connection ceiling on hardware. |
+| Background trailer playback, `trailer_pause_on_scroll` | **N/A.** No supported YouTube playback path on tvOS. |
+| `tunneled_surface_fill`, Fit/Fill only while tunneled | **N/A.** Android tunneled playback. |
+| Settings reorganisation, shared section components, rail grouping | **N/A.** Compose structure. Ours is already split by screen. |
+| Bengali, Hebrew, Croatian, Polish, Turkish; RTL text direction | **N/A** while the app ships English and French. |
+
+### The stream cache the preload needed
+
+Upstream warms a `StreamSearchSessionCache` before the next-episode card appears. We had no such
+cache, so the port is the cache plus the warming — and the cache is the half that pays for itself
+everywhere, not only on the next episode.
+
+Two decisions in it. It holds **the addon's list, never a resolved debrid URL**: those expire, and
+a stale one plays nothing. And **a refresh bypasses it**, because someone who asked for the list
+again is asking for *this* list again; answering from memory is the one response that cannot be
+what they meant.
+
+The prefetch fires two minutes before the end rather than when the card appears. By the time the
+card is on screen the viewer is already pressing it, and a prefetch that finishes after the press
+has bought nothing.
+
+### Saying what went wrong
+
+`mpv_error_string` reached the screen verbatim, so a viewer read "unrecognized file format" on
+their television — accurate, untranslated, and silent on the only question they have: try another
+source, try the other engine, or stop. There are a dozen mpv error codes and three things anyone
+can do about them, so three is what the message now distinguishes. The raw text stays underneath:
+it is the only thing worth having when someone reports the failure.
+
 ## Verification
 
-- Unit suite at 1.0.40: **689 tests, 0 failures**. UI suite: **14 tests, 0 failures**.
+- Unit suite at 1.0.45: **702 tests, 0 failures**. UI suite: **14 tests, 0 failures**.
 - Test density is ahead of upstream per line — 703 tests over ~49k lines against 983 over 201k —
   so the 1.0.12 plan's "tests too thin" framing was wrong on volume. It was right about
   *placement*: the network clients still carry the least of it, though every release since

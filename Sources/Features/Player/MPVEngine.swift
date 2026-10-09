@@ -605,7 +605,14 @@ final class MPVEngine {
             let end = data.assumingMemoryBound(to: mpv_event_end_file.self).pointee
             // `error` means the source failed; EOF is a normal finish.
             if end.reason == MPV_END_FILE_REASON_ERROR {
-                errorMessage = String(cString: mpv_error_string(end.error))
+                // mpv's own words said accurately what had happened and nothing about what to do
+                // about it — a viewer reading "unrecognized file format" on a television learns
+                // only that something is wrong. The raw text is kept underneath; see
+                // `MPVPlaybackFailure`.
+                errorMessage = MPVPlaybackFailure.message(
+                    fileError: String(cString: mpv_error_string(end.error)),
+                    logLine: logTail.last
+                )
             } else if end.reason == MPV_END_FILE_REASON_EOF {
                 didEnd = true
             }

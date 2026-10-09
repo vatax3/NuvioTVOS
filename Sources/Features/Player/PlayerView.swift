@@ -31,6 +31,8 @@ struct PlayerView: View {
     @State private var lastScrobbleProgress: Double = 0
     @State private var simklSessionActive = false
     @State private var mdbListSessionActive = false
+    /// One prefetch per playback. See `prefetchNextEpisodeIfDue`.
+    @State private var didPrefetchNextEpisode = false
     @State private var didSendTrackingStop = false
     @State private var subtitles = SubtitleTrackController()
     /// AniSkip intervals are deliberately owned by the player rather than the detail screen:
@@ -263,6 +265,7 @@ struct PlayerView: View {
                     scrobble(position: position, duration: duration)
                     simklScrobble(position: position, duration: duration)
                     mdbListScrobble(position: position, duration: duration)
+                    prefetchNextEpisodeIfDue(position: position, duration: duration)
                     advanceIfDue(position: position, duration: duration)
                     offerRecommendationsIfDue(position: position, duration: duration)
                 },
@@ -323,6 +326,7 @@ struct PlayerView: View {
                     scrobble(position: position, duration: duration)
                     simklScrobble(position: position, duration: duration)
                     mdbListScrobble(position: position, duration: duration)
+                    prefetchNextEpisodeIfDue(position: position, duration: duration)
                     advanceIfDue(position: position, duration: duration)
                     offerRecommendationsIfDue(position: position, duration: duration)
                 },
@@ -1107,6 +1111,47 @@ struct PlayerView: View {
         movieRecommendations = PostPlayRecommendation.cards(
             from: model.moreLikeThis, excluding: request.contentId
         )
+    }
+
+    /// Warms the next episode's source list while this one is still playing.
+    ///
+    /// Pressing the next-episode card re-asked every installed addon from nothing, so the list a
+    /// viewer had been looking at thirty seconds earlier was rebuilt while they waited. The
+    /// answers are cached in `StremioClient`; this only decides when to go and get them.
+    ///
+    /// Two minutes before the end rather than at the countdown: by the time the card is on
+    /// screen the viewer is already pressing it, and a prefetch that finishes after the press has
+    /// bought nothing. Early enough to land, late enough that abandoning a film halfway does not
+    /// spend a round of requests on an episode nobody reaches.
+    private func prefetchNextEpisodeIfDue(position: Double, duration: Double) {
+        guard settings.player.preloadNextEpisodeSources,
+              !didPrefetchNextEpisode,
+              let next = request.nextUp,
+              duration > 0, duration - position <= 120
+        else { return }
+        didPrefetchNextEpisode = true
+
+        let providers = addons.enabledAddons.filter {
+            $0.supports(resource: "stream", type: next.contentType)
+        }
+        let candidates = next.streamIdCandidates
+        let targets = providers.compactMap { addon -> (Addon, String)? in
+            guard let id = candidates.first(where: {
+                addon.handles(id: $0, resource: "stream", type: next.contentType)
+            }) else { return nil }
+            return (addon, id)
+        }
+        guard !targets.isEmpty else { return }
+
+        Task.detached(priority: .utility) {
+            // Grouped by the id each addon declared, because two addons can want different
+            // namespaces for the same episode — the same rule the real load applies.
+            for (addon, videoId) in targets {
+                await StremioClient.shared.prefetchStreams(
+                    addons: [addon], type: next.contentType, videoId: videoId
+                )
+            }
+        }
     }
 
     private func advanceIfDue(position: Double, duration: Double) {

@@ -142,8 +142,12 @@ final class StreamsViewModel {
         await withTaskGroup(of: (Addon, [Stream]?).self) { group in
             for (addon, videoId) in providers {
                 group.addTask { [client] in
+                    // A refresh bypasses the cache: someone who asked for the list again is
+                    // asking for *this* list again, and answering from memory is the one
+                    // response that cannot be what they meant.
                     guard let streams = try? await client.fetchStreams(
-                        addon: addon, type: request.contentType, videoId: videoId
+                        addon: addon, type: request.contentType, videoId: videoId,
+                        allowingCache: !retainingResults
                     ) else { return (addon, nil) }
                     // An empty answer is not necessarily a miss: some addons publish their links
                     // inline on the meta entry instead of implementing `/stream`.

@@ -62,7 +62,7 @@ card is 252 pt here and occupies the identical fraction of the screen.
 
 ## Upstream parity
 
-Reconciled through NuvioTV **`1.1.0-beta.2`** (2026-09-25). That means every upstream release up
+Reconciled through NuvioTV **`1.1.0-beta.5`** (2026-10-07). That means every upstream release up
 to that tag has been read and each change ported, judged not applicable, or declined with a reason
 — not that the two apps have the same feature set, which they cannot. The version lines are
 independent on purpose.

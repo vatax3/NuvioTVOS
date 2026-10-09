@@ -496,11 +496,44 @@ actor StremioClient {
 
     // MARK: Streams
 
-    func fetchStreams(addon: Addon, type: String, videoId: String) async throws -> [Stream] {
+    /// One addon's answer for one video, briefly remembered.
+    ///
+    /// The window this serves is the next-episode hand-off: finishing an episode and pressing the
+    /// card re-asked every installed addon from scratch, so the source list a viewer had just
+    /// been looking at was rebuilt from nothing while they waited. Upstream warms a session cache
+    /// before the card appears; the cache has to exist first, and this is it.
+    ///
+    /// Deliberately short, and deliberately **not** the resolved playback URL. What is kept is
+    /// the addon's list — magnets, infohashes, direct links — which changes on the timescale of
+    /// an indexer's crawl. Debrid resolution runs after this and is never cached here, because
+    /// those links do expire and a stale one plays nothing.
+    private struct StreamCacheKey: Hashable {
+        let addonBaseUrl: String
+        let type: String
+        let videoId: String
+    }
+
+    private var streamCache: [StreamCacheKey: (streams: [Stream], at: Date)] = [:]
+    /// Long enough to cover a credits sequence and the next-episode card, short enough that a
+    /// viewer who waits out an advert break gets a fresh list.
+    private static let streamCacheTTL: TimeInterval = 5 * 60
+
+    /// - Parameter allowingCache: `false` for an explicit refresh. Someone who asked for the list
+    ///   again is asking for *this* list again, and answering from memory is the one response
+    ///   that cannot be what they meant.
+    func fetchStreams(
+        addon: Addon, type: String, videoId: String, allowingCache: Bool = true
+    ) async throws -> [Stream] {
+        let key = StreamCacheKey(addonBaseUrl: addon.baseUrl, type: type, videoId: videoId)
+        if allowingCache, let hit = streamCache[key],
+           Date().timeIntervalSince(hit.at) < Self.streamCacheTTL {
+            return hit.streams
+        }
+
         let url = StremioURL.stream(baseUrl: addon.baseUrl, type: type, videoId: videoId)
         let dto = try await get(url, as: StreamResponseDTO.self)
         var seen: [String: Int] = [:]
-        return (dto.streams ?? []).compacted().compactMap { item -> Stream? in
+        let streams = (dto.streams ?? []).compacted().compactMap { item -> Stream? in
             var stream = StremioMapper.stream(
                 from: item,
                 addonName: addon.displayName,
@@ -511,6 +544,28 @@ actor StremioClient {
             seen[key] = count + 1
             stream.occurrence = count
             return stream
+        }
+        // Bounded: a long binge would otherwise hold every episode's list for the session. The
+        // oldest go first, which is also the least likely to be asked for again.
+        if streamCache.count >= 40 {
+            let oldest = streamCache.min { $0.value.at < $1.value.at }?.key
+            if let oldest { streamCache.removeValue(forKey: oldest) }
+        }
+        streamCache[key] = (streams, Date())
+        return streams
+    }
+
+    /// Fills the cache for a video nobody has asked for yet, and reports nothing.
+    ///
+    /// Failures are swallowed on purpose: this runs while something else is playing, and an
+    /// addon that is down should cost the viewer a slower list later, never an error now.
+    func prefetchStreams(addons: [Addon], type: String, videoId: String) async {
+        await withTaskGroup(of: Void.self) { group in
+            for addon in addons {
+                group.addTask { [weak self] in
+                    _ = try? await self?.fetchStreams(addon: addon, type: type, videoId: videoId)
+                }
+            }
         }
     }
 

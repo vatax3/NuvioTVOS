@@ -3,11 +3,11 @@
 Nuvio for Apple TV is a port of [NuvioMedia/NuvioTV](https://github.com/NuvioMedia/NuvioTV), the
 Android TV app. This file records how far the port has been reconciled against it.
 
-**Reconciled through: `1.1.0-beta.2` (2026-09-25).**
+**Reconciled through: `1.1.0-beta.5` (2026-10-07).**
 
 > The per-release tables below stop at `0.8.9-beta`. Everything after it is reconciled in
 > [PARITY-AUDIT.md](PARITY-AUDIT.md), window by window — 0.8.12-beta, 1.0.0 and 1.1.0-beta.2 each
-> have a section there with the same three verdicts. The tables were not backfilled because two
+> have a section there with the same three verdicts, as does 1.1.0-beta.5. The tables were not backfilled because two
 > documents answering one question is how a status goes stale, which this project has now had
 > happen three times. **This file owns the marker and the pre-0.8.9 history; the audit owns
 > everything since.**
@@ -16,7 +16,7 @@ That sentence is the whole point of this file, and it is deliberately not "we ha
 features as 0.8.7". A shared version number would claim an equality that cannot exist: roughly a
 third of every upstream release is ExoPlayer, Compose or Android TV platform work with no tvOS
 counterpart. What is claimed here is narrower and checkable — **every upstream release up to and
-including 1.1.0-beta.2 has been read, and each change in it was ported, judged not applicable, or
+including 1.1.0-beta.5 has been read, and each change in it was ported, judged not applicable, or
 declined for a stated reason.**
 
 The two version lines are therefore independent. Ours is `1.0.x`; theirs is `1.1.x-beta`. They
@@ -129,6 +129,8 @@ The same verdict, for the three windows the audit covers. Each is argued at leng
 | **Post-credits detection extended to series outros** | 1.0.0 | Ported for films and declined for series. Their series route cannot return an explicit `post_credits` mark, so on series the change is a five-second-tail heuristic alone — and almost every episode has more than five seconds of black, a studio card or a next-episode preview after its ending. It would relabel most endings as leading to a scene that is not there. |
 | **MDBList's snapshot-and-journal delta engine** | 1.1.0-beta.2 | Most of the thirty-five files: a durable snapshot kept current by an activities watermark, journal replay and a 409 full-resync. It serves their cached-snapshot design; our tracker screens fetch when they appear, so there is no snapshot for a journal to be applied against. Everything a viewer can see *is* ported. |
 | **A three-colour custom theme with an on-screen colour picker** | 1.0.0 | The palette is ported; the picker is not. Choosing a hue with a D-pad is slow and imprecise, and is the reason such controls go untouched. The hex goes to a phone through `LocalConfigServer` instead, and the other two colours are derived — which is the relationship the seven presets already have. |
+| **A transparent letterbox for true black HDR bars** | 1.1.0-beta.5 | Carried as *unverified* since 1.0.0 and now settled: upstream's own implementation excludes the mpv engine. It works by letting an ExoPlayer SurfaceView punch through the window background; ours is an mpv Metal layer over a window tvOS paints, so there is nothing to punch through to. |
+| **Automatic subtitle sync** | 1.1.0-beta.5 | ~7,800 lines, and not refused — deferred with the blocking question written down. It aligns an addon subtitle against the *embedded* track's timeline, and mpv does not hand out a muxed track's cues as text. That has to be answered before the rest can be scoped. |
 | **Stable and beta update channels** | 1.0.0 | Blocked rather than refused: our updater reads the sideloading feed, and the feed has one channel. Needs a second feed or a flag in the existing one before the setting could mean anything. |
 | **RTL layout and text direction** (~20 commits) | 1.1.0-beta.2 | N/A while the app ships English and French. Becomes real the day a right-to-left table is added. |
 | **Their localisation updates** | every window | Same as above: our strings are our own. The gap that remains is *languages* — two against thirty-six — which is translation work, not engineering. |

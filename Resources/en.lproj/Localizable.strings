@@ -11,6 +11,9 @@
 "navigation.settings" = "Settings";
 
 /* Player */
+"player.error_invalid_content" = "That source did not send a playable file. Try another one.";
+"player.error_unsupported_format" = "This file uses something the player cannot decode. Try the other engine, or another source.";
+"player.error_stream_unavailable" = "That source could not be opened. It may have expired — try another one.";
 "player.range_unreported" = "Not reported by mpv";
 "player.sync_to_line" = "Sync to a line";
 "player.sync_to_line_detail" = "Pick the line being spoken now";
@@ -412,6 +415,8 @@
 "settings.about.update_available" = "Update available";
 
 /* PlaybackSettingsContent.swift */
+"settings.playback.preload_next" = "Preload next episode";
+"settings.playback.preload_next_sub" = "Ask the addons for its sources before you press play";
 "settings.playback.hdr_peak" = "HDR peak detection";
 "settings.playback.hdr_dv_footnote" = "tvOS owns tone mapping and the Dolby Vision path. The MPV engine hands the display the source colorimetry and lets libplacebo map anything the panel cannot show. The player's stream information shows what is actually being presented, which is the only place this is observable.";
 "settings.playback.tab_general" = "General";

@@ -505,6 +505,15 @@ struct PlaybackSettingsContent: View {
                     systemImage: "forward.end.fill",
                     isOn: $player.autoPlayNextEpisodeEnabled
                 )
+                SettingsToggle(
+                    title: L10n.text("settings.playback.preload_next", fallback: "Preload next episode"),
+                    subtitle: L10n.text(
+                        "settings.playback.preload_next_sub",
+                        fallback: "Ask the addons for its sources before you press play"
+                    ),
+                    systemImage: "arrow.down.circle",
+                    isOn: $player.preloadNextEpisodeSources
+                )
                 if player.autoPlayNextEpisodeEnabled {
                     SettingsOptionRow(
                         title: L10n.text("settings.playback.trigger_on", fallback: "Trigger on"),

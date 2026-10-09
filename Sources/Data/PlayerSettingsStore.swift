@@ -91,6 +91,13 @@ final class PlayerSettingsStore: PreferenceStore {
         set { setOption("mpv_hdr_peak_detection", newValue) }
     }
 
+    /// `preload_next_episode_sources`. On by default: the cost is one round of addon requests
+    /// near the end of an episode, and the thing it buys is the next one starting without a wait.
+    var preloadNextEpisodeSources: Bool {
+        get { bool("preload_next_episode_sources", default: true) }
+        set { setBool("preload_next_episode_sources", newValue) }
+    }
+
     var mpvAudioOutput: MpvAudioOutput {
         get { option("mpv_audio_output", default: .automatic) }
         set { setOption("mpv_audio_output", newValue) }
