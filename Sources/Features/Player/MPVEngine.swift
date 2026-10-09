@@ -495,11 +495,15 @@ final class MPVEngine {
     /// Apply the same subtitle preferences used by AVKit and the custom external-subtitle
     /// overlay.  This is deliberately a live update: changing an audio/subtitle preference
     /// must never recreate the MPV surface or briefly interrupt playback.
-    func applySubtitleStyle(_ style: SubtitleStyle) {
-        applySubtitleStyle(style, asOption: false)
+    /// - Parameter controlsVisible: whether the transport is on screen. The line is lifted clear
+    ///   of it while it is, and only while it is — see `SubtitlePlacement`.
+    func applySubtitleStyle(_ style: SubtitleStyle, controlsVisible: Bool = false) {
+        applySubtitleStyle(style, asOption: false, controlsVisible: controlsVisible)
     }
 
-    private func applySubtitleStyle(_ style: SubtitleStyle, asOption: Bool) {
+    private func applySubtitleStyle(
+        _ style: SubtitleStyle, asOption: Bool, controlsVisible: Bool = false
+    ) {
         let set: (String, String) -> Void = { name, value in
             if asOption { self.setOption(name, value) }
             else { self.command(["set", name, value]) }
@@ -515,15 +519,18 @@ final class MPVEngine {
         set("sub-outline-size", outlineSize)
         set("sub-border-size", outlineSize)
         set("sub-border-style", style.backgroundColor.alphaComponent > 0.01 ? "opaque-box" : "outline-and-shadow")
-        // MPV places subtitles using a percentage from the bottom, and Nuvio's stored offset is
-        // intentionally in small display points, so a 2:1 conversion produces useful remote
-        // presets without making the transport bar overlap the text.
-        //
-        // It starts at 90 rather than 100 because `sub-pos=100` hugs the physical bottom edge of
-        // the frame, which is exactly the strip a television overscans away — the default offset
-        // is zero, so every viewer got the cropped position. The floor keeps a large offset from
-        // pushing the line into the middle of the picture.
-        set("sub-pos", String(format: "%.0f", min(96, max(55, 90 - style.verticalOffset / 10))))
+        // `sub-pos` stays at mpv's own 100 and the whole distance is spent through the margin,
+        // which is the only way the two renderers can agree: `sub-pos` is a percentage of the
+        // frame and the overlay works in points, so mixing them double-counted the gap and made
+        // the stored offset worth about half as much here as there. See `SubtitlePlacement`.
+        set("sub-pos", "100")
+        set("sub-use-margins", "yes")
+        set(
+            "sub-margin-y",
+            String(format: "%.0f", SubtitlePlacement.mpvMarginY(
+                offset: style.verticalOffset, controlsVisible: controlsVisible
+            ))
+        )
     }
 
     private func mpvColor(_ color: Color) -> String {

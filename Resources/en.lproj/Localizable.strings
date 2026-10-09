@@ -11,6 +11,9 @@
 "navigation.settings" = "Settings";
 
 /* Player */
+"player.raise_subtitles" = "Raise";
+"player.lower_subtitles" = "Lower";
+"player.offset_default" = "Default position";
 "player.error_invalid_content" = "That source did not send a playable file. Try another one.";
 "player.error_unsupported_format" = "This file uses something the player cannot decode. Try the other engine, or another source.";
 "player.error_stream_unavailable" = "That source could not be opened. It may have expired — try another one.";
@@ -37,9 +40,6 @@
 "player.bold_text" = "Bold text";
 "player.outline" = "Outline";
 "player.position" = "Position";
-"player.bottom" = "Bottom";
-"player.raised" = "Raised";
-"player.high" = "High";
 "player.reset_subtitle_style" = "Reset subtitle style";
 "player.text_color" = "Text colour";
 "player.text_opacity" = "Text opacity";

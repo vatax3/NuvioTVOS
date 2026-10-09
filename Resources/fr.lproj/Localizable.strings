@@ -11,6 +11,9 @@
 "navigation.settings" = "Réglages";
 
 /* Player */
+"player.raise_subtitles" = "Monter";
+"player.lower_subtitles" = "Descendre";
+"player.offset_default" = "Position par défaut";
 "player.error_invalid_content" = "Cette source n’a pas envoyé de fichier lisible. Essayez-en une autre.";
 "player.error_unsupported_format" = "Ce fichier utilise un format que le lecteur ne sait pas décoder. Essayez l’autre moteur, ou une autre source.";
 "player.error_stream_unavailable" = "Cette source n’a pas pu être ouverte. Elle a peut-être expiré — essayez-en une autre.";
@@ -37,9 +40,6 @@
 "player.bold_text" = "Texte en gras";
 "player.outline" = "Contour";
 "player.position" = "Position";
-"player.bottom" = "Bas";
-"player.raised" = "Relevés";
-"player.high" = "Haut";
 "player.reset_subtitle_style" = "Réinitialiser le style";
 "player.text_color" = "Couleur du texte";
 "player.text_opacity" = "Opacité du texte";

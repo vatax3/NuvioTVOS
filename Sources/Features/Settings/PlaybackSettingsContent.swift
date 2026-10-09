@@ -415,11 +415,16 @@ struct PlaybackSettingsContent: View {
                 }
                 SettingsDecimalStepperRow(
                     title: L10n.text("settings.playback.vertical_offset", fallback: "Vertical offset"),
-                    subtitle: L10n.text("settings.playback.vertical_offset_sub", fallback: "Lift subtitles clear of burned-in text"),
+                    subtitle: L10n.text(
+                        "settings.playback.vertical_offset_sub",
+                        fallback: "Zero is where every other player puts them. Positive lifts."
+                    ),
                     value: $player.subtitleVerticalOffset,
-                    range: -100...100,
+                    // The same bounds the policy clamps to, so the stepper cannot offer a value
+                    // the renderers will quietly refuse.
+                    range: SubtitlePlacement.offsetRange,
                     step: 5,
-                    format: { String(format: "%.0f", $0) }
+                    format: { String(format: "%+.0f", $0) }
                 )
             }
 

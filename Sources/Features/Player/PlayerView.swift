@@ -340,7 +340,11 @@ struct PlayerView: View {
                 }
             )
 
-            SubtitleOverlay(cues: subtitles.activeCues, style: settings.subtitleStyle)
+            SubtitleOverlay(
+                cues: subtitles.activeCues,
+                style: settings.subtitleStyle,
+                liftedForControls: engineChrome.controlsVisible
+            )
 
             skipSegmentCard
 

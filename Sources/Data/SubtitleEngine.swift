@@ -402,3 +402,50 @@ enum SubtitleSyncByLine {
         return String(format: "%+.1fs", seconds)
     }
 }
+
+// MARK: - Where the line sits
+
+/// How far above the bottom of the picture a subtitle is drawn, for both renderers.
+///
+/// There are two of them — mpv draws the muxed tracks, this app draws the addon ones — and they
+/// had been given the same stored number in two different units. The overlay read it as display
+/// points; mpv read it as *tenths of a percent of frame height*, which is roughly half as much.
+/// So the one control moved one renderer twice as far as the other, and on the engine most
+/// viewers use it barely moved at all. Reported as exactly that: the position presets "change
+/// almost nothing".
+///
+/// Worse, both started high. The overlay reserved `dp(60)` and mpv was pinned to `sub-pos=90`,
+/// each lifting the line about a tenth of the picture **permanently**, to clear a transport bar
+/// that is hidden almost all of the time. That is what "a bit high" was.
+///
+/// So: one baseline, mpv's own, which is what the rest of the world is calibrated against. One
+/// unit, display points, converted per renderer. And the transport allowance is paid only while
+/// the transport is actually on screen.
+enum SubtitlePlacement {
+    /// mpv's stock `sub-margin-y`, in its own 720-high script space — about 3% of the picture,
+    /// and the position essentially every other player puts a subtitle at.
+    static let baseInset: Double = 17
+
+    /// Lifted by this much while the transport is up, which is where the old permanent value
+    /// came from. Paying it on a timer rather than always is the whole of the fix.
+    static let controlsLift: Double = 60
+
+    /// mpv measures its subtitle margin in a 720-high script space; the overlay measures in
+    /// `dp`, which is two points of a 1080-high screen. One display point is `2/1080` of the
+    /// height, one mpv unit is `1/720`, so a `dp` is `2/1080 × 720` mpv units.
+    static let mpvUnitsPerPoint: Double = 2.0 / 1080.0 * 720.0
+
+    /// Clamped so a stored value from a future build — or a viewer holding the stepper down —
+    /// cannot park the line off the top of the picture or behind the bottom edge.
+    static let offsetRange: ClosedRange<Double> = -100...300
+
+    static func inset(offset: Double, controlsVisible: Bool) -> Double {
+        let clamped = min(offsetRange.upperBound, max(offsetRange.lowerBound, offset))
+        return max(0, baseInset + clamped + (controlsVisible ? controlsLift : 0))
+    }
+
+    /// The same distance, in the units `sub-margin-y` takes.
+    static func mpvMarginY(offset: Double, controlsVisible: Bool) -> Double {
+        inset(offset: offset, controlsVisible: controlsVisible) * mpvUnitsPerPoint
+    }
+}

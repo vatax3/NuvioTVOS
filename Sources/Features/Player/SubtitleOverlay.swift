@@ -145,6 +145,9 @@ final class SubtitleTrackController {
 struct SubtitleOverlay: View {
     let cues: [SubtitleCue]
     let style: SubtitleStyle
+    /// Whether the engine's transport is on screen. The host knows; this view is drawn over
+    /// both engines and cannot see either one's chrome.
+    var liftedForControls = false
 
     var body: some View {
         GeometryReader { proxy in
@@ -171,15 +174,16 @@ struct SubtitleOverlay: View {
                 }
                 .frame(maxWidth: proxy.size.width * 0.8)
                 .frame(width: proxy.size.width, height: proxy.size.height, alignment: .bottom)
-                // The transport bar occupies the bottom strip, so cues sit above it by
-                // default; the offset preference moves them from there.
-                .padding(.bottom, baseBottomInset + dp(CGFloat(style.verticalOffset)))
+                // Lifted clear of the transport only while the transport is there. Reserving
+                // the room permanently is what put every line a tenth of the picture too high.
+                .padding(.bottom, dp(CGFloat(SubtitlePlacement.inset(
+                    offset: style.verticalOffset, controlsVisible: liftedForControls
+                ))))
             }
         }
         .allowsHitTesting(false)
     }
 
-    private var baseBottomInset: CGFloat { dp(60) }
 
     /// SwiftUI has no text stroke, so the outline is approximated with a tight dark shadow —
     /// visually equivalent at TV viewing distance and far cheaper than four offset copies.

@@ -158,8 +158,10 @@ struct MPVPlayerView: View {
                             audioMix: audioMix,
                             audioLanguages: audioLanguages, subtitleLanguages: subtitleLanguages,
                             prefersForcedSubtitles: prefersForcedSubtitles,
-            hdrPeakDetection: hdrPeakDetection,
-                            subtitleStyle: subtitleStyle, initialAspectMode: initialAspectMode)
+                            hdrPeakDetection: hdrPeakDetection,
+                            subtitleStyle: subtitleStyle,
+                            controlsVisible: showsControls,
+                            initialAspectMode: initialAspectMode)
                 .ignoresSafeArea()
 
             if engine.isBuffering {
@@ -1099,6 +1101,25 @@ struct MPVPlayerView: View {
         }
     }
 
+    /// How far the line currently sits from where it would sit by default.
+    private var subtitleOffsetLabel: String {
+        let offset = settings.player.subtitleVerticalOffset
+        guard abs(offset) >= 0.5 else {
+            return L10n.text("player.offset_default", fallback: "Default position")
+        }
+        return String(format: "%+.0f", offset)
+    }
+
+    /// Both renderers read the same number through `SubtitlePlacement`, so one press moves the
+    /// muxed track and the addon track by the same distance.
+    private func adjustSubtitleOffset(by delta: Double) {
+        let next = settings.player.subtitleVerticalOffset + delta
+        settings.player.subtitleVerticalOffset = min(
+            SubtitlePlacement.offsetRange.upperBound,
+            max(SubtitlePlacement.offsetRange.lowerBound, next)
+        )
+    }
+
     /// The one place the subtitle delay is written, so mpv's renderer and the host's stay level.
     private func applySubtitleDelay(_ seconds: Double) {
         engine.setSubtitleDelay(seconds)
@@ -1208,13 +1229,22 @@ struct MPVPlayerView: View {
                     ) { player.subtitleTextColor = subtitleColor(player.subtitleTextColor, alphaPercent: percent) }
                 }
             }
+            // Three presets, replaced by the number they were standing in for. They were
+            // reported as changing "almost nothing", which was true twice over: the steps were
+            // small, and on this engine the stored value was worth about half what it was worth
+            // on the overlay. Both halves are fixed; what is left is that a position is a
+            // distance, and offering three of them was never going to suit every picture.
             InPlayerPanelSection(title: L10n.text("player.position")) {
-                ForEach([(L10n.text("player.bottom"), 0.0), (L10n.text("player.raised"), 30.0), (L10n.text("player.high"), 60.0)], id: \.0) { preset in
-                    InPlayerPanelRow(
-                        title: preset.0, systemImage: "arrow.up.and.down",
-                        isSelected: abs(player.subtitleVerticalOffset - preset.1) < 0.1
-                    ) { player.subtitleVerticalOffset = preset.1 }
-                }
+                InPlayerPanelRow(
+                    title: L10n.text("player.raise_subtitles", fallback: "Raise"),
+                    subtitle: subtitleOffsetLabel,
+                    systemImage: "arrow.up"
+                ) { adjustSubtitleOffset(by: 5) }
+                InPlayerPanelRow(
+                    title: L10n.text("player.lower_subtitles", fallback: "Lower"),
+                    subtitle: subtitleOffsetLabel,
+                    systemImage: "arrow.down"
+                ) { adjustSubtitleOffset(by: -5) }
             }
             InPlayerPanelSection(title: nil) {
                 InPlayerPanelRow(title: L10n.text("player.reset_subtitle_style"), systemImage: "arrow.counterclockwise") {
@@ -1743,6 +1773,9 @@ private struct MPVMetalSurface: UIViewControllerRepresentable {
     let prefersForcedSubtitles: Bool
     let hdrPeakDetection: HDRPeakDetection
     let subtitleStyle: SubtitleStyle
+    /// Whether this engine's transport is on screen, so mpv can lift its own subtitles clear of
+    /// it for as long as it is there. See `SubtitlePlacement`.
+    let controlsVisible: Bool
     let initialAspectMode: MPVEngine.AspectMode
 
     func makeUIViewController(context: Context) -> MPVMetalViewController {
@@ -1758,7 +1791,7 @@ private struct MPVMetalSurface: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ controller: MPVMetalViewController, context: Context) {
-        controller.applySubtitleStyle(subtitleStyle)
+        controller.applySubtitleStyle(subtitleStyle, controlsVisible: controlsVisible)
     }
 }
 
@@ -1855,10 +1888,10 @@ final class MPVMetalViewController: UIViewController {
         appliedSubtitleStyle = subtitleStyle
     }
 
-    func applySubtitleStyle(_ style: SubtitleStyle) {
+    func applySubtitleStyle(_ style: SubtitleStyle, controlsVisible: Bool = false) {
         guard appliedSubtitleStyle != style else { return }
         appliedSubtitleStyle = style
-        engine.applySubtitleStyle(style)
+        engine.applySubtitleStyle(style, controlsVisible: controlsVisible)
     }
 
     override func viewDidLayoutSubviews() {
