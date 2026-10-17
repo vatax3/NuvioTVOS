@@ -1301,3 +1301,12 @@
 "settings.layout.landscape_clearlogo_sub" = "Dessiner le logo du titre sur l'image plutôt que son nom";
 "settings.layout.random_episode" = "Épisodes aléatoires";
 "settings.layout.random_episode_sub" = "Proposer un bouton Aléatoire sur une série, pour que Lire tire un épisode au hasard";
+"party.error_not_found" = "Aucune session avec ce code.";
+"party.error_full" = "Cette session est complète.";
+"party.error_removed" = "Vous ne faites plus partie de cette session.";
+"party.error_ended" = "La session est terminée.";
+"party.error_rate_limited" = "Trop de tentatives. Patientez un instant.";
+"party.error_sign_in" = "Connectez-vous à votre compte Nuvio pour regarder ensemble.";
+"party.error_unavailable" = "Les sessions communes sont indisponibles pour le moment.";
+"party.error_network" = "Impossible de joindre la session.";
+"party.someone" = "Quelqu'un";

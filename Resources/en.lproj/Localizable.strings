@@ -1301,3 +1301,12 @@
 "settings.layout.landscape_clearlogo_sub" = "Draw the title's logo over the artwork instead of its name";
 "settings.layout.random_episode" = "Shuffle episodes";
 "settings.layout.random_episode_sub" = "Offer a Shuffle button on a series, so Play picks an episode at random";
+"party.error_not_found" = "No party with that code.";
+"party.error_full" = "That party is full.";
+"party.error_removed" = "You are no longer in this party.";
+"party.error_ended" = "The party has ended.";
+"party.error_rate_limited" = "Too many attempts. Wait a moment.";
+"party.error_sign_in" = "Sign in to your Nuvio account to watch together.";
+"party.error_unavailable" = "Watch parties are unavailable right now.";
+"party.error_network" = "Could not reach the party.";
+"party.someone" = "Someone";

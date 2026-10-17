@@ -331,6 +331,22 @@ actor NuvioBackend {
         currentSession = session
     }
 
+    /// What the realtime socket needs, which is not the same as what a REST call needs: the
+    /// host, the publishable key, and a **live** access token.
+    ///
+    /// The token is refreshed here rather than read, because a WebSocket authorises once at join
+    /// and then runs for the length of a film. A REST call that starts on a stale token is
+    /// retried after a refresh; a channel joined on one simply receives nothing, with no error
+    /// to notice.
+    func realtimeCredentials() async -> (backendUrl: String, key: String, token: String?)? {
+        guard configuration.isConfigured else { return nil }
+        var token = currentSession?.accessToken
+        if let session = currentSession, session.isExpired {
+            token = try? await refreshSession().accessToken
+        }
+        return (configuration.normalizedBackendUrl, configuration.publishableKey, token)
+    }
+
     // MARK: Endpoints
 
     private func url(_ path: String) throws -> URL {
