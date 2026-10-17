@@ -40,6 +40,16 @@
       ],
       "versions": [
         {
+          "version": "1.0.47",
+          "buildVersion": "49",
+          "date": "2026-10-17",
+          "localizedDescription": "Reconciled against Android TV `1.1.0-beta.7`.\n\n### Subtitles\n\n- **The transport clearance shipped in 1.0.46 never reached mpv.** The dedup guard compared only the subtitle style, and when nothing but the controls move the style is unchanged — so every such call returned early. The stored offset is part of the style and did work, which is why only half the feature was visibly broken.\n- **Your preferred subtitle language matched no three-letter track.** Choosing Spanish against a track tagged `spa` — which is what OpenSubtitles serves — produced no match at all, so the player fell through to whatever the file listed first. Same for French against `fre`/`fra`, German against `ger`/`deu`, Dutch against `dut`/`nld`, Chinese against `chi`/`zho`. The picker also showed `SPA` instead of the language name, and split one language into two groups.\n- Subtitles now also clear the seek readout, and nothing is lifted while the appearance panel is open — so the offset you are adjusting is the position the film will have.\n\n### Player\n\n- **Holding Select reached nothing inside the player.** The gesture recognizer lives on the root view and playback is presented over it, so the hold that opens options on every poster did nothing here.\n- Holding Select on an episode in the in-player Episodes panel now opens its options. Descriptions scroll into view while a row is focused, and moving onto a season switches to it without a press.\n- The next episode keeps the release you were already watching even when the addon publishes no binge group, by matching the filename — which is most debrid sources.\n- The next episode's sources are warmed before its card appears, not two minutes from the end: if you set the card to five or ten minutes out, it used to sit there with nothing loading behind it.\n- The player's **File** row is filled for sources that send no filename hint.\n\n### Also\n\n- The recurring upstream reconciliation is now a documented procedure rather than one re-derived each time.\n\n756 unit tests, 18 UI tests, 0 failures.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.47/Nuvio-1.0.47-tvOS-unsigned.ipa",
+          "size": 32244300,
+          "minOSVersion": "17.0",
+          "sha256": "d7d1414e68855f88b0c77f525c228a0f5e4b45be514e3003cbf8076081607466"
+        },
+        {
           "version": "1.0.46",
           "buildVersion": "48",
           "date": "2026-10-09",
@@ -386,11 +396,11 @@
         ],
         "privacy": {}
       },
-      "version": "1.0.46",
-      "versionDate": "2026-10-09",
-      "versionDescription": "## Subtitles sit where they should\n\nThey were about a tenth of the picture too high — both the player's own subtitles\nand the ones from addons. Each was permanently leaving room for the transport bar,\nwhich is hidden almost all of the time.\n\nThat room is now made only while the bar is actually on screen. At rest the line\nsits where virtually every other player puts it.\n\n## The position control actually moves them\n\n\"Bottom / Raised / High\" barely did anything, and on the MPV engine it did about\nhalf of the little it did elsewhere: the same stored number meant two different\ndistances to the two renderers.\n\nIt is one distance now, and the same on both. In the player's subtitle panel,\n**Monter** and **Descendre** move the line ten points a press and show you where it\nis. Réglages → Lecture → Décalage vertical does the same in larger steps.\n\nZero is the standard position. Positive lifts.",
-      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.46/Nuvio-1.0.46-tvOS-unsigned.ipa",
-      "size": 32210557,
+      "version": "1.0.47",
+      "versionDate": "2026-10-17",
+      "versionDescription": "Reconciled against Android TV `1.1.0-beta.7`.\n\n### Subtitles\n\n- **The transport clearance shipped in 1.0.46 never reached mpv.** The dedup guard compared only the subtitle style, and when nothing but the controls move the style is unchanged — so every such call returned early. The stored offset is part of the style and did work, which is why only half the feature was visibly broken.\n- **Your preferred subtitle language matched no three-letter track.** Choosing Spanish against a track tagged `spa` — which is what OpenSubtitles serves — produced no match at all, so the player fell through to whatever the file listed first. Same for French against `fre`/`fra`, German against `ger`/`deu`, Dutch against `dut`/`nld`, Chinese against `chi`/`zho`. The picker also showed `SPA` instead of the language name, and split one language into two groups.\n- Subtitles now also clear the seek readout, and nothing is lifted while the appearance panel is open — so the offset you are adjusting is the position the film will have.\n\n### Player\n\n- **Holding Select reached nothing inside the player.** The gesture recognizer lives on the root view and playback is presented over it, so the hold that opens options on every poster did nothing here.\n- Holding Select on an episode in the in-player Episodes panel now opens its options. Descriptions scroll into view while a row is focused, and moving onto a season switches to it without a press.\n- The next episode keeps the release you were already watching even when the addon publishes no binge group, by matching the filename — which is most debrid sources.\n- The next episode's sources are warmed before its card appears, not two minutes from the end: if you set the card to five or ten minutes out, it used to sit there with nothing loading behind it.\n- The player's **File** row is filled for sources that send no filename hint.\n\n### Also\n\n- The recurring upstream reconciliation is now a documented procedure rather than one re-derived each time.\n\n756 unit tests, 18 UI tests, 0 failures.",
+      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.47/Nuvio-1.0.47-tvOS-unsigned.ipa",
+      "size": 32244300,
       "minOSVersion": "17.0"
     }
   ],
