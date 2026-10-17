@@ -145,6 +145,9 @@ struct EpisodeOptionsDialog: View {
         }
         .buttonStyle(NuvioRowButtonStyle(cornerRadius: NuvioTheme.radii.lg))
         .focused($focused, equals: action)
+        // Named so a UI test can assert the dialog opened at all: a SwiftUI overlay container
+        // does not reliably surface as an accessibility element, so a row is its presence.
+        .accessibilityIdentifier("episodeOptions.\(action.id)")
     }
 
     private func label(_ action: EpisodeOptionsPolicy.Action) -> String {

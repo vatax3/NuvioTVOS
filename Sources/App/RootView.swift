@@ -11,6 +11,7 @@ struct RootView: View {
     @Environment(ProfileStore.self) private var profiles
     @Environment(NuvioAccountStore.self) private var account
     @Environment(NuvioSyncService.self) private var sync
+    @Environment(SelectHoldReporter.self) private var selectHolds
     @Environment(\.scenePhase) private var scenePhase
 
     /// Latched once at appearance rather than recomputed: the walk-through must not vanish
@@ -79,6 +80,13 @@ struct RootView: View {
                 // Replacing a source remains in the same full-screen presentation, but the
                 // decoder must be rebuilt for the new URL rather than retaining the old engine.
                 .id(request.id)
+                // A second gate, for a reason that is structural rather than incidental: the
+                // recognizer lives on its hosting controller's view, and a `fullScreenCover` is
+                // *presented* — the root's controller stops receiving presses for as long as the
+                // player is up. So the gesture that works everywhere else reached nothing inside
+                // the player. One reporter, two recognizers, only one of them in a live
+                // hierarchy at a time.
+                .selectHoldGate(reporting: selectHolds)
                 // What Menu means during playback is decided in one place — `PlayerExitPolicy`,
                 // which closes a panel before it hides the transport and hides the transport
                 // before it ends playback. The presentation must not have an opinion of its

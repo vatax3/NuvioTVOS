@@ -701,16 +701,21 @@ struct StreamsView: View {
 
         // Read once — it is consumed on read, and both branches below need to know whether the
         // screen was reached by auto-advance.
-        let bingeGroup = PlaybackSessionStore.shared.consumeBingeGroup(for: request.videoId)
+        let release = PlaybackSessionStore.shared.consumeRelease(for: request.videoId)
 
         // Arrived here by auto-advance: the release that was playing is almost always the right
         // one for the next episode — same encode, same audio, same subtitle timing. Trying it
         // first is what `stream_auto_play_prefer_bingegroup_next_episode` asks for, and it
         // applies even when general auto-play is off, which is the point of the pair.
-        if settings.player.reuseBingeGroup, let bingeGroup,
-           let match = StreamFilterEngine.bingeGroupMatch(in: model.orderedStreams, group: bingeGroup) {
+        if settings.player.reuseBingeGroup, let release,
+           let match = NextEpisodeSourceMatch.find(
+               in: model.orderedStreams,
+               release: release,
+               season: request.season,
+               episode: request.episode
+           ) {
             didAutoPlay = true
-            await play(match)
+            await play(match.stream)
             return
         }
 
@@ -718,7 +723,7 @@ struct StreamsView: View {
         // The chain reached an episode that release does not cover. Falling back to the ordinary
         // auto-play choice is a preference, because the alternative — stopping on the picker —
         // is what some viewers want rather than a different encode mid-season.
-        guard bingeGroup == nil || settings.player.autoPlayNextEpisodeFallbackEnabled else { return }
+        guard release == nil || settings.player.autoPlayNextEpisodeFallbackEnabled else { return }
 
         guard let candidate = StreamFilterEngine.autoPlayCandidate(
             from: model.orderedStreams,
@@ -831,7 +836,11 @@ struct StreamsView: View {
             subtitleLine: [request.episodeLabel, request.episodeName]
                 .compactMap { $0 }.joined(separator: " · ").nilIfBlank,
             streamName: stream.displayName,
-            filename: stream.behaviorHints?.filename,
+            // The addon's hint when it sent one, otherwise read off the *resolved* URL — which is
+            // where a debrid link carries it, and those are most of what a viewer plays. It fills
+            // the player's File row and is what the next episode's source list matches against.
+            filename: stream.behaviorHints?.filename?.nilIfBlank
+                ?? NextEpisodeSourceMatch.filenameFromURL(url),
             headers: stream.behaviorHints?.proxyHeaders?.request ?? [:],
             contentId: request.contentId,
             contentType: request.contentType,

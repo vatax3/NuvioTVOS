@@ -17,8 +17,6 @@ import Observation
 final class RemoteProgressService {
     private(set) var isRefreshing = false
     private(set) var lastRefresh: Date?
-    /// Rows adopted from the account on the last pass, so a source change can retract them.
-    private(set) var adoptedVideoIds: Set<String> = []
     /// Rows already looked up on TMDB, successfully or not. A title with genuinely no still on
     /// TMDB must not be retried on every appearance of Home.
     private var enrichedVideoIds: Set<String> = []
@@ -48,7 +46,6 @@ final class RemoteProgressService {
         isRefreshing = true
         defer { isRefreshing = false }
 
-        var adopted: Set<String> = []
         if source == .trakt {
             let clientId = settings.tracking.traktClientId
             let token = settings.tracking.traktAccessToken
@@ -56,7 +53,7 @@ final class RemoteProgressService {
             let items = await TraktClient.shared.playbackProgress(clientId: clientId, token: token)
             for item in items {
                 guard let entry = Self.progress(from: item) else { continue }
-                if adopt(entry, into: library) { adopted.insert(entry.videoId) }
+                adopt(entry, into: library)
                 if library.cachedPreview(contentType: entry.contentType, contentId: entry.contentId) == nil,
                    let preview = await preview(for: item, addons: addons) {
                     library.cache(preview)
@@ -66,7 +63,7 @@ final class RemoteProgressService {
             guard let token = await MDBListSession.token(settings.tracking) else { return }
             for item in await MDBListClient.shared.playback(token: token) {
                 guard let entry = Self.progress(from: item) else { continue }
-                if adopt(entry, into: library) { adopted.insert(entry.videoId) }
+                adopt(entry, into: library)
                 // MDBList's playback rows carry no artwork, so unlike the Simkl branch there is
                 // nothing to seed a preview from. The rail falls back to whatever the addon
                 // cached when the title was last opened.
@@ -80,7 +77,7 @@ final class RemoteProgressService {
             )) ?? []
             for item in items {
                 guard let entry = Self.progress(from: item) else { continue }
-                if adopt(entry, into: library) { adopted.insert(entry.videoId) }
+                adopt(entry, into: library)
                 if library.cachedPreview(contentType: entry.contentType, contentId: entry.contentId) == nil {
                     library.cache(MetaPreview(
                         id: item.contentId,
@@ -94,7 +91,6 @@ final class RemoteProgressService {
             }
         }
         lastRefresh = Date()
-        adoptedVideoIds = adopted
     }
 
     /// Removes a title's resume points from whichever service is supplying them.
@@ -189,14 +185,13 @@ final class RemoteProgressService {
         lastRefresh = nil
     }
 
-    private func adopt(_ entry: WatchProgress, into library: LibraryStore) -> Bool {
+    private func adopt(_ entry: WatchProgress, into library: LibraryStore) {
         // A position recorded on this device is the better one: it has a real duration and is
         // the exact point the engine can seek to. Remote percentages only fill gaps/newer rows.
         if let local = library.progress(forVideoId: entry.videoId), local.updatedAt >= entry.updatedAt {
-            return false
+            return
         }
         library.adoptProgress(entry)
-        return true
     }
 
     /// Maps one Trakt resume point onto our record.

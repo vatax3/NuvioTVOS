@@ -141,6 +141,16 @@ struct MPVPlayerView: View {
     private enum ControlFocus: Hashable {
         case sink, progress, playPause
         case control(String)
+
+        /// Names the control for the UI tests, which have to aim a real remote at it.
+        var identifier: String {
+            switch self {
+            case .sink: return "sink"
+            case .progress: return "progress"
+            case .playPause: return "playPause"
+            case .control(let name): return name
+            }
+        }
     }
 
     private enum TrackPicker: String, Identifiable {
@@ -160,7 +170,7 @@ struct MPVPlayerView: View {
                             prefersForcedSubtitles: prefersForcedSubtitles,
                             hdrPeakDetection: hdrPeakDetection,
                             subtitleStyle: subtitleStyle,
-                            controlsVisible: showsControls,
+                            subtitleObstructions: subtitleObstructions,
                             initialAspectMode: initialAspectMode)
                 .ignoresSafeArea()
 
@@ -367,7 +377,25 @@ struct MPVPlayerView: View {
         .onAppear {
             // One hop's grace so the buttons are in the focus system before it is aimed at them.
             retargetFocus()
+            stagePanelForTestingIfNeeded()
         }
+    }
+
+    /// Puts the Episodes panel on screen for the UI tests, so the test that holds Select on an
+    /// episode row does not first have to walk a transport that auto-hides under it.
+    ///
+    /// After a beat rather than in the same turn as `onAppear`: the transport aims focus at
+    /// itself as it mounts, and a panel opening inside that turn loses the race and comes up with
+    /// nothing focused — a state a viewer never sees, because they open it later. A method rather
+    /// than an inline closure because this view's body is already at the type-checker's limit.
+    private func stagePanelForTestingIfNeeded() {
+        #if DEBUG
+        guard PlayerHarness.opensEpisodesPanel else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1))
+            picker = .episodes
+        }
+        #endif
     }
 
     private var renderDiagnostic: some View {
@@ -439,6 +467,19 @@ struct MPVPlayerView: View {
     /// What the host needs to know about this engine's own chrome.
     private var chromeState: PlayerChromeState {
         PlayerChromeState(controlsVisible: controlsInteractable, panelOpen: picker != nil)
+    }
+
+    /// Where mpv should put its own subtitles, given what else is on screen.
+    ///
+    /// `showsControls` rather than `controlsInteractable`: the question is whether the bar is
+    /// *drawn*, not whether it can be pressed. And the appearance panel suppresses the lift
+    /// entirely, so the offset the viewer is adjusting is shown where the film will have it.
+    private var subtitleObstructions: SubtitlePlacement.Obstructions {
+        SubtitlePlacement.Obstructions(
+            controls: showsControls,
+            seekReadout: seekReadout != nil,
+            previewingOffset: picker == .subtitleAppearance
+        )
     }
 
     /// The player's current shape, as the input rules need to see it.
@@ -881,6 +922,7 @@ struct MPVPlayerView: View {
         // out of the spatial focus graph. Appearance is unaffected — it is faded out anyway.
         .disabled(!controlsInteractable)
         .accessibilityLabel(label)
+        .accessibilityIdentifier("player.transport.\(focus.identifier)")
     }
 
     // MARK: Floating read-outs
@@ -1775,7 +1817,7 @@ private struct MPVMetalSurface: UIViewControllerRepresentable {
     let subtitleStyle: SubtitleStyle
     /// Whether this engine's transport is on screen, so mpv can lift its own subtitles clear of
     /// it for as long as it is there. See `SubtitlePlacement`.
-    let controlsVisible: Bool
+    let subtitleObstructions: SubtitlePlacement.Obstructions
     let initialAspectMode: MPVEngine.AspectMode
 
     func makeUIViewController(context: Context) -> MPVMetalViewController {
@@ -1791,7 +1833,7 @@ private struct MPVMetalSurface: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ controller: MPVMetalViewController, context: Context) {
-        controller.applySubtitleStyle(subtitleStyle, controlsVisible: controlsVisible)
+        controller.applySubtitleStyle(subtitleStyle, obstructions: subtitleObstructions)
     }
 }
 
@@ -1814,6 +1856,12 @@ final class MPVMetalViewController: UIViewController {
     private let metalLayer = MPVMetalLayer()
     private var lastDrawableSize: CGSize = .zero
     private var appliedSubtitleStyle: SubtitleStyle?
+    /// Cached beside the style, because the placement depends on both and the dedup below has to
+    /// compare everything that reaches mpv. It did not, and that was a real defect: the transport
+    /// lift shipped in 1.0.46 and **never arrived on this engine**, because the style is
+    /// unchanged when only the chrome moves, so the guard swallowed every such call. The stored
+    /// offset still worked, which is exactly why it went unnoticed — half the feature behaved.
+    private var appliedSubtitleObstructions = SubtitlePlacement.Obstructions()
 
     init(
         engine: MPVEngine,
@@ -1888,10 +1936,14 @@ final class MPVMetalViewController: UIViewController {
         appliedSubtitleStyle = subtitleStyle
     }
 
-    func applySubtitleStyle(_ style: SubtitleStyle, controlsVisible: Bool = false) {
-        guard appliedSubtitleStyle != style else { return }
+    func applySubtitleStyle(
+        _ style: SubtitleStyle, obstructions: SubtitlePlacement.Obstructions = .init()
+    ) {
+        guard appliedSubtitleStyle != style || appliedSubtitleObstructions != obstructions
+        else { return }
         appliedSubtitleStyle = style
-        engine.applySubtitleStyle(style, controlsVisible: controlsVisible)
+        appliedSubtitleObstructions = obstructions
+        engine.applySubtitleStyle(style, obstructions: obstructions)
     }
 
     override func viewDidLayoutSubviews() {

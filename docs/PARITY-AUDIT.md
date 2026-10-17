@@ -1,4 +1,4 @@
-# Functional parity audit — tvOS 1.0.45 vs Android TV 1.1.0-beta.5
+# Functional parity audit — tvOS 1.0.47 vs Android TV 1.1.0-beta.7
 
 Audit date: 2026-08-25, re-derived against 1.0.31 on 2026-08-26, tracked forward since.
 Supersedes the audit published with 1.0.15. Twenty releases landed while it was open, so the
@@ -795,16 +795,104 @@ source, try the other engine, or stop. There are a dozen mpv error codes and thr
 can do about them, so three is what the message now distinguishes. The raw text stays underneath:
 it is the only thing worth having when someone reports the failure.
 
+## Upstream moved a fifth time: 1.1.0-beta.5 → 1.1.0-beta.7
+
+234 commits over nine days (7–16 October), 300 files, two tags. Read over the network with
+`gh api .../compare` and `.../contents?ref=<tag>` rather than from the local snapshot, which still
+sits at `0.8.9-beta`. That procedure is now a skill —
+[.claude/skills/upstream-parity/SKILL.md](../.claude/skills/upstream-parity/SKILL.md) — rather than
+prose to be re-derived each pass.
+
+Most of the volume is three new features. The interesting part is underneath them: **two of
+upstream's small fixes were converging on the subtitle work shipped three days earlier**, and
+chasing them turned up two defects of ours that no changelog named.
+
+| Upstream | Ours |
+|---|---|
+| **Keep subtitles above the controls and bottom overlays**, **keep the offset previewable** — a new `SubtitleLiftRules.kt` | **Ported in 1.0.47**, and it found that 1.0.46's lift had never reached mpv — see below. The clearance set is ours: measured against our own layout, only the seek readout shares a subtitle's band. |
+| **Prefetch lead time** — fire on the card's own threshold a lead early, or within the lead of the end | **Ported in 1.0.47.** Ours used a flat two minutes, so a viewer who set the card to five or ten minutes out watched it sit there with nothing warming behind it. |
+| **Filename matching for binge-group selection** (`FilenameEpisodeMatcher`) | **Ported in 1.0.47** as `NextEpisodeSourceMatch`. Ours matched `bingeGroup` alone, which most addons serving debrid results never publish, so the next episode could change release mid-season. |
+| **A switched stream must not inherit the launch filename** (`streamFilenameFromUrl`) | **Ported in 1.0.47.** Ours never inherited, but showed *nothing* when the addon sent no hint. The name now comes off the resolved URL — which is also what makes the match above reachable for debrid sources. |
+| **Full episode descriptions**, **season tab repair**, **long press for episode options** in the in-player panel | **Ported in 1.0.47**: `FocusScrollingText` at fixed height, season on focus with upstream's 150 ms debounce, options on a held Select. The panel now also seeds the episode cache from metadata it already loaded, so the dialog's season-watched and previous-episodes rows are correct from the player for the first time. |
+| **Map OpenSubtitles' non-standard Spanish codes** (`spn`, `esp`) | **Adapted in 1.0.47, and our version of the bug was far worse** — see below. |
+| **Automatic subtitle sync on libmpv** | **Still declined, doubt now resolved by their own code.** *"mpv exposes no embedded subtitle timing while it plays, so only the container's own subtitle index can serve as the reference."* They demux the container themselves. The cost here is our own subtitle-index demuxer over range requests — not an mpv property we had missed. |
+| **Watch parties** (~2,500 lines) | Open and **portable**, which the usual reasoning would have got wrong: they run on upstream's own Supabase through `watch_party_*` RPCs, and `NuvioBackend` already speaks to it for account sync. What is new is the transport — Phoenix broadcast and presence over a Realtime WebSocket, with no SDK our side. Scoped as its own release. |
+| **Media servers — Jellyfin and Emby** (~2,700 lines) | Open. A second source type beside the Stremio addons; nothing on tvOS blocks it. |
+| **Ambient mode** | Open with a doubt: tvOS gives the screen to the system screensaver on the viewer's own delay, so an in-app slideshow competes with Aerial. |
+| **AFR: sort sampled timestamps, prefer a clean refresh multiple over 3:2 pulldown, drop a stale preflight** | **N/A, all three.** They exist because Android measures the frame rate from a downloaded file head and picks a `Display.Mode`. We hand `AVDisplayCriteria` to `AVDisplayManager` and tvOS picks: no timestamps sampled, no way to express "72 Hz over 60 Hz", no async preflight to go stale. See [DisplayModeMatcher.swift](../Sources/Features/Player/DisplayModeMatcher.swift). |
+| **Refresh libmpv tracks only on change** (`MpvTrackRefreshGate`) | **Already true here** — ours is driven by an observed `track-list` property, not a progress tick. Recorded so the next pass does not build the gate. |
+| **Stop the audio fallback rebuilding the player forever** | **Cannot occur** — `PlayerRecoveryPolicy.automaticAttemptLimit` is 1. |
+| **Keep Continue Watching when a progress request fails** | **Already true** — the rail is local-first. Checking it found `RemoteProgressService.adoptedVideoIds`, assigned every refresh and read by nothing; removed. |
+| **Rating visibility on Continue Watching** | **N/A until the MDBList follow-up lands** — our CW card draws no rating to gate. |
+| **Drop whole-series history marks**; **stall at the watched threshold** | Not reproduced, not claimed fixed. Recorded rather than dropped. |
+| HTTP/2 removal, TCPNODELAY, receive window, trailer buffers, hardware-decoder fallback, chunk buffer lifetime | **N/A.** OkHttp and ExoPlayer internals. |
+| Background trailers, in-app YouTube extractor | **N/A.** No supported YouTube path on tvOS. |
+| Modern-home recomposition, `LightweightCard`, layout invalidation | **N/A.** Compose internals. |
+| Hungarian, Greek, Italian, Vietnamese, Hebrew | **N/A.** Our strings are our own; the gap is *languages*, two against thirty-six. |
+| Highlighting episodes rated 9.7+ in one hard-coded blue | Not ported — we have seven accents plus a custom one for it to clash with. |
+
+### 1.0.46's subtitle lift never reached mpv
+
+The transport clearance shipped three days before this pass and, on the engine most viewers run, did
+nothing. `MPVMetalViewController.applySubtitleStyle` guarded on `appliedSubtitleStyle != style` —
+and when only the chrome moves the style is unchanged, so every such call returned early. The
+stored *offset* is part of the style and therefore worked, which is exactly why it went unnoticed:
+half the feature behaved.
+
+Fixed by caching the obstruction set beside the style. The general lesson is small: a dedup key has
+to cover every input that reaches the far side, and this one was written when there was only one.
+
+Measuring the clearances also shrank the port. Upstream lifts for four overlays because their cards
+sit in a scaffold that reserves room for the control row; ours float over the picture and were
+given clearance directly — the skip card at 116 dp and the post-play card at 110 dp are already
+above a resting subtitle at 17 dp. Only the seek readout shares the band. Copying four constants
+would have shipped three that do nothing.
+
+### A preferred subtitle language matched no three-letter track
+
+`SubtitleSelector` compared **raw strings with `hasPrefix`**, so a viewer who chose Spanish and a
+track tagged `spa` — what OpenSubtitles, the addon we install by default, serves — produced **no
+match at all**. Not a lower rank: nothing, so the preference found no track and selection fell
+through to whatever the file listed first. Same for `fr` against `fre`/`fra`, `de` against
+`ger`/`deu`, `nl` against `dut`/`nld`, `zh` against `chi`/`zho`.
+
+The aggravating detail: `MediaLanguage.normalise` was written for exactly this comparison, alias
+table included, and this path never called it. `displayLanguage` had the same hole from the other
+side, printing `SPA` where Foundation could not resolve the code — which also split one language
+into two groups in the picker.
+
+This is 1.0.38's `slang` defect in a second place. Both sides now go through the normaliser, with
+the region subtag kept for ranking and dropped for matching — the old `hasPrefix` happened to get
+`pt` → `pt-BR` right in one direction, and trading a silent miss on `spa` for one on `pt-BR` would
+have been no improvement.
+
+### The hold gesture reached nothing inside the player
+
+`SelectHoldGate` hangs its recognizer off the hosting controller's view, and the player is a
+`fullScreenCover` — a *presented* controller, so the root's view stops receiving presses while
+playback is up. The gesture that works on every poster in the app reached nothing at all inside the
+player. A second gate inside the cover fixes it: one reporter, two recognizers, one live at a time.
+
+Third instance of the same lesson in six releases: **whether a control or a gesture is reachable is
+a runtime fact about the focus and responder graph, and no policy test can see it.** The transport's
+buttons also gained identifiers, which retired an existing test's reliance on `buttons["chevron.right"]`
+— the SF Symbol's own identifier leaking through an unnamed button.
+
 ## Verification
 
-- Unit suite at 1.0.45: **702 tests, 0 failures**. UI suite: **14 tests, 0 failures**.
+- Unit suite at 1.0.47: **756 tests, 0 failures**. UI suite: **18 tests, 0 failures**.
 - Test density is ahead of upstream per line — 703 tests over ~49k lines against 983 over 201k —
   so the 1.0.12 plan's "tests too thin" framing was wrong on volume. It was right about
   *placement*: the network clients still carry the least of it, though every release since
   1.0.22 has added a testable policy type in front of one.
-- Three build guards now fail on structural drift rather than leaving it to review: a declared
-  setting with no reader, a localisation key missing from either table, and a release whose
-  version never reached the sideloading feed.
+- Four build guards now fail on structural drift rather than leaving it to review: a declared
+  setting with no reader, a localisation key missing from either table, a release whose version
+  never reached the sideloading feed, and `L10n.format`'s `String`-only signature, which turns a
+  mismatched specifier into a compile error.
+- The recurring upstream pass is now a skill rather than prose to be re-derived:
+  [.claude/skills/upstream-parity/SKILL.md](../.claude/skills/upstream-parity/SKILL.md). It carries
+  the reading procedure, the four verdicts, and the trap that made one pass read a window
+  backwards twice.
 
 Not verified: a physical Apple TV, live Trakt/Simkl/debrid/Nuvio accounts, every third-party
 addon, or a side-by-side against a running 0.8.9 installation. In particular **the Dolby Vision

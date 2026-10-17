@@ -17,6 +17,10 @@ struct InPlayerEpisodesView: View {
     @State private var selectedSeason = 1
     @State private var isLoading = true
     @State private var error: String?
+    @State private var options: EpisodeOptionsRequest?
+    /// Debounces the season a focused chip asks for, so crossing four chips to reach the fifth
+    /// loads one season rather than five. Upstream uses 150ms for the same control.
+    @State private var seasonFocusTask: Task<Void, Never>?
 
     private var seasons: [Int] { meta?.seasons ?? [] }
     private var episodes: [Video] {
@@ -33,15 +37,7 @@ struct InPlayerEpisodesView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: NuvioTheme.spacing.xs) {
                         ForEach(seasons, id: \.self) { season in
-                            Button(action: { selectedSeason = season }) {
-                                Text(L10n.format("player.season_format", fallback: "Season %@", String(season)))
-                                    .nuvioText(NuvioTextStyles.metadata)
-                                    .foregroundStyle(selectedSeason == season ? colors.textPrimary : colors.textSecondary)
-                                    .padding(.horizontal, NuvioTheme.spacing.md)
-                                    .padding(.vertical, NuvioTheme.spacing.sm)
-                                    .background(selectedSeason == season ? colors.secondary.opacity(0.28) : colors.surfaceVariant.opacity(0.50), in: Capsule())
-                            }
-                            .buttonStyle(NuvioRowButtonStyle(cornerRadius: NuvioTheme.radii.xl))
+                            seasonChip(season)
                         }
                     }
                     .padding(.horizontal, NuvioTheme.spacing.xs)
@@ -64,14 +60,77 @@ struct InPlayerEpisodesView: View {
                             subtitle: episode.displayOverview?.nilIfBlank,
                             systemImage: progressIcon(for: episode),
                             isSelected: episode.id == request.videoId,
-                            requestsInitialFocus: episode.id == request.videoId
-                                || (!episodes.contains(where: { $0.id == request.videoId }) && index == 0)
+                            // Only the season the panel opened on claims focus. A chip loading
+                            // its season must not pull the remote down into the list — that is
+                            // upstream's own bug here, and ours re-runs this the same way.
+                            requestsInitialFocus: selectedSeason == (request.season ?? selectedSeason)
+                                && (episode.id == request.videoId
+                                    || (!episodes.contains(where: { $0.id == request.videoId }) && index == 0)),
+                            revealsSubtitle: true,
+                            onHold: meta.map { meta in
+                                { options = EpisodeOptionsRequest(video: episode, meta: meta) }
+                            },
+                            identifier: "player.episode.\(episode.id)"
                         ) { onSelect(streamRequest(for: episode)) }
                     }
                 }
             }
         }
+        .overlay {
+            if let options {
+                EpisodeOptionsDialog(
+                    request: options,
+                    onPlay: { episode in
+                        self.options = nil
+                        onSelect(streamRequest(for: episode))
+                    },
+                    onDismiss: { self.options = nil }
+                )
+            }
+        }
         .task { await load() }
+        .onDisappear { seasonFocusTask?.cancel() }
+    }
+
+    /// One season chip. Focusing it selects the season, after a beat.
+    ///
+    /// Selecting on focus rather than on Select, which is what upstream moved to and is right here
+    /// for a reason that is ours: every season's episodes are already in the `Meta` we loaded, so
+    /// there is no request behind a move and the list is simply there. Making the viewer press
+    /// Select to see it was a keystroke that bought nothing.
+    private func seasonChip(_ season: Int) -> some View {
+        Button(action: { select(season: season, immediately: true) }) {
+            Text(L10n.format("player.season_format", fallback: "Season %@", String(season)))
+                .nuvioText(NuvioTextStyles.metadata)
+                .foregroundStyle(selectedSeason == season ? colors.textPrimary : colors.textSecondary)
+                .padding(.horizontal, NuvioTheme.spacing.md)
+                .padding(.vertical, NuvioTheme.spacing.sm)
+                .background(
+                    selectedSeason == season
+                        ? colors.secondary.opacity(0.28)
+                        : colors.surfaceVariant.opacity(0.50),
+                    in: Capsule()
+                )
+        }
+        .buttonStyle(NuvioRowButtonStyle(cornerRadius: NuvioTheme.radii.xl))
+        .onFocusChange { focused in
+            guard focused else { return }
+            select(season: season, immediately: false)
+        }
+    }
+
+    /// The debounce. Crossing four chips to reach the fifth should load one season, not five.
+    private func select(season: Int, immediately: Bool) {
+        seasonFocusTask?.cancel()
+        guard !immediately else {
+            selectedSeason = season
+            return
+        }
+        seasonFocusTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled else { return }
+            selectedSeason = season
+        }
     }
 
     /// Three states in one symbol family, which is what the panel had none of: every episode
@@ -86,6 +145,15 @@ struct InPlayerEpisodesView: View {
     }
 
     private func load() async {
+        #if DEBUG
+        if let staged = PlayerHarness.episodesMeta() {
+            meta = staged
+            library.cacheEpisodes(staged.episodeRefs, forContentId: request.contentId)
+            selectedSeason = request.season ?? staged.seasons.first ?? 1
+            isLoading = false
+            return
+        }
+        #endif
         guard request.contentType == "series" else {
             error = L10n.text("player.episodes_series_only", fallback: "Episode selection is available for series only.")
             isLoading = false
@@ -99,6 +167,12 @@ struct InPlayerEpisodesView: View {
                 addon: addon, type: request.contentType, id: request.contentId
             ), resolved.type == .series {
                 meta = resolved
+                // Free, and it makes the options dialog correct from here: the season-watched and
+                // previous-episodes rows read this cache, and until now only the detail screen
+                // filled it. Next Up and the watched walk read it too.
+                if !resolved.episodeRefs.isEmpty {
+                    library.cacheEpisodes(resolved.episodeRefs, forContentId: request.contentId)
+                }
                 selectedSeason = request.season
                     ?? resolved.seasons.first
                     ?? 1

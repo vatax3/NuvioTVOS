@@ -419,4 +419,27 @@ final class PlayerSettingsStore: PreferenceStore {
             return (duration - position) <= Double(nextEpisodeThresholdMinutesBeforeEnd) * 60
         }
     }
+
+    /// How early to warm the next episode's source list.
+    ///
+    /// Two minutes, which is long enough for every addon to answer and short enough that
+    /// abandoning a film halfway does not spend a round of requests on an episode nobody
+    /// reaches. The `StremioClient` cache holds for five minutes, so a warm this early is still
+    /// fresh when the card is pressed.
+    var nextEpisodePrefetchLead: Double { 120 }
+
+    /// Whether the next episode's sources should be warmed now.
+    ///
+    /// The lead alone was the whole condition, and that was wrong for anyone who moved the card's
+    /// own threshold: *Minutes before end* can be set to five or ten, so the card sat on screen
+    /// for minutes before the warm began — which is precisely what the prefetch exists to
+    /// prevent. So the card's own rule is asked **one lead ahead**, and the flat lead stays as a
+    /// floor for a percentage threshold that lands later than it.
+    func shouldPrefetchNextEpisode(position: Double, duration: Double) -> Bool {
+        guard duration > 0 else { return false }
+        if duration - position <= nextEpisodePrefetchLead { return true }
+        return shouldAdvanceToNextEpisode(
+            position: position + nextEpisodePrefetchLead, duration: duration
+        )
+    }
 }

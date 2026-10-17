@@ -267,28 +267,44 @@ actor SubtitleLoader {
 enum SubtitleSelector {
     /// Applies the viewer's language preferences: preferred first, then secondary, then the
     /// rest — unless they asked to see only their languages.
+    /// Both sides of every language comparison go through `MediaLanguage.normalise` first.
+    ///
+    /// **This was the whole of a silent defect.** The comparison was `lang.hasPrefix(code)` on the
+    /// raw strings, so a viewer who chose Spanish and a track tagged `spa`, `esp` or `spn` — which
+    /// is what OpenSubtitles, the addon we install by default, serves — did not match at all. Not
+    /// ranked lower: *no match*, so the preference found nothing and the viewer landed on whatever
+    /// the file listed first. Same for `fr` against `fre`/`fra`, `de` against `ger`/`deu`, `nl`
+    /// against `dut`/`nld`. The normaliser for exactly this already existed and this path simply
+    /// never called it.
     static func order(
         _ subtitles: [Subtitle],
         preferred: String,
         secondary: String,
         onlyPreferred: Bool
     ) -> [Subtitle] {
-        let preferredCode = preferred.trimmingCharacters(in: .whitespaces).lowercased()
-        let secondaryCode = secondary.trimmingCharacters(in: .whitespaces).lowercased()
-
-        func rank(_ subtitle: Subtitle) -> Int {
-            let lang = subtitle.lang.lowercased()
-            if !preferredCode.isEmpty, lang.hasPrefix(preferredCode) { return 0 }
-            if !secondaryCode.isEmpty, lang.hasPrefix(secondaryCode) { return 1 }
-            return 2
+        func rank(_ subtitle: Subtitle) -> (language: Int, exactness: Int) {
+            if let strength = Self.match(subtitle.lang, against: preferred) {
+                return (0, strength == .exact ? 0 : 1)
+            }
+            if let strength = Self.match(subtitle.lang, against: secondary) {
+                return (1, strength == .exact ? 0 : 1)
+            }
+            return (2, 0)
         }
 
-        let filtered = onlyPreferred && !(preferredCode.isEmpty && secondaryCode.isEmpty)
-            ? subtitles.filter { rank($0) < 2 }
+        let hasPreference = !Self.code(preferred).isEmpty || !Self.code(secondary).isEmpty
+        let filtered = onlyPreferred && hasPreference
+            ? subtitles.filter { rank($0).language < 2 }
             : subtitles
-        // Enumerate so the sort stays stable: equal-rank tracks keep the addon's own order.
+        // Enumerate so the sort stays stable: equal-rank tracks keep the addon's own order. The
+        // exactness tier sits between the two, so a viewer who chose Brazilian Portuguese gets
+        // the `pt-BR` track above the plain `pt` one rather than whichever the addon listed first.
         return filtered.enumerated()
-            .sorted { (rank($0.element), $0.offset) < (rank($1.element), $1.offset) }
+            .sorted { left, right in
+                let a = rank(left.element)
+                let b = rank(right.element)
+                return (a.language, a.exactness, left.offset) < (b.language, b.exactness, right.offset)
+            }
             .map(\.element)
     }
 
@@ -315,15 +331,19 @@ enum SubtitleSelector {
         audioLanguage: String? = nil,
         useForced: Bool = false
     ) -> Subtitle? {
-        let code = preferred.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !code.isEmpty else { return nil }
-        let matching = ordered.filter { $0.lang.lowercased().hasPrefix(code) }
+        guard !Self.code(preferred).isEmpty else { return nil }
+        // Exact region first, then the same language in another one. Partitioned rather than
+        // sorted, because `ordered` arrives in the order the picker shows and Swift's sort is not
+        // documented as stable — re-sorting would quietly reshuffle equally good tracks.
+        let strengths = ordered.compactMap { track in
+            Self.match(track.lang, against: preferred).map { ($0, track) }
+        }
+        let matching = strengths.filter { $0.0 == .exact }.map(\.1)
+            + strengths.filter { $0.0 != .exact }.map(\.1)
 
         guard useForced else { return matching.first }
 
-        let audio = (audioLanguage ?? "").trimmingCharacters(in: .whitespaces).lowercased()
-        let audioIsPreferredLanguage = !audio.isEmpty
-            && (audio.hasPrefix(code) || code.hasPrefix(audio))
+        let audioIsPreferredLanguage = Self.match(audioLanguage ?? "", against: preferred) != nil
 
         if audioIsPreferredLanguage {
             return matching.first(where: isForced)
@@ -346,6 +366,45 @@ enum SubtitleSelector {
         case .flat:
             return [("All subtitles", subtitles)]
         }
+    }
+
+    /// How well a track's language answers a preference.
+    enum LanguageMatch: Equatable {
+        /// The same code, region included.
+        case exact
+        /// The same language in a different region — `pt` asked for, `pt-BR` offered.
+        case language
+    }
+
+    /// Whether a track tagged `trackLanguage` satisfies a preference for `preference`, and how
+    /// well, or nil when it is a different language.
+    ///
+    /// Both sides are normalised first, which is the fix: the comparison used to be
+    /// `hasPrefix` on the raw strings. The regional half is kept because the old prefix
+    /// comparison happened to get it right in one direction — someone who asked for Portuguese
+    /// did match a `pt-BR` track — and losing that while fixing the three-letter codes would
+    /// trade one silent miss for another.
+    nonisolated static func match(
+        _ trackLanguage: String, against preference: String
+    ) -> LanguageMatch? {
+        let wanted = code(preference)
+        let track = code(trackLanguage)
+        guard !wanted.isEmpty, !track.isEmpty else { return nil }
+        if wanted == track { return .exact }
+        return base(wanted) == base(track) ? .language : nil
+    }
+
+    /// One language code, canonical and lower-cased, or empty for an absent one.
+    nonisolated private static func code(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return "" }
+        return MediaLanguage.normalise(trimmed).lowercased()
+    }
+
+    /// The language subtag without its region. The catalogue lists `pt` and `pt-br` as separate
+    /// choices on purpose, so the region is dropped for matching and kept for ranking.
+    nonisolated private static func base(_ code: String) -> String {
+        String(code.split(separator: "-").first ?? "")
     }
 }
 
@@ -435,17 +494,54 @@ enum SubtitlePlacement {
     /// height, one mpv unit is `1/720`, so a `dp` is `2/1080 × 720` mpv units.
     static let mpvUnitsPerPoint: Double = 2.0 / 1080.0 * 720.0
 
+    /// Lifted by this much while the hidden-controls seek readout is up.
+    ///
+    /// That readout is drawn bottom-**centre** — `tvSafeVertical + dp(24)` of bottom padding and
+    /// about 60dp tall, so it occupies roughly 48–108dp — which is exactly the band a subtitle
+    /// sits in. It is the only one of our bottom overlays that does, and the measurement is why
+    /// the other two are absent: the skip card clears 116dp and the post-play card 110dp, both
+    /// placed there to stay off the transport, so both already sit *above* a resting subtitle.
+    /// Upstream lifts for all four because their cards are laid out against a scaffold that
+    /// reserves room for the control row; ours float over the picture and were given the
+    /// clearance directly.
+    static let seekReadoutLift: Double = 91
+
     /// Clamped so a stored value from a future build — or a viewer holding the stepper down —
     /// cannot park the line off the top of the picture or behind the bottom edge.
     static let offsetRange: ClosedRange<Double> = -100...300
 
-    static func inset(offset: Double, controlsVisible: Bool) -> Double {
+    /// What stands between the line and the bottom of the picture right now.
+    struct Obstructions: Equatable {
+        /// The transport is on screen.
+        var controls = false
+        /// The compact seek readout is on screen, which happens only with the transport down.
+        var seekReadout = false
+        /// The viewer has the subtitle appearance panel open, so **nothing** is lifted.
+        ///
+        /// This is the half of the rule that is easy to miss and does the most for the control:
+        /// the panel is open precisely because they are moving the line, and measuring from a
+        /// lifted baseline shows them a position the film will not have. Upstream reached the
+        /// same conclusion in 1.1.0-beta.7 — *"lift is disabled so the configured bottom offset
+        /// is shown and can be previewed while adjusting it"*.
+        var previewingOffset = false
+    }
+
+    /// How far above the bottom edge the line sits, in dp.
+    ///
+    /// The lift is the **largest** clearance in force, never their sum: two overlays in the same
+    /// band need the line clear of the taller one, and adding them would throw it into the middle
+    /// of the picture.
+    static func inset(offset: Double, obstructions: Obstructions = .init()) -> Double {
         let clamped = min(offsetRange.upperBound, max(offsetRange.lowerBound, offset))
-        return max(0, baseInset + clamped + (controlsVisible ? controlsLift : 0))
+        let lift = obstructions.previewingOffset ? 0 : max(
+            obstructions.controls ? controlsLift : 0,
+            obstructions.seekReadout ? seekReadoutLift : 0
+        )
+        return max(0, baseInset + clamped + lift)
     }
 
     /// The same distance, in the units `sub-margin-y` takes.
-    static func mpvMarginY(offset: Double, controlsVisible: Bool) -> Double {
-        inset(offset: offset, controlsVisible: controlsVisible) * mpvUnitsPerPoint
+    static func mpvMarginY(offset: Double, obstructions: Obstructions = .init()) -> Double {
+        inset(offset: offset, obstructions: obstructions) * mpvUnitsPerPoint
     }
 }

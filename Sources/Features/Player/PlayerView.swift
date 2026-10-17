@@ -340,10 +340,12 @@ struct PlayerView: View {
                 }
             )
 
+            // No seek readout on this path — it belongs to the hidden-controls seek, which is the
+            // MPV surface's own, and AVKit draws its own transport here.
             SubtitleOverlay(
                 cues: subtitles.activeCues,
                 style: settings.subtitleStyle,
-                liftedForControls: engineChrome.controlsVisible
+                obstructions: .init(controls: engineChrome.controlsVisible)
             )
 
             skipSegmentCard
@@ -1123,15 +1125,15 @@ struct PlayerView: View {
     /// viewer had been looking at thirty seconds earlier was rebuilt while they waited. The
     /// answers are cached in `StremioClient`; this only decides when to go and get them.
     ///
-    /// Two minutes before the end rather than at the countdown: by the time the card is on
-    /// screen the viewer is already pressing it, and a prefetch that finishes after the press has
-    /// bought nothing. Early enough to land, late enough that abandoning a film halfway does not
-    /// spend a round of requests on an episode nobody reaches.
+    /// Ahead of the countdown: by the time the card is on screen the viewer is already pressing
+    /// it, and a prefetch that finishes after the press has bought nothing. `shouldPrefetchNextEpisode`
+    /// owns *when* — it asks the card's own threshold one lead early, which a flat lead could not,
+    /// because that threshold is a viewer setting and can put the card minutes from the end.
     private func prefetchNextEpisodeIfDue(position: Double, duration: Double) {
         guard settings.player.preloadNextEpisodeSources,
               !didPrefetchNextEpisode,
               let next = request.nextUp,
-              duration > 0, duration - position <= 120
+              settings.player.shouldPrefetchNextEpisode(position: position, duration: duration)
         else { return }
         didPrefetchNextEpisode = true
 
@@ -1267,6 +1269,19 @@ struct PlayerView: View {
 
     /// The transport's next-episode button: no countdown, no consent prompt — the viewer has
     /// already decided by pressing it.
+    /// What is playing, in the terms the next episode's source list can look for: the addon's own
+    /// `bingeGroup` when it published one, and the filename either way. Most addons publish no
+    /// `bingeGroup` at all, which is why the second half exists — see `NextEpisodeSourceMatch`.
+    private var playingRelease: NextEpisodeSourceMatch.Release {
+        NextEpisodeSourceMatch.Release(
+            bingeGroup: request.sourceBingeGroup,
+            filename: request.filename?.nilIfBlank
+                ?? NextEpisodeSourceMatch.filenameFromURL(request.streamURL),
+            season: request.season,
+            episode: request.episode
+        )
+    }
+
     private func playNextEpisodeNow() {
         postPlayTask?.cancel()
         postPlayTask = nil
@@ -1278,7 +1293,7 @@ struct PlayerView: View {
             to: next.videoId,
             // Only offered when the viewer asked for it; the stream screen decides what to do
             // with it, and ignores it entirely when the preference is off.
-            bingeGroup: settings.player.preferBingeGroupNextEpisode ? request.sourceBingeGroup : nil
+            release: settings.player.preferBingeGroupNextEpisode ? playingRelease : nil
         )
         router.openStreams(next)
         dismiss()
@@ -1307,7 +1322,7 @@ struct PlayerView: View {
             to: next.videoId,
             // Only offered when the viewer asked for it; the stream screen decides what to do
             // with it, and ignores it entirely when the preference is off.
-            bingeGroup: settings.player.preferBingeGroupNextEpisode ? request.sourceBingeGroup : nil
+            release: settings.player.preferBingeGroupNextEpisode ? playingRelease : nil
         )
         router.openStreams(next)
     }

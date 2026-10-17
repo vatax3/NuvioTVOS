@@ -145,9 +145,9 @@ final class SubtitleTrackController {
 struct SubtitleOverlay: View {
     let cues: [SubtitleCue]
     let style: SubtitleStyle
-    /// Whether the engine's transport is on screen. The host knows; this view is drawn over
-    /// both engines and cannot see either one's chrome.
-    var liftedForControls = false
+    /// What is covering the bottom of the picture. The host knows; this view is drawn over both
+    /// engines and cannot see either one's chrome.
+    var obstructions = SubtitlePlacement.Obstructions()
 
     var body: some View {
         GeometryReader { proxy in
@@ -177,7 +177,7 @@ struct SubtitleOverlay: View {
                 // Lifted clear of the transport only while the transport is there. Reserving
                 // the room permanently is what put every line a tenth of the picture too high.
                 .padding(.bottom, dp(CGFloat(SubtitlePlacement.inset(
-                    offset: style.verticalOffset, controlsVisible: liftedForControls
+                    offset: style.verticalOffset, obstructions: obstructions
                 ))))
             }
         }

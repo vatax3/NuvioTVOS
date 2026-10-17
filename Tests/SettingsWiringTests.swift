@@ -173,11 +173,11 @@ final class SettingsWiringTests: XCTestCase {
             stream(name: "None", bingeGroup: nil)
         ]
         XCTAssertEqual(
-            StreamFilterEngine.bingeGroupMatch(in: streams, group: "torrentio|1080p|WEB-DL")?.displayName,
+            NextEpisodeSourceMatch.bingeGroupMatch(in: streams, group: "torrentio|1080p|WEB-DL")?.displayName,
             "Same"
         )
-        XCTAssertNil(StreamFilterEngine.bingeGroupMatch(in: streams, group: "nothing-like-this"))
-        XCTAssertNil(StreamFilterEngine.bingeGroupMatch(in: streams, group: "   "))
+        XCTAssertNil(NextEpisodeSourceMatch.bingeGroupMatch(in: streams, group: "nothing-like-this"))
+        XCTAssertNil(NextEpisodeSourceMatch.bingeGroupMatch(in: streams, group: "   "))
     }
 
     private func stream(name: String, bingeGroup: String?) -> Nuvio.Stream {

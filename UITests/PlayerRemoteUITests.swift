@@ -140,16 +140,26 @@ final class PlayerRemoteUITests: XCTestCase {
 
         // Walk to the trailing chevron — focus stops at the end of the row, so pressing past
         // it is harmless — and open the second half of the row with it.
-        XCTAssertTrue(app.buttons["chevron.right"].exists, "the row should end in the expand chevron")
-        for _ in 0..<6 {
-            XCUIRemote.shared.press(.right)
-            usleep(300_000)
-        }
+        //
+        // The control is named by what it does, not by the glyph it happens to wear: this used
+        // to query `buttons["chevron.right"]`, which was the SF Symbol's own identifier leaking
+        // through an unnamed button and would have broken on any change of icon.
+        let expand = app.buttons["player.transport.more"]
+        let revealed = app.buttons["player.transport.info"]
+        XCTAssertTrue(expand.exists, "the row should end in the expand control")
+        XCTAssertFalse(revealed.exists, "the occasional tools should start out hidden")
+
+        // Counted presses, not a focus-driven walk: `hasFocus` on these buttons is the
+        // unreliable witness this test's own docs warn about, and a walk that waits on it stalls
+        // under suite load. Focus stops at the end of the row, so pressing past it is harmless.
+        for _ in 0..<6 { XCUIRemote.shared.press(.right); usleep(300_000) }
         XCUIRemote.shared.press(.select)
 
+        // The witness is the second half of the row actually arriving, rather than an icon
+        // swapping: a flipped chevron over an unchanged row would pass and mean nothing.
         XCTAssertTrue(
-            wait(for: { self.app.buttons["chevron.left"].exists }),
-            "Select on a transport button must act — the chevron should have flipped"
+            wait(for: { revealed.exists }),
+            "Select on a transport button must act — the occasional tools should have appeared"
         )
     }
 

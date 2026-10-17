@@ -495,14 +495,18 @@ final class MPVEngine {
     /// Apply the same subtitle preferences used by AVKit and the custom external-subtitle
     /// overlay.  This is deliberately a live update: changing an audio/subtitle preference
     /// must never recreate the MPV surface or briefly interrupt playback.
-    /// - Parameter controlsVisible: whether the transport is on screen. The line is lifted clear
-    ///   of it while it is, and only while it is — see `SubtitlePlacement`.
-    func applySubtitleStyle(_ style: SubtitleStyle, controlsVisible: Bool = false) {
-        applySubtitleStyle(style, asOption: false, controlsVisible: controlsVisible)
+    /// - Parameter obstructions: what is covering the bottom of the picture. The line is lifted
+    ///   clear of it while it is there, and only while it is — see `SubtitlePlacement`.
+    func applySubtitleStyle(
+        _ style: SubtitleStyle, obstructions: SubtitlePlacement.Obstructions = .init()
+    ) {
+        applySubtitleStyle(style, asOption: false, obstructions: obstructions)
     }
 
     private func applySubtitleStyle(
-        _ style: SubtitleStyle, asOption: Bool, controlsVisible: Bool = false
+        _ style: SubtitleStyle,
+        asOption: Bool,
+        obstructions: SubtitlePlacement.Obstructions = .init()
     ) {
         let set: (String, String) -> Void = { name, value in
             if asOption { self.setOption(name, value) }
@@ -528,7 +532,7 @@ final class MPVEngine {
         set(
             "sub-margin-y",
             String(format: "%.0f", SubtitlePlacement.mpvMarginY(
-                offset: style.verticalOffset, controlsVisible: controlsVisible
+                offset: style.verticalOffset, obstructions: obstructions
             ))
         )
     }

@@ -14,14 +14,14 @@ final class SubtitlePlacementTests: XCTestCase {
     /// mpv's own `sub-margin-y` is 22, which is the position essentially every other player puts
     /// a subtitle at. Landing on it is the point of the baseline, not a coincidence.
     func testTheDefaultMatchesMpvsOwnMargin() {
-        let margin = SubtitlePlacement.mpvMarginY(offset: 0, controlsVisible: false)
+        let margin = SubtitlePlacement.mpvMarginY(offset: 0, obstructions: .init())
 
         XCTAssertEqual(margin, 22.67, accuracy: 1)
     }
 
     /// Roughly 3% of the picture, where it used to be about 10%.
     func testTheDefaultIsNotLiftedAwayFromTheBottom() {
-        let inset = SubtitlePlacement.inset(offset: 0, controlsVisible: false)
+        let inset = SubtitlePlacement.inset(offset: 0, obstructions: .init())
 
         XCTAssertEqual(inset, 17, accuracy: 0.001)
         // Two points per `dp` on a 1080-high screen.
@@ -35,28 +35,28 @@ final class SubtitlePlacementTests: XCTestCase {
     func testBothRenderersMoveByTheSameFractionOfTheScreen() {
         let offset: Double = 50
         let overlayPoints = (
-            SubtitlePlacement.inset(offset: offset, controlsVisible: false)
-                - SubtitlePlacement.inset(offset: 0, controlsVisible: false)
+            SubtitlePlacement.inset(offset: offset, obstructions: .init())
+                - SubtitlePlacement.inset(offset: 0, obstructions: .init())
         ) * 2
-        let mpvUnits = SubtitlePlacement.mpvMarginY(offset: offset, controlsVisible: false)
-            - SubtitlePlacement.mpvMarginY(offset: 0, controlsVisible: false)
+        let mpvUnits = SubtitlePlacement.mpvMarginY(offset: offset, obstructions: .init())
+            - SubtitlePlacement.mpvMarginY(offset: 0, obstructions: .init())
 
         XCTAssertEqual(overlayPoints / 1080, mpvUnits / 720, accuracy: 0.0001)
     }
 
     func testAPositiveOffsetLiftsAndANegativeOneLowers() {
-        let base = SubtitlePlacement.inset(offset: 0, controlsVisible: false)
+        let base = SubtitlePlacement.inset(offset: 0, obstructions: .init())
 
-        XCTAssertGreaterThan(SubtitlePlacement.inset(offset: 30, controlsVisible: false), base)
-        XCTAssertLessThan(SubtitlePlacement.inset(offset: -10, controlsVisible: false), base)
+        XCTAssertGreaterThan(SubtitlePlacement.inset(offset: 30, obstructions: .init()), base)
+        XCTAssertLessThan(SubtitlePlacement.inset(offset: -10, obstructions: .init()), base)
     }
 
     /// Worth having as a number rather than a feeling: one step of the control has to be visible
     /// on a television. Five units is ten points of a 1080-high screen.
     func testOneStepOfTheControlIsVisible() {
         let step = (
-            SubtitlePlacement.inset(offset: 5, controlsVisible: false)
-                - SubtitlePlacement.inset(offset: 0, controlsVisible: false)
+            SubtitlePlacement.inset(offset: 5, obstructions: .init())
+                - SubtitlePlacement.inset(offset: 0, obstructions: .init())
         ) * 2
 
         XCTAssertEqual(step, 10, accuracy: 0.001)
@@ -68,8 +68,8 @@ final class SubtitlePlacementTests: XCTestCase {
     /// line too high in the first place.
     func testTheLineLiftsWhileTheTransportIsUp() {
         XCTAssertEqual(
-            SubtitlePlacement.inset(offset: 0, controlsVisible: true)
-                - SubtitlePlacement.inset(offset: 0, controlsVisible: false),
+            SubtitlePlacement.inset(offset: 0, obstructions: .init(controls: true))
+                - SubtitlePlacement.inset(offset: 0, obstructions: .init()),
             SubtitlePlacement.controlsLift,
             accuracy: 0.001
         )
@@ -77,8 +77,8 @@ final class SubtitlePlacementTests: XCTestCase {
 
     func testTheLiftAppliesToMpvToo() {
         XCTAssertGreaterThan(
-            SubtitlePlacement.mpvMarginY(offset: 0, controlsVisible: true),
-            SubtitlePlacement.mpvMarginY(offset: 0, controlsVisible: false)
+            SubtitlePlacement.mpvMarginY(offset: 0, obstructions: .init(controls: true)),
+            SubtitlePlacement.mpvMarginY(offset: 0, obstructions: .init())
         )
     }
 
@@ -86,7 +86,7 @@ final class SubtitlePlacementTests: XCTestCase {
     /// with-transport position exactly where viewers were used to seeing it.
     func testWithTheTransportUpTheLineIsWhereItUsedToAlwaysBe() {
         XCTAssertEqual(
-            SubtitlePlacement.inset(offset: 0, controlsVisible: true), 77, accuracy: 0.001
+            SubtitlePlacement.inset(offset: 0, obstructions: .init(controls: true)), 77, accuracy: 0.001
         )
     }
 
@@ -96,15 +96,15 @@ final class SubtitlePlacementTests: XCTestCase {
     /// the line off the picture.
     func testAnAbsurdOffsetIsClamped() {
         XCTAssertEqual(
-            SubtitlePlacement.inset(offset: 9_000, controlsVisible: false),
+            SubtitlePlacement.inset(offset: 9_000, obstructions: .init()),
             SubtitlePlacement.inset(
-                offset: SubtitlePlacement.offsetRange.upperBound, controlsVisible: false
+                offset: SubtitlePlacement.offsetRange.upperBound, obstructions: .init()
             )
         )
         XCTAssertEqual(
-            SubtitlePlacement.inset(offset: -9_000, controlsVisible: false),
+            SubtitlePlacement.inset(offset: -9_000, obstructions: .init()),
             SubtitlePlacement.inset(
-                offset: SubtitlePlacement.offsetRange.lowerBound, controlsVisible: false
+                offset: SubtitlePlacement.offsetRange.lowerBound, obstructions: .init()
             )
         )
     }
@@ -113,9 +113,94 @@ final class SubtitlePlacementTests: XCTestCase {
     func testTheLowestOffsetStaysInsideThePicture() {
         XCTAssertGreaterThanOrEqual(
             SubtitlePlacement.inset(
-                offset: SubtitlePlacement.offsetRange.lowerBound, controlsVisible: false
+                offset: SubtitlePlacement.offsetRange.lowerBound, obstructions: .init()
             ),
             0
+        )
+    }
+
+    // MARK: The seek readout
+
+    /// The hidden-controls seek readout is drawn bottom-centre, in the band a subtitle occupies,
+    /// so the line has to clear it too. It is the only other overlay of ours that does: the skip
+    /// card clears 116dp and the post-play card 110dp, both already above a resting subtitle.
+    func testTheLineLiftsForTheSeekReadout() {
+        XCTAssertEqual(
+            SubtitlePlacement.inset(offset: 0, obstructions: .init(seekReadout: true))
+                - SubtitlePlacement.inset(offset: 0, obstructions: .init()),
+            SubtitlePlacement.seekReadoutLift,
+            accuracy: 0.001
+        )
+    }
+
+    /// The readout sits higher than the transport, and it replaces it rather than joining it —
+    /// so its clearance has to be the larger of the two or the line lands across it.
+    func testTheReadoutNeedsMoreClearanceThanTheTransport() {
+        XCTAssertGreaterThan(SubtitlePlacement.seekReadoutLift, SubtitlePlacement.controlsLift)
+    }
+
+    // MARK: Two at once
+
+    /// **The largest clearance, never the sum.** Two overlays in one band need the line clear of
+    /// the taller one; adding them would throw it into the middle of the picture.
+    func testTwoObstructionsTakeTheLargerClearanceRatherThanBoth() {
+        let both = SubtitlePlacement.inset(
+            offset: 0, obstructions: .init(controls: true, seekReadout: true)
+        )
+
+        XCTAssertEqual(
+            both,
+            SubtitlePlacement.inset(offset: 0, obstructions: .init(seekReadout: true)),
+            accuracy: 0.001
+        )
+        XCTAssertLessThan(
+            both,
+            SubtitlePlacement.inset(offset: 0, obstructions: .init())
+                + SubtitlePlacement.controlsLift + SubtitlePlacement.seekReadoutLift
+        )
+    }
+
+    // MARK: Previewing the offset
+
+    /// With the appearance panel open the viewer is moving the line, so nothing is lifted: the
+    /// position they are looking at has to be the position the film will have. Measuring from a
+    /// lifted baseline is a large part of why the control felt vague.
+    func testThePanelSuspendsEveryLift() {
+        for obstructions in [
+            SubtitlePlacement.Obstructions(controls: true, previewingOffset: true),
+            SubtitlePlacement.Obstructions(seekReadout: true, previewingOffset: true),
+            SubtitlePlacement.Obstructions(
+                controls: true, seekReadout: true, previewingOffset: true
+            )
+        ] {
+            XCTAssertEqual(
+                SubtitlePlacement.inset(offset: 40, obstructions: obstructions),
+                SubtitlePlacement.inset(offset: 40, obstructions: .init()),
+                accuracy: 0.001,
+                "the preview must show the resting position, not a lifted one"
+            )
+        }
+    }
+
+    /// Suppressing the lift must not suppress the offset — that is the number being adjusted.
+    func testThePreviewStillHonoursTheOffsetItself() {
+        let preview = SubtitlePlacement.Obstructions(controls: true, previewingOffset: true)
+
+        XCTAssertGreaterThan(
+            SubtitlePlacement.inset(offset: 60, obstructions: preview),
+            SubtitlePlacement.inset(offset: 0, obstructions: preview)
+        )
+    }
+
+    /// And both renderers suspend it, or the preview is honest on one engine and not the other —
+    /// which is the exact shape of the defect this whole type exists to prevent.
+    func testTheSuspensionReachesMpvAsWell() {
+        XCTAssertEqual(
+            SubtitlePlacement.mpvMarginY(
+                offset: 0, obstructions: .init(controls: true, previewingOffset: true)
+            ),
+            SubtitlePlacement.mpvMarginY(offset: 0, obstructions: .init()),
+            accuracy: 0.001
         )
     }
 }

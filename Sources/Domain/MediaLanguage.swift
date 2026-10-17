@@ -127,6 +127,12 @@ struct MediaLanguage: Identifiable, Hashable, Sendable {
 
     /// The bibliographic 639-2 codes that differ from the terminological ones. Files label
     /// French tracks `fre` about as often as `fra`, and a viewer's preference has to match both.
+    ///
+    /// The last row is not ISO anything: it is OpenSubtitles' own legacy vocabulary, which the
+    /// default subtitle addon still serves. Upstream added `spn` and `esp` in 1.1.0-beta.7 after
+    /// Spanish tracks stopped matching; the rest come from the same list and are unambiguous.
+    /// `hbs` is deliberately absent — Serbo-Croatian is a macrolanguage, and picking Serbian or
+    /// Croatian on the viewer's behalf would be a guess rather than a normalisation.
     private static let threeLetterAliases: [String: String] = [
         "fre": "fr", "fra": "fr", "ger": "de", "deu": "de", "dut": "nl", "nld": "nl",
         "gre": "el", "ell": "el", "chi": "zh", "zho": "zh", "cze": "cs", "ces": "cs",
@@ -138,6 +144,8 @@ struct MediaLanguage: Identifiable, Hashable, Sendable {
         "rus": "ru", "pol": "pl", "swe": "sv", "dan": "da", "nor": "no", "fin": "fi",
         "hun": "hu", "tur": "tr", "ara": "ar", "heb": "he", "hin": "hi", "tha": "th",
         "vie": "vi", "ukr": "uk", "bul": "bg", "hrv": "hr", "srp": "sr", "slv": "sl",
-        "est": "et", "lav": "lv", "lit": "lt", "ind": "id", "cat": "ca"
+        "est": "et", "lav": "lv", "lit": "lt", "ind": "id", "cat": "ca",
+        "esp": "es", "spn": "es", "pob": "pt", "scc": "sr", "scr": "hr",
+        "zht": "zh", "zhe": "zh", "ze": "zh"
     ]
 }

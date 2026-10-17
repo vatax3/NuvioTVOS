@@ -653,8 +653,11 @@ struct Subtitle: Codable, Hashable, Identifiable, Sendable {
     var lang: String
     var addonName: String?
 
+    /// Through `MediaLanguage`, which normalises the code first. Asking Foundation directly — as
+    /// this did — prints `SPA` for a Spanish track, because `localizedString(forLanguageCode:)`
+    /// resolves 639-1 and leaves the three-letter forms addons actually serve unanswered.
     var displayLanguage: String {
-        Locale.current.localizedString(forLanguageCode: lang)?.capitalized ?? lang.uppercased()
+        MediaLanguage.named(lang) ?? lang.uppercased()
     }
 }
 

@@ -208,10 +208,26 @@ struct InPlayerPanelRow: View {
     /// The button that represents the active value (or the first available choice) receives
     /// focus when a player tool is opened.  This makes icon presses immediately navigable.
     var requestsInitialFocus = false
+    /// Read the whole subtitle rather than one clipped line, by scrolling it while this row holds
+    /// focus. For an episode description, where one line is a tease; a track name needs none of it.
+    var revealsSubtitle = false
+    /// A held Select, where there is something to open. Absent on most rows, which is why the
+    /// press is only swallowed when a handler exists — see `SelectHoldGate`.
+    var onHold: (() -> Void)?
+    /// For the UI tests, which have to drive a real remote at a real row.
+    var identifier: String?
     let action: () -> Void
 
+    @State private var swallowsNextPress = false
+
     var body: some View {
-        Button(action: action) {
+        Button(action: {
+            if swallowsNextPress {
+                swallowsNextPress = false
+                return
+            }
+            action()
+        }) {
             HStack(spacing: NuvioTheme.spacing.md) {
                 if isLoading {
                     ProgressView().tint(colors.secondary)
@@ -227,10 +243,18 @@ struct InPlayerPanelRow: View {
                         .foregroundStyle(colors.textPrimary)
                         .lineLimit(2)
                     if let subtitle = subtitle?.nilIfBlank {
-                        Text(subtitle)
-                            .nuvioText(NuvioTextStyles.metadata)
-                            .foregroundStyle(colors.textSecondary)
-                            .lineLimit(1)
+                        if revealsSubtitle {
+                            FocusScrollingText(
+                                text: subtitle,
+                                color: colors.textSecondary,
+                                isFocused: rowFocused
+                            )
+                        } else {
+                            Text(subtitle)
+                                .nuvioText(NuvioTextStyles.metadata)
+                                .foregroundStyle(colors.textSecondary)
+                                .lineLimit(1)
+                        }
                     }
                 }
                 Spacer(minLength: 0)
@@ -247,6 +271,14 @@ struct InPlayerPanelRow: View {
         .buttonStyle(NuvioRowButtonStyle(cornerRadius: NuvioTheme.radii.md))
         .focusEffectDisabled()
         .focused($rowFocused)
+        // Focus alone is not the condition: with no handler there is nothing to open, and
+        // swallowing the press would make the row inert — which is how the poster dialog was
+        // unreachable for thirteen releases.
+        .onSelectHold(
+            isFocused: rowFocused && onHold != nil,
+            swallowsNextPress: $swallowsNextPress
+        ) { onHold?() }
+        .accessibilityIdentifier(identifier ?? "")
         .onAppear {
             guard requestsInitialFocus else { return }
             Task { @MainActor in rowFocused = true }
@@ -520,7 +552,10 @@ struct InPlayerSourcesPanel: View {
                 subtitleLine: [sourceRequest.episodeLabel, sourceRequest.episodeName]
                     .compactMap { $0 }.joined(separator: " · ").nilIfBlank,
                 streamName: stream.displayName,
-                filename: stream.behaviorHints?.filename,
+                // From this stream, never inherited: an in-place switch rebuilds the request, so
+                // the name follows the file that is about to play rather than the one that was.
+                filename: stream.behaviorHints?.filename?.nilIfBlank
+                    ?? NextEpisodeSourceMatch.filenameFromURL(url),
                 headers: stream.behaviorHints?.proxyHeaders?.request ?? [:],
                 contentId: sourceRequest.contentId,
                 contentType: sourceRequest.contentType,

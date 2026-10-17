@@ -233,6 +233,61 @@ struct FocusMarqueeText: View {
     }
 }
 
+/// Multi-line text in a box of fixed height, which scrolls its remainder into view while focused.
+///
+/// The vertical counterpart of `FocusMarqueeText`, for an episode description clipped to a couple
+/// of lines in a list. Port of upstream's `FocusScrollingText`, and the fixed height is the part
+/// that matters rather than the scrolling: growing a focused row would push every row below it
+/// while the focus engine is mid-gesture, and this codebase has already lost every catalog rail
+/// once to a list whose heights moved under it. The box never changes size; only the text inside
+/// it does.
+struct FocusScrollingText: View {
+    let text: String
+    var style: NuvioTextStyle = NuvioTextStyles.metadata
+    var color: Color
+    var isFocused: Bool
+    /// How many lines are visible at rest. Two is what the panel has room for.
+    var lines: Int = 2
+
+    @State private var textHeight: CGFloat = 0
+    @State private var offset: CGFloat = 0
+
+    private var boxHeight: CGFloat { sp(style.lineHeight) * CGFloat(lines) }
+    private var overflow: CGFloat { max(0, textHeight - boxHeight) }
+
+    var body: some View {
+        Text(text)
+            .nuvioText(style)
+            .foregroundStyle(color)
+            .fixedSize(horizontal: false, vertical: true)
+            .background {
+                GeometryReader { textProxy in
+                    Color.clear
+                        .onAppear { textHeight = textProxy.size.height }
+                        .onChange(of: textProxy.size.height) { _, new in textHeight = new }
+                }
+            }
+            .offset(y: offset)
+            .frame(height: boxHeight, alignment: .top)
+            .clipped()
+            .onChange(of: isFocused) { _, focused in animate(focused) }
+            .onChange(of: text) { _, _ in offset = 0 }
+    }
+
+    private func animate(_ focused: Bool) {
+        guard focused, overflow > 1 else {
+            withAnimation(NuvioMotion.quickTween) { offset = 0 }
+            return
+        }
+        // A long pause before anything moves: someone walking down the list should see still
+        // text, and only someone who stopped on a row is asking to read the rest of it.
+        let duration = Double(overflow) / dp(18)
+        withAnimation(.easeInOut(duration: duration).delay(2.5).repeatForever(autoreverses: true)) {
+            offset = -overflow
+        }
+    }
+}
+
 // MARK: - Section header
 
 struct SectionHeader: View {
