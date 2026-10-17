@@ -10,6 +10,15 @@ import UIKit
 /// headers cannot travel with it, so a debrid link that needs an `Authorization` or `Referer`
 /// header will fail in an external player even though it plays internally. Nuvio says so at the
 /// point of choice rather than letting it fail silently.
+///
+/// **Skip segments cannot travel either, and this is where that is recorded** — the audit carried
+/// "no skip-segment forwarding" as an open gap and it is a forced one. Upstream attaches them as
+/// an Android `Intent` extra (`putExtra("skip_segments", json)`), with their own comment noting
+/// that one player reads it and the rest ignore it. A tvOS hand-off is a URL against a scheme
+/// whose parameters are fixed by the receiving app: Infuse and VLC take `url`, `name` and `sub`,
+/// nPlayer and Outplayer take a bare URL. There is no channel for arbitrary data, so there is
+/// nothing to forward through. Inventing a parameter would fail silently, which is the same
+/// reasoning that keeps the undocumented backend endpoints out.
 enum ExternalPlayer: String, CaseIterable, Identifiable, Codable, Sendable {
     case infuse
     case vlc

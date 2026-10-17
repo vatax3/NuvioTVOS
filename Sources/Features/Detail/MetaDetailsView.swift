@@ -9,6 +9,7 @@ struct MetaDetailsView: View {
     @Environment(AppSettings.self) private var settings
     @Environment(Router.self) private var router
     @Environment(PluginStore.self) private var plugins
+    @Environment(EpisodeShuffleStore.self) private var shuffle
 
     let request: DetailRequest
 
@@ -23,6 +24,7 @@ struct MetaDetailsView: View {
     /// The long-press overlay on an episode. Held here rather than on the router because it is
     /// only reachable from this screen and dies with it.
     @State private var episodeOptions: EpisodeOptionsRequest?
+    @State private var showsShuffleOptions = false
 
     var body: some View {
         GeometryReader { proxy in
@@ -47,7 +49,10 @@ struct MetaDetailsView: View {
         .background(colors.background)
         // More like this, the franchise row and the cast rail.
         .customPosterScreen(.details, settings: settings)
-        .task { await model.load(request: request, addonStore: addons, settings: settings) }
+        .task {
+            shuffle.beginVisit(contentId: request.id)
+            await model.load(request: request, addonStore: addons, settings: settings)
+        }
         // The episode list is what lets Continue Watching offer the *next* episode once one is
         // finished, and the rail is drawn before any addon could answer. Cached here rather than
         // fetched there. See `NextUpProjection`.
@@ -62,8 +67,24 @@ struct MetaDetailsView: View {
                     onPlay: { playEpisode($0) },
                     onDismiss: { episodeOptions = nil }
                 )
+            } else if showsShuffleOptions {
+                EpisodeShuffleDialog(
+                    contentId: request.id,
+                    offering: shuffleOfferingLabel,
+                    onDismiss: { showsShuffleOptions = false }
+                )
             }
         }
+    }
+
+    /// What the shuffle dialog says *Play* is currently offering.
+    private var shuffleOfferingLabel: String? {
+        guard let meta = model.meta, let target = shuffledTarget(meta),
+              let season = target.season, let episode = target.episode
+        else { return nil }
+        let code = String(format: "S%02dE%02d", season, episode)
+        guard let name = (target.name ?? target.title)?.nilIfBlank else { return code }
+        return "\(code) · \(name)"
     }
 
     // MARK: Backdrop
@@ -267,13 +288,67 @@ struct MetaDetailsView: View {
     }
 
     /// The video *Play* would open, so the button can be judged on what it would actually do.
+    ///
+    /// Three callers read this — the button's label, its availability, and the press itself — and
+    /// they must agree, or the button names one episode and plays another.
     private func playTarget(_ meta: Meta) -> Video? {
         guard meta.type == .series else { return nil }
-        return model.nextUpEpisode(
+        if let shuffled = shuffledTarget(meta) { return shuffled }
+        return nextUp(meta)
+    }
+
+    private func nextUp(_ meta: Meta) -> Video? {
+        model.nextUpEpisode(
             library: library,
             threshold: settings.watchedThreshold,
             fromFurthest: settings.layout.nextUpFromFurthestEpisode,
             includeUnaired: settings.layout.showUnairedNextUp
+        )
+    }
+
+    private var isShuffling: Bool {
+        shuffle.isShuffling(
+            contentId: request.id,
+            type: model.meta?.type ?? .unknown,
+            isAvailable: settings.layout.randomEpisodeEnabled
+        )
+    }
+
+    /// The shuffled episode, or nil when shuffle is off — **or when something is already in
+    /// progress**, which is upstream's rule and the right one: a half-watched episode is a
+    /// commitment the viewer made, and a random pick is not the answer to "I was in the middle
+    /// of this". Shuffle resumes first and randomises only once there is nothing to resume.
+    private func shuffledTarget(_ meta: Meta) -> Video? {
+        guard isShuffling else { return nil }
+        if let resume = inProgressEpisode(meta) { return resume }
+        return shuffle.episode(
+            surface: .detail,
+            contentId: request.id,
+            videos: meta.watchableEpisodes(includeUnaired: settings.layout.showUnairedNextUp),
+            watched: watchedEpisodeIds(meta),
+            includesWatched: shuffle.settings(forContentId: request.id).includesWatched
+        )
+    }
+
+    /// The episode with a real, unfinished position on it — the most recently touched one.
+    private func inProgressEpisode(_ meta: Meta) -> Video? {
+        meta.videos
+            .compactMap { video -> (Video, WatchProgress)? in
+                guard let progress = library.progress(forVideoId: video.id),
+                      progress.fraction > 0.01,
+                      !progress.isFinished(threshold: settings.watchedThreshold)
+                else { return nil }
+                return (video, progress)
+            }
+            .max { $0.1.updatedAt < $1.1.updatedAt }?
+            .0
+    }
+
+    private func watchedEpisodeIds(_ meta: Meta) -> Set<String> {
+        Set(
+            meta.videos
+                .filter { library.isWatched(videoId: $0.id, threshold: settings.watchedThreshold) }
+                .map(\.id)
         )
     }
 
@@ -303,6 +378,21 @@ struct MetaDetailsView: View {
             // cards below are deliberately *not* disabled for the same reason inverted: they
             // are the whole row, and an unfocusable rail is how 1.0.37 lost every catalog.
             .disabled(!canPlay(meta))
+
+            // Only for a series, and only when the viewer has turned the feature on in Layout
+            // settings — otherwise the row grows a control most people have no use for.
+            if meta.type == .series, settings.layout.randomEpisodeEnabled {
+                Button(action: { showsShuffleOptions = true }) {
+                    HStack(spacing: NuvioTheme.spacing.sm) {
+                        Image(systemName: "shuffle")
+                        Text(L10n.text("detail.shuffle", fallback: "Shuffle"))
+                    }
+                    .nuvioText(NuvioTextStyles.button)
+                    .padding(.horizontal, NuvioTheme.spacing.xl)
+                    .frame(height: NuvioTheme.components.buttonHeight)
+                }
+                .buttonStyle(NuvioPillButtonStyle(emphasis: .secondary, selected: isShuffling))
+            }
 
             Button(action: { toggleLibrary(meta) }) {
                 HStack(spacing: NuvioTheme.spacing.sm) {
@@ -421,21 +511,27 @@ struct MetaDetailsView: View {
 
     private func playLabel(_ meta: Meta) -> String {
         if meta.type == .series {
-            if let next = model.nextUpEpisode(
-                library: library,
-                threshold: settings.watchedThreshold,
-                fromFurthest: settings.layout.nextUpFromFurthestEpisode,
-                includeUnaired: settings.layout.showUnairedNextUp
-            ),
-               let season = next.season, let episode = next.episode {
-                return String(format: "Play S%02dE%02d", season, episode)
+            // `playTarget` rather than its own lookup: the label and the press used to resolve
+            // the episode separately, which was harmless only while they resolved it the same
+            // way. Shuffle makes them disagree.
+            guard let next = playTarget(meta), let season = next.season, let episode = next.episode
+            else {
+                // Shuffle on with nothing left to offer is a state the button has to admit to,
+                // because the viewer's next move is to include watched episodes.
+                return isShuffling
+                    ? L10n.text("detail.shuffle_exhausted", fallback: "No episodes left")
+                    : L10n.text("detail.play", fallback: "Play")
             }
-            return "Play"
+            let code = String(format: "S%02dE%02d", season, episode)
+            if isShuffling, inProgressEpisode(meta) == nil {
+                return L10n.format("detail.shuffle_play", fallback: "Shuffle %@", code)
+            }
+            return L10n.format("detail.play_episode", fallback: "Play %@", code)
         }
         if let progress = library.progress(forVideoId: meta.id), progress.fraction > 0.01 {
-            return "Resume"
+            return L10n.text("detail.resume", fallback: "Resume")
         }
-        return "Play"
+        return L10n.text("detail.play", fallback: "Play")
     }
 
     // MARK: Actions
@@ -443,13 +539,7 @@ struct MetaDetailsView: View {
     private func play(meta: Meta) {
         library.cache(meta.preview())
         if meta.type == .series {
-            guard let next = model.nextUpEpisode(
-                library: library,
-                threshold: settings.watchedThreshold,
-                fromFurthest: settings.layout.nextUpFromFurthestEpisode,
-                includeUnaired: settings.layout.showUnairedNextUp
-            )
-            else { return }
+            guard let next = playTarget(meta) else { return }
             playEpisode(next)
         } else {
             router.openStreams(StreamRequest(

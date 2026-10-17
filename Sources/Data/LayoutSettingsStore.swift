@@ -97,6 +97,21 @@ final class LayoutSettingsStore: PreferenceStore {
         set { setBool("modern_landscape_posters_enabled", newValue) }
     }
 
+    /// `always_show_landscape_clearlogo`: draw the title's logo on a landscape card instead of
+    /// its name. Independent of the Modern-view switch above, because a viewer who wants logos
+    /// wants them wherever landscape artwork is drawn.
+    var alwaysShowLandscapeClearlogo: Bool {
+        get { bool("always_show_landscape_clearlogo", default: false) }
+        set { setBool("always_show_landscape_clearlogo", newValue) }
+    }
+
+    /// `random_episode_enabled`: makes per-show shuffle available at all. The per-show switches
+    /// live in `EpisodeShuffleStore`; this one only decides whether they are offered.
+    var randomEpisodeEnabled: Bool {
+        get { bool("random_episode_enabled", default: false) }
+        set { setBool("random_episode_enabled", newValue) }
+    }
+
     // MARK: - Custom poster artwork
 
     /// A URL the viewer wrote, with `{imdb_id}`-style placeholders. Empty means the addon's own

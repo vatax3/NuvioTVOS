@@ -38,6 +38,12 @@ struct ContentCard: View {
     private var backdropExpandEnabled: Bool { allowsBackdropExpand && metrics.backdropExpandEnabled }
     private var cornerRadius: CGFloat { metrics.cornerRadius }
     private var shape: PosterShape { metrics.resolvedShape(for: item.posterShape) }
+    /// `always_show_landscape_clearlogo`, and only where there is a logo to draw: without one
+    /// `expandedOverlay` falls back to the name, so this stays true and the card still says what
+    /// it is. Landscape only — a logo over a portrait poster covers the art it identifies.
+    private var showsLandscapeLogo: Bool {
+        metrics.showsLandscapeLogo && shape == .landscape && !isExpanded
+    }
     private var baseSize: CGSize { metrics.size(for: shape) }
     private var baseHeight: CGFloat { baseSize.height }
 
@@ -91,7 +97,9 @@ struct ContentCard: View {
                 }
             }
 
-            if showLabels {
+            // The logo treatment replaces the name rather than joining it: drawn in both
+            // places, a landscape rail reads as every title being announced twice.
+            if showLabels, !showsLandscapeLogo {
                 labels
                     .padding(.top, NuvioTheme.spacing.sm)
                     .frame(width: cardWidth, alignment: .leading)
@@ -112,7 +120,7 @@ struct ContentCard: View {
             .frame(width: cardWidth, height: baseHeight)
             .clipped()
 
-            if isExpanded {
+            if isExpanded || showsLandscapeLogo {
                 expandedOverlay
             }
 

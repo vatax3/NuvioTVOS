@@ -196,7 +196,8 @@ final class AppSettings {
             backdropExpandEnabled: layout.focusedPosterBackdropExpandEnabled,
             backdropExpandDelay: layout.focusedPosterBackdropExpandDelaySeconds,
             showsFullReleaseDate: layout.showFullReleaseDate,
-            showsRatings: layout.homeRatingsVisibility.showsRatings
+            showsRatings: layout.homeRatingsVisibility.showsRatings,
+            showsLandscapeLogo: layout.alwaysShowLandscapeClearlogo
         )
     }
 

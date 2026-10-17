@@ -78,6 +78,7 @@ private struct ProfileScopedRoot: View {
     @State private var plugins = PluginStore()
     @State private var router = Router()
     @State private var remoteProgress = RemoteProgressService()
+    @State private var episodeShuffle = EpisodeShuffleStore()
 
     var body: some View {
         RootView()
@@ -88,6 +89,7 @@ private struct ProfileScopedRoot: View {
             .environment(settings)
             .environment(addons)
             .environment(library)
+            .environment(episodeShuffle)
             .environment(collections)
             .environment(plugins)
             .environment(router)

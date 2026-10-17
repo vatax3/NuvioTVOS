@@ -1054,8 +1054,8 @@ struct MPVPlayerView: View {
                     canDecrease: engine.audioDelay > -MPVEngine.audioDelayLimit,
                     canIncrease: engine.audioDelay < MPVEngine.audioDelayLimit,
                     requestsInitialFocus: engine.audioTracks.isEmpty,
-                    onDecrease: { engine.adjustAudioDelay(by: -0.025) },
-                    onIncrease: { engine.adjustAudioDelay(by: 0.025) }
+                    onDecrease: { engine.adjustAudioDelay(by: -0.025 * Double($0)) },
+                    onIncrease: { engine.adjustAudioDelay(by: 0.025 * Double($0)) }
                 )
 
                 PlayerRailStepper(
@@ -1067,8 +1067,8 @@ struct MPVPlayerView: View {
                     ),
                     canDecrease: engine.amplificationDb > 0,
                     canIncrease: engine.amplificationDb < MPVEngine.amplificationLimitDb,
-                    onDecrease: { setAmplification(engine.amplificationDb - 1) },
-                    onIncrease: { setAmplification(engine.amplificationDb + 1) }
+                    onDecrease: { setAmplification(engine.amplificationDb - $0) },
+                    onIncrease: { setAmplification(engine.amplificationDb + $0) }
                 )
             }
         }
@@ -1114,8 +1114,8 @@ struct MPVPlayerView: View {
                     ),
                     canDecrease: engine.subtitleDelay > -MPVEngine.subtitleDelayLimit,
                     canIncrease: engine.subtitleDelay < MPVEngine.subtitleDelayLimit,
-                    onDecrease: { applySubtitleDelay(engine.subtitleDelay - 0.1) },
-                    onIncrease: { applySubtitleDelay(engine.subtitleDelay + 0.1) }
+                    onDecrease: { applySubtitleDelay(engine.subtitleDelay - 0.1 * Double($0)) },
+                    onIncrease: { applySubtitleDelay(engine.subtitleDelay + 0.1 * Double($0)) }
                 )
 
                 PlayerRailCard(

@@ -160,8 +160,9 @@ struct PlayerRailStepper: View {
     var canDecrease = true
     var canIncrease = true
     var requestsInitialFocus = false
-    let onDecrease: () -> Void
-    let onIncrease: () -> Void
+    /// Both take the multiplier the hold ramp supplies; a single press passes 1.
+    let onDecrease: (Int) -> Void
+    let onIncrease: (Int) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: NuvioTheme.spacing.xs) {
@@ -189,7 +190,7 @@ struct PlayerRailStepper: View {
         _ systemImage: String,
         enabled: Bool,
         initialFocus: Bool,
-        action: @escaping () -> Void
+        action: @escaping (Int) -> Void
     ) -> some View {
         PlayerRailStepButton(
             systemImage: systemImage,
@@ -207,10 +208,19 @@ private struct PlayerRailStepButton: View {
     let systemImage: String
     let enabled: Bool
     let requestsInitialFocus: Bool
-    let action: () -> Void
+    /// The step, with a multiplier the hold ramp supplies and a single press leaves at 1.
+    let action: (Int) -> Void
+
+    @State private var swallowsNextPress = false
 
     var body: some View {
-        Button(action: action) {
+        Button(action: {
+            if swallowsNextPress {
+                swallowsNextPress = false
+                return
+            }
+            action(1)
+        }) {
             Image(systemName: systemImage)
                 .font(.system(size: NuvioTheme.sizes.icons.sm, weight: .semibold))
                 .foregroundStyle(enabled ? .white : .white.opacity(0.35))
@@ -221,6 +231,13 @@ private struct PlayerRailStepButton: View {
         .focusEffectDisabled()
         .disabled(!enabled)
         .focused($focused)
+        // Holding it runs the step repeatedly, with the step growing the longer it is held: the
+        // audio delay moves in 25ms increments over a range of seconds, so pressing once per
+        // increment is a chore and nobody did it.
+        .onSelectHoldRepeat(
+            isFocused: focused && enabled,
+            swallowsNextPress: $swallowsNextPress
+        ) { action($0) }
         .onAppear {
             guard requestsInitialFocus else { return }
             Task { @MainActor in focused = true }

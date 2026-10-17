@@ -643,6 +643,22 @@ struct LayoutSettingsContent: View {
                 SettingsStepperRow(title: L10n.text("settings.layout.corner_radius", fallback: "Corner radius"), value: $layout.posterCardCornerRadiusDp, range: 0...28, format: { "\($0) dp" })
                 SettingsToggle(title: L10n.text("settings.layout.show_labels", fallback: "Show labels"), subtitle: L10n.text("settings.layout.show_labels_subtitle", fallback: "Title and year under each poster"), isOn: $layout.posterLabelsEnabled)
                 SettingsToggle(title: L10n.text("settings.layout.landscape_posters", fallback: "Landscape posters in Modern view"), isOn: $layout.modernLandscapePostersEnabled)
+                SettingsToggle(
+                    title: L10n.text("settings.layout.landscape_clearlogo", fallback: "Logos on landscape cards"),
+                    subtitle: L10n.text(
+                        "settings.layout.landscape_clearlogo_sub",
+                        fallback: "Draw the title's logo over the artwork instead of its name"
+                    ),
+                    isOn: $layout.alwaysShowLandscapeClearlogo
+                )
+                SettingsToggle(
+                    title: L10n.text("settings.layout.random_episode", fallback: "Shuffle episodes"),
+                    subtitle: L10n.text(
+                        "settings.layout.random_episode_sub",
+                        fallback: "Offer a Shuffle button on a series, so Play picks an episode at random"
+                    ),
+                    isOn: $layout.randomEpisodeEnabled
+                )
                 SettingsRow(
                     title: L10n.text("settings.layout.custom_poster", fallback: "Poster artwork"),
                     subtitle: L10n.text(

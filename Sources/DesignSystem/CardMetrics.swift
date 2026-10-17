@@ -18,6 +18,10 @@ struct PosterMetrics: Equatable {
     var showsFullReleaseDate: Bool = false
     /// `home_imdb_ratings_visibility`: whether a focused poster shows the title's score.
     var showsRatings: Bool = true
+    /// `always_show_landscape_clearlogo`: on a landscape card, draw the title's logo over the
+    /// artwork instead of its name underneath. Portrait cards are unaffected — a logo over a
+    /// poster covers the art it is identifying, which is why upstream scopes this to landscape.
+    var showsLandscapeLogo: Bool = false
 
     static let `default` = PosterMetrics(
         width: NuvioTheme.components.posterCard.width,

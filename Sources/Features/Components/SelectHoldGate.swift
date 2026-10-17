@@ -19,12 +19,22 @@ final class SelectHoldReporter {
     /// Bumped once per hold. Cards watch it rather than being called back, because the gate has
     /// no idea which card is focused and the focused card is the only one that should answer.
     private(set) var holdCount = 0
+    /// True for as long as the button is down, for controls that **repeat** while held rather
+    /// than acting once — a stepper, where one press per 25ms of audio delay is a chore and the
+    /// platform gives a focused `Button` no way to know it is still being pressed.
+    private(set) var isHolding = false
 
-    func report() { holdCount += 1 }
+    func report() {
+        holdCount += 1
+        isHolding = true
+    }
+
+    func reportRelease() { isHolding = false }
 }
 
 private struct SelectHoldGateView: UIViewRepresentable {
     let onHold: () -> Void
+    let onRelease: () -> Void
 
     func makeUIView(context: Context) -> UIView {
         let view = GateView()
@@ -35,22 +45,31 @@ private struct SelectHoldGateView: UIViewRepresentable {
 
     func updateUIView(_ uiView: UIView, context: Context) {
         context.coordinator.onHold = onHold
+        context.coordinator.onRelease = onRelease
     }
 
-    func makeCoordinator() -> Coordinator { Coordinator(onHold: onHold) }
+    func makeCoordinator() -> Coordinator { Coordinator(onHold: onHold, onRelease: onRelease) }
 
     @MainActor
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         var onHold: () -> Void
+        var onRelease: () -> Void
 
-        init(onHold: @escaping () -> Void) {
+        init(onHold: @escaping () -> Void, onRelease: @escaping () -> Void) {
             self.onHold = onHold
+            self.onRelease = onRelease
             super.init()
         }
 
         @objc func held(_ recognizer: UILongPressGestureRecognizer) {
-            guard recognizer.state == .began else { return }
-            onHold()
+            switch recognizer.state {
+            case .began: onHold()
+            // The release matters as much as the press for a repeating control: a ramp with no
+            // end runs until the value hits its limit, which is the opposite of a fine
+            // adjustment.
+            case .ended, .cancelled, .failed: onRelease()
+            default: break
+            }
         }
 
         /// The recognizer must never take the press away from anything. Every other Select in
@@ -123,7 +142,13 @@ private struct SelectHoldGateView: UIViewRepresentable {
 extension View {
     /// Installs the app-wide Select-hold recognizer. Once, at the root.
     func selectHoldGate(reporting reporter: SelectHoldReporter) -> some View {
-        background(SelectHoldGateView { reporter.report() }.frame(width: 0, height: 0))
+        background(
+            SelectHoldGateView(
+                onHold: { reporter.report() },
+                onRelease: { reporter.reportRelease() }
+            )
+            .frame(width: 0, height: 0)
+        )
     }
 }
 
@@ -158,5 +183,82 @@ extension View {
         modifier(SelectHoldResponder(
             isFocused: isFocused, action: action, swallowsNextPress: swallowsNextPress
         ))
+    }
+}
+
+/// How fast a held stepper should run, and how big its steps should get.
+///
+/// A constant repeat is the obvious answer and the wrong one: the audio delay moves in 25ms steps
+/// over a range of seconds, so a fixed rate takes the better part of a minute to cross it, while a
+/// rate fast enough to cross it quickly cannot be stopped on a single step. So the *interval*
+/// stays slow enough to aim with and the **step grows** the longer the button is held.
+enum HoldRepeatRamp {
+    /// Slow enough that the first few ticks are individually visible on a television.
+    static let interval: Duration = .milliseconds(110)
+
+    /// The multiplier applied to one step, after `ticks` repeats have already fired.
+    static func multiplier(afterTicks ticks: Int) -> Int {
+        switch ticks {
+        case ..<8: return 1
+        case ..<16: return 4
+        default: return 10
+        }
+    }
+}
+
+/// Repeats `action` for as long as Select is held while this view has focus.
+struct SelectHoldRepeater: ViewModifier {
+    let isFocused: Bool
+    /// Multiplied into the caller's own step, so the ramp lives here and the size of a step
+    /// stays the caller's business.
+    let action: (Int) -> Void
+
+    @Environment(SelectHoldReporter.self) private var reporter
+    @Binding var swallowsNextPress: Bool
+    @State private var ramp: Task<Void, Never>?
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: reporter.isHolding) { _, holding in
+                guard isFocused else { return }
+                guard holding else {
+                    ramp?.cancel()
+                    ramp = nil
+                    return
+                }
+                // The platform still delivers the ordinary press on release, so the control that
+                // answered the hold drops it — same contract as `SelectHoldResponder`.
+                swallowsNextPress = true
+                ramp?.cancel()
+                ramp = Task { @MainActor in
+                    var ticks = 0
+                    while !Task.isCancelled {
+                        try? await Task.sleep(for: HoldRepeatRamp.interval)
+                        guard !Task.isCancelled else { return }
+                        action(HoldRepeatRamp.multiplier(afterTicks: ticks))
+                        ticks += 1
+                    }
+                }
+            }
+            .onDisappear {
+                ramp?.cancel()
+                ramp = nil
+            }
+    }
+}
+
+extension View {
+    /// Repeats while Select is held and this view has focus. The closure receives the multiplier
+    /// to apply to one step.
+    func onSelectHoldRepeat(
+        isFocused: Bool,
+        swallowsNextPress: Binding<Bool>,
+        perform action: @escaping (Int) -> Void
+    ) -> some View {
+        modifier(
+            SelectHoldRepeater(
+                isFocused: isFocused, action: action, swallowsNextPress: swallowsNextPress
+            )
+        )
     }
 }
