@@ -14,6 +14,7 @@ struct PlayerView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @Environment(LibraryStore.self) private var library
+    @Environment(PartyStore.self) private var party
     @Environment(AppSettings.self) private var settings
     @Environment(Router.self) private var router
     @Environment(AddonStore.self) private var addons
@@ -42,6 +43,11 @@ struct PlayerView: View {
     @State private var dismissedSkipSegments: Set<String> = []
     @State private var playbackPosition: Double = 0
     @State private var playbackDuration: Double = 0
+    /// The rate a party correction is asking for, or nil to leave the viewer's own speed alone.
+    @State private var partyRate: Double?
+    /// True while a party correction is nudging the rate, which `PartySync` needs in order to
+    /// stop at a tighter threshold than it started at.
+    @State private var isPartyNudging = false
     /// Both player backends consume this one-shot seek request and acknowledge it by clearing it.
     @State private var requestedSeek: Double?
     /// A one-shot pause command shared by AVPlayer and MPV. The still-watching prompt must
@@ -86,6 +92,7 @@ struct PlayerView: View {
     /// AVPlayer's transport menu can request a source change.  Keep the picker above the player
     /// instead of navigating back to the Sources route, just like the Android/iOS side panel.
     @State private var showsSourcePanel = false
+    @State private var showsPartyPanel = false
 
     /// When the audio route last changed under playback, and the observer that reports it.
     /// A pause that lands right after a route change was the route change's doing, not the
@@ -197,6 +204,12 @@ struct PlayerView: View {
         // A new segment starts its own life: an outro should not arrive already spent because
         // the intro's countdown ran out an hour ago.
         .onChange(of: activeSkipSegment?.id) { _, _ in skipAutoHidden = false }
+        // Somebody shared a link: open it, so the party is watching the same file rather than
+        // the same title from four different sources.
+        .onChange(of: party.sharedStream) { _, stream in
+            guard let stream else { return }
+            adoptSharedStream(stream)
+        }
         // A panel covers the picture, so the pause card has nothing to say and nowhere to say
         // it. Reported: pausing and then opening the subtitle chooser raised "You are watching"
         // over the list a few seconds later, because the countdown only ever asked whether
@@ -245,10 +258,12 @@ struct PlayerView: View {
                 onSeekApplied: { requestedSeek = nil },
                 pauseRequest: requestedPause,
                 onPauseApplied: { requestedPause = nil },
+                partyRate: partyRate,
                 revealControlsRequest: revealControlsRequest,
                 onChooseEpisode: request.contentType == "series" ? chooseEpisode : nil,
                 onPlayNextEpisode: request.nextUp == nil ? nil : playNextEpisodeNow,
                 onSwitchEngine: { engineOverride = .exoplayer },
+                onShowParty: party.isAvailable ? { showsPartyPanel = true } : nil,
                 showsPauseOverlay: showsPauseOverlay,
                 hasOpenPrompt: showsPauseOverlay || nextEpisodeCountdown != nil || showsStillWatchingPrompt,
                 onDismissPrompt: dismissTransientPrompt,
@@ -287,6 +302,12 @@ struct PlayerView: View {
 
             if showsSourcePanel {
                 InPlayerSourcesPanel(request: request) { showsSourcePanel = false }
+            }
+
+            if showsPartyPanel {
+                InPlayerPartyPanel(
+                    media: partyMedia, stream: partyStream
+                ) { showsPartyPanel = false }
             }
         }
         .animation(NuvioMotion.quickTween, value: visibleSkipSegment?.id)
@@ -605,7 +626,12 @@ struct PlayerView: View {
             hasStartedPlayback = true
             showParentalGuideIfReady()
         }
+        reportPartyStatus(isLoading: loading)
         if paused != wasPaused {
+            // Publishing from here rather than from the button covers every route to a pause —
+            // the transport, the remote's Play/Pause, a hand-off returning. The store refuses
+            // the ones it caused itself, so a correction is not echoed back as a command.
+            publishToParty(positionMs: Int64(playbackPosition * 1000), paused: paused)
             // A sustained pause lets the television sleep again; a buffer stall does not last
             // long enough to. See `PlaybackWakeLockPolicy`.
             PlaybackWakeLock.setPaused(paused)
@@ -703,6 +729,146 @@ struct PlayerView: View {
             loadSkipSegmentsIfNeeded(duration: duration)
         }
         autoSkipIfEnabled()
+        syncWithPartyIfNeeded(position: position, duration: duration)
+    }
+
+    // MARK: Watch party
+
+    private var partyCoordinator: PlayerPartyCoordinator {
+        PlayerPartyCoordinator(
+            store: party,
+            mediaKey: PartyMedia.key(
+                type: request.contentType,
+                id: request.contentId,
+                season: request.season,
+                episode: request.episode
+            ),
+            isNudging: isPartyNudging
+        )
+    }
+
+    /// Closes the gap with the party, every tick. Cheap to call: the coordinator returns `.none`
+    /// without a party, and that is the state nearly every playback is in.
+    private func syncWithPartyIfNeeded(position: Double, duration: Double) {
+        guard party.isActive else { return }
+        let positionMs = Int64(position * 1000)
+        let durationMs = duration.isFinite ? Int64(duration * 1000) : 0
+
+        switch partyCoordinator.instruction(
+            positionMs: positionMs, isPaused: isPaused, durationMs: durationMs
+        ) {
+        case .none:
+            break
+        case .seek(let target):
+            // Wrapped, so the position we were just told to adopt is not published straight back
+            // as a command of our own.
+            party.applyingCorrection { requestedSeek = target }
+        case .setRate(let rate):
+            isPartyNudging = true
+            partyRate = rate
+        case .restoreRate:
+            isPartyNudging = false
+            partyRate = nil
+        case .pause(let paused):
+            party.applyingCorrection {
+                requestedPause = PlaybackTransportRequest(paused: paused)
+            }
+        }
+    }
+
+    /// Opens a link somebody else shared.
+    ///
+    /// Only when it is a different file: the sharer gets their own broadcast back through the
+    /// heartbeat's snapshot, and reopening the stream already playing would restart the film for
+    /// the person who started the party.
+    private func adoptSharedStream(_ stream: PartyStream) {
+        guard stream.url != request.streamURL,
+              stream.mediaKey == partyCoordinator.mediaKey || partyCoordinator.mediaKey == nil
+        else { return }
+        router.play(
+            PlaybackRequest(
+                streamURL: stream.url,
+                title: request.title,
+                subtitleLine: request.subtitleLine,
+                streamName: stream.name ?? stream.addonName,
+                filename: stream.filename,
+                headers: stream.headers,
+                contentId: request.contentId,
+                contentType: request.contentType,
+                videoId: request.videoId,
+                season: request.season,
+                episode: request.episode,
+                poster: request.poster,
+                backdrop: request.backdrop,
+                logo: request.logo,
+                startFromBeginning: false,
+                preview: request.preview,
+                nextUp: request.nextUp,
+                imdbId: request.imdbId,
+                subtitles: request.subtitles,
+                sourceRequest: request.sourceRequest,
+                sourceAddonName: stream.addonName,
+                sourceAddonLogo: stream.addonLogo,
+                sourceDescription: stream.description,
+                sourceBingeGroup: stream.bingeGroup
+            )
+        )
+    }
+
+    /// Tells the party what this device is doing, so the others can wait for it rather than
+    /// run ahead of it.
+    private func reportPartyStatus(isLoading: Bool) {
+        guard party.isActive else { return }
+        let coordinator = partyCoordinator
+        Task {
+            await party.report(
+                status: coordinator.status(isLoading: isLoading, isBehindMs: nil),
+                mediaKey: coordinator.mediaKey
+            )
+        }
+    }
+
+    /// What this player is showing, in the terms a party describes a title.
+    private var partyMedia: PartyMedia {
+        PartyMedia(
+            type: request.contentType,
+            metaId: request.contentId,
+            metaType: request.contentType,
+            videoId: request.videoId,
+            season: request.season,
+            episode: request.episode,
+            title: request.title,
+            episodeTitle: request.subtitleLine,
+            poster: request.poster,
+            background: request.backdrop,
+            logo: request.logo
+        )
+    }
+
+    /// The link this device resolved, offered to the party so everybody opens the same file.
+    private var partyStream: PartyStream {
+        PartyStream(
+            mediaKey: partyCoordinator.mediaKey ?? partyMedia.key,
+            url: request.streamURL,
+            headers: request.headers,
+            name: request.streamName,
+            addonName: request.sourceAddonName ?? "",
+            addonLogo: request.sourceAddonLogo,
+            filename: request.filename
+        )
+    }
+
+    /// Publishes what this device just did, so everybody follows.
+    private func publishToParty(positionMs: Int64, paused: Bool) {
+        guard party.isActive else { return }
+        Task {
+            await party.publish(
+                positionMs: positionMs,
+                paused: paused,
+                rate: 1,
+                mediaKey: partyCoordinator.mediaKey
+            )
+        }
     }
 
     private func loadSkipSegmentsIfNeeded(duration: Double) {

@@ -211,6 +211,8 @@ struct RootView: View {
             LayoutSettingsView()
         case .playbackSettings:
             PlaybackSettingsView()
+        case .watchParty:
+            PartyView()
         case .about:
             AboutView()
         }

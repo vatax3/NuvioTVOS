@@ -227,6 +227,7 @@ enum Route: Hashable {
     case themeSettings
     case layoutSettings
     case playbackSettings
+    case watchParty
     case about
 }
 

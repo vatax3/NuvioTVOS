@@ -48,6 +48,10 @@ struct MPVPlayerView: View {
     let onSeekApplied: () -> Void
     let pauseRequest: PlaybackTransportRequest?
     let onPauseApplied: () -> Void
+    /// A playback rate a watch party is asking for, or nil to leave the viewer's own speed
+    /// alone. Carried like the seek and pause requests above rather than read from the store, so
+    /// every change to playback has one owner.
+    var partyRate: Double?
     /// Bumped when a layer the host drew over playback has handed the remote back and the
     /// transport should come up in its place. Upstream's skip card moves focus onto the control
     /// row on Down; ours cannot, because the row leaves the focus graph entirely while a card
@@ -60,6 +64,9 @@ struct MPVPlayerView: View {
     /// Hands the same source to AVFoundation.  Android's control row carries the mirror of
     /// this, and it is the escape hatch when a file decodes badly on one engine.
     let onSwitchEngine: (() -> Void)?
+    /// Opens the watch-party panel. Absent when the feature is unavailable, which also takes the
+    /// control out of the transport rather than offering one that explains itself away.
+    var onShowParty: (() -> Void)?
     /// The host's pause card owns the bottom-left of the screen while it is up, so the
     /// transport steps aside rather than drawing the same title behind it.
     let showsPauseOverlay: Bool
@@ -87,6 +94,9 @@ struct MPVPlayerView: View {
     @State private var hideTask: Task<Void, Never>?
     @State private var lastPersistedPosition: Double = 0
     @State private var picker: TrackPicker?
+    /// The speed the viewer themselves chose, remembered so a party correction can hand it back
+    /// when it finishes rather than resetting everyone to 1×.
+    @State private var viewerSpeed: Double = 1
     /// The trailing half of Android's control row, revealed by the chevron.  It holds the tools
     /// a viewer reaches for occasionally — speed, picture mode, hand-off, stream info — so the
     /// primary row stays short enough to cross in a couple of D-pad presses.
@@ -171,6 +181,7 @@ struct MPVPlayerView: View {
                             hdrPeakDetection: hdrPeakDetection,
                             subtitleStyle: subtitleStyle,
                             subtitleObstructions: subtitleObstructions,
+                            playbackSpeed: partyRate ?? viewerSpeed,
                             initialAspectMode: initialAspectMode)
                 .ignoresSafeArea()
 
@@ -710,6 +721,12 @@ struct MPVPlayerView: View {
                 }
             }
             controlButton("info.circle", label: L10n.text("player.stream_information"), focus: .control("info")) { picker = .streamInfo }
+            if onShowParty != nil {
+                controlButton(
+                    "person.2", label: L10n.text("party.title", fallback: "Watch together"),
+                    focus: .control("party")
+                ) { onShowParty?() }
+            }
         }
 
         controlButton(
@@ -1219,12 +1236,18 @@ struct MPVPlayerView: View {
                         : String(format: "%.2gx", speed),
                     isSelected: isSelected,
                     requestsInitialFocus: isSelected
-                ) { engine.setPlaybackSpeed(speed) }
+                ) { chooseSpeed(speed) }
             }
         }
     }
 
     private static let playbackSpeeds: [Double] = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
+
+    /// Records the speed as the viewer's own, so a party nudge knows what to restore.
+    private func chooseSpeed(_ speed: Double) {
+        viewerSpeed = speed
+        engine.setPlaybackSpeed(speed)
+    }
 
     private var subtitleAppearancePanel: some View {
         @Bindable var player = settings.player
@@ -1818,6 +1841,10 @@ private struct MPVMetalSurface: UIViewControllerRepresentable {
     /// Whether this engine's transport is on screen, so mpv can lift its own subtitles clear of
     /// it for as long as it is there. See `SubtitlePlacement`.
     let subtitleObstructions: SubtitlePlacement.Obstructions
+    /// The rate to run at: a party correction's, or the viewer's own. Applied here rather than
+    /// through another `onChange` because this view's body is at the type-checker's limit and
+    /// this surface already exists to funnel engine updates.
+    let playbackSpeed: Double
     let initialAspectMode: MPVEngine.AspectMode
 
     func makeUIViewController(context: Context) -> MPVMetalViewController {
@@ -1834,6 +1861,7 @@ private struct MPVMetalSurface: UIViewControllerRepresentable {
 
     func updateUIViewController(_ controller: MPVMetalViewController, context: Context) {
         controller.applySubtitleStyle(subtitleStyle, obstructions: subtitleObstructions)
+        controller.applyPlaybackSpeed(playbackSpeed)
     }
 }
 
@@ -1862,6 +1890,7 @@ final class MPVMetalViewController: UIViewController {
     /// unchanged when only the chrome moves, so the guard swallowed every such call. The stored
     /// offset still worked, which is exactly why it went unnoticed — half the feature behaved.
     private var appliedSubtitleObstructions = SubtitlePlacement.Obstructions()
+    private var appliedPlaybackSpeed: Double?
 
     init(
         engine: MPVEngine,
@@ -1934,6 +1963,14 @@ final class MPVMetalViewController: UIViewController {
             layer: metalLayer
         )
         appliedSubtitleStyle = subtitleStyle
+    }
+
+    /// Deduped, like the subtitle style above: a speed command on every body evaluation would
+    /// reach mpv dozens of times a second while a correction is running.
+    func applyPlaybackSpeed(_ speed: Double) {
+        guard abs((appliedPlaybackSpeed ?? -1) - speed) > 0.001 else { return }
+        appliedPlaybackSpeed = speed
+        engine.setPlaybackSpeed(speed)
     }
 
     func applySubtitleStyle(

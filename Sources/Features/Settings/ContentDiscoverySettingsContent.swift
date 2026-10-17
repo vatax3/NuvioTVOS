@@ -40,6 +40,16 @@ struct ContentDiscoverySettingsContent: View {
                     trailing: { SettingsValueLabel(value: "") },
                     action: { router.push(.collectionManager) }
                 )
+                SettingsRow(
+                    title: L10n.text("party.title", fallback: "Watch together"),
+                    subtitle: L10n.text(
+                        "settings.discovery.party_sub",
+                        fallback: "Join a party with a code, or see who is in one"
+                    ),
+                    systemImage: "person.2",
+                    trailing: { SettingsValueLabel(value: "") },
+                    action: { router.push(.watchParty) }
+                )
                 if showsPlugins {
                     SettingsRow(
                         title: L10n.text("settings.discovery.plugins", fallback: "Plugins"),
