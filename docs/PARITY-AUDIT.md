@@ -1,4 +1,4 @@
-# Functional parity audit — tvOS 1.0.50 vs Android TV 1.1.0-beta.7
+# Functional parity audit — tvOS 1.0.51 vs Android TV 1.1.0-beta.7
 
 Audit date: 2026-08-25, re-derived against 1.0.31 on 2026-08-26, tracked forward since.
 Supersedes the audit published with 1.0.15. Twenty releases landed while it was open, so the
@@ -1003,9 +1003,31 @@ top of the parity skill: **a feature that talks to somebody else's client is por
 match, not when the logic does.** Both failures were invisible to every test we had, because every
 test we had was a conversation with ourselves.
 
+## 1.0.51: a ported loop can still be starved
+
+The 1.0.50 port was faithful and then **starved**. Upstream's `runPartySync` is a 250 ms timer;
+ours was driven by `MPVEngine`'s position observer, which publishes at the same 4 Hz and looked
+like the same thing. It is not: the observer goes silent the moment playback pauses, which is
+precisely when the loop has something to say. The result was a party in which the other device
+could pause you and you could not pause it — the inbound direction arrives as a push, the
+outbound had no trigger at all. **A tick rate is not a tick source.**
+
+Three more from the same session, each a reminder that this feature's bugs live where no policy
+test can see them: a control whose title flipped to the action while its highlight showed the
+state, so it read as inverted; panel rows behind `if`s re-identifying everything below them when
+a status broadcast arrived, which moves focus out from under the remote; and a focus claim that
+is written once and lost to whatever claims focus in the next frame — the race
+`MPVPlayerView.retargetFocus` has documented since 1.0.32, now retried in `InPlayerPanelRow` as
+well.
+
+So the window also added `PartyHarness`, beside the player and library harnesses and for the same
+reason. A watch party needs an account, a live backend and a second device, so every observation
+of these screens had been made by hand on a television by the person reporting them — which is
+how three runtime defects reached a release with 806 green tests behind them.
+
 ## Verification
 
-- Unit suite at 1.0.50: **806 tests, 0 failures**. UI suite: **18 tests, 0 failures**.
+- Unit suite at 1.0.51: **812 tests, 0 failures**. UI suite: **23 tests, 0 failures**.
 - Test density is ahead of upstream per line — 703 tests over ~49k lines against 983 over 201k —
   so the 1.0.12 plan's "tests too thin" framing was wrong on volume. It was right about
   *placement*: the network clients still carry the least of it, though every release since
