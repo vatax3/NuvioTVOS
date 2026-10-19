@@ -123,6 +123,12 @@ arithmetic ported exactly, and one query parameter — `nuvio_realtime=1` — wi
 backend's edge answers `410 Gone` and nothing connects at all. That parameter is the single most
 load-bearing line in the feature and reads like nothing in upstream's source.
 
+1.0.50 then reconciled the rest of it against their implementation end to end. The lesson from
+both passes is the same one from two directions, and it belongs with the procedure rather than
+with this feature: **a port that talks to somebody else's client is finished when the bytes
+match, not when the logic does.** Three broadcast payload shapes and one missing channel event
+were enough to make a correct implementation inert, and no test we had could see it.
+
 ## Declined since 0.8.9
 
 The same verdict, for the three windows the audit covers. Each is argued at length in

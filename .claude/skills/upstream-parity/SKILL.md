@@ -92,6 +92,24 @@ these was found that way, and none was on any changelog:
 So for each upstream line, check our tree before writing a verdict. The answer is often that we
 have the same bug in a worse form.
 
+## 5b. When the port talks to their client, the bytes are the contract
+
+A feature that only has to behave — a filter, a cache, a layout — is ported when the logic
+matches. A feature that **joins the same session as the official app** is ported when the *bytes*
+match, and the difference has now cost two releases:
+
+- 1.0.48's watch parties were structurally exact — the sync arithmetic ported line for line, the
+  Phoenix framing correct, twenty-four green tests — and never connected, because the backend
+  gates realtime behind a query parameter that reads like decoration in upstream's source.
+- 1.0.49's were exact and **did not interoperate**: three broadcast payloads carried a different
+  envelope from theirs, and one channel event was not implemented at all. A decode that fails
+  drops the message in silence, so the symptom is a feature that looks unimplemented.
+
+So, for anything shared with their app: read the **sender and the receiver** in their source, not
+the data class. `@SerialName` tells you the field names; only the call site tells you whether the
+object is wrapped. Pin the shapes with a round-trip test against literals — it is the one thing
+a test can hold, because every other test you write is a conversation with yourself.
+
 ## 6. Where the record goes
 
 - [docs/UPSTREAM-PARITY.md](../../../docs/UPSTREAM-PARITY.md) owns **the marker and the pre-0.8.9

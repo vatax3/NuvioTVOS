@@ -1,4 +1,4 @@
-# Functional parity audit — tvOS 1.0.49 vs Android TV 1.1.0-beta.7
+# Functional parity audit — tvOS 1.0.50 vs Android TV 1.1.0-beta.7
 
 Audit date: 2026-08-25, re-derived against 1.0.31 on 2026-08-26, tracked forward since.
 Supersedes the audit published with 1.0.15. Twenty releases landed while it was open, so the
@@ -941,9 +941,71 @@ Upstream gives it its own settings section after Profiles, gated on availability
 It keeps its English name in French: it is the word people in a party read off each other's
 screens.
 
+## 1.0.50: the feature was ported and did not interoperate
+
+Three more reports once the socket was open, and this time the answer was to read upstream's
+party subsystem end to end rather than chase them one at a time —
+`PartyRepository.kt` (730 lines), `PartyChannel.kt`, `PartySync.kt`, `PartyClock.kt` and
+`PlayerRuntimeControllerParty.kt` (450). The finding is worth more than the fixes.
+
+**The arithmetic was exact and the bytes were wrong.** `PartySync` was a faithful port with
+twenty-four passing tests; the Phoenix framing was correct; and three broadcast payloads carried
+a different shape from the official app's. Every one of those mismatches fails *silently*,
+because a decode that fails simply drops the message:
+
+| event | the contract | ours | what it looked like |
+|---|---|---|---|
+| `stream` | `{member_id, stream}` | a bare `PartyStream` | the host's link never arrived; the client fell back to its own source list, which is indistinguishable from the feature not existing |
+| `media` | `{media, playback}` | a bare `PartyMedia` | a change of title never landed |
+| `status` | a **broadcast** carrying presence | not implemented | every member frozen at whatever they were doing when they connected — the roster reading *Offline* |
+
+`status` is the instructive one. Phoenix presence is tracked **once per connection**, and
+upstream's `onPresence` deliberately ignores a join for a key it already holds; live state travels
+on a debounced `status` broadcast instead. Reading presence as the status channel is a reasonable
+guess from the protocol and wrong about the application — and it also emptied the coordinator's
+"who is still buffering", which is how a party waits for a slow member.
+
+**The player published on one occasion out of five.** Only a pause transition broadcast anything,
+so *nobody ever published a position*: `playback` stayed nil on every device, `state_request` was
+answered with nothing, and the correction loop had nothing to correct against. The party agreed on
+the title and nothing else. Upstream's loop is a 250 Hz-ish tick — 250 ms — which turns out to be
+exactly the rate `MPVEngine` already publishes `time-pos` at, so the port needed no timer of its
+own. The pieces that look like detail are each a specific misbehaviour prevented: a 1.2 s delay
+before acting on a pause disagreement (engines report transitions a few frames late), a 2.5 s
+settle after a seek, a 500 ms correction interval, and a **measured seek lead** — a seek lands
+late on this hardware, and without measuring the error every correction undershoots by the same
+amount forever.
+
+**The clock was late by a whole round trip.** `serverTimeMs - Date()`, uncompensated, is 100–300 ms
+out on a domestic connection — above the 250 ms nudge threshold, so every device in the party sat
+permanently rate-nudging against an error that was not there. `PartyClock` keeps the best of four
+samples, adds half the round trip back, and anchors against a monotonic instant rather than a wall
+clock tvOS steps when it reaches NTP.
+
+**Host-only was a wall rather than a choice.** Upstream never blocks a guest's pause: they fall
+behind deliberately, are told so over the picture, and are offered *Catch up*. Every line of that
+arithmetic — `ownSeek`, `shouldRejoin`, `reportedGapMs` — was already in our `PartySync`, ported
+in 1.0.48 and called by nothing. The receiving-side gate is ported too: with *host only* on, a
+non-host's state is ignored by everyone, so the restriction holds even against a client that has
+not learned of it yet.
+
+Also from the same reading: sharing is the host's switch and off by default, as upstream has it;
+playback persists on a 1.5 s debounce rather than an RPC per publish; the coordinator loop that
+holds the room for a buffering member is ported with its three-second grace and fifteen-second
+limit; and a device the backend no longer lists rejoins instead of sitting in a party it is not in.
+
+**The panel could not be navigated or left**, and that one was not about parties at all: it passed
+`handlesExit: false` — correct for the panels `MPVPlayerView` owns, wrong for one rendered in
+`PlayerView` — and was missing from `hasFocusableOverlay`, so the player never yielded the remote.
+
+The lesson is the `nuvio_realtime=1` lesson from the other direction, and it is now written at the
+top of the parity skill: **a feature that talks to somebody else's client is ported when the bytes
+match, not when the logic does.** Both failures were invisible to every test we had, because every
+test we had was a conversation with ourselves.
+
 ## Verification
 
-- Unit suite at 1.0.49: **793 tests, 0 failures**. UI suite: **18 tests, 0 failures**.
+- Unit suite at 1.0.50: **806 tests, 0 failures**. UI suite: **18 tests, 0 failures**.
 - Test density is ahead of upstream per line — 703 tests over ~49k lines against 983 over 201k —
   so the 1.0.12 plan's "tests too thin" framing was wrong on volume. It was right about
   *placement*: the network clients still carry the least of it, though every release since
