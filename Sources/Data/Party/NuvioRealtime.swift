@@ -87,8 +87,15 @@ actor NuvioRealtime {
         heartbeatTask = Task { [weak self] in await self?.heartbeatLoop() }
     }
 
-    /// `wss://<host>/realtime/v1/websocket?apikey=…&vsn=1.0.0`, derived from the REST base URL
-    /// the account is already configured with rather than stored a second time.
+    /// `wss://<host>/realtime/v1/websocket?apikey=…&vsn=1.0.0&nuvio_realtime=1`, derived from the
+    /// REST base URL the account is already configured with rather than stored a second time.
+    ///
+    /// **`nuvio_realtime=1` is load-bearing and non-obvious.** The backend sits behind an edge
+    /// that answers `410 Gone` to any realtime request without it — before Kong, before the
+    /// socket, with no error a client could read. Without the flag the handshake never completes,
+    /// the join times out, and the party shows "Reconnecting…" over a perfectly correct roster
+    /// forever. That is precisely what 1.0.48 shipped. Upstream carries the same flag in
+    /// `core/network/RealtimeUrl.kt`, where it is easy to read as cosmetic.
     static func socketURL(backendUrl: String, key: String) -> URL? {
         var trimmed = backendUrl.trimmingCharacters(in: .whitespaces)
         while trimmed.hasSuffix("/") { trimmed.removeLast() }
@@ -97,7 +104,8 @@ actor NuvioRealtime {
         components.path = "/realtime/v1/websocket"
         components.queryItems = [
             URLQueryItem(name: "apikey", value: key),
-            URLQueryItem(name: "vsn", value: "1.0.0")
+            URLQueryItem(name: "vsn", value: "1.0.0"),
+            URLQueryItem(name: "nuvio_realtime", value: "1")
         ]
         return components.url
     }

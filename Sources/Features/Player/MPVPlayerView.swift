@@ -64,6 +64,9 @@ struct MPVPlayerView: View {
     /// Hands the same source to AVFoundation.  Android's control row carries the mirror of
     /// this, and it is the escape hatch when a file decodes badly on one engine.
     let onSwitchEngine: (() -> Void)?
+    /// Whether a party is running, which decides whether its control is an occasional tool or
+    /// part of the row proper.
+    var isPartyActive = false
     /// Opens the watch-party panel. Absent when the feature is unavailable, which also takes the
     /// control out of the transport rather than offering one that explains itself away.
     var onShowParty: (() -> Void)?
@@ -711,6 +714,11 @@ struct MPVPlayerView: View {
         if onChooseEpisode != nil, request.contentType == "series" {
             controlButton("list.bullet", label: L10n.text("player.episodes"), focus: .control("episodes")) { picker = .episodes }
         }
+        // While a party is running it is not an occasional tool: it is where you see who is
+        // behind and how to leave, so it sits in the row rather than behind the chevron.
+        if onShowParty != nil, isPartyActive {
+            partyButton
+        }
 
         if showsMoreActions {
             controlButton("speedometer", label: L10n.text("player.speed"), focus: .control("speed")) { picker = .speed }
@@ -721,11 +729,8 @@ struct MPVPlayerView: View {
                 }
             }
             controlButton("info.circle", label: L10n.text("player.stream_information"), focus: .control("info")) { picker = .streamInfo }
-            if onShowParty != nil {
-                controlButton(
-                    "person.2", label: L10n.text("party.title", fallback: "Watch together"),
-                    focus: .control("party")
-                ) { onShowParty?() }
+            if onShowParty != nil, !isPartyActive {
+                partyButton
             }
         }
 
@@ -915,6 +920,15 @@ struct MPVPlayerView: View {
         ) {
             dismiss()
         }
+    }
+
+    /// The watch-party control, drawn in whichever half of the row it belongs to.
+    @ViewBuilder
+    private var partyButton: some View {
+        controlButton(
+            "person.2.wave.2.fill", label: L10n.text("party.title", fallback: "Watch party"),
+            focus: .control("party")
+        ) { onShowParty?() }
     }
 
     private func controlButton(

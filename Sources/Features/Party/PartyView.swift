@@ -9,6 +9,7 @@ struct PartyView: View {
     @Environment(PartyStore.self) private var party
     @Environment(ProfileStore.self) private var profiles
     @Environment(NuvioAccountStore.self) private var account
+    @Environment(Router.self) private var router
 
     /// What this device would share if it started a party here. Absent from Settings, where
     /// nothing is playing — then the screen can only join.
@@ -27,7 +28,7 @@ struct PartyView: View {
             } else if !party.isAvailable {
                 notice(PartyError.unavailable.message)
             } else if let active = party.party {
-                PartyRoster(party: active)
+                PartyRoster(party: active, onWatch: watchWithParty)
             } else {
                 joining
             }
@@ -39,17 +40,20 @@ struct PartyView: View {
         .padding(NuvioTheme.spacing.xxl)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .task { await party.refreshAvailability(isSignedIn: account.isSignedIn) }
-        .onExitCommand { onDismiss?() }
+        // Only when there is something to call. `onExitCommand` **consumes** the Menu press
+        // whether or not its closure does anything, so attaching it unconditionally left the
+        // pushed screen with no way out at all — the navigation stack never saw the press.
+        .modifier(OptionalExitCommand(action: onDismiss))
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: NuvioTheme.spacing.xs) {
-            Text(L10n.text("party.title", fallback: "Watch together"))
+            Text(L10n.text("party.title", fallback: "Watch party"))
                 .nuvioText(NuvioTypography.headlineLarge)
                 .foregroundStyle(colors.textPrimary)
             Text(L10n.text(
                 "party.subtitle",
-                fallback: "Play in step with other people, each on their own television."
+                fallback: "Everyone plays from their own sources and stays in step."
             ))
             .nuvioText(NuvioTextStyles.metadata)
             .foregroundStyle(colors.textSecondary)
@@ -130,7 +134,7 @@ struct PartyView: View {
             if preview.isFull {
                 notice(PartyError.full.message)
             } else {
-                Button(action: { Task { await party.join(code: code, identity: identity) } }) {
+                Button(action: { Task { await joinAndWatch() } }) {
                     rowLabel(
                         L10n.text("party.join", fallback: "Join"), systemImage: "person.badge.plus"
                     )
@@ -139,6 +143,33 @@ struct PartyView: View {
                 .disabled(party.isBusy)
             }
         }
+    }
+
+    // MARK: Getting to the film
+
+    /// Joins, then takes the viewer to the party's title.
+    ///
+    /// The second half is the part 1.0.48 was missing altogether: a member who joined landed on
+    /// a roster with nothing to press, and `sharedStream` is only read by the player — a screen
+    /// they were not on. So the party was joined, correct, and could never start.
+    ///
+    /// The pause is upstream's and is worth keeping: the roster appears, the viewer sees *who*
+    /// they have joined, and only then does the screen move.
+    private func joinAndWatch() async {
+        await party.join(code: code, identity: identity)
+        guard let joined = party.party else { return }
+        try? await Task.sleep(for: .milliseconds(1600))
+        guard party.party?.id == joined.id else { return }
+        watchWithParty(joined.media)
+    }
+
+    /// Opens the stream list for what the party is watching.
+    ///
+    /// The source list rather than straight into playback, because everybody picks their own:
+    /// the host's link is offered at the top of it when they shared one, and the release the
+    /// host is on is marked. Upstream's `openPartyMedia` does the same.
+    private func watchWithParty(_ media: PartyMedia) {
+        router.push(.streams(media.streamRequest))
     }
 
     // MARK: Plumbing
@@ -174,12 +205,56 @@ struct PartyView: View {
     }
 }
 
+extension PartyMedia {
+    /// What the party is watching, in the terms the stream list asks for.
+    ///
+    /// `videoId` falls back to the meta id: a film has no separate video, and a party started on
+    /// one carries only the one identifier.
+    var streamRequest: StreamRequest {
+        StreamRequest(
+            videoId: videoId?.nilIfBlank ?? metaId,
+            contentType: metaType,
+            title: title,
+            contentId: metaId,
+            contentName: title,
+            poster: poster,
+            backdrop: background,
+            logo: logo,
+            season: season,
+            episode: episode,
+            episodeName: episodeTitle
+        )
+    }
+}
+
+/// Installs a Menu handler only when there is one, which is not the same as installing one that
+/// does nothing.
+///
+/// `InPlayerPanel` carries the same modifier and the same note, learned the same way: a handler
+/// that returns early still swallows the press. Pushed onto the navigation stack with no
+/// `onDismiss`, this screen could not be left at all.
+private struct OptionalExitCommand: ViewModifier {
+    let action: (() -> Void)?
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let action {
+            content.onExitCommand(perform: action)
+        } else {
+            content
+        }
+    }
+}
+
 /// Who is in the party, and what the host can do about it.
 struct PartyRoster: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(PartyStore.self) private var store
 
     let party: ActiveParty
+    /// Opens what the party is watching. The primary action here: a roster you cannot act on is
+    /// a dead end, which is what the first version of this screen was.
+    let onWatch: (PartyMedia) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: NuvioTheme.spacing.lg) {
@@ -205,6 +280,21 @@ struct PartyRoster: View {
 
     @ViewBuilder
     private var controls: some View {
+        VStack(alignment: .leading, spacing: NuvioTheme.spacing.md) {
+            Button(action: { onWatch(party.media) }) {
+                label(
+                    L10n.text("party.watch_with_party", fallback: "Watch with the party"),
+                    systemImage: "play.fill"
+                )
+            }
+            .buttonStyle(NuvioPillButtonStyle(emphasis: .primary))
+
+            secondaryControls
+        }
+    }
+
+    @ViewBuilder
+    private var secondaryControls: some View {
         HStack(spacing: NuvioTheme.spacing.md) {
             if party.isHost {
                 Button(action: { Task { await store.setHostOnly(!party.hostOnly) } }) {

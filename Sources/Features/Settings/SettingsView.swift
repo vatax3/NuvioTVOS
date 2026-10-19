@@ -160,12 +160,13 @@ struct SettingsView: View {
     @Environment(AddonStore.self) private var addons
     @Environment(ProfileStore.self) private var profiles
     @Environment(Router.self) private var router
+    @Environment(PartyStore.self) private var party
 
     enum Section: String, CaseIterable, Identifiable {
-        // Order and grouping mirror the Android rail: Account, Profiles, Appearance, Layout,
-        // Content & Discovery, Integrations, Playback, Advanced, Tracking, About. Experience mode
-        // is not a rail entry there either — it lives inside Advanced.
-        case account, profiles, appearance, layout, contentDiscovery, integrations,
+        // Order and grouping mirror the Android rail: Account, Profiles, Watch party, Appearance,
+        // Layout, Content & Discovery, Integrations, Playback, Advanced, Tracking, About.
+        // Experience mode is not a rail entry there either — it lives inside Advanced.
+        case account, profiles, watchParty, appearance, layout, contentDiscovery, integrations,
              playback, advanced, tracking, about
         var id: String { rawValue }
 
@@ -173,6 +174,7 @@ struct SettingsView: View {
             switch self {
             case .account: return L10n.text("settings.account")
             case .profiles: return L10n.text("settings.profiles")
+            case .watchParty: return L10n.text("party.title", fallback: "Watch party")
             case .appearance: return L10n.text("settings.appearance")
             case .layout: return L10n.text("settings.layout")
             case .contentDiscovery: return L10n.text("settings.content_discovery")
@@ -188,6 +190,7 @@ struct SettingsView: View {
             switch self {
             case .account: return "person.crop.circle"
             case .profiles: return "person.2.fill"
+            case .watchParty: return "person.2.wave.2.fill"
             case .appearance: return "paintpalette.fill"
             case .layout: return "rectangle.3.group.fill"
             case .contentDiscovery: return "square.grid.2x2.fill"
@@ -210,11 +213,17 @@ struct SettingsView: View {
             self == .account || self == .profiles
         }
 
+        /// Watch parties are a backend feature and a signed-in one: with either missing there is
+        /// nothing the section could offer. Upstream hides its own rail entry on the same
+        /// condition rather than showing a dead end.
+        var needsWatchParty: Bool { self == .watchParty }
+
         /// A restricted profile must not be able to reach the settings that would let it lift
         /// its own restriction, or reconfigure sources for the whole household.
         var isBlockedWhenRestricted: Bool {
             switch self {
-            case .contentDiscovery, .playback, .integrations, .advanced, .profiles, .account:
+            case .contentDiscovery, .playback, .integrations, .advanced, .profiles, .account,
+                 .watchParty:
                 return true
             default:
                 return false
@@ -235,6 +244,7 @@ struct SettingsView: View {
         Section.allCases.filter { section in
             guard settings.app.showsAdvancedSettings || !section.isAdvancedOnly else { return false }
             guard isPrimaryProfileActive || !section.isPrimaryProfileOnly else { return false }
+            guard party.isAvailable || party.isActive || !section.needsWatchParty else { return false }
             return !(isRestricted && section.isBlockedWhenRestricted)
         }
     }
@@ -308,6 +318,7 @@ struct SettingsView: View {
         switch section {
         case .account: AccountSettingsContent()
         case .profiles: ProfilesSettingsContent()
+        case .watchParty: WatchPartySettingsContent()
         case .appearance: ThemeSettingsContent()
         case .layout: LayoutSettingsContent()
         case .contentDiscovery: ContentDiscoverySettingsContent()

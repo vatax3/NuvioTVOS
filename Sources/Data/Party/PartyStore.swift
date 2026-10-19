@@ -71,6 +71,10 @@ final class PartyStore {
     /// Set while this device is applying a correction, so its own corrected position is not
     /// republished as a command — which is how two devices chase each other.
     private var isApplyingCorrection = false
+    private var reconnectTask: Task<Void, Never>?
+    /// How many times the channel has been reopened without a join landing, which sets how long
+    /// to wait before the next attempt.
+    private var reconnectAttempt = 0
 
     // MARK: Availability
 
@@ -171,6 +175,11 @@ final class PartyStore {
         playback = nil
         sharedStream = nil
         notice = nil
+        // After `party` is cleared, so the `connected(false)` that closing the socket reports
+        // cannot schedule a reconnect to a party we have just left.
+        reconnectTask?.cancel()
+        reconnectTask = nil
+        reconnectAttempt = 0
     }
 
     // MARK: The host's controls
@@ -277,16 +286,49 @@ final class PartyStore {
 
     // MARK: Realtime
 
+    /// Reopens the channel after a backoff, for as long as there is still a party to reopen it
+    /// for.
+    ///
+    /// 1.0.48 had none of this: a socket that failed to open stayed shut for the life of the
+    /// party, which turned one bad URL into a session that could never recover. The delay grows
+    /// so that a backend outage is waited out rather than polled.
+    private func scheduleReconnect() {
+        guard party != nil, reconnectTask == nil else { return }
+        let attempt = reconnectAttempt
+        reconnectAttempt += 1
+        let seconds = min(30, 3 << min(attempt, 4))
+        reconnectTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(seconds))
+            guard !Task.isCancelled else { return }
+            self?.reconnectTask = nil
+            await self?.openChannel()
+        }
+    }
+
     private func openChannel() async {
         guard let party, let identity,
               let credentials = await NuvioBackend.shared.realtimeCredentials()
-        else { return }
+        else {
+            // No credentials means no socket at all, and no amount of retrying fixes that.
+            error = .unavailable
+            self.party?.isConnected = false
+            return
+        }
+
+        // Measured against the live backend: a join carrying no JWT is refused outright with
+        // "MalformedJWT". Retrying that forever would be a loop with no way out of it, so it is
+        // reported as what it is.
+        guard let token = credentials.token else {
+            error = .signInRequired
+            self.party?.isConnected = false
+            return
+        }
 
         do {
             try await realtime.open(
                 backendUrl: credentials.backendUrl,
                 publishableKey: credentials.key,
-                accessToken: credentials.token,
+                accessToken: token,
                 channel: "watch-party:\(party.id)",
                 presenceKey: party.memberId
             ) { [weak self] event in
@@ -299,6 +341,11 @@ final class PartyStore {
         } catch {
             log.error("Could not open the party channel: \(error.localizedDescription, privacy: .public)")
             self.party?.isConnected = false
+            // Said out loud rather than only logged. A party whose socket never opens looks
+            // joined — right code, right roster — and simply never moves, which is the single
+            // most confusing state this feature can be in.
+            self.error = .network
+            scheduleReconnect()
         }
     }
 
@@ -306,6 +353,14 @@ final class PartyStore {
         switch event {
         case .connected(let connected):
             party?.isConnected = connected
+            if connected {
+                reconnectAttempt = 0
+                reconnectTask?.cancel()
+                reconnectTask = nil
+                if error == .network { error = nil }
+            } else {
+                scheduleReconnect()
+            }
 
         case .presence(let presence):
             party?.presence = presence

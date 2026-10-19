@@ -411,6 +411,7 @@ struct StreamsView: View {
     @Environment(PluginStore.self) private var plugins
     @Environment(AppSettings.self) private var settings
     @Environment(Router.self) private var router
+    @Environment(PartyStore.self) private var party
 
     let request: StreamRequest
 
@@ -587,6 +588,10 @@ struct StreamsView: View {
                         )
                     }
 
+                    if let shared = partySharedStream {
+                        partyStreamRow(shared)
+                    }
+
                     if model.isLoading && model.groups.isEmpty {
                         NuvioLoadingView(message: L10n.text("streams.searching", fallback: "Searching your addons for sources…"))
                             .frame(maxWidth: .infinity, minHeight: dp(320))
@@ -603,6 +608,7 @@ struct StreamsView: View {
                                 group: group,
                                 model: model,
                                 showsHeader: selectedAddon == nil,
+                                partySource: partySource,
                                 onSelect: { stream in Task { await play(stream) } }
                             )
                         }
@@ -675,6 +681,107 @@ struct StreamsView: View {
                 )
             )
         }
+    }
+
+    // MARK: The party's source
+
+    /// What the party is watching, when what it is watching is this.
+    private var partyMediaKey: String {
+        PartyMedia.key(
+            type: request.contentType, id: request.contentId,
+            season: request.season, episode: request.episode
+        )
+    }
+
+    /// The release the party is on, for marking it in the list below.
+    private var partySource: PartySource? {
+        guard let active = party.party, active.media.key == partyMediaKey else { return nil }
+        return active.media.source
+    }
+
+    /// The host's own resolved link, when they shared one.
+    ///
+    /// Not offered to the host themselves — they are already the one playing it — and only for
+    /// the title the party is on, because a URL belongs to one file.
+    private var partySharedStream: PartyStream? {
+        guard let active = party.party, !active.isHost,
+              let shared = party.sharedStream, shared.mediaKey == partyMediaKey
+        else { return nil }
+        return shared
+    }
+
+    private var partyHostName: String {
+        party.party.flatMap { $0.member($0.hostMemberId)?.displayName }
+            ?? L10n.text("party.someone", fallback: "Someone")
+    }
+
+    /// Playing the host's link rather than one of our own sources.
+    ///
+    /// It is deliberately a row of its own above the list, not a source mixed into it: it is the
+    /// host's debrid account the stream comes through, and that is worth choosing rather than
+    /// landing on.
+    private func partyStreamRow(_ shared: PartyStream) -> some View {
+        Button(action: { play(shared: shared) }) {
+            HStack(spacing: NuvioTheme.spacing.md) {
+                Image(systemName: "person.2.wave.2.fill")
+                    .foregroundStyle(colors.secondary)
+                VStack(alignment: .leading, spacing: NuvioTheme.spacing.xxs) {
+                    Text(L10n.format(
+                        "party.shared_by", fallback: "Shared by %@", partyHostName
+                    ))
+                    .nuvioText(NuvioTextStyles.cardTitle)
+                    .foregroundStyle(colors.textPrimary)
+                    if let name = shared.name?.nilIfBlank ?? shared.filename?.nilIfBlank {
+                        Text(name)
+                            .nuvioText(NuvioTextStyles.metadata)
+                            .foregroundStyle(colors.textSecondary)
+                            .lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(NuvioTheme.spacing.lg)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(NuvioRowButtonStyle(cornerRadius: NuvioTheme.radii.lg))
+        .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)
+    }
+
+    /// Opens the host's link directly. Already resolved by the device that shared it, so it does
+    /// not go back through the debrid round the list's own rows take.
+    private func play(shared: PartyStream) {
+        router.play(
+            PlaybackRequest(
+                streamURL: shared.url,
+                title: request.title,
+                subtitleLine: [request.episodeLabel, request.episodeName]
+                    .compactMap { $0 }.joined(separator: " · ").nilIfBlank,
+                streamName: shared.name,
+                filename: shared.filename?.nilIfBlank
+                    ?? NextEpisodeSourceMatch.filenameFromURL(shared.url),
+                headers: shared.headers,
+                contentId: request.contentId,
+                contentType: request.contentType,
+                videoId: request.videoId,
+                season: request.season,
+                episode: request.episode,
+                poster: request.poster,
+                backdrop: request.backdrop,
+                logo: request.logo,
+                startFromBeginning: false,
+                preview: library.cachedPreview(
+                    contentType: request.contentType, contentId: request.contentId
+                ),
+                nextUp: nextUpRequest,
+                imdbId: request.imdbId,
+                subtitles: model.subtitles,
+                sourceRequest: request,
+                sourceAddonName: shared.addonName,
+                sourceAddonLogo: shared.addonLogo,
+                sourceDescription: shared.description,
+                sourceBingeGroup: shared.bingeGroup
+            )
+        )
     }
 
     private func banner(_ text: String, tint: Color) -> some View {
@@ -875,6 +982,8 @@ private struct StreamGroupSection: View {
     let group: AddonStreams
     let model: StreamsViewModel
     let showsHeader: Bool
+    /// The release the party is on, so the row carrying it can say so.
+    let partySource: PartySource?
     let onSelect: (Stream) -> Void
 
     var body: some View {
@@ -904,6 +1013,7 @@ private struct StreamGroupSection: View {
                         ruleBadges: model.ruleBadges[stream.stableKey] ?? [],
                         cache: model.cacheState(for: stream),
                         isResolving: model.resolvingKey == stream.stableKey,
+                        isPartySource: partySource?.matches(stream) ?? false,
                         action: { onSelect(stream) }
                     )
                 }
@@ -927,6 +1037,9 @@ private struct StreamRow: View {
     let ruleBadges: [StreamBadge]
     let cache: DebridCacheResult?
     let isResolving: Bool
+    /// Whether this is the file the party is watching. Marked rather than reordered: the list is
+    /// still the viewer's own, in their own order.
+    let isPartySource: Bool
     let action: () -> Void
 
     /// The template's output, when this row is one debrid will resolve.
@@ -1174,6 +1287,13 @@ private struct StreamRow: View {
     @ViewBuilder
     private var badges: some View {
         HStack(spacing: NuvioTheme.spacing.sm) {
+            if isPartySource {
+                NuvioBadge(
+                    text: L10n.text("party.source", fallback: "Party's source"),
+                    tint: colors.secondary,
+                    filled: true
+                )
+            }
             // Imported badges lead: they are the ones the viewer chose to see.
             ForEach(Array(ruleBadges.enumerated()), id: \.offset) { _, badge in
                 StreamRuleBadgeChip(badge: badge)

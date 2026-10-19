@@ -12,6 +12,7 @@ struct RootView: View {
     @Environment(NuvioAccountStore.self) private var account
     @Environment(NuvioSyncService.self) private var sync
     @Environment(SelectHoldReporter.self) private var selectHolds
+    @Environment(PartyStore.self) private var party
     @Environment(\.scenePhase) private var scenePhase
 
     /// Latched once at appearance rather than recomputed: the walk-through must not vanish
@@ -111,6 +112,11 @@ struct RootView: View {
             if profiles.consumeProfileManagementRequest() {
                 router.select(.settings)
             }
+            // Asked once here rather than by each party surface, which was a standstill: the
+            // player's party control was gated on an availability only the panel behind that
+            // control ever refreshed, so a cold launch never offered it. Upstream asks on every
+            // `ON_START` for the same reason.
+            await party.refreshAvailability(isSignedIn: account.isSignedIn)
             await addons.refreshAll()
             // Startup sync, the equivalent of Android's StartupSyncService. Runs after the addon
             // refresh so a pulled addon list lands on top of resolved manifests.
@@ -124,6 +130,7 @@ struct RootView: View {
         // has just proved they own makes the sign-in look as though it did nothing.
         .onChange(of: account.isSignedIn) { _, signedIn in
             if signedIn { syncAccount() }
+            Task { await party.refreshAvailability(isSignedIn: signedIn) }
         }
         // And coming back to the app: a television is left running for days, so "at launch"
         // can mean "a week ago". What was watched on a phone this afternoon should be here.

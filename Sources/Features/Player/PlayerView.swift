@@ -263,7 +263,9 @@ struct PlayerView: View {
                 onChooseEpisode: request.contentType == "series" ? chooseEpisode : nil,
                 onPlayNextEpisode: request.nextUp == nil ? nil : playNextEpisodeNow,
                 onSwitchEngine: { engineOverride = .exoplayer },
-                onShowParty: party.isAvailable ? { showsPartyPanel = true } : nil,
+                isPartyActive: party.isActive,
+                onShowParty: party.isAvailable || party.isActive
+                    ? { showsPartyPanel = true } : nil,
                 showsPauseOverlay: showsPauseOverlay,
                 hasOpenPrompt: showsPauseOverlay || nextEpisodeCountdown != nil || showsStillWatchingPrompt,
                 onDismissPrompt: dismissTransientPrompt,
@@ -841,7 +843,16 @@ struct PlayerView: View {
             episodeTitle: request.subtitleLine,
             poster: request.poster,
             background: request.backdrop,
-            logo: request.logo
+            logo: request.logo,
+            // What this device is playing, described rather than linked, so the others can find
+            // the same release in their own source lists. Without it a member has nothing to
+            // match against and the party agrees on the title but not on the file.
+            source: PartySource(
+                filename: request.filename,
+                bingeGroup: request.sourceBingeGroup,
+                addonId: request.sourceAddonName,
+                name: request.streamName
+            )
         )
     }
 

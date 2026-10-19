@@ -17,7 +17,7 @@ struct InPlayerPartyPanel: View {
 
     var body: some View {
         InPlayerPanel(
-            title: L10n.text("party.title", fallback: "Watch together"),
+            title: L10n.text("party.title", fallback: "Watch party"),
             subtitle: media.title.nilIfBlank,
             handlesExit: false,
             onDismiss: onDismiss
