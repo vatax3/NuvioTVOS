@@ -320,6 +320,12 @@ struct ActiveParty: Equatable, Sendable {
     var maxMembers: Int = 3
     var isConnected = false
     var hostOnly = false
+    /// Whether this device — the host — is offering its resolved link to the others.
+    ///
+    /// Local to the host and deliberately **off by default**: the link is usually a debrid one
+    /// tied to their own account, so the party streaming through it is a choice rather than a
+    /// consequence. Upstream keeps it the same way, outside the party record entirely.
+    var isSharing = false
 
     var isHost: Bool { memberId == hostMemberId }
 

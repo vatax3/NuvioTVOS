@@ -1330,7 +1330,6 @@
 "party.status_behind" = "behind";
 "party.status_browsing" = "browsing";
 "party.members" = "Watching";
-"party.share_again" = "Share this link again";
 "party.settings_description" = "Join friends with a party code.";
 "party.seats" = "%@ of %@ seats";
 "party.join_title" = "Join a watch party";
@@ -1338,3 +1337,10 @@
 "party.watch_with_party" = "Watch with the party";
 "party.shared_by" = "Shared by %@";
 "party.source" = "Party's source";
+"party.host_only_note" = "Only the host can control playback";
+"party.watching_alone" = "Watching on your own — catch up when you like";
+"party.caught_up" = "Back with the party";
+"party.catch_up" = "Catch up";
+"party.behind_by" = "%@ behind the party";
+"party.share_my_stream" = "Share my stream";
+"party.share_my_stream_sub" = "Friends can play your link instead of picking their own. It runs through your debrid account.";

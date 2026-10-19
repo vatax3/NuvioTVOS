@@ -1330,7 +1330,6 @@
 "party.status_behind" = "en retard";
 "party.status_browsing" = "navigue";
 "party.members" = "En train de regarder";
-"party.share_again" = "Repartager ce lien";
 "party.settings_description" = "Rejoignez vos amis avec un code de Watch party.";
 "party.seats" = "%@ places sur %@";
 "party.join_title" = "Rejoindre une Watch party";
@@ -1338,3 +1337,10 @@
 "party.watch_with_party" = "Regarder avec la Watch party";
 "party.shared_by" = "Partagé par %@";
 "party.source" = "Source de la Watch party";
+"party.host_only_note" = "Seul l'hôte peut commander la lecture";
+"party.watching_alone" = "Vous regardez de votre côté — rejoignez quand vous voulez";
+"party.caught_up" = "De retour avec la Watch party";
+"party.catch_up" = "Rejoindre la Watch party";
+"party.behind_by" = "%@ de retard sur la Watch party";
+"party.share_my_stream" = "Partager mon lien";
+"party.share_my_stream_sub" = "Les autres peuvent lire votre lien au lieu de choisir le leur. Il passe par votre compte debrid.";

@@ -132,6 +132,19 @@ enum PartySync {
         isPlaying && gapMs <= rejoinGapMs
     }
 
+    /// Who the party is still waiting for.
+    ///
+    /// Only members on *this* title: somebody who has moved to the next episode is not holding
+    /// this one up. `ignoring` carries the members already waited out once, so one slow
+    /// connection cannot stop the room indefinitely.
+    static func waitingMemberIds(in party: ActiveParty, ignoring: Set<String>) -> [String] {
+        party.presence.values
+            .filter { $0.mediaKey == party.media.key }
+            .filter { $0.status == .loading || $0.status == .buffering }
+            .map(\.memberId)
+            .filter { !ignoring.contains($0) }
+    }
+
     /// The gap, rounded to the step it is reported in and never to zero — "behind by 0 seconds"
     /// is a state the badge should not be able to show.
     static func reportedGapMs(_ gapMs: Int64) -> Int64 {

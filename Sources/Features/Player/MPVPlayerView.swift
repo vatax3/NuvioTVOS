@@ -67,6 +67,8 @@ struct MPVPlayerView: View {
     /// Whether a party is running, which decides whether its control is an occasional tool or
     /// part of the row proper.
     var isPartyActive = false
+    /// Reports the speed the viewer chose, so a party can publish it.
+    var onViewerSpeedChange: ((Double) -> Void)?
     /// Opens the watch-party panel. Absent when the feature is unavailable, which also takes the
     /// control out of the transport rather than offering one that explains itself away.
     var onShowParty: (() -> Void)?
@@ -1260,6 +1262,7 @@ struct MPVPlayerView: View {
     /// Records the speed as the viewer's own, so a party nudge knows what to restore.
     private func chooseSpeed(_ speed: Double) {
         viewerSpeed = speed
+        onViewerSpeedChange?(speed)
         engine.setPlaybackSpeed(speed)
     }
 

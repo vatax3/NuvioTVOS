@@ -13,13 +13,16 @@ struct InPlayerPartyPanel: View {
     let media: PartyMedia
     /// The resolved link, shared on request so everybody opens the same file.
     let stream: PartyStream
+    /// Whether this device has fallen behind on purpose, and how to end that.
+    var isBehind = false
+    var onCatchUp: () -> Void = {}
     let onDismiss: () -> Void
 
     var body: some View {
         InPlayerPanel(
             title: L10n.text("party.title", fallback: "Watch party"),
             subtitle: media.title.nilIfBlank,
-            handlesExit: false,
+            handlesExit: true,
             onDismiss: onDismiss
         ) {
             if !account.isSignedIn {
@@ -56,10 +59,7 @@ struct InPlayerPartyPanel: View {
                 requestsInitialFocus: true,
                 revealsSubtitle: true
             ) {
-                Task {
-                    await store.create(media: media, identity: identity)
-                    await store.share(stream: stream)
-                }
+                Task { await store.create(media: media, identity: identity) }
             }
         }
     }
@@ -76,17 +76,47 @@ struct InPlayerPartyPanel: View {
                     : L10n.text("party.reconnecting", fallback: "Reconnecting…")
             )
 
-            // Sharing again is the answer to "they are stuck on the loading screen": a member
-            // who joined after the link went out has nothing to play, and the party's own state
-            // does not carry it.
-            if party.canControl {
+            // Catching up is the way out of having watched on your own for a while, and it has
+            // to be offered: a member who paused while the room played on has no other way back
+            // to it, and seeking forward by hand would only land near the party, not on it.
+            if isBehind {
                 InPlayerPanelRow(
-                    title: L10n.text("party.share_again", fallback: "Share this link again"),
+                    title: L10n.text("party.catch_up", fallback: "Catch up"),
+                    systemImage: "forward.fill",
+                    requestsInitialFocus: true,
+                    action: onCatchUp
+                )
+            }
+
+            if party.isHost {
+                // A switch rather than an action, because the question is standing rather than
+                // momentary — and because what it turns on routes everybody through this
+                // account's debrid, which the subtitle says in as many words.
+                InPlayerPanelRow(
+                    title: L10n.text("party.share_my_stream", fallback: "Share my stream"),
+                    subtitle: L10n.text(
+                        "party.share_my_stream_sub",
+                        fallback: "Friends can play your link instead of picking their own. It runs through your debrid account."
+                    ),
                     systemImage: "link",
-                    requestsInitialFocus: true
+                    isSelected: party.isSharing,
+                    requestsInitialFocus: !isBehind,
+                    revealsSubtitle: true
                 ) {
-                    Task { await store.share(stream: stream) }
+                    Task {
+                        await store.setSharing(!party.isSharing)
+                        if store.party?.isSharing == true { await store.share(stream: stream) }
+                    }
                 }
+            }
+
+            if !party.canControl {
+                InPlayerInfoRow(
+                    title: L10n.text("party.host_only", fallback: "Only I control playback"),
+                    value: L10n.text(
+                        "party.host_only_note", fallback: "Only the host can control playback"
+                    )
+                )
             }
 
             if party.isHost {

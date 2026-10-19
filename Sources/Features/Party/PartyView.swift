@@ -297,6 +297,14 @@ struct PartyRoster: View {
     private var secondaryControls: some View {
         HStack(spacing: NuvioTheme.spacing.md) {
             if party.isHost {
+                Button(action: { Task { await store.setSharing(!party.isSharing) } }) {
+                    label(
+                        L10n.text("party.share_my_stream", fallback: "Share my stream"),
+                        systemImage: party.isSharing ? "link" : "link.badge.plus"
+                    )
+                }
+                .buttonStyle(NuvioPillButtonStyle(emphasis: .secondary, selected: party.isSharing))
+
                 Button(action: { Task { await store.setHostOnly(!party.hostOnly) } }) {
                     label(
                         party.hostOnly
