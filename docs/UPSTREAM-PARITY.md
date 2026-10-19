@@ -117,6 +117,12 @@ Not ported, on purpose.
 | Redesign episode options overlay | 0.8.7 | Our in-player panels were designed against the iOS and macOS apps and already diverge deliberately. |
 | Localization updates | 0.8.5, 0.8.7 | Our strings are our own; `Resources/*.lproj` is not generated from theirs. |
 
+**Watch parties were on this list and are not any more.** Ported in 1.0.48 and made to work in
+1.0.49: a Phoenix channel over `URLSessionWebSocketTask` rather than an SDK, upstream's sync
+arithmetic ported exactly, and one query parameter — `nuvio_realtime=1` — without which the
+backend's edge answers `410 Gone` and nothing connects at all. That parameter is the single most
+load-bearing line in the feature and reads like nothing in upstream's source.
+
 ## Declined since 0.8.9
 
 The same verdict, for the three windows the audit covers. Each is argued at length in
@@ -131,7 +137,6 @@ The same verdict, for the three windows the audit covers. Each is argued at leng
 | **A three-colour custom theme with an on-screen colour picker** | 1.0.0 | The palette is ported; the picker is not. Choosing a hue with a D-pad is slow and imprecise, and is the reason such controls go untouched. The hex goes to a phone through `LocalConfigServer` instead, and the other two colours are derived — which is the relationship the seven presets already have. |
 | **A transparent letterbox for true black HDR bars** | 1.1.0-beta.5 | Carried as *unverified* since 1.0.0 and now settled: upstream's own implementation excludes the mpv engine. It works by letting an ExoPlayer SurfaceView punch through the window background; ours is an mpv Metal layer over a window tvOS paints, so there is nothing to punch through to. |
 | **Automatic subtitle sync** | 1.1.0-beta.5, settled at beta.7 | ~7,800 lines, and the blocking question is now **answered by upstream's own code rather than still open**. It aligns an addon subtitle against the *embedded* track's timeline, and our doubt was whether mpv could hand out a muxed track's cues as text. Upstream shipped auto-sync on their mpv engine in 1.1.0-beta.7 and their comment states it plainly: *"mpv exposes no embedded subtitle timing while it plays, so only the container's own subtitle index can serve as the reference."* They pass `allowLiveReference = false` and demux the remote container themselves with their ExoPlayer extractors. So the cost here is our own MKV/MP4 subtitle-index demuxer over range requests, not an mpv property we had missed. The retiming half (`AutoSyncSubtitleTextRetimer`) is small and would transfer; the reference half is the 7,800 lines. |
-| **Watch parties** | 1.1.0-beta.7 | ~2,500 lines, and **not declined on the usual grounds** — this one is portable. It runs on upstream's own Supabase through `watch_party_*` Postgrest RPCs, and we already speak to that backend for account sync, so the "their backend contract" reason that covers the discovery endpoint and playback reports does not apply. What is new is the transport: their Realtime channel is Phoenix broadcast plus presence over a WebSocket, and we have no SDK for it. Scoped as its own release rather than refused. |
 | **Media servers (Jellyfin / Emby)** | 1.1.0-beta.7 | Open, not declined. ~2,700 lines, experimental upstream, and nothing on tvOS blocks it — it is HTTP. It is a whole second source type beside the Stremio addons: catalogues, library, streams and watch state. Deferred as a lot of its own. |
 | **Ambient mode** | 1.1.0-beta.6 | A poster slideshow while the app is idle. Open with a real doubt attached: tvOS hands the screen to the system screensaver after the viewer's own delay, so an in-app slideshow competes with Aerial rather than replacing it. |
 | **Stable and beta update channels** | 1.0.0 | Blocked rather than refused: our updater reads the sideloading feed, and the feed has one channel. Needs a second feed or a flag in the existing one before the setting could mean anything. |

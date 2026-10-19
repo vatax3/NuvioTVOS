@@ -151,6 +151,12 @@ metadata) and the marquee-on-focus card titles.
   and settings, per profile, at launch and when the player closes. Watch progress resolves per
   item by which device watched it most recently; library removals are tombstoned and pushed
   before the pull so a deletion cannot be undone by the next sync.
+- **Watch parties** — watch the same thing in step with other people, each on their own
+  television, through the same Nuvio backend the Android app uses: a Phoenix channel over a
+  WebSocket for positions, pauses and presence, with upstream's drift correction ported exactly —
+  a seek past 1.5 s of drift, and a ±5 % rate nudge below that so small gaps close without a
+  visible jump. Everyone plays from their own sources; the host can share their resolved link
+  instead, and is told plainly that it runs through their own debrid account.
 
 ## Deliberate deviations
 

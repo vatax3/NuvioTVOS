@@ -1,4 +1,4 @@
-# Functional parity audit — tvOS 1.0.47 vs Android TV 1.1.0-beta.7
+# Functional parity audit — tvOS 1.0.49 vs Android TV 1.1.0-beta.7
 
 Audit date: 2026-08-25, re-derived against 1.0.31 on 2026-08-26, tracked forward since.
 Supersedes the audit published with 1.0.15. Twenty releases landed while it was open, so the
@@ -878,9 +878,72 @@ a runtime fact about the focus and responder graph, and no policy test can see i
 buttons also gained identifiers, which retired an existing test's reliance on `buttons["chevron.right"]`
 — the SF Symbol's own identifier leaking through an unnamed button.
 
+## What 1.0.48 and 1.0.49 closed in that window
+
+The beta.7 window was triaged above; what it left open was shipped across two releases, and the
+second one exists because the first was wrong in a way no test here could see.
+
+### The small tier
+
+- **Random episodes** (1.0.48). Upstream's shuffle, with the two details that separate it from a
+  die roll: every episode is offered once before any repeats, and when the cycle restarts the one
+  just shown is excluded. A part-watched episode always wins — that is a commitment the viewer
+  made, not something a draw should overwrite.
+- **Clearlogos on landscape cards** (1.0.48).
+- **Steppers that repeat on a held Select** (1.0.48), with the *step* growing rather than the
+  interval shrinking: a cadence fast enough to cross the range can no longer stop on a value.
+- **Skip-segment forwarding to external players — forced, not missing** (1.0.48). Upstream passes
+  the interval as an Android Intent extra, with their own comment noting one player reads it and
+  the rest ignore it. A tvOS hand-off is a URL whose parameters the receiving app fixes; there is
+  no channel to attach anything to. The audit line is closed with the evidence rather than left
+  on the list.
+
+### Watch parties: ported, then actually connected
+
+Shipped in 1.0.48 — `NuvioRealtime` speaking Phoenix over `URLSessionWebSocketTask`, `PartySync`
+ported exactly, the store, the player integration and both screens — with one caveat stated in
+the release notes: **no two devices had ever been in a party.** They have now, and four of the
+five things that came back were real.
+
+**The socket had never opened, and could not have.** `api.nuvio.tv` answers `410 Gone` to any
+realtime request that does not carry `nuvio_realtime=1` — at the edge, before Kong, before the
+WebSocket, with no error a client can read. Measured directly: without the flag, 410; with it,
+`101 Switching Protocols`, and Phoenix replies on the first frame. Upstream carries the same
+parameter in `core/network/RealtimeUrl.kt`, where it reads like a cosmetic detail on a URL
+builder. **It is the whole feature.** Everything else — the framing, the ref matching, the
+heartbeat, the twenty-four sync tests — was correct and never ran; the join timed out, nothing
+retried, and the screen said "Reconnecting…" over a perfectly correct roster.
+
+Two things follow from that and are now fixed with it: the channel reconnects on a backoff
+instead of staying shut for the life of the party, and a channel that will not open says so
+rather than only logging it. A party that looks joined and never moves is the worst state this
+feature can be in silently.
+
+**A joined member had nowhere to go**, independently of the socket. `sharedStream` was read only
+by the player — a screen they were not on — so a party could be joined, correct, and never start.
+Upstream's member path is "Watch with the party" into the *source list*, fired automatically a
+moment after joining, with the host's link at the top and the release the host is on marked in
+the list. That is the model, and our copy had implied the other one: **everyone plays from their
+own sources and stays in step**; the host's debrid link is an option, not the mechanism.
+
+**Menu did nothing on the Watch party screen.** `onExitCommand` consumes the press whether or not
+its closure does anything, and the pushed screen passed none — so there was no way out of it at
+all. `InPlayerPanel` carries the same modifier with the same note, learned the same way; this is
+the second time.
+
+**The player's control was behind a standstill**: gated on an availability that only the panel
+*behind that control* ever refreshed, so a cold launch never offered it. Fourth instance of the
+recurring lesson, in a new costume — reachability is a runtime fact, and here the runtime fact
+was an ordering one.
+
+**And it was in the wrong place**: a row under *Content & discovery*, where nobody would look.
+Upstream gives it its own settings section after Profiles, gated on availability. So do we now.
+It keeps its English name in French: it is the word people in a party read off each other's
+screens.
+
 ## Verification
 
-- Unit suite at 1.0.47: **756 tests, 0 failures**. UI suite: **18 tests, 0 failures**.
+- Unit suite at 1.0.49: **793 tests, 0 failures**. UI suite: **18 tests, 0 failures**.
 - Test density is ahead of upstream per line — 703 tests over ~49k lines against 983 over 201k —
   so the 1.0.12 plan's "tests too thin" framing was wrong on volume. It was right about
   *placement*: the network clients still carry the least of it, though every release since
