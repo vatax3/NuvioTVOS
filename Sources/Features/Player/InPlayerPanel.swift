@@ -219,6 +219,7 @@ struct InPlayerPanelRow: View {
     let action: () -> Void
 
     @State private var swallowsNextPress = false
+    @State private var focusClaim: Task<Void, Never>?
 
     var body: some View {
         Button(action: {
@@ -281,8 +282,21 @@ struct InPlayerPanelRow: View {
         .accessibilityIdentifier(identifier ?? "")
         .onAppear {
             guard requestsInitialFocus else { return }
-            Task { @MainActor in rowFocused = true }
+            // Retried rather than written once. A focus binding only takes if its target is
+            // already in the focus graph, and the write races the render that puts it there —
+            // the same race `MPVPlayerView.retargetFocus` documents. A panel opened the instant
+            // playback starts loses it to the transport's own claim, and then nothing owns the
+            // panel at all.
+            focusClaim?.cancel()
+            focusClaim = Task { @MainActor in
+                for delay in [0, 120, 320, 650] {
+                    if delay > 0 { try? await Task.sleep(for: .milliseconds(delay)) }
+                    guard !Task.isCancelled, !rowFocused else { return }
+                    rowFocused = true
+                }
+            }
         }
+        .onDisappear { focusClaim?.cancel() }
     }
 }
 

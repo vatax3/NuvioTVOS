@@ -31,6 +31,7 @@ struct WatchPartySettingsContent: View {
                         trailing: { SettingsValueLabel(value: active.code) },
                         action: { router.push(.watchParty) }
                     )
+                    .accessibilityIdentifier("settings.party.open")
                 } else {
                     SettingsRow(
                         title: L10n.text("party.join_title", fallback: "Join a watch party"),
@@ -44,6 +45,7 @@ struct WatchPartySettingsContent: View {
                         trailing: { SettingsValueLabel(value: "") },
                         action: { router.push(.watchParty) }
                     )
+                    .accessibilityIdentifier("settings.party.open")
                 }
             }
         }

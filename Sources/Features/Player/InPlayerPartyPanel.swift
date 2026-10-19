@@ -22,26 +22,30 @@ struct InPlayerPartyPanel: View {
         InPlayerPanel(
             title: L10n.text("party.title", fallback: "Watch party"),
             subtitle: media.title.nilIfBlank,
+            focusCloseOnAppear: store.party == nil && !account.isSignedIn,
             handlesExit: true,
             onDismiss: onDismiss
         ) {
-            if !account.isSignedIn {
-                InPlayerInfoRow(
-                    title: L10n.text("common.unavailable"),
-                    value: PartyError.signInRequired.message
-                )
-            } else if !store.isAvailable {
-                InPlayerInfoRow(
-                    title: L10n.text("common.unavailable"),
-                    value: PartyError.unavailable.message
-                )
-            } else if let party = store.party {
+            // The party we are in outranks both notices, for the same reason the settings screen
+            // orders them this way: a lapsed session must not take away the way out of a party.
+            if let party = store.party {
                 active(party)
+            } else if !account.isSignedIn {
+                unavailable(PartyError.signInRequired.message)
+            } else if !store.isAvailable {
+                unavailable(PartyError.unavailable.message)
             } else {
                 idle
             }
         }
         .task { await store.refreshAvailability(isSignedIn: account.isSignedIn) }
+    }
+
+    /// A panel with nothing to press in it still has to be readable and leavable, so the close
+    /// control is where focus lands.
+    @ViewBuilder
+    private func unavailable(_ message: String) -> some View {
+        InPlayerInfoRow(title: L10n.text("common.unavailable"), value: message)
     }
 
     // MARK: Not in one
@@ -57,7 +61,8 @@ struct InPlayerPartyPanel: View {
                 ),
                 systemImage: "person.2.badge.plus",
                 requestsInitialFocus: true,
-                revealsSubtitle: true
+                revealsSubtitle: true,
+                identifier: "party.panel.start"
             ) {
                 Task { await store.create(media: media, identity: identity) }
             }
@@ -66,9 +71,33 @@ struct InPlayerPartyPanel: View {
 
     // MARK: In one
 
+    /// The rows are deliberately **not** conditional on anything that changes while the panel is
+    /// open.
+    ///
+    /// `InPlayerPanel` stacks its content positionally, so a row that appears or disappears
+    /// re-identifies every row below it — and the status line here updates several times a second
+    /// while somebody is buffering. Focus jumping out from under the remote mid-press is what
+    /// that looks like to a viewer. So the host's controls and the guest's note sit in fixed
+    /// places and change their *state*, never their presence; only *Catch up*, which exists for
+    /// a condition the viewer deliberately created, is allowed to come and go — and it is first,
+    /// so nothing below it can be re-identified by its arrival.
     @ViewBuilder
     private func active(_ party: ActiveParty) -> some View {
         InPlayerPanelSection(title: L10n.format("party.code_is", fallback: "Code: %@", party.code)) {
+            if isBehind {
+                InPlayerPanelRow(
+                    title: L10n.text("party.catch_up", fallback: "Catch up"),
+                    subtitle: L10n.text(
+                        "party.watching_alone",
+                        fallback: "Watching on your own — catch up when you like"
+                    ),
+                    systemImage: "forward.fill",
+                    requestsInitialFocus: true,
+                    identifier: "party.panel.catchUp",
+                    action: onCatchUp
+                )
+            }
+
             InPlayerInfoRow(
                 title: L10n.text("party.members", fallback: "Watching"),
                 value: party.isConnected
@@ -76,21 +105,8 @@ struct InPlayerPartyPanel: View {
                     : L10n.text("party.reconnecting", fallback: "Reconnecting…")
             )
 
-            // Catching up is the way out of having watched on your own for a while, and it has
-            // to be offered: a member who paused while the room played on has no other way back
-            // to it, and seeking forward by hand would only land near the party, not on it.
-            if isBehind {
-                InPlayerPanelRow(
-                    title: L10n.text("party.catch_up", fallback: "Catch up"),
-                    systemImage: "forward.fill",
-                    requestsInitialFocus: true,
-                    action: onCatchUp
-                )
-            }
-
             if party.isHost {
-                // A switch rather than an action, because the question is standing rather than
-                // momentary — and because what it turns on routes everybody through this
+                // A switch: one title, on or off. What it turns on routes everybody through this
                 // account's debrid, which the subtitle says in as many words.
                 InPlayerPanelRow(
                     title: L10n.text("party.share_my_stream", fallback: "Share my stream"),
@@ -101,48 +117,50 @@ struct InPlayerPartyPanel: View {
                     systemImage: "link",
                     isSelected: party.isSharing,
                     requestsInitialFocus: !isBehind,
-                    revealsSubtitle: true
+                    revealsSubtitle: true,
+                    identifier: "party.panel.sharing"
                 ) {
                     Task {
                         await store.setSharing(!party.isSharing)
                         if store.party?.isSharing == true { await store.share(stream: stream) }
                     }
                 }
-            }
 
-            if !party.canControl {
-                InPlayerInfoRow(
-                    title: L10n.text("party.host_only", fallback: "Only I control playback"),
-                    value: L10n.text(
-                        "party.host_only_note", fallback: "Only the host can control playback"
-                    )
-                )
-            }
-
-            if party.isHost {
                 InPlayerPanelRow(
-                    title: party.hostOnly
-                        ? L10n.text("party.everyone_controls", fallback: "Let everyone control")
-                        : L10n.text("party.host_only", fallback: "Only I control playback"),
+                    title: L10n.text("party.host_only", fallback: "Only I control playback"),
                     systemImage: party.hostOnly
-                        ? "person.2"
-                        : "person.badge.shield.checkmark",
-                    isSelected: party.hostOnly
+                        ? "person.badge.shield.checkmark" : "person.2",
+                    isSelected: party.hostOnly,
+                    identifier: "party.panel.hostOnly"
                 ) {
                     Task { await store.setHostOnly(!party.hostOnly) }
                 }
 
                 InPlayerPanelRow(
                     title: L10n.text("party.end", fallback: "End party"),
-                    systemImage: "xmark"
+                    systemImage: "xmark",
+                    identifier: "party.panel.end"
                 ) {
                     Task { await store.end() }
                     onDismiss()
                 }
             } else {
+                // Shown to a guest whatever the setting is, so the row count does not change
+                // under the remote when the host flips it. The value is the state.
+                InPlayerInfoRow(
+                    title: L10n.text("party.playback", fallback: "Playback"),
+                    value: party.canControl
+                        ? L10n.text("party.everyone_controls", fallback: "Let everyone control")
+                        : L10n.text(
+                            "party.host_only_note", fallback: "Only the host can control playback"
+                        )
+                )
+
                 InPlayerPanelRow(
                     title: L10n.text("party.leave", fallback: "Leave party"),
-                    systemImage: "rectangle.portrait.and.arrow.right"
+                    systemImage: "rectangle.portrait.and.arrow.right",
+                    requestsInitialFocus: !isBehind,
+                    identifier: "party.panel.leave"
                 ) {
                     Task { await store.leave() }
                     onDismiss()

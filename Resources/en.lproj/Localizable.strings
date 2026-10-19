@@ -1337,6 +1337,7 @@
 "party.watch_with_party" = "Watch with the party";
 "party.shared_by" = "Shared by %@";
 "party.source" = "Party's source";
+"party.playback" = "Playback";
 "party.host_only_note" = "Only the host can control playback";
 "party.watching_alone" = "Watching on your own — catch up when you like";
 "party.caught_up" = "Back with the party";

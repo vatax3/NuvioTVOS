@@ -1337,6 +1337,7 @@
 "party.watch_with_party" = "Regarder avec la Watch party";
 "party.shared_by" = "Partagé par %@";
 "party.source" = "Source de la Watch party";
+"party.playback" = "Lecture";
 "party.host_only_note" = "Seul l'hôte peut commander la lecture";
 "party.watching_alone" = "Vous regardez de votre côté — rejoignez quand vous voulez";
 "party.caught_up" = "De retour avec la Watch party";

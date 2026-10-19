@@ -23,12 +23,14 @@ struct PartyView: View {
         VStack(alignment: .leading, spacing: NuvioTheme.spacing.xl) {
             header
 
-            if !account.isSignedIn {
+            // The party we are in outranks both notices. A session that lapses mid-party would
+            // otherwise replace the roster with "sign in" and take away the only way out of it.
+            if let active = party.party {
+                PartyRoster(party: active, onWatch: watchWithParty, onFinished: leaveScreen)
+            } else if !account.isSignedIn {
                 notice(PartyError.signInRequired.message)
             } else if !party.isAvailable {
                 notice(PartyError.unavailable.message)
-            } else if let active = party.party {
-                PartyRoster(party: active, onWatch: watchWithParty)
             } else {
                 joining
             }
@@ -163,6 +165,22 @@ struct PartyView: View {
         watchWithParty(joined.media)
     }
 
+    /// Ending or leaving is the end of this screen's business, so it closes.
+    ///
+    /// Not cosmetic. Left mounted, the content swaps underneath the button that is still holding
+    /// focus — and what replaces it, with nothing playing to start a party from, is a text field
+    /// as the only focusable view on screen. Destroying a focused control and pushing the remote
+    /// into a text field in the same frame is the kind of thing tvOS is entitled to be unhappy
+    /// about, and ending a party reported as a crash is what prompted looking at it. Going back
+    /// is also simply what a viewer expects: the party is over, so is the screen.
+    private func leaveScreen() {
+        if let onDismiss {
+            onDismiss()
+        } else {
+            router.pop()
+        }
+    }
+
     /// Opens the stream list for what the party is watching.
     ///
     /// The source list rather than straight into playback, because everybody picks their own:
@@ -255,6 +273,10 @@ struct PartyRoster: View {
     /// Opens what the party is watching. The primary action here: a roster you cannot act on is
     /// a dead end, which is what the first version of this screen was.
     let onWatch: (PartyMedia) -> Void
+    /// Called once this device is out of the party, by either route.
+    let onFinished: () -> Void
+
+    @FocusState private var watchFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: NuvioTheme.spacing.lg) {
@@ -288,6 +310,11 @@ struct PartyRoster: View {
                 )
             }
             .buttonStyle(NuvioPillButtonStyle(emphasis: .primary))
+            .accessibilityIdentifier("party.roster.watch")
+            // A deliberate landing point. Without one the remote arrives on whatever the focus
+            // engine picks — here, the button that removes a member from the party.
+            .focused($watchFocused)
+            .onAppear { Task { @MainActor in watchFocused = true } }
 
             secondaryControls
         }
@@ -304,29 +331,36 @@ struct PartyRoster: View {
                     )
                 }
                 .buttonStyle(NuvioPillButtonStyle(emphasis: .secondary, selected: party.isSharing))
+                .accessibilityIdentifier("party.roster.sharing")
 
+                // One title, switched on or off. It used to flip the *title* to the action it
+                // would perform while the highlight showed the *state*, so a host who had turned
+                // the restriction on saw a lit button reading "Let everyone control" — which says
+                // the opposite of what was true.
                 Button(action: { Task { await store.setHostOnly(!party.hostOnly) } }) {
                     label(
-                        party.hostOnly
-                            ? L10n.text("party.everyone_controls", fallback: "Let everyone control")
-                            : L10n.text("party.host_only", fallback: "Only I control playback"),
-                        systemImage: party.hostOnly ? "person.2" : "person.badge.shield.checkmark"
+                        L10n.text("party.host_only", fallback: "Only I control playback"),
+                        systemImage: party.hostOnly
+                            ? "person.badge.shield.checkmark" : "person.2"
                     )
                 }
                 .buttonStyle(NuvioPillButtonStyle(emphasis: .secondary, selected: party.hostOnly))
+                .accessibilityIdentifier("party.roster.hostOnly")
 
-                Button(action: { Task { await store.end() } }) {
+                Button(action: { Task { await store.end(); onFinished() } }) {
                     label(L10n.text("party.end", fallback: "End party"), systemImage: "xmark")
                 }
                 .buttonStyle(NuvioPillButtonStyle(emphasis: .secondary))
+                .accessibilityIdentifier("party.roster.end")
             } else {
-                Button(action: { Task { await store.leave() } }) {
+                Button(action: { Task { await store.leave(); onFinished() } }) {
                     label(
                         L10n.text("party.leave", fallback: "Leave party"),
                         systemImage: "rectangle.portrait.and.arrow.right"
                     )
                 }
                 .buttonStyle(NuvioPillButtonStyle(emphasis: .secondary))
+                .accessibilityIdentifier("party.roster.leave")
             }
         }
     }

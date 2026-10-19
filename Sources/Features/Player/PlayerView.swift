@@ -99,7 +99,11 @@ struct PlayerView: View {
     /// AVPlayer's transport menu can request a source change.  Keep the picker above the player
     /// instead of navigating back to the Sources route, just like the Android/iOS side panel.
     @State private var showsSourcePanel = false
+    #if DEBUG
+    @State private var showsPartyPanel = PartyHarness.opensPanel
+    #else
     @State private var showsPartyPanel = false
+    #endif
 
     /// When the audio route last changed under playback, and the observer that reports it.
     /// A pause that lands right after a route change was the route change's doing, not the
@@ -639,6 +643,34 @@ struct PlayerView: View {
         }
 
         partyOverlay
+
+        // The party's own clock.
+        //
+        // The loop used to be driven by the engine's position observer alone, and that observer
+        // goes quiet the moment playback pauses — so a pause made *here* was never noticed and
+        // never published, while a pause made elsewhere arrived as a push and worked. Hence a
+        // party in which the other device could pause you but you could not pause it. Upstream's
+        // loop is a timer for exactly this reason; its 250ms is the same cadence `MPVEngine`
+        // publishes `time-pos` at, which is why the observer looked sufficient.
+        //
+        // Attached here, to a view with no size, rather than to `PlayerView`'s body: that body
+        // is at the type-checker's limit and this keeps a modifier off it.
+        Color.clear
+            .frame(width: 0, height: 0)
+            .allowsHitTesting(false)
+            .task(id: party.isActive) { await runPartyTicker() }
+    }
+
+    private func runPartyTicker() async {
+        guard party.isActive else {
+            partyLoop.reset()
+            return
+        }
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled, party.isActive else { return }
+            syncWithPartyIfNeeded(position: playbackPosition, duration: playbackDuration)
+        }
     }
 
     /// One line of party news, and the standing note when this device has chosen to watch on its
@@ -685,6 +717,10 @@ struct PlayerView: View {
             showParentalGuideIfReady()
         }
         if paused != wasPaused {
+            // Published from here rather than left to the loop's mismatch delay: that delay is
+            // there to absorb a disagreement that arrives from elsewhere, and a viewer pressing
+            // pause is not a disagreement — it is the command the party is waiting for.
+            publishLocalPauseToParty()
             // A sustained pause lets the television sleep again; a buffer stall does not last
             // long enough to. See `PlaybackWakeLockPolicy`.
             PlaybackWakeLock.setPaused(paused)
@@ -804,20 +840,33 @@ struct PlayerView: View {
     /// nearly every playback is in.
     private func syncWithPartyIfNeeded(position: Double, duration: Double) {
         guard party.isActive else { return }
-        let instructions = partyLoop.tick(
-            PlayerPartyLoop.Input(
-                positionMs: Int64(position * 1000),
-                durationMs: duration.isFinite ? Int64(duration * 1000) : 0,
-                isPaused: isPaused,
-                isLoading: isLoading,
-                hasRendered: hasStartedPlayback,
-                mediaKey: partyMediaKey,
-                viewerRate: viewerPlaybackRate
-            ),
-            store: party
-        )
+        var input = partyInput
+        input.positionMs = Int64(position * 1000)
+        if duration.isFinite { input.durationMs = Int64(duration * 1000) }
+        let instructions = partyLoop.tick(input, store: party)
         for instruction in instructions { perform(instruction) }
         sharePartyStreamIfNeeded()
+    }
+
+    /// Announces a pause or a resume made on this device, at once.
+    private func publishLocalPauseToParty() {
+        guard party.isActive else { return }
+        for instruction in partyLoop.localPlaybackToggled(partyInput, store: party) {
+            perform(instruction)
+        }
+    }
+
+    /// This device's state, in the terms the loop reads it.
+    private var partyInput: PlayerPartyLoop.Input {
+        PlayerPartyLoop.Input(
+            positionMs: Int64(playbackPosition * 1000),
+            durationMs: playbackDuration.isFinite ? Int64(playbackDuration * 1000) : 0,
+            isPaused: isPaused,
+            isLoading: isLoading,
+            hasRendered: hasStartedPlayback,
+            mediaKey: partyMediaKey,
+            viewerRate: viewerPlaybackRate
+        )
     }
 
     private func perform(_ instruction: PlayerPartyLoop.Instruction) {

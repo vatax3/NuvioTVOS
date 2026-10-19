@@ -86,9 +86,20 @@ final class PartyStore {
     /// to wait before the next attempt.
     private var reconnectAttempt = 0
 
+    init() {
+        #if DEBUG
+        if let staged = PartyHarness.staged() { stageForTesting(staged) }
+        #endif
+    }
+
     // MARK: Availability
 
     func refreshAvailability(isSignedIn: Bool) async {
+        #if DEBUG
+        // The harness has no account behind it, and asking would answer "not signed in" and take
+        // the staged party's screens away again.
+        if PartyHarness.isActive { return }
+        #endif
         guard isSignedIn else {
             isAvailable = false
             return
@@ -187,17 +198,27 @@ final class PartyStore {
 
     // MARK: Leaving
 
+    /// Leaves, without waiting to be told it worked.
+    ///
+    /// The teardown is local and immediate; telling the backend is a courtesy that must not hold
+    /// the interface. Awaited, it held the screen for as long as the request took — and a request
+    /// that cannot succeed, on a party the server has already forgotten, holds it until the
+    /// socket times out.
     func leave() async {
         guard let party, let identity else { return }
         await teardown()
-        _ = try? await PartyApi.leave(partyId: party.id, deviceId: identity.deviceId)
+        Task.detached {
+            _ = try? await PartyApi.leave(partyId: party.id, deviceId: identity.deviceId)
+        }
     }
 
     /// The host ending it for everybody, as opposed to leaving it running.
     func end() async {
         guard let party, let identity else { return }
         await teardown()
-        _ = try? await PartyApi.end(partyId: party.id, deviceId: identity.deviceId)
+        Task.detached {
+            _ = try? await PartyApi.end(partyId: party.id, deviceId: identity.deviceId)
+        }
     }
 
     private func teardown() async {
@@ -830,6 +851,19 @@ final class PartyStore {
             }
         }
     }
+
+#if DEBUG
+    /// Puts a party in place with no backend behind it, for the harness. The RPCs then all fail
+    /// harmlessly — which is itself the point for *end* and *leave*, where what is being
+    /// examined is the teardown rather than the request.
+    func stageForTesting(_ staged: ActiveParty) {
+        party = staged
+        identity = PartyIdentity(
+            deviceId: PartyDevice.id, displayName: "Val", avatarUrl: nil, avatarColor: nil
+        )
+        isAvailable = true
+    }
+#endif
 
     func clearNotice() { notice = nil }
     func clearEvent() { lastEvent = nil }

@@ -306,6 +306,21 @@ final class PlayerPartyLoop {
         }
     }
 
+    /// The viewer paused or resumed on this device.
+    ///
+    /// Published immediately when they may drive. When they may not, nothing is said and the
+    /// loop's own mismatch branch decides what it means a moment later — adopting the room's
+    /// state, or letting them fall behind on purpose.
+    func localPlaybackToggled(_ input: Input, store: PartyStore) -> [Instruction] {
+        guard let party = store.party, party.media.key == input.mediaKey else { return [] }
+        mismatchSince = nil
+        previousPositionMs = input.positionMs
+        guard party.canControl else { return [] }
+        return [.publish(
+            positionMs: input.positionMs, paused: input.isPaused, rate: input.viewerRate
+        )]
+    }
+
     /// Rejoins the party's position on request.
     func catchUp() { setBehind(false) }
 
