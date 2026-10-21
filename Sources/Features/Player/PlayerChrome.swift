@@ -1337,7 +1337,10 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
         Group {
             InPlayerPanelSection(title: "Source") {
                 if let addon = request.sourceAddonName?.nilIfBlank { InPlayerInfoRow(title: "Addon", value: addon) }
-                InPlayerInfoRow(title: L10n.text("player.engine", fallback: "Player"), value: "MPV")
+                InPlayerInfoRow(title: L10n.text("player.engine", fallback: "Player"), value: Engine.label)
+                if let pipeline = engine.streamInfo.pipeline {
+                    InPlayerInfoRow(title: L10n.text("player.pipeline", fallback: "Pipeline"), value: pipeline)
+                }
                 if let name = request.streamName?.nilIfBlank { InPlayerInfoRow(title: "Stream", value: name) }
                 if let filename = request.filename?.nilIfBlank { InPlayerInfoRow(title: "File", value: filename) }
                 if !request.sourceHints.isEmpty { InPlayerInfoRow(title: "Sources", value: request.sourceHints.joined(separator: " · ")) }

@@ -762,6 +762,8 @@ final class MPVEngine {
 /// `PlayerEngineSurface` was extracted. The conformance is empty on purpose: a member that needed
 /// an adapter here would be a sign the protocol had been designed rather than measured.
 extension MPVEngine: PlayerEngineSurface {
+    static var label: String { "MPV" }
+
     /// mpv sees a demuxer and a decoder, never the origin's HTTP answer: a refusal reaches it as
     /// an empty stream and reads as invalid content. So it cannot tell a refused origin from a
     /// file another engine would open, and says so by never ruling the hand-off out. The engine

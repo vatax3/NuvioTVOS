@@ -207,6 +207,12 @@ final class AetherEngineAdapter {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.refreshStreamInfo() }
             .store(in: &sinks)
+        // The route can move mid-session — a native session AVPlayer refuses is rebuilt on the
+        // software path — so the panel follows it rather than reading it once at the load.
+        engine.$videoRoute
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.refreshStreamInfo() }
+            .store(in: &sinks)
 
         // Fires from whatever thread emitted the line — demuxer, producer, local server — so it is
         // hopped onto the main actor before it reaches observed storage.
@@ -268,7 +274,8 @@ final class AetherEngineAdapter {
             outputRange: engine.videoFormat.label,
             audioCodec: active.map { $0.isAtmos ? "\($0.codec) · Atmos" : $0.codec },
             audioChannels: active.map { "\($0.channels) ch" },
-            audioOutput: engine.audioDelivery.label
+            audioOutput: engine.audioDelivery.label,
+            pipeline: engine.videoRoute.label
         )
     }
 }
@@ -276,6 +283,8 @@ final class AetherEngineAdapter {
 // MARK: - The chrome's contract
 
 extension AetherEngineAdapter: PlayerEngineSurface {
+    static var label: String { "Aether" }
+
     /// AetherEngine clamps lip-sync correction at ±2 s and keeps the value across the rebuilds a
     /// session makes on its own.
     static var audioDelayLimit: Double { 2 }
@@ -441,6 +450,21 @@ private extension AudioDelivery {
         case .playerManaged: return L10n.text("player.audio_player_managed", fallback: "AVFoundation")
         case .droppedNoPipeline: return L10n.text("player.audio_dropped", fallback: "Dropped — no pipeline")
         case .noAudioInSource, .none: return nil
+        }
+    }
+}
+
+private extension VideoRoute {
+    /// Named for what it means to the viewer rather than for the code path. `.loopback` is the one
+    /// this engine was adopted for: the source is remuxed and handed to AVPlayer, which is what
+    /// lets an audio bitstream reach the receiver untouched.
+    var label: String? {
+        switch self {
+        case .loopback: return L10n.text("player.route_loopback", fallback: "Remux to AVPlayer (bitstream intact)")
+        case .remoteBypass: return L10n.text("player.route_native", fallback: "Direct to AVPlayer")
+        case .software: return L10n.text("player.route_software", fallback: "Software decode (no passthrough)")
+        case .audio: return L10n.text("player.route_audio", fallback: "Audio only")
+        case .none: return nil
         }
     }
 }

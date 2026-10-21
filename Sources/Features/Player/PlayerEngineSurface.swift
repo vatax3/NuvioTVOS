@@ -73,6 +73,13 @@ protocol PlayerEngineSurface: AnyObject, Observable {
 
     func liveStats() -> PlayerLiveStats
 
+    /// What the stream-information panel calls this engine.
+    ///
+    /// It used to be the literal "MPV" in the panel, which was true while the chrome was mpv's
+    /// own and became a lie the moment it was shared: a viewer reading the panel would be told the
+    /// wrong engine while the other one played. The name has to come from whatever is underneath.
+    static var label: String { get }
+
     // MARK: Capability limits
     //
     // The chrome draws its steppers against these rather than against constants of its own,
@@ -228,6 +235,13 @@ struct PlayerStreamInfo: Hashable {
     var audioCodec: String?
     var audioChannels: String?
     var audioOutput: String?
+    /// Which pipeline inside the engine is actually serving, for an engine that has more than one.
+    /// nil on mpv, which has exactly one and would only ever repeat itself here.
+    ///
+    /// Worth a row of its own because it is the difference between a session that is doing what
+    /// this engine was adopted for and one that quietly is not: a remux served to AVPlayer keeps
+    /// the audio bitstream intact, and a session that fell back to software decode does not.
+    var pipeline: String?
 }
 
 /// The three readings the stats overlay needs from the engine. Everything else it draws comes

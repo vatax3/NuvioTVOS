@@ -1153,6 +1153,11 @@
 "settings.advanced.stats_overlay_sub" = "Ajouter un bouton Stats aux informations du flux, pour le tampon, le réseau, le débit, le processeur, la mémoire et la température en direct";
 "player.stats" = "Stats";
 "player.engine" = "Lecteur";
+"player.pipeline" = "Pipeline";
+"player.route_loopback" = "Remux vers AVPlayer (bitstream intact)";
+"player.route_native" = "Direct vers AVPlayer";
+"player.route_software" = "Décodage logiciel (pas de passthrough)";
+"player.route_audio" = "Audio seulement";
 "player.diagnostics" = "Diagnostics";
 
 /* MovieRecommendationsOverlay */

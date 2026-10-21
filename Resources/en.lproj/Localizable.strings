@@ -1153,6 +1153,11 @@
 "settings.advanced.stats_overlay_sub" = "Add a Stats button to stream information, for live buffer, network, bitrate, CPU, memory and thermal readings";
 "player.stats" = "Stats";
 "player.engine" = "Player";
+"player.pipeline" = "Pipeline";
+"player.route_loopback" = "Remux to AVPlayer (bitstream intact)";
+"player.route_native" = "Direct to AVPlayer";
+"player.route_software" = "Software decode (no passthrough)";
+"player.route_audio" = "Audio only";
 "player.diagnostics" = "Diagnostics";
 
 /* MovieRecommendationsOverlay */
