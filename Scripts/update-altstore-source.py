@@ -59,8 +59,8 @@ def release_version(tag: str) -> str | None:
     return match.group(1) if match else None
 
 
-def release_versions(tag: str) -> tuple[str, str]:
-    """The marketing and build versions, read from `project.yml` at that tag.
+def release_versions(tag: str) -> tuple[str, str, str]:
+    """The marketing version, build version and tvOS floor, read from `project.yml` at that tag.
 
     Not from the checked-in Info.plist, which is the wrong source of truth twice over: XcodeGen
     generates it *from* `project.yml`, and Xcode overrides its version keys with the build
@@ -84,7 +84,15 @@ def release_versions(tag: str) -> tuple[str, str]:
     if not re.search(r"^\s*PRODUCT_BUNDLE_IDENTIFIER:\s*com\.nuvio\.tvos\s*$", text, re.MULTILINE):
         raise ValueError(f"{tag}: project.yml does not build com.nuvio.tvos")
 
-    return unique("MARKETING_VERSION"), unique("CURRENT_PROJECT_VERSION")
+    # The tvOS floor is read the same way rather than hardcoded. It was a literal "17.0" for
+    # 51 releases, which was true for every one of them — and silently wrong the moment 1.0.52
+    # raised the floor to 18.0, because a feed that understates the requirement offers a
+    # tvOS 17 device a build it cannot install.
+    return (
+        unique("MARKETING_VERSION"),
+        unique("CURRENT_PROJECT_VERSION"),
+        unique("deploymentTarget"),
+    )
 
 
 def version_record(release: dict[str, Any]) -> dict[str, Any] | None:
@@ -109,7 +117,7 @@ def version_record(release: dict[str, Any]) -> dict[str, Any] | None:
         found = ", ".join(str(item.get("name")) for item in release.get("assets", [])) or "none"
         raise ValueError(f"{tag}: no asset named {expected_name} (assets: {found})")
 
-    marketing_version, build_version = release_versions(tag)
+    marketing_version, build_version, minimum_os = release_versions(tag)
     if marketing_version != version:
         raise ValueError(f"{tag}: tag says {version}, project.yml says {marketing_version}")
 
@@ -124,7 +132,7 @@ def version_record(release: dict[str, Any]) -> dict[str, Any] | None:
         ),
         "downloadURL": str(asset["browser_download_url"]),
         "size": int(asset["size"]),
-        "minOSVersion": "17.0",
+        "minOSVersion": minimum_os,
     }
     digest = str(asset.get("digest") or "")
     if digest.startswith("sha256:") and len(digest) == len("sha256:") + 64:
