@@ -74,8 +74,30 @@ gh release create "v$VERSION" "build/Nuvio-$VERSION-tvOS-unsigned.ipa" \
 cd - && git worktree remove ../nuvio-release-$VERSION
 ```
 
-The release notes become the version's `localizedDescription` in the feed — they are what a
-sideloading client shows, so write them for a viewer rather than for a changelog.
+## Writing the notes
+
+The release notes become the version's `localizedDescription` in the feed, so they are read in two
+places at once: the GitHub release page and a sideloading client. Both audiences are strangers to
+the work. Four rules, and they are not negotiable per release:
+
+1. **English.** Every release, regardless of the language the work was discussed in.
+2. **A changelog, not a story.** Group the changes under short headings — *Added*, *Changed*,
+   *Fixed* — and give each entry one or two sentences: what changed, and what it means for someone
+   using the app. Longest-reaching change first.
+3. **Impersonal.** No first person, no second person, no account of how the work went, what was
+   tried, what was learned, or who asked for it. The subject of every sentence is the app or the
+   feature, never a developer or a particular user. "Playback now bitstreams E-AC-3 JOC", not
+   "I fixed Atmos for you".
+4. **Legible on its own.** Someone reading the repository months later, with no memory of the
+   conversation, should understand each entry without opening a diff. Name features as the UI names
+   them; expand an acronym the first time it appears.
+
+Technical detail is welcome where it explains a user-visible consequence. Detail that only explains
+the implementation belongs in the commit message.
+
+> Through 1.0.51 the notes were written in French as a first-person account of the session. They
+> read as a diary to anyone who was not in it, and a sideloading client showed that diary as the
+> version's description.
 
 ## Then check the feed actually moved
 
