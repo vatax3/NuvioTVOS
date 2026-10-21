@@ -98,6 +98,12 @@
 "player.aspect_cinema_zoom" = "Zoom cinéma";
 "player.aspect_fit_height" = "Ajusté en hauteur";
 "player.aspect_fit_width" = "Ajusté en largeur";
+"player.audio_stream_copy" = "Passthrough (copie du flux)";
+"player.audio_bridged" = "Transcodé (ré-encodé)";
+"player.audio_decoded" = "Décodé en PCM";
+"player.audio_player_managed" = "AVFoundation";
+"player.audio_dropped" = "Abandonné — aucun pipeline";
+"player.engine_unavailable" = "Le moteur de lecture n'a pas pu démarrer.";
 "player.audio_delay" = "Décalage audio";
 "player.subtitle_delay" = "Décalage des sous-titres";
 "player.reset_subtitle_delay" = "Réinitialiser le décalage";
@@ -120,6 +126,8 @@
 "licenses.mdblist_body" = "Nuvio utilise MDBList pour les notes agrégées et les fournisseurs de scores externes. Nuvio n'est ni affilié à MDBList ni approuvé par lui.";
 "licenses.aniskip_body" = "Nuvio utilise l'API AniSkip pour les repères d'intro, de résumé et de générique fournis par la communauté et utilisés par les commandes de saut. Nuvio n'est ni affilié à AniSkip ni approuvé par lui.";
 "licenses.avfoundation_body" = "La pile de lecture d'Apple, utilisée pour les sources H.264/HEVC et HLS ainsi que pour l'intégration « À l'écoute ».";
+"licenses.aether_body" = "AetherEngine lit ce que le lecteur système ne sait pas ouvrir : il démuxe avec FFmpeg et rend via VideoToolbox et AVFoundation, ce qui préserve le Dolby Atmos et la Dolby Vision depuis une source Matroska. Sous licence GNU Lesser General Public License v3.0 ou ultérieure, avec une exception pour la distribution via les boutiques d'applications. Il est lié dynamiquement et embarque son propre FFmpeg, également LGPL. Copyright les contributeurs d'AetherEngine.";
+"licenses.libtruehd_body" = "LibTrueHD décode le TrueHD Atmos afin que ses métadonnées d'objets soient rendues en conservant les canaux de hauteur. Son API C, son framer et son empaquetage sont sous MIT, Copyright Quick104 et Vincent Herbst. Il intègre les crates truehd et oamd du projet truehdd, Copyright Rainbaby et les contributeurs de truehdd, sous licence Apache, version 2.0 — dont une copie est distribuée avec cette application ainsi que le fichier NOTICE du projet. La licence est disponible sur apache.org/licenses/LICENSE-2.0. Les métadonnées Dolby Vision sont analysées par libdovi, la crate dolby_vision de dovi_tool, Copyright quietvoid et contributeurs, utilisée sous licence MIT.";
 "licenses.libmpv_body" = "Le moteur interne à codecs étendus. mpv est sous licence GNU General Public License v2 ou ultérieure ; les composants de libmpv conservent leurs termes d'origine.";
 "licenses.ffmpeg_body" = "Démultiplexage, décodage et filtrage au sein du moteur mpv. Sous licence GNU Lesser General Public License v2.1 ou ultérieure, avec des composants GPL lorsqu'ils sont activés.";
 "licenses.native_body" = "Rendu des sous-titres, gestion des couleurs, décodage AV1 et couche Vulkan-sur-Metal qui dessine l'image. Chacun conserve sa licence d'origine — ISC, LGPL, BSD et Apache 2.0 respectivement.";
@@ -429,6 +437,7 @@
 "settings.playback.tab_advanced" = "Avancé";
 "settings.playback.title" = "Lecture";
 "settings.playback.player" = "Lecteur";
+"settings.playback.player_footnote" = "Aether démuxe avec FFmpeg et lit sur le pipeline système : le MKV fonctionne, et le Dolby Atmos comme la Dolby Vision atteignent votre ampli et votre écran intacts. MPV décode en logiciel et sert de repli pour ce qu'Aether n'ouvre pas, au prix de l'Atmos. AVFoundation seul ne sait pas démuxer le MKV. L'app change de moteur automatiquement quand l'un refuse une source.";
 "settings.playback.target" = "Cible de lecture";
 "settings.playback.target_subtitle" = "Où une source s’ouvre quand vous appuyez sur Lecture";
 "settings.playback.internal_engine" = "Moteur interne";
@@ -1166,6 +1175,10 @@
 "settings.layout.episode_overlay_blur_sub" = "Afficher l’image de l’épisode, floutée.";
 
 /* SettingsModels.swift */
+"option.engine_aether" = "Aether (recommandé)";
+"option.engine_aether_sub" = "Large prise en charge des conteneurs sur le pipeline système. Passthrough Dolby Atmos et Dolby Vision.";
+"option.engine_mpv" = "MPV (codecs étendus)";
+"option.engine_avf" = "AVFoundation";
 "option.engine_avf_sub" = "Pipeline système. Meilleure efficacité énergétique et passthrough HDR.";
 "option.engine_mpv_sub" = "Pipeline logiciel pour les conteneurs qu’AVFoundation refuse.";
 "option.internal_player" = "Lecteur interne";

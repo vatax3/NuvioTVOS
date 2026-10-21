@@ -38,7 +38,10 @@ git commit -am "Release $VERSION" && git push
 
 Archive from a detached worktree rather than the working tree, so the build contains only what was
 committed — an untracked file that compiles locally and does not exist for anyone else has shipped
-before:
+before. Two things the worktree needs beyond `Vendor/`: **Xcode 27 or later** (AetherEngine's floor,
+Swift 6.4 — Xcode 26 cannot compile it), and a package resolve, which `xcodegen generate` sets up and
+the first `xcodebuild` performs. `Packages/PlayerEngineKit` is in the repository, so the worktree
+carries it; its dependencies are fetched from the network at their pinned versions.
 
 ```bash
 # 2. Build

@@ -19,63 +19,12 @@ import Libmpv
 @Observable
 @MainActor
 final class MPVEngine {
-    /// The seven picture modes the Android TV player offers, in its order.  The aspect button
-    /// steps through the list one press at a time, so the sequence is part of the port, not an
-    /// arbitrary ordering of an enum.
-    enum AspectMode: String, CaseIterable, Identifiable {
-        case fit, crop, stretch, slightZoom, cinemaZoom, fitHeight, fitWidth
+    /// Lifted to `PlayerAspectMode` when the second engine arrived: a chrome generic over
+    /// engines cannot name a type nested in a class that sits behind `#if canImport(Libmpv)`.
+    /// The alias keeps `MPVEngine.AspectMode` meaning what it has always meant at every call site.
+    typealias AspectMode = PlayerAspectMode
 
-        var id: String { rawValue }
-        var label: String {
-            switch self {
-            case .fit: return L10n.text("player.aspect_fit")
-            case .crop: return L10n.text("player.aspect_crop")
-            case .stretch: return L10n.text("player.aspect_stretch")
-            case .slightZoom: return L10n.text("player.aspect_slight_zoom")
-            case .cinemaZoom: return L10n.text("player.aspect_cinema_zoom")
-            case .fitHeight: return L10n.text("player.aspect_fit_height")
-            case .fitWidth: return L10n.text("player.aspect_fit_width")
-            }
-        }
-
-        var next: AspectMode {
-            let all = AspectMode.allCases
-            let index = all.firstIndex(of: self) ?? 0
-            return all[(index + 1) % all.count]
-        }
-
-        /// The mode playback starts in, from the viewer's `resize_mode` preference.
-        ///
-        /// Android's five values do not map one to one onto the seven offered in the player —
-        /// `slightZoom` and `cinemaZoom` are steps the viewer reaches by cycling, not defaults —
-        /// so the two zoom cases both land on `crop`, which is what "zoom to fill" means.
-        init(resizeMode: ResizeMode) {
-            switch resizeMode {
-            case .fit: self = .fit
-            case .fill: self = .stretch
-            case .zoom: self = .crop
-            case .fixedWidth: self = .fitWidth
-            case .fixedHeight: self = .fitHeight
-            }
-        }
-    }
-
-    struct StreamInfo: Hashable {
-        var videoCodec: String?
-        var resolution: String?
-        var frameRate: String?
-        /// `video-params/gamma` and `primaries`: the colorimetry of the **source**.
-        var sourceRange: String?
-        /// `video-target-params/…`: the colorimetry libplacebo is actually **presenting**, after
-        /// tone-mapping. When this differs from the source the picture is being converted, which
-        /// is the difference between "HDR reaching the panel" and "HDR flattened to SDR first" —
-        /// and it is not otherwise observable from the sofa. Reported as the light being wrong,
-        /// too dark or too bright, and varying by scene.
-        var outputRange: String?
-        var audioCodec: String?
-        var audioChannels: String?
-        var audioOutput: String?
-    }
+    typealias StreamInfo = PlayerStreamInfo
 
     private(set) var isReady = false
     private(set) var isPaused = false
@@ -118,52 +67,7 @@ final class MPVEngine {
     /// AudioUnit. The reference iOS bridge samples state; tvOS now does the same at 4 Hz.
     @ObservationIgnored private var lastPositionPublication = CACurrentMediaTime()
 
-    struct MPVTrack: Identifiable, Hashable {
-        let id: Int64
-        let title: String
-        let language: String?
-        let isSelected: Bool
-        /// mpv's `external` flag: true for the addon subtitles loaded with `sub-add`, false for
-        /// what the container itself carries. It is the difference a viewer most wants to see
-        /// in the list, because it predicts whether the timing will match this exact release.
-        let isExternal: Bool
-        let isDefault: Bool
-        let isForced: Bool
-        let isHearingImpaired: Bool
-        /// `subrip`, `ass`, `webvtt`, `eac3`, `dts`… as the demuxer names it.
-        let codec: String?
-        let channelCount: Int?
-
-        var displayName: String {
-            let label = title.nilIfBlank ?? MediaLanguage.named(language) ?? "Track \(id)"
-            guard let language, title.nilIfBlank != nil else { return label }
-            return "\(label) · \(language.uppercased())"
-        }
-
-        /// The second line of a track card: where it came from, what it is, and how it is
-        /// flagged. Everything here is already in the demuxer's own metadata.
-        var details: [String] {
-            var parts: [String] = [isExternal ? "Addon" : "Built-in"]
-            if let codec = codec?.nilIfBlank { parts.append(Self.formatName(codec)) }
-            if let channelCount { parts.append("\(channelCount) ch") }
-            if isDefault { parts.append("Default") }
-            if isForced { parts.append("Forced") }
-            if isHearingImpaired { parts.append("SDH") }
-            return parts
-        }
-
-        private static func formatName(_ codec: String) -> String {
-            switch codec.lowercased() {
-            case "subrip": return "SRT"
-            case "webvtt": return "VTT"
-            case "ass", "ssa": return "ASS"
-            case "hdmv_pgs_subtitle": return "PGS"
-            case "dvd_subtitle": return "VobSub"
-            case "mov_text": return "TX3G"
-            default: return codec.uppercased()
-            }
-        }
-    }
+    typealias MPVTrack = PlayerTrack
 
     // MARK: Lifecycle
 
@@ -822,13 +726,7 @@ final class MPVEngine {
         return parts.joined(separator: " · ")
     }
 
-    /// The three readings the stats overlay needs from the engine. Everything else it draws
-    /// comes from the process itself — see `PlaybackStatsSampler`.
-    struct LiveStats {
-        var bufferSeconds: Double?
-        var networkBitsPerSecond: Double?
-        var streamBitsPerSecond: Double?
-    }
+    typealias LiveStats = PlayerLiveStats
 
     func liveStats() -> LiveStats {
         // `cache-speed` is bytes per second; every other rate in the overlay is bits.
@@ -858,6 +756,17 @@ final class MPVEngine {
         let value = String(cString: raw).trimmingCharacters(in: .whitespacesAndNewlines)
         return value.nilIfBlank
     }
+}
+
+/// Everything the chrome asks of an engine, `MPVEngine` already had — which is the point of how
+/// `PlayerEngineSurface` was extracted. The conformance is empty on purpose: a member that needed
+/// an adapter here would be a sign the protocol had been designed rather than measured.
+extension MPVEngine: PlayerEngineSurface {
+    /// mpv sees a demuxer and a decoder, never the origin's HTTP answer: a refusal reaches it as
+    /// an empty stream and reads as invalid content. So it cannot tell a refused origin from a
+    /// file another engine would open, and says so by never ruling the hand-off out. The engine
+    /// that *can* tell is the one that classifies — see the adapter's `errorInfo` reading.
+    var failureInvitesAnotherEngine: Bool { true }
 }
 
 /// Bridges the C callbacks, which take a raw pointer and cannot hold a Swift reference.

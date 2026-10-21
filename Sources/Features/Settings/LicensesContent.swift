@@ -117,6 +117,19 @@ struct LicensesContent: View {
                 url: "developer.apple.com/av-foundation"
             ),
             Attribution(
+                title: "AetherEngine",
+                body: L10n.text("licenses.aether_body"),
+                url: "github.com/superuser404notfound/AetherEngine"
+            ),
+            Attribution(
+                // Statically linked whenever the TrueHDObjectAudio trait is on, which it is here.
+                // Apache-2.0 §4 asks for its licence text and its own NOTICE to travel with the
+                // binary, and this screen is where they travel: it is the copy a viewer can reach.
+                title: "LibTrueHD",
+                body: L10n.text("licenses.libtruehd_body"),
+                url: "github.com/superuser404notfound/LibTrueHD"
+            ),
+            Attribution(
                 title: "mpv / libmpv",
                 body: L10n.text("licenses.libmpv_body"),
                 url: "mpv.io"

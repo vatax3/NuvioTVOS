@@ -3,7 +3,7 @@ options:
   bundleIdPrefix: com.nuvio
   createIntermediateGroups: true
   deploymentTarget:
-    tvOS: "17.0"
+    tvOS: "18.0"
   groupSortPosition: top
 
 schemes:
@@ -31,13 +31,28 @@ settings:
 # 15 repositories, and Xcode's resolver sat on a GitHub credential prompt instead of downloading.
 # These are the same release artifacts, trimmed to their tvOS slices.
 
+# AetherEngine, through a local wrapper package rather than directly.
+#
+# Two reasons, both in Packages/PlayerEngineKit/Package.swift: the wrapper is a *dynamic*
+# framework, which is what keeps the engine's FFmpeg references bound to its own
+# `AetherLib*` frameworks instead of to the static mpv FFmpeg linked into this executable;
+# and a package's traits live in a manifest, which XcodeGen cannot express (it drops a
+# `traits:` key without a word through 2.46.0).
+packages:
+  PlayerEngineKit:
+    path: Packages/PlayerEngineKit
+
 targets:
   NuvioTVOS:
     type: application
     platform: tvOS
-    deploymentTarget: "17.0"
+    deploymentTarget: "18.0"
     dependencies:
       - target: NuvioTopShelf
+        embed: true
+      # The dynamic framework AetherEngine is linked into. Embedded, unlike the Vendor
+      # static archives below, because the whole point is that it is not in the executable.
+      - package: PlayerEngineKit
         embed: true
       # System frameworks the mpv/FFmpeg stack calls into: VideoToolbox for hardware decode,
       # Metal and IOSurface for MoltenVK, the audio units for output.
@@ -186,7 +201,7 @@ targets:
   NuvioTopShelf:
     type: tv-app-extension
     platform: tvOS
-    deploymentTarget: "17.0"
+    deploymentTarget: "18.0"
     dependencies:
       - sdk: TVServices.framework
     sources:
@@ -216,7 +231,7 @@ targets:
   NuvioTVOSUITests:
     type: bundle.ui-testing
     platform: tvOS
-    deploymentTarget: "17.0"
+    deploymentTarget: "18.0"
     dependencies:
       - target: NuvioTVOS
     sources:
@@ -230,7 +245,7 @@ targets:
   NuvioTVOSTests:
     type: bundle.unit-test
     platform: tvOS
-    deploymentTarget: "17.0"
+    deploymentTarget: "18.0"
     dependencies:
       - target: NuvioTVOS
     sources:

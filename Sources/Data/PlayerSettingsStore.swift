@@ -11,7 +11,13 @@ final class PlayerSettingsStore: PreferenceStore {
     // MARK: - Engine
 
     var internalPlayerEngine: InternalPlayerEngine {
-        get { option("internal_player_engine", default: MPVEngineSupport.isAvailable ? .mpv : .exoplayer) }
+        get {
+            option("internal_player_engine", default: PlayerEngineRouting.preferenceOrder.first {
+                PlayerEngineRouting.Availability(
+                    aether: AetherEngineSupport.isAvailable, mpv: MPVEngineSupport.isAvailable
+                ).has($0)
+            } ?? .exoplayer)
+        }
         set { setOption("internal_player_engine", newValue) }
     }
 

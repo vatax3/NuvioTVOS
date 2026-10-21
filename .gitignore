@@ -15,3 +15,11 @@ Vendor/
 build/
 *.ipa
 *.xcarchive
+
+# SwiftPM's working directory for the local wrapper package: full clones of AetherEngine and its
+# dependencies, fetched at pinned versions. Build inputs, like Vendor/ above, not source.
+Packages/*/.build/
+
+# The pin file is the exception, and it is source: `Package.swift` pins only to a minor, so this
+# is what makes a release build reproducible rather than "whatever resolved that afternoon".
+!Packages/*/Package.resolved

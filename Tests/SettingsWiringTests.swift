@@ -220,4 +220,33 @@ final class SettingsWiringTests: XCTestCase {
         XCTAssertEqual(MPVEngine.AspectMode(resizeMode: .fixedWidth), .fitWidth)
         XCTAssertEqual(MPVEngine.AspectMode(resizeMode: .fixedHeight), .fitHeight)
     }
+
+    // MARK: Engine selection
+
+    /// The store's default follows the preference order rather than naming an engine, so a build
+    /// without one of them still starts on the best it has instead of on the floor.
+    func testTheDefaultEngineIsTheBestOneTheBuildHas() {
+        let cases: [(PlayerEngineRouting.Availability, InternalPlayerEngine)] = [
+            (.init(aether: true, mpv: true), .aether),
+            (.init(aether: false, mpv: true), .mpv),
+            (.init(aether: false, mpv: false), .exoplayer),
+            (.init(aether: true, mpv: false), .aether)
+        ]
+        for (availability, expected) in cases {
+            let resolved = PlayerEngineRouting.preferenceOrder.first { availability.has($0) }
+            XCTAssertEqual(resolved, expected)
+        }
+    }
+
+    /// `PlayerAspectMode` was lifted out of `MPVEngine` so a chrome generic over engines could
+    /// name it. The mapping from the viewer's stored `resize_mode` has to survive that move.
+    func testEveryStoredResizeModeStillMapsOntoAPictureMode() {
+        for mode in ResizeMode.allCases {
+            let mapped = PlayerAspectMode(resizeMode: mode)
+            XCTAssertTrue(PlayerAspectMode.allCases.contains(mapped))
+        }
+        // The two zoom values both mean "fill the frame", which is one mode and not two.
+        XCTAssertEqual(PlayerAspectMode(resizeMode: .zoom), .crop)
+        XCTAssertEqual(PlayerAspectMode(resizeMode: .fill), .stretch)
+    }
 }

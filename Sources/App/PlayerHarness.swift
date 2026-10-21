@@ -98,6 +98,18 @@ enum PlayerHarness {
         )
     }
 
+    /// Which engine the harness mounts, `NUVIO_HARNESS_ENGINE`, defaulting to mpv.
+    ///
+    /// It used to be whatever the store defaulted to, which was mpv because that was the default.
+    /// With a third engine the default moved, so every remote-input test would have changed
+    /// surface without a word. Pinned to mpv instead: that is the surface these tests were
+    /// written against, and a test that wants another engine now says so.
+    static var engine: InternalPlayerEngine {
+        ProcessInfo.processInfo.environment["NUVIO_HARNESS_ENGINE"]?
+            .nilIfBlank
+            .flatMap(InternalPlayerEngine.init(rawValue:)) ?? .mpv
+    }
+
     static func request() -> PlaybackRequest? {
         guard ProcessInfo.processInfo.arguments.contains(launchArgument) else { return nil }
         let url = ProcessInfo.processInfo.environment[streamVariable]?.nilIfBlank ?? stallingStream

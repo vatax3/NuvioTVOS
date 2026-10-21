@@ -111,33 +111,67 @@ struct PlayerView: View {
     @State private var routeChangedAt: Date?
     @State private var routeObserver: NSObjectProtocol?
 
-    /// MKV and friends have no AVFoundation demuxer, so those files are routed to MPV even when
-    /// the viewer left the engine on Default — an unplayable file is worse than a slower decode.
-    private var resolvedEngine: InternalPlayerEngine {
-        guard MPVEngineSupport.isAvailable else { return .exoplayer }
-        // Android's in-player engine switch is a one-session override, not a settings change:
-        // the viewer is fixing this file, not changing their default.
-        if let engineOverride { return engineOverride }
-        if settings.player.internalPlayerEngine == .mpv { return .mpv }
-        // AVFoundation already refused this source once — see `avPlayer`'s `onFailed`.
-        if didFallBackToMPV { return .mpv }
-        return MPVEngineSupport.requiresMPV(
-            url: request.streamURL, filename: request.filename ?? request.streamName
-        ) ? .mpv : .exoplayer
+    /// Which engine plays this source. The rules live in `PlayerEngineRouting`, where they are
+    /// pure and tested; what is here is only the state they read.
+    private var engineContext: PlayerEngineRouting.Context {
+        PlayerEngineRouting.Context(
+            setting: settings.player.internalPlayerEngine,
+            // Android's in-player engine switch is a one-session override, not a settings change:
+            // the viewer is fixing this file, not changing their default.
+            sessionOverride: engineOverride ?? harnessEngine,
+            refused: refusedEngines,
+            availability: .init(
+                aether: AetherEngineSupport.isAvailable, mpv: MPVEngineSupport.isAvailable
+            ),
+            // MKV and friends have no AVFoundation demuxer, so those files go elsewhere even when
+            // the viewer left the engine there — an unplayable file is worse than a slower decode.
+            isPlayableByAVFoundation: !MPVEngineSupport.requiresMPV(
+                url: request.streamURL, filename: request.filename ?? request.streamName
+            )
+        )
     }
 
-    /// Set when AVFoundation reports it cannot open the source. Port of Android's
+    private var resolvedEngine: InternalPlayerEngine {
+        PlayerEngineRouting.engine(for: engineContext)
+    }
+
+    /// The UI-test harness names the surface it drives, so moving the default engine cannot
+    /// silently move what those tests are testing. nil in a shipping build.
+    private var harnessEngine: InternalPlayerEngine? {
+        #if DEBUG
+        PlayerHarness.request() == nil ? nil : PlayerHarness.engine
+        #else
+        nil
+        #endif
+    }
+
+    /// What the in-player engine button switches to: the next engine this build has, in the
+    /// preference order, wrapping round. nil when there is only one, which takes the control out
+    /// of the transport rather than offering one that explains itself away.
+    private func nextEngine() -> InternalPlayerEngine? {
+        let available = PlayerEngineRouting.preferenceOrder.filter { engineContext.availability.has($0) }
+        guard available.count > 1 else { return nil }
+        guard let index = available.firstIndex(of: resolvedEngine) else {
+            return available.first { $0 != resolvedEngine }
+        }
+        return available[(index + 1) % available.count]
+    }
+
+    /// Engines that have refused *this* source. Port of Android's
     /// `auto_switch_internal_player_on_error`: a debrid link usually carries no extension, so
     /// container sniffing alone cannot tell an MKV from an MP4 and the refusal is the only
-    /// reliable signal. Without this the viewer just gets AVPlayer's blank "no entry" screen.
-    @State private var didFallBackToMPV = false
+    /// reliable signal. Without this the viewer just gets a blank "no entry" screen.
+    ///
+    /// A set rather than the boolean this was, because with three engines the question stopped
+    /// being "did we fall back" and became "which ones are spent".
+    @State private var refusedEngines: Set<InternalPlayerEngine> = []
     /// Set by the in-player engine button, and cleared only by leaving playback.
     @State private var engineOverride: InternalPlayerEngine?
-    /// AVFoundation's refusal, once there is nowhere left to hand the stream to.
-    @State private var avPlaybackError: String?
-    /// Recreating only the MPV subtree gives a failed demuxer/decoder one clean retry while the
-    /// full-screen player, its source request and its navigation context remain mounted.
-    @State private var mpvSessionGeneration = 0
+    /// An engine's refusal, once there is nowhere left to hand the stream to.
+    @State private var playbackError: String?
+    /// Recreating only the engine's subtree gives a failed demuxer/decoder one clean retry while
+    /// the full-screen player, its source request and its navigation context remain mounted.
+    @State private var engineSessionGeneration = 0
     @State private var automaticRecoveryAttempts = 0
     /// A recovery remount must resume from the live playhead, not the older library checkpoint.
     /// `requestedSeek` alone is too early for a newly-created MPV handle and can be consumed
@@ -146,10 +180,10 @@ struct PlayerView: View {
 
     var body: some View {
         Group {
-            if resolvedEngine == .mpv {
-                mpvPlayer
-            } else {
-                avPlayer
+            switch resolvedEngine {
+            case .aether: aetherPlayer
+            case .mpv: mpvPlayer
+            case .exoplayer: avPlayer
             }
         }
         .ignoresSafeArea()
@@ -251,6 +285,97 @@ struct PlayerView: View {
     }
 
     @ViewBuilder
+    private var aetherPlayer: some View {
+        #if canImport(PlayerEngineKit)
+        ZStack {
+            AetherPlayerView(
+                request: request,
+                resumeAt: recoveryResumePosition ?? resumePosition,
+                subtitleStyle: settings.subtitleStyle,
+                audioLanguages: settings.audioTrackLanguages,
+                subtitleLanguages: settings.subtitleTrackLanguages,
+                frameRateMatchingMode: settings.player.frameRateMatchingMode,
+                addonCues: subtitles.cues,
+                addonCueClock: subtitles.cueClock,
+                onSubtitleDelayChange: { subtitles.delay = $0 },
+                seekTarget: requestedSeek,
+                onSeekApplied: { requestedSeek = nil },
+                pauseRequest: requestedPause,
+                onPauseApplied: { requestedPause = nil },
+                partyRate: partyRate,
+                revealControlsRequest: revealControlsRequest,
+                onChooseEpisode: request.contentType == "series" ? chooseEpisode : nil,
+                onPlayNextEpisode: request.nextUp == nil ? nil : playNextEpisodeNow,
+                onSwitchEngine: nextEngine().map { next in { engineOverride = next } },
+                isPartyActive: party.isActive,
+                onViewerSpeedChange: { viewerPlaybackRate = $0 },
+                onShowParty: party.isAvailable || party.isActive
+                    ? { showsPartyPanel = true } : nil,
+                showsPauseOverlay: showsPauseOverlay,
+                hasOpenPrompt: showsPauseOverlay || nextEpisodeCountdown != nil || showsStillWatchingPrompt,
+                onDismissPrompt: dismissTransientPrompt,
+                hasFocusableOverlay: hasFocusableOverlay,
+                onChromeChange: { engineChrome = $0 },
+                onPlaybackTime: observePlaybackTime,
+                onPlaybackState: { paused, loading in
+                    observePlaybackState(paused: paused, loading: loading)
+                },
+                // Unlike the other two, this engine knows whether another one is worth trying: it
+                // reads the origin's HTTP answer, so it can tell a refusal from a file mpv opens.
+                onPlaybackFailure: { reason, invitesAnotherEngine in
+                    handleEngineFailure(reason, invitesAnotherEngine: invitesAnotherEngine)
+                },
+                onProgress: { position, duration, completed in
+                    observePlaybackTime(position, duration)
+                    persist(position: position, duration: duration, completed: completed)
+                    scrobble(position: position, duration: duration)
+                    simklScrobble(position: position, duration: duration)
+                    mdbListScrobble(position: position, duration: duration)
+                    prefetchNextEpisodeIfDue(position: position, duration: duration)
+                    advanceIfDue(position: position, duration: duration)
+                    offerRecommendationsIfDue(position: position, duration: duration)
+                },
+                onFinished: {
+                    persist(position: 0, duration: 0, completed: true)
+                    scrobbleStop(progressPercent: 100)
+                    advanceToNextEpisode()
+                    dismiss()
+                }
+            )
+            .id(engineSessionGeneration)
+
+            skipSegmentCard
+
+            postPlayOverlay
+            movieRecommendationsOverlay
+            stillWatchingOverlay
+            playerStatusOverlay
+
+            if let playbackError {
+                ErrorStateView(message: playbackError) { retryOnAnotherEngine() }
+                    .background(.black.opacity(0.85))
+            }
+
+            if showsSourcePanel {
+                InPlayerSourcesPanel(request: request) { showsSourcePanel = false }
+            }
+
+            if showsPartyPanel {
+                InPlayerPartyPanel(
+                    media: partyMedia,
+                    stream: partyStream,
+                    isBehind: partyLoop.isBehind,
+                    onCatchUp: { partyLoop.catchUp(); showsPartyPanel = false }
+                ) { showsPartyPanel = false }
+            }
+        }
+        .animation(NuvioMotion.quickTween, value: visibleSkipSegment?.id)
+        #else
+        mpvPlayer
+        #endif
+    }
+
+    @ViewBuilder
     private var mpvPlayer: some View {
         #if canImport(Libmpv)
         ZStack {
@@ -281,7 +406,7 @@ struct PlayerView: View {
                 revealControlsRequest: revealControlsRequest,
                 onChooseEpisode: request.contentType == "series" ? chooseEpisode : nil,
                 onPlayNextEpisode: request.nextUp == nil ? nil : playNextEpisodeNow,
-                onSwitchEngine: { engineOverride = .exoplayer },
+                onSwitchEngine: nextEngine().map { next in { engineOverride = next } },
                 isPartyActive: party.isActive,
                 onViewerSpeedChange: { viewerPlaybackRate = $0 },
                 onShowParty: party.isAvailable || party.isActive
@@ -313,7 +438,7 @@ struct PlayerView: View {
                     dismiss()
                 }
             )
-            .id(mpvSessionGeneration)
+            .id(engineSessionGeneration)
 
             skipSegmentCard
 
@@ -356,7 +481,7 @@ struct PlayerView: View {
                 pauseRequest: requestedPause,
                 onPauseApplied: { requestedPause = nil },
                 onChooseSource: request.sourceRequest == nil ? nil : { showsSourcePanel = true },
-                onSwitchEngine: MPVEngineSupport.isAvailable ? { engineOverride = .mpv } : nil,
+                onSwitchEngine: nextEngine().map { next in { engineOverride = next } },
                 frameRateMatchingMode: settings.player.frameRateMatchingMode,
                 audioLanguages: settings.audioTrackLanguages,
                 onPlaybackState: { paused, loading in
@@ -376,7 +501,7 @@ struct PlayerView: View {
                     advanceIfDue(position: position, duration: duration)
                     offerRecommendationsIfDue(position: position, duration: duration)
                 },
-                onFailed: handleAVFoundationFailure,
+                onFailed: { handleEngineFailure($0) },
                 onChromeChange: { engineChrome = $0 },
                 onFinished: {
                     persist(position: 0, duration: 0, completed: true)
@@ -401,36 +526,59 @@ struct PlayerView: View {
             stillWatchingOverlay
             playerStatusOverlay
 
-            if let avPlaybackError {
-                ErrorStateView(message: avPlaybackError) { retryOnMPV() }
+            if let playbackError {
+                ErrorStateView(message: playbackError) { retryOnAnotherEngine() }
                     .background(.black.opacity(0.85))
             }
         }
         .animation(NuvioMotion.quickTween, value: visibleSkipSegment?.id)
     }
 
-    /// Android's `auto_switch_internal_player_on_error`: a debrid link usually carries no
-    /// extension, so container sniffing cannot tell an MKV from an MP4 and AVFoundation's
-    /// refusal is the only reliable signal. The silent hand-off applies to a stream that landed
-    /// here by that guess — when the viewer pressed the engine button themselves, switching back
-    /// without a word would read as the button doing nothing, so the failure is named instead.
-    private func handleAVFoundationFailure(_ reason: String?) {
-        guard avPlaybackError == nil else { return }
-        if MPVEngineSupport.isAvailable, settings.player.autoSwitchInternalPlayerOnError,
-           !didFallBackToMPV, engineOverride == nil {
-            didFallBackToMPV = true
+    /// Android's `auto_switch_internal_player_on_error`, generalised to three engines: a debrid
+    /// link usually carries no extension, so container sniffing cannot tell an MKV from an MP4 and
+    /// a refusal is the only reliable signal. The silent hand-off applies to a stream that landed
+    /// on an engine by that guess — when the viewer pressed the engine button themselves,
+    /// switching away without a word would read as the button doing nothing, so the failure is
+    /// named instead.
+    ///
+    /// - Parameter invitesAnotherEngine: false for a failure no engine would survive — an origin
+    ///   answering 401/403, a rate-limited one, a certificate the host declined. Only the engine
+    ///   that reads the origin's status can tell; the others say `true` and mean "I cannot know".
+    private func handleEngineFailure(_ reason: String?, invitesAnotherEngine: Bool = true) {
+        guard playbackError == nil else { return }
+        let failed = resolvedEngine
+        if PlayerEngineRouting.fallback(
+            after: failed,
+            context: engineContext,
+            invitesAnotherEngine: invitesAnotherEngine,
+            automaticSwitchEnabled: settings.player.autoSwitchInternalPlayerOnError
+        ) != nil {
+            refusedEngines.insert(failed)
             return
         }
-        avPlaybackError = reason?.nilIfBlank ?? L10n.text("player.error_playback_failed")
+        playbackError = reason?.nilIfBlank ?? L10n.text("player.error_playback_failed")
     }
 
-    private func retryOnMPV() {
-        avPlaybackError = nil
-        guard MPVEngineSupport.isAvailable else {
+    /// The retry on an error card: hand the source to whichever engine has not had it yet.
+    private func retryOnAnotherEngine() {
+        playbackError = nil
+        let failed = resolvedEngine
+        guard let next = PlayerEngineRouting.fallback(
+            after: failed,
+            context: PlayerEngineRouting.Context(
+                setting: engineContext.setting,
+                sessionOverride: nil,
+                refused: engineContext.refused,
+                availability: engineContext.availability,
+                isPlayableByAVFoundation: engineContext.isPlayableByAVFoundation
+            ),
+            invitesAnotherEngine: true,
+            automaticSwitchEnabled: true
+        ) else {
             dismiss()
             return
         }
-        engineOverride = .mpv
+        engineOverride = next
     }
 
     private var recoveryState: PlayerRecoveryPolicy.State {
@@ -453,7 +601,7 @@ struct PlayerView: View {
             recoveryState.panelOpen.description,
             recoveryState.promptOpen.description,
             String(automaticRecoveryAttempts),
-            String(mpvSessionGeneration)
+            String(engineSessionGeneration)
         ].joined(separator: "|")
     }
 
@@ -463,19 +611,27 @@ struct PlayerView: View {
             automaticRecoveryAttempts += 1
         }
         recoveryResumePosition = playbackPosition > 1 ? playbackPosition : nil
-        avPlaybackError = nil
+        playbackError = nil
 
-        if resolvedEngine == .exoplayer, MPVEngineSupport.isAvailable {
-            // An explicit AVFoundation session override otherwise wins over `didFallBackToMPV`
-            // in `resolvedEngine` and makes the watchdog look as if it retried while doing
-            // nothing. Keep the override semantics, but point it at the recovery engine.
+        let failed = resolvedEngine
+        // AVFoundation cannot retry its way out of a source it has no demuxer for, so there the
+        // recovery is another engine. The other two own their own pipelines and get one clean
+        // remount instead, which keeps the source request and the navigation context mounted.
+        if failed == .exoplayer,
+           let next = PlayerEngineRouting.fallback(
+               after: failed, context: engineContext,
+               invitesAnotherEngine: true, automaticSwitchEnabled: true
+           ) {
+            // An explicit session override otherwise wins over `refusedEngines` in
+            // `resolvedEngine` and makes the watchdog look as if it retried while doing nothing.
+            // Keep the override semantics, but point it at the recovery engine.
             if engineOverride != nil {
-                engineOverride = .mpv
+                engineOverride = next
             } else {
-                didFallBackToMPV = true
+                refusedEngines.insert(failed)
             }
         } else {
-            mpvSessionGeneration += 1
+            engineSessionGeneration += 1
         }
     }
 

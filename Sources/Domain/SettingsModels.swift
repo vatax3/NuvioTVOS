@@ -17,11 +17,25 @@ extension SettingsOption {
 enum InternalPlayerEngine: String, SettingsOption {
     case exoplayer = "EXOPLAYER"
     case mpv = "MPV"
-    var displayName: String { self == .exoplayer ? "Default (AVFoundation)" : "MPV (extended codecs)" }
+    /// Raw value is ours: upstream's DataStore has no third engine, so there is nothing to stay
+    /// wire-compatible with. The other two keep Android's strings.
+    case aether = "AETHER"
+
+    /// A `switch` rather than the ternary this was, which labelled anything that was not
+    /// AVFoundation as MPV — a third case would have been mislabelled with no compiler complaint.
+    var displayName: String {
+        switch self {
+        case .aether: return L10n.text("option.engine_aether", fallback: "Aether (recommended)")
+        case .mpv: return L10n.text("option.engine_mpv", fallback: "MPV (extended codecs)")
+        case .exoplayer: return L10n.text("option.engine_avf", fallback: "AVFoundation")
+        }
+    }
+
     var summary: String {
         switch self {
-        case .exoplayer: return L10n.text("option.engine_avf_sub", fallback: "System pipeline. Best power efficiency and HDR passthrough.")
-        case .mpv: return L10n.text("option.engine_mpv_sub", fallback: "Software pipeline for containers AVFoundation refuses.")
+        case .aether: return L10n.text("option.engine_aether_sub", fallback: "Wide container support on the system pipeline. Dolby Atmos and Dolby Vision passthrough.")
+        case .exoplayer: return L10n.text("option.engine_avf_sub", fallback: "System pipeline. Best power efficiency and HDR passthrough, but it cannot open MKV.")
+        case .mpv: return L10n.text("option.engine_mpv_sub", fallback: "Software pipeline for containers AVFoundation refuses. No Atmos passthrough.")
         }
     }
 }

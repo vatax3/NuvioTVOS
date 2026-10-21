@@ -98,6 +98,12 @@
 "player.aspect_cinema_zoom" = "Cinema Zoom";
 "player.aspect_fit_height" = "Fit Height";
 "player.aspect_fit_width" = "Fit Width";
+"player.audio_stream_copy" = "Passthrough (stream copy)";
+"player.audio_bridged" = "Bridged (re-encoded)";
+"player.audio_decoded" = "Decoded to PCM";
+"player.audio_player_managed" = "AVFoundation";
+"player.audio_dropped" = "Dropped — no pipeline";
+"player.engine_unavailable" = "The playback engine could not start.";
 "player.audio_delay" = "Audio delay";
 "player.subtitle_delay" = "Subtitle delay";
 "player.reset_subtitle_delay" = "Reset subtitle delay";
@@ -120,6 +126,8 @@
 "licenses.mdblist_body" = "Nuvio uses MDBList for aggregated ratings and external score providers. Nuvio is not affiliated with or endorsed by MDBList.";
 "licenses.aniskip_body" = "Nuvio uses the AniSkip API for community-provided intro, recap and credits timestamps used by the skip controls. Nuvio is not affiliated with or endorsed by AniSkip.";
 "licenses.avfoundation_body" = "Apple's playback stack, used for H.264/HEVC and HLS sources and for Now Playing integration.";
+"licenses.aether_body" = "AetherEngine plays what the system player cannot open: it demuxes with FFmpeg and renders through VideoToolbox and AVFoundation, which is what keeps Dolby Atmos and Dolby Vision intact from a Matroska source. Licensed under the GNU Lesser General Public License v3.0 or later, with an exception for distribution through app stores. It is linked dynamically and carries its own FFmpeg, also LGPL. Copyright the AetherEngine contributors.";
+"licenses.libtruehd_body" = "LibTrueHD decodes TrueHD Atmos so its object metadata can be rendered with the height channels kept. Its C API, framer and packaging are MIT, Copyright Quick104 and Vincent Herbst. It compiles in the truehd and oamd crates from the truehdd project, Copyright Rainbaby and the truehdd contributors, licensed under the Apache License, Version 2.0 — a copy of which is distributed with this application together with the project's NOTICE file. You may obtain the licence at apache.org/licenses/LICENSE-2.0. Dolby Vision metadata is parsed by libdovi, the dolby_vision crate from dovi_tool, Copyright quietvoid and contributors, used under the MIT licence.";
 "licenses.libmpv_body" = "The internal extended-codec engine. mpv is licensed under the GNU General Public License v2 or later; libmpv components retain their upstream terms.";
 "licenses.ffmpeg_body" = "Demuxing, decoding and filtering inside the mpv engine. Licensed under the GNU Lesser General Public License v2.1 or later, with GPL components where enabled.";
 "licenses.native_body" = "Subtitle rendering, colour management, AV1 decoding and the Vulkan-on-Metal layer that draws the picture. Each retains its upstream licence — ISC, LGPL, BSD and Apache 2.0 respectively.";
@@ -429,6 +437,7 @@
 "settings.playback.tab_advanced" = "Advanced";
 "settings.playback.title" = "Playback";
 "settings.playback.player" = "Player";
+"settings.playback.player_footnote" = "Aether demuxes with FFmpeg and plays on the system pipeline, so MKV works and Dolby Atmos and Dolby Vision reach your receiver and panel untouched. MPV decodes in software and is the fallback for what Aether will not open, at the cost of Atmos. AVFoundation alone cannot demux MKV. The app picks another engine automatically when one refuses a source.";
 "settings.playback.target" = "Playback target";
 "settings.playback.target_subtitle" = "Where a source opens when you press Play";
 "settings.playback.internal_engine" = "Internal engine";
@@ -1166,6 +1175,10 @@
 "settings.layout.episode_overlay_blur_sub" = "Show the episode still, blurred.";
 
 /* SettingsModels.swift */
+"option.engine_aether" = "Aether (recommended)";
+"option.engine_aether_sub" = "Wide container support on the system pipeline. Dolby Atmos and Dolby Vision passthrough.";
+"option.engine_mpv" = "MPV (extended codecs)";
+"option.engine_avf" = "AVFoundation";
 "option.engine_avf_sub" = "System pipeline. Best power efficiency and HDR passthrough.";
 "option.engine_mpv_sub" = "Software pipeline for containers AVFoundation refuses.";
 "option.internal_player" = "Internal player";

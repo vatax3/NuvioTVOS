@@ -4,19 +4,48 @@ Nuvio for Apple TV is licensed under the GNU General Public License v3.0 (see `L
 port of [NuvioTV for Android TV](https://github.com/tapframe/NuvioTV), which is GPL-3.0, so the
 port is a derivative work and carries the same terms.
 
-The playback stack is linked in and keeps its own. Nothing below is checked into this repository —
-`Scripts/fetch-mpv.sh` downloads all 28 xcframeworks from a pinned release (`VERSION="1.0.0"`) of
-the MPVKit projects, then trims each to its tvOS slice.
+The playback stack is linked in and keeps its own. Nothing below is checked into this repository.
+The mpv half is fetched by `Scripts/fetch-mpv.sh`, which downloads all 28 xcframeworks from a
+pinned release (`VERSION="1.0.0"`) of the MPVKit projects and trims each to its tvOS slice. The
+AetherEngine half is resolved by SwiftPM from `Packages/PlayerEngineKit`, pinned to a minor.
 
 ## Relinking
 
-libmpv and most of the stack below are LGPL. Section 4 of the LGPL requires that a recipient be
+AetherEngine, libmpv and most of the stack below are LGPL. Section 4 of the LGPL requires that a recipient be
 able to relink the application against a modified version of the library. That is satisfied in
 practice rather than by a special provision: this application is built from source, and every
 binary it links is fetched by a script at a pinned version that anyone can point at their own
-build. Replace an xcframework in `Vendor/`, run `xcodegen generate`, and rebuild.
+build. Replace an xcframework in `Vendor/`, run `xcodegen generate`, and rebuild. The AetherEngine
+side is relinkable the same way and more directly: its FFmpeg frameworks are **dynamically** linked
+and resolved by SwiftPM, so pointing `Packages/PlayerEngineKit/Package.swift` at another build of
+either is the whole procedure.
 
-## Components
+## Components — AetherEngine
+
+Resolved through `Packages/PlayerEngineKit`, which depends on AetherEngine with the
+`TrueHDObjectAudio` and `DTSXObjectAudio` package traits enabled. The engine's own FFmpeg is
+prefixed (`AetherLibavcodec` and friends) and is a **separate** FFmpeg from mpv's below: both are in
+the binary, each linked to its own, which is why the wrapper package exists.
+
+| Component | Source repository | Licence |
+|---|---|---|
+| AetherEngine | `superuser404notfound/AetherEngine` | LGPL-3.0-or-later, with an Apple-store / DRM exception |
+| FFmpeg — AetherLibavcodec, AetherLibavformat, AetherLibavutil, AetherLibswresample, AetherLibswscale, AetherLibavfilter | `superuser404notfound/FFmpegBuild` | LGPL-2.1-or-later, no GPL components, dynamically linked |
+| dav1d (AetherLibdav1d) | `superuser404notfound/FFmpegBuild` | BSD-2-Clause |
+| zimg (AetherLibzimg) | `superuser404notfound/FFmpegBuild` | WTFPL |
+| libzvbi (AetherLibzvbi) | `superuser404notfound/FFmpegBuild` | LGPL-2.1-or-later (GPL parts excised) |
+| libdovi | `superuser404notfound/LibDovi` | MIT (the `dolby_vision` crate from `quietvoid/dovi_tool`, dual MIT OR Apache-2.0, taken under MIT) |
+| LibTrueHD | `superuser404notfound/LibTrueHD` | MIT for the C API, framer and packaging (Copyright Quick104, Vincent Herbst); the compiled-in `truehd` and `oamd` crates from `truehdd/truehdd` are **Apache-2.0** (Copyright Rainbaby and the truehdd contributors) |
+
+**Apache-2.0 obligation.** LibTrueHD is statically linked whenever the `TrueHDObjectAudio` trait is
+on, which it is in this build. Apache-2.0 §4 requires its licence text and LibTrueHD's own `NOTICE`
+to travel with the binary. Both ship in the app bundle, from `Resources/Licenses/`
+(`LibTrueHD-Apache-2.0.txt`, `LibTrueHD-NOTICE.txt`, with `LibTrueHD-MIT.txt` and
+`AetherEngine-LGPL-3.0.txt` beside them), and the in-app attribution screen names them.
+DTS:X needs no entry of its own — it is decoded by FFmpeg's `dca` decoder above, with FFmpegBuild's
+height patch, so the `DTSXObjectAudio` trait adds no library and no licence.
+
+## Components — libmpv
 
 All fetched from the `mpvkit` organisation. The licence column is the component's own upstream
 licence; where a project offers a choice, the term listed is the one its MPVKit build is made

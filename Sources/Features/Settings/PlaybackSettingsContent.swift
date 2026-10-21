@@ -62,10 +62,16 @@ struct PlaybackSettingsContent: View {
         return VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
             SettingsCard(
                 title: L10n.text("settings.playback.player", fallback: "Player"),
-                footnote: """
-                AVFoundation is the system player; MPV is used for containers AVFoundation cannot
-                demux, such as MKV. The app chooses MPV automatically when necessary.
-                """
+                footnote: L10n.text(
+                    "settings.playback.player_footnote",
+                    fallback: """
+                    Aether demuxes with FFmpeg and plays on the system pipeline, so MKV works and \
+                    Dolby Atmos and Dolby Vision reach your receiver and panel untouched. MPV \
+                    decodes in software and is the fallback for what Aether will not open, at the \
+                    cost of Atmos. AVFoundation alone cannot demux MKV. The app picks another \
+                    engine automatically when one refuses a source.
+                    """
+                )
             ) {
                 SettingsOptionRow(
                     title: L10n.text("settings.playback.target", fallback: "Playback target"),

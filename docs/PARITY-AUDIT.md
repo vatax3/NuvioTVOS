@@ -174,6 +174,10 @@ path and AVFoundation refuses.
   can play, not replacing the engine. Found by reading a second, independent tvOS port whose whole
   design is FFmpeg-demux plus AVPlayer-playback, precisely to keep the bitstream intact.
 
+  **Closed since.** That remux is what AetherEngine does, and it is now in the tree as a third
+  engine beside libmpv — see *Three engines, and why Atmos needed a third* at the end of this
+  document. The reading of a receiver's display is still outstanding.
+
   Two things bound how much this matters. It is unverified — nobody has read a receiver's display.
   And Atmos is a height format: on a 5.1 system with no height channels there is nothing for it to
   add that the decoded 5.1 bed does not already carry, and mpv's PCM output of a lossless TrueHD or
@@ -1045,3 +1049,67 @@ Not verified: a physical Apple TV, live Trakt/Simkl/debrid/Nuvio accounts, every
 addon, or a side-by-side against a running 0.8.9 installation. In particular **the Dolby Vision
 and AV1 advantages claimed above are architectural, not measured.** They remain the largest
 untested assertion in this document.
+
+## Three engines, and why Atmos needed a third
+
+The MKV-Atmos gap recorded under *Differences assumed or forced* is closed, by the route that entry
+named: remux the audio to a path AVPlayer can play rather than replace the engine.
+[AetherEngine](https://github.com/superuser404notfound/AetherEngine) demuxes with FFmpeg, stream-copies
+the elementary streams into fMP4 and serves that to AVPlayer over a loopback origin. An E-AC-3 JOC
+track therefore reaches HDMI as a bitstream, from a Matroska source, which neither of our previous
+two engines could do: libmpv cannot passthrough on tvOS at all (no Apple audio output takes a
+compressed stream), and AVFoundation alone has no Matroska demuxer.
+
+It is linked through `Packages/PlayerEngineKit`, a local wrapper package whose product is a
+**dynamic** framework. That is load-bearing rather than tidy: our `Vendor/Libav*.xcframework` are
+static archives linked into the app binary, so mpv's `_avcodec_*` are definitions *inside* it, and an
+AetherEngine linked into the same target would bind to those and run against a different FFmpeg's
+struct layouts — their AE#396, reported as an audio defect and reproduced on five fixtures before
+anyone read the link. Verified on a real build: the wrapper resolves `_avcodec_open2`
+`(from AetherLibavcodec)` while the app binary keeps its own definition. The wrapper also carries the
+package traits (`TrueHDObjectAudio`, `DTSXObjectAudio`), which XcodeGen cannot express.
+
+### What each engine is for now
+
+| | Aether | MPV | AVFoundation |
+| --- | --- | --- | --- |
+| Containers | FFmpeg demux | FFmpeg demux | Apple's set only |
+| Dolby Atmos | E-AC-3 JOC passed through; TrueHD and DTS:X rendered to APAC with heights | Decoded to PCM, objects lost | Passed through, but it cannot open MKV |
+| Dolby Vision | Native output, real panel switch | Tone-mapped by libplacebo | Native, same container limit |
+| Authored ASS styling | Host overlay, plain styled text | libass, full | Host overlay |
+| Role | Default | Fallback for what Aether will not open | Floor |
+
+The cascade is `PlayerEngineRouting`, pure and tested (`Tests/PlayerEngineRoutingTests.swift`). Two
+rules in it are worth repeating because neither is obvious:
+
+- **A refusal no engine would survive is not handed on.** An origin answering 401/403, a
+  rate-limited origin, a certificate the host declined: a second engine opens a second connection to
+  be refused again, and on a connection-capped debrid or IPTV account that is the bug rather than the
+  recovery (AetherEngine's AE#377). Only Aether can tell — it reads the origin's HTTP answer, where
+  mpv sees a refusal as an empty stream and reads it as invalid content.
+- **A viewer's own engine press is never silently undone.** Switching away from an engine they
+  chose would read as the button doing nothing, so the failure is named instead. That rule is
+  upstream's and predates this work; it now applies across three engines.
+
+### Settings that are inert on the default engine
+
+Four controls are mpv's own and have no counterpart on Aether. They are reported as zero-range or
+absent rather than accepted and ignored, so the chrome draws them inert:
+
+| Setting | Why |
+| --- | --- |
+| Amplification (PCM) | Aether's `volume` stops at unity; there is no post-decode gain |
+| Centre mix level | No equivalent; the fold is libswresample's, inside mpv |
+| HDR peak detection, tone mapping | Nothing is tone-mapped: the source colorimetry reaches the panel |
+| Audio output channels | AVFoundation negotiates the layout. With tvOS's Continuous Audio Connection on, every HDMI route reports 32 unlabelled channels whatever the sink takes, so an eARC soundbar and a legacy-ARC one are indistinguishable from the app — choosing for the viewer on that basis is how a 7.1 pick plays stereo |
+
+Authored ASS styling is the one real regression on the default engine: Aether publishes cues and the
+host draws them, so the overlay that already serves the AVFoundation path renders them as plain
+styled text. A file whose styling matters still has libass — on MPV, one press away.
+
+### Still unverified
+
+Everything above is read off the engine's own published state and a build. **No receiver has been
+read.** The measurement that settles this work is a REMUX MKV DD+ JOC and a TrueHD Atmos file on a
+real Apple TV behind an Atmos receiver, cross-checked against `audioDelivery` (`.streamCopy`
+expected) and `videoRoute` (`.loopback`). Their own benchmark does not cover Atmos either.

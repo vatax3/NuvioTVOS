@@ -163,14 +163,22 @@ metadata) and the marquee-on-focus card titles.
 These are choices, not gaps — each one is a place where copying Android would have made the tvOS
 app worse:
 
-1. **Two playback engines, chosen per file.** NuvioTV runs ExoPlayer and libmpv side by side;
-   this build does the same with AVFoundation and libmpv (rendered through MoltenVK). AVFoundation
-   gets H.264/HEVC/HLS, where the system player also brings Siri Remote gestures, scrubbing
-   preview and Now Playing for free; anything AVFoundation cannot demux — MKV above all — is
-   routed to mpv, which carries Nuvio's own transport: a focusable, accelerating scrub bar, the
-   Android control row, and the bottom-left audio and subtitle overlays. The transport is a port
-   rather than a tvOS invention, including Menu's whole meaning during playback, which is decided
-   in one place (`PlayerExitPolicy`) exactly as Android decides it in one `BackHandler`.
+1. **Three playback engines, chosen per file.** NuvioTV runs ExoPlayer and libmpv side by side;
+   this build runs [AetherEngine](https://github.com/superuser404notfound/AetherEngine), libmpv
+   (rendered through MoltenVK) and bare AVFoundation, in that order of preference.
+
+   AetherEngine is the default and the reason the set grew: it demuxes with FFmpeg and plays on
+   the system pipeline, so an MKV opens *and* its Dolby Atmos bitstream and Dolby Vision reach the
+   receiver and the panel untouched — which neither of the other two can do. libmpv cannot
+   passthrough on tvOS at all, because no Apple audio output takes a compressed stream, and bare
+   AVFoundation has no Matroska demuxer. mpv stays as the fallback for what Aether will not open
+   and for authored ASS styling, which only libass renders properly; AVFoundation is the floor.
+
+   All three mount the same chrome — `PlayerChrome`, generic over the engine — so Nuvio's
+   transport is written once: a focusable, accelerating scrub bar, the Android control row, and
+   the bottom-left audio and subtitle overlays. The transport is a port rather than a tvOS
+   invention, including Menu's whole meaning during playback, which is decided in one place
+   (`PlayerExitPolicy`) exactly as Android decides it in one `BackHandler`.
 2. **Focus is the tvOS focus engine**, not a reimplementation of Compose's. `focusSection()` and
    the native engine give correct D-pad behaviour for free; Nuvio's *visual* focus treatment
    (2 dp accent ring, 1.02 scale, 8 dp elevation) is reproduced by hand because tvOS's stock
@@ -245,7 +253,9 @@ television.
 
 ## Build & run
 
-Requires Xcode 26 with the tvOS SDK, plus [XcodeGen](https://github.com/yonaskolb/XcodeGen).
+Requires **Xcode 27** (AetherEngine's floor; Swift 6.4) with the tvOS 18 SDK or later, plus
+[XcodeGen](https://github.com/yonaskolb/XcodeGen). `xcodegen generate` writes the package
+references too, so the first build resolves `Packages/PlayerEngineKit` and its dependencies.
 
 ```bash
 brew install xcodegen          # if needed
@@ -303,8 +313,9 @@ GPL-3.0. Not a preference: this is a port of [NuvioTV for Android
 TV](https://github.com/tapframe/NuvioTV), which is GPL-3.0, so the port is a derivative work and
 carries the same terms. Full text in [`LICENSE`](LICENSE).
 
-The playback stack is linked in and keeps its own licences — libmpv, FFmpeg, libass, dav1d,
-libplacebo, MoltenVK and the rest, mostly LGPL. They are listed with their terms in
+The playback stack is linked in and keeps its own licences — AetherEngine (LGPL-3.0 with an
+app-store exception) and its own FFmpeg, libmpv, FFmpeg, libass, dav1d, libplacebo, MoltenVK and
+the rest, mostly LGPL. They are listed with their terms in
 [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md), which also explains how the LGPL's relinking
 requirement is met: nothing binary is checked in, `Scripts/fetch-mpv.sh` fetches every framework
 at a pinned version, and replacing one in `Vendor/` and rebuilding is the whole procedure.
