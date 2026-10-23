@@ -40,6 +40,16 @@
       ],
       "versions": [
         {
+          "version": "1.0.54",
+          "buildVersion": "56",
+          "date": "2026-10-23",
+          "localizedDescription": "Chapter navigation, a subtitle style of its own for HDR, and a subtitle that stops moving while it is being read.\n\n**Requires tvOS 18 or later.**\n\n## Added\n\n- **Chapters.** A file with two or more chapters now has a chapter list in the player and a control that appears only when there is one. The list opens on the chapter playing, and picking one leaves the panel open — chapter skipping is usually done more than once in a row. The progress bar shows where each chapter begins. Jumps land on the boundary rather than on the nearest keyframe before it.\n- **A separate subtitle style for HDR and Dolby Vision.** Off by default. On HDR pictures, white is rendered at the panel's peak brightness rather than at SDR white, which on a bright television reads as glare. *Settings › Playback › Subtitles* now offers a colour and a brightness that apply only to HDR and Dolby Vision, leaving the standard style untouched everywhere else. The lowest brightness is dim, never invisible.\n\n## Fixed\n\n- **Subtitles no longer drop mid-sentence.** Subtitles are lifted clear of the playback controls while those are on screen. The controls hide on a timer that knows nothing about what is being read, so the subtitle used to slide back down in the middle of a line. It now waits for the line to change, and moves between subtitles instead.\n\n## Changed\n\n- The engine switch moved from the main control row to *More actions*. It is a way out of a file one engine will not play, rather than a control to reach for during playback.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.54/Nuvio-1.0.54-tvOS-unsigned.ipa",
+          "size": 40996391,
+          "minOSVersion": "18.0",
+          "sha256": "7e869c9fbf7da5e9f6a0a1a8e2442eea461181b15616b1761986e927a3abbc6f"
+        },
+        {
           "version": "1.0.53",
           "buildVersion": "55",
           "date": "2026-10-23",
@@ -456,11 +466,11 @@
         ],
         "privacy": {}
       },
-      "version": "1.0.53",
+      "version": "1.0.54",
       "versionDate": "2026-10-23",
-      "versionDescription": "Three fixes to things that are used every day: the track menus on the new playback engine, where a series opens, and the profile PIN screen.\n\n**Requires tvOS 18 or later.**\n\n## Fixed\n\n- **The audio and subtitle menus now show which track is playing.** On the Aether engine the checkmark was decided once, before playback had resolved a selection, and then never moved. *Off* stayed ticked in the subtitle list while a subtitle was on screen, including the one just chosen, and the audio list often showed no current track at all. The menus now follow the engine's selection as it changes, so the checkmark is correct while the panel stays open.\n- **A series opens on the season in progress.** The episode list started on the first season every time, even when the *Play* button beside it was already offering an episode from season four. The season tab now opens on the episode Play would resume and scrolls it into view. Focus stays on *Play*, so the artwork and the action row remain on screen.\n- **The profile PIN screen fits on the television.** The identity and the keypad were stacked and together asked for more height than a 1080p panel has, so the avatar was cut off the top and the fallback button off the bottom. They now sit side by side, at full size — the keys are unchanged targets for a remote. The zero key is aligned with the column above it.\n\n## Internal\n\n- The profile screens and their PIN entry have automated coverage for the first time, including a check that every key is drawn within the screen.\n- A watch party test could only pass on a simulator that had already been through first-run setup, which made a working screen look broken. Both it and the new profile test now declare that they are under test.",
-      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.53/Nuvio-1.0.53-tvOS-unsigned.ipa",
-      "size": 40977970,
+      "versionDescription": "Chapter navigation, a subtitle style of its own for HDR, and a subtitle that stops moving while it is being read.\n\n**Requires tvOS 18 or later.**\n\n## Added\n\n- **Chapters.** A file with two or more chapters now has a chapter list in the player and a control that appears only when there is one. The list opens on the chapter playing, and picking one leaves the panel open — chapter skipping is usually done more than once in a row. The progress bar shows where each chapter begins. Jumps land on the boundary rather than on the nearest keyframe before it.\n- **A separate subtitle style for HDR and Dolby Vision.** Off by default. On HDR pictures, white is rendered at the panel's peak brightness rather than at SDR white, which on a bright television reads as glare. *Settings › Playback › Subtitles* now offers a colour and a brightness that apply only to HDR and Dolby Vision, leaving the standard style untouched everywhere else. The lowest brightness is dim, never invisible.\n\n## Fixed\n\n- **Subtitles no longer drop mid-sentence.** Subtitles are lifted clear of the playback controls while those are on screen. The controls hide on a timer that knows nothing about what is being read, so the subtitle used to slide back down in the middle of a line. It now waits for the line to change, and moves between subtitles instead.\n\n## Changed\n\n- The engine switch moved from the main control row to *More actions*. It is a way out of a file one engine will not play, rather than a control to reach for during playback.",
+      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.54/Nuvio-1.0.54-tvOS-unsigned.ipa",
+      "size": 40996391,
       "minOSVersion": "18.0"
     }
   ],
