@@ -44,6 +44,7 @@ final class MPVEngine {
     /// Selectable tracks the file itself carries, for the transport menus.
     private(set) var audioTracks: [MPVTrack] = []
     private(set) var subtitleTracks: [MPVTrack] = []
+    private(set) var chapters: [PlayerChapter] = []
     private(set) var playbackSpeed: Double = 1
     private(set) var audioDelay: Double = 0
     private(set) var subtitleDelay: Double = 0
@@ -232,7 +233,7 @@ final class MPVEngine {
         // `makeUIViewController`, which SwiftUI happens to do but does not promise.
         setAspectMode(initialAspectMode)
 
-        for property in ["time-pos", "duration", "demuxer-cache-time", "pause", "eof-reached", "core-idle", "track-list", "current-tracks/sub/lang", "sub-text"] {
+        for property in ["time-pos", "duration", "demuxer-cache-time", "pause", "eof-reached", "core-idle", "track-list", "chapter-list", "current-tracks/sub/lang", "sub-text"] {
             let format: mpv_format = {
                 switch property {
                 case "time-pos", "duration", "demuxer-cache-time": return MPV_FORMAT_DOUBLE
@@ -596,6 +597,8 @@ final class MPVEngine {
             }
         case "track-list":
             refreshTracks()
+        case "chapter-list":
+            refreshChapters()
         case "current-tracks/sub/lang":
             if let family = subtitleFontResolver.familyForLanguage(property.stringValue) {
                 applySubtitleFont(family)
@@ -621,6 +624,28 @@ final class MPVEngine {
             log.error("\(message, privacy: .public)")
             logTail.append("[error] \(message)")
         }
+    }
+
+    /// Reads the chapter list back as JSON, the same way the tracks are read.
+    ///
+    /// mpv lists chapters itself for every container it demuxes, so there is nothing to parse out
+    /// of the file by hand — which is the whole of upstream's `MatroskaChapterLoader`, written
+    /// because ExoPlayer's Matroska extractor skips them.
+    private func refreshChapters() {
+        guard let handle,
+              let raw = mpv_get_property_string(handle, "chapter-list") else { return }
+        defer { mpv_free(raw) }
+
+        guard let data = String(cString: raw).data(using: .utf8),
+              let entries = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+        else { return }
+
+        chapters = PlayerChapters.normalize(
+            entries.compactMap { entry in
+                guard let time = entry["time"] as? Double, time.isFinite else { return nil }
+                return PlayerChapter(start: time, title: entry["title"] as? String)
+            }
+        )
     }
 
     /// Reads the track list back as JSON, which is far less error-prone than walking mpv_node.

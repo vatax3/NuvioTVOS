@@ -57,6 +57,7 @@ final class AetherEngineAdapter {
     private(set) var logTail: [String] = []
     private(set) var audioTracks: [PlayerTrack] = []
     private(set) var subtitleTracks: [PlayerTrack] = []
+    private(set) var chapters: [PlayerChapter] = []
     private(set) var playbackSpeed: Double = 1
     private(set) var audioDelay: Double = 0
     private(set) var subtitleDelay: Double = 0
@@ -210,6 +211,16 @@ final class AetherEngineAdapter {
                 guard let self else { return }
                 activeSubtitleTrackID = index.map(Int64.init)
                 subtitleTracks = subtitleTracks.marking(selected: activeSubtitleTrackID)
+            }
+            .store(in: &sinks)
+        // `mediaChapters` is the container's own list; `discChapters` belongs to a disc title and
+        // is not a thing this app ever opens.
+        engine.$mediaChapters
+            .receive(on: RunLoop.main)
+            .sink { [weak self] published in
+                self?.chapters = PlayerChapters.normalize(
+                    published.map { PlayerChapter(start: $0.startSeconds, title: $0.name) }
+                )
             }
             .store(in: &sinks)
         engine.$subtitleCues

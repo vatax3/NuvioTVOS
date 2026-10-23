@@ -56,6 +56,17 @@ protocol PlayerEngineSurface: AnyObject, Observable {
     var audioTracks: [PlayerTrack] { get }
     var subtitleTracks: [PlayerTrack] { get }
 
+    // MARK: Chapters
+
+    /// The chapters the container lists, normalised — empty when the file has none, and also when
+    /// it has exactly one, which is a start marker rather than something to skip to.
+    ///
+    /// Both engines demux the file themselves and so already know this: mpv publishes
+    /// `chapter-list` and AetherEngine publishes `mediaChapters`. Upstream has to read the
+    /// container over range requests because ExoPlayer's Matroska extractor skips chapters, and
+    /// that whole file has no counterpart here.
+    var chapters: [PlayerChapter] { get }
+
     // MARK: Picture and sound settings the player itself exposes
 
     var audioDelay: Double { get }

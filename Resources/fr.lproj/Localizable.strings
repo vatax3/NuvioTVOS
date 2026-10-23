@@ -1363,3 +1363,5 @@
 "party.behind_by" = "%@ de retard sur la Watch party";
 "party.share_my_stream" = "Partager mon lien";
 "party.share_my_stream_sub" = "Les autres peuvent lire votre lien au lieu de choisir le leur. Il passe par votre compte debrid.";
+"player.chapters" = "Chapitres";
+"player.chapter_number" = "Chapitre %@";

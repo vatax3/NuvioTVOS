@@ -154,7 +154,7 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
     }
 
     private enum TrackPicker: String, Identifiable {
-        case audio, subtitles, subtitleAppearance, subtitleSync, speed, streamInfo, sources, episodes
+        case audio, subtitles, subtitleAppearance, subtitleSync, speed, streamInfo, sources, episodes, chapters
         var id: String { rawValue }
     }
 
@@ -631,9 +631,11 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
         if request.sourceRequest != nil {
             controlButton("arrow.left.arrow.right", label: L10n.text("player.sources"), focus: .control("sources")) { picker = .sources }
         }
-        if let onSwitchEngine {
-            controlButton("arrow.triangle.2.circlepath", label: L10n.text("player.switch_engine"), focus: .control("engine")) {
-                onSwitchEngine()
+        // Only when the file has them, which `chapters` already decides — a list of one is
+        // published as none, so this button never opens a panel with nothing to jump to.
+        if !engine.chapters.isEmpty {
+            controlButton("list.bullet.indent", label: L10n.text("player.chapters"), focus: .control("chapters")) {
+                picker = .chapters
             }
         }
         if onChooseEpisode != nil, request.contentType == "series" {
@@ -647,6 +649,14 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
 
         if showsMoreActions {
             controlButton("speedometer", label: L10n.text("player.speed"), focus: .control("speed")) { picker = .speed }
+            // Behind the chevron since it became a three-way cycle: it is a way out of a file one
+            // engine will not play, not something to reach for mid-film. Upstream moved theirs at
+            // the same time, for a two-way one.
+            if let onSwitchEngine {
+                controlButton("arrow.triangle.2.circlepath", label: L10n.text("player.switch_engine"), focus: .control("engine")) {
+                    onSwitchEngine()
+                }
+            }
             controlButton("aspectratio", label: L10n.text("player.aspect_ratio"), focus: .control("aspect")) { cycleAspectMode() }
             if externalPlayerTarget != nil {
                 controlButton("arrow.up.forward.app", label: L10n.text("player.open_external"), focus: .control("external")) {
@@ -968,6 +978,30 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
             audioOverlay
         case .subtitles:
             subtitleOverlay
+        case .chapters:
+            chaptersOverlay
+        }
+    }
+
+    /// The chapter list, opening on the chapter playing so the viewer starts where they are.
+    private var chaptersOverlay: some View {
+        let current = PlayerChapters.index(in: engine.chapters, at: engine.position)
+        return PlayerRailOverlay(title: L10n.text("player.chapters"), onDismiss: closePicker) {
+            PlayerRailColumn(width: dp(520)) {
+                ForEach(Array(engine.chapters.enumerated()), id: \.element.id) { index, chapter in
+                    PlayerRailCard(
+                        title: chapter.displayName(number: index + 1),
+                        subtitle: timecode(chapter.start),
+                        metadata: nil,
+                        isSelected: index == current,
+                        requestsInitialFocus: index == current
+                    ) {
+                        // The panel stays up: chapter skipping is something a viewer does twice in
+                        // a row, and closing it would make the second press a navigation instead.
+                        engine.seek(to: chapter.start)
+                    }
+                }
+            }
         }
     }
 
