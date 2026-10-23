@@ -40,6 +40,16 @@
       ],
       "versions": [
         {
+          "version": "1.0.55",
+          "buildVersion": "57",
+          "date": "2026-10-23",
+          "localizedDescription": "### Added\n\n- **Badges for what is playing.** An imported badge pack can now be matched against the stream the\n  player has actually decoded and drawn alongside the player controls, not only against what a\n  source addon advertised on the sources screen. The pack's own rules decide what appears, so a\n  pack written for the Android TV app works here unchanged — resolution, codec, HDR format, Dolby\n  Atmos and DTS variants, channel layout and the audio track's language are all offered to it.\n  Off by default: turn it on under Settings → Playback → Source list → In the player, which appears\n  once a badge pack is installed.\n- **Resume progress on the sources screen.** Picking a new source for something already part-way\n  through now shows how far in that is, with the time remaining. Episodes report their own\n  position rather than the series'.\n\n### Changed\n\n- The remaining-time label on Continue Watching cards is translated. It had been English in every\n  language since the rail shipped.\n\n### Fixed\n\n- Dolby Vision files are identified as Dolby Vision by the new player badges rather than as HDR10.\n  A profile 8.1 stream carries an HDR10 base layer, so the source colorimetry alone describes it\n  incorrectly.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.55/Nuvio-1.0.55-tvOS-unsigned.ipa",
+          "size": 41006529,
+          "minOSVersion": "18.0",
+          "sha256": "5774492d4654d1fdbc1ea3536fef2dee30da80b0f0071a9d436ab557dc02f841"
+        },
+        {
           "version": "1.0.54",
           "buildVersion": "56",
           "date": "2026-10-23",
@@ -466,11 +476,11 @@
         ],
         "privacy": {}
       },
-      "version": "1.0.54",
+      "version": "1.0.55",
       "versionDate": "2026-10-23",
-      "versionDescription": "Chapter navigation, a subtitle style of its own for HDR, and a subtitle that stops moving while it is being read.\n\n**Requires tvOS 18 or later.**\n\n## Added\n\n- **Chapters.** A file with two or more chapters now has a chapter list in the player and a control that appears only when there is one. The list opens on the chapter playing, and picking one leaves the panel open — chapter skipping is usually done more than once in a row. The progress bar shows where each chapter begins. Jumps land on the boundary rather than on the nearest keyframe before it.\n- **A separate subtitle style for HDR and Dolby Vision.** Off by default. On HDR pictures, white is rendered at the panel's peak brightness rather than at SDR white, which on a bright television reads as glare. *Settings › Playback › Subtitles* now offers a colour and a brightness that apply only to HDR and Dolby Vision, leaving the standard style untouched everywhere else. The lowest brightness is dim, never invisible.\n\n## Fixed\n\n- **Subtitles no longer drop mid-sentence.** Subtitles are lifted clear of the playback controls while those are on screen. The controls hide on a timer that knows nothing about what is being read, so the subtitle used to slide back down in the middle of a line. It now waits for the line to change, and moves between subtitles instead.\n\n## Changed\n\n- The engine switch moved from the main control row to *More actions*. It is a way out of a file one engine will not play, rather than a control to reach for during playback.",
-      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.54/Nuvio-1.0.54-tvOS-unsigned.ipa",
-      "size": 40996391,
+      "versionDescription": "### Added\n\n- **Badges for what is playing.** An imported badge pack can now be matched against the stream the\n  player has actually decoded and drawn alongside the player controls, not only against what a\n  source addon advertised on the sources screen. The pack's own rules decide what appears, so a\n  pack written for the Android TV app works here unchanged — resolution, codec, HDR format, Dolby\n  Atmos and DTS variants, channel layout and the audio track's language are all offered to it.\n  Off by default: turn it on under Settings → Playback → Source list → In the player, which appears\n  once a badge pack is installed.\n- **Resume progress on the sources screen.** Picking a new source for something already part-way\n  through now shows how far in that is, with the time remaining. Episodes report their own\n  position rather than the series'.\n\n### Changed\n\n- The remaining-time label on Continue Watching cards is translated. It had been English in every\n  language since the rail shipped.\n\n### Fixed\n\n- Dolby Vision files are identified as Dolby Vision by the new player badges rather than as HDR10.\n  A profile 8.1 stream carries an HDR10 base layer, so the source colorimetry alone describes it\n  incorrectly.",
+      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.55/Nuvio-1.0.55-tvOS-unsigned.ipa",
+      "size": 41006529,
       "minOSVersion": "18.0"
     }
   ],
