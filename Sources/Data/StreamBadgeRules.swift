@@ -321,9 +321,19 @@ enum StreamBadgeMatcher {
         attributes: ParsedStreamAttributes?,
         filters: [CompiledStreamBadgeFilter]
     ) -> [StreamBadge] {
-        guard !filters.isEmpty else { return [] }
-        let candidates = candidates(for: stream, attributes: attributes)
-        guard !candidates.isEmpty else { return [] }
+        badges(matching: candidates(for: stream, attributes: attributes), filters: filters)
+    }
+
+    /// The badges any text earns, in filter order, deduplicated.
+    ///
+    /// Taken by the other end from `badges(for stream:…)`: the player has no `Stream` to describe,
+    /// it has what the engine reports about what is on screen. Same rules, same order, same
+    /// de-duplication — only the candidates differ.
+    static func badges(
+        matching candidates: [String],
+        filters: [CompiledStreamBadgeFilter]
+    ) -> [StreamBadge] {
+        guard !filters.isEmpty, !candidates.isEmpty else { return [] }
 
         var seen = Set<String>()
         var out: [StreamBadge] = []

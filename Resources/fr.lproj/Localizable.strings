@@ -285,6 +285,7 @@
 "row.see_all" = "Tout voir";
 "row.failed" = "Une erreur est survenue";
 "card.almost_done" = "Bientôt fini";
+"card.remaining_minutes" = "%@ min restantes";
 "poster_options.keep_it" = "Le garder";
 "discover.pick_catalog" = "Choisissez un catalogue à parcourir.";
 "home.loading" = "Chargement des catalogues…";
@@ -659,6 +660,9 @@
 "settings.integrations.file_size" = "Taille du fichier";
 "settings.integrations.seeders" = "Sources";
 "settings.integrations.cache_status" = "État du cache";
+"settings.integrations.in_the_player" = "Dans le lecteur";
+"settings.integrations.badges_in_player" = "Badges de ce qui est en lecture";
+"settings.integrations.badges_in_player_sub" = "Apparier le pack au flux décodé et le dessiner avec les commandes du lecteur";
 "settings.integrations.badge_rules" = "Règles de badges";
 "settings.integrations.badge_rules_sub" = "Importer un pack de badges — géré depuis un téléphone";
 

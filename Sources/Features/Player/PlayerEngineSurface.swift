@@ -297,6 +297,17 @@ struct PlayerStreamInfo: Hashable {
     /// this engine was adopted for and one that quietly is not: a remux served to AVPlayer keeps
     /// the audio bitstream intact, and a session that fell back to software decode does not.
     var pipeline: String?
+
+    /// The same facts as some of the strings above, unformatted.
+    ///
+    /// Badge rules match on tokens — `2160p`, `5.1`, `10bit` — and the strings above are already
+    /// composed for a human to read ("3840 × 2160", "6 ch"). Parsing them back would be a
+    /// formatter and a parser kept in step for no reason, since both engines have the numbers
+    /// immediately before they format them. Nothing but `playbackBadgeTokens` reads these.
+    var videoWidth: Int?
+    var videoHeight: Int?
+    var audioChannelCount: Int?
+    var bitDepth: Int?
 }
 
 /// The three readings the stats overlay needs from the engine. Everything else it draws comes

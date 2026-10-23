@@ -741,7 +741,12 @@ final class MPVEngine {
             ),
             audioCodec: propertyString("audio-codec-name") ?? propertyString("audio-codec"),
             audioChannels: propertyString("audio-params/channel-count"),
-            audioOutput: audioOutput
+            audioOutput: audioOutput,
+            videoWidth: width.flatMap(Int.init),
+            videoHeight: height.flatMap(Int.init),
+            audioChannelCount: propertyString("audio-params/channel-count").flatMap(Int.init),
+            // `video-params/depth` is the decoded depth, which is what a badge means by "10bit".
+            bitDepth: propertyString("video-params/depth").flatMap(Int.init)
         )
 
         if let fps, let width = width.flatMap(Int32.init), let height = height.flatMap(Int32.init) {

@@ -602,6 +602,41 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
 
     // MARK: Controls
 
+    /// The badges an imported pack earns from what is actually playing.
+    ///
+    /// Matched against the decoded stream rather than the release name, so they say what reached
+    /// the decoder — which is the whole difference from the same pack's badges on the sources
+    /// screen, where the claim is only what the addon wrote.
+    ///
+    /// Drawn only while the chrome is up, and capped: these are decoration on top of someone's
+    /// film, and a fifty-rule pack can match six. Four is what fits beside the title without
+    /// measuring, and the rest are dropped rather than wrapped onto a second line.
+    @ViewBuilder
+    private var playbackBadges: some View {
+        let badges = StreamBadgeMatcher.badges(
+            matching: playbackBadgeTokens(engine.streamInfo, languages: activeAudioLanguages),
+            filters: settings.streamBadges.playerFilters
+        )
+        if !badges.isEmpty {
+            HStack(spacing: NuvioTheme.spacing.xs) {
+                ForEach(Array(badges.prefix(4).enumerated()), id: \.offset) { _, badge in
+                    StreamRuleBadgeChip(badge: badge)
+                }
+            }
+        }
+    }
+
+    /// The selected audio track's language, in both the forms a pack might spell it.
+    private var activeAudioLanguages: [String] {
+        guard let language = engine.audioTracks.first(where: \.isSelected)?.language?.nilIfBlank else {
+            return []
+        }
+        // Both forms, because a pack may look for `fre` or for `French` and neither is wrong.
+        var out = [language]
+        if let name = MediaLanguage.named(language)?.nilIfBlank, name != language { out.append(name) }
+        return out
+    }
+
     /// The Android control row, in its order: transport first, then the tools that change what
     /// is playing, then a chevron that reveals the occasional ones.  Elapsed/total sits at the
     /// trailing edge of the same row rather than under the bar, which is where it is on TV.
@@ -624,6 +659,7 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
                         .foregroundStyle(.white.opacity(0.68))
                         .lineLimit(2)
                 }
+                playbackBadges
             }
 
             progressBar

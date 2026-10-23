@@ -317,7 +317,11 @@ final class AetherEngineAdapter {
             audioCodec: active.map { $0.isAtmos ? "\($0.codec) · Atmos" : $0.codec },
             audioChannels: active.map { "\($0.channels) ch" },
             audioOutput: engine.audioDelivery.label,
-            pipeline: engine.videoRoute.label
+            pipeline: engine.videoRoute.label,
+            videoWidth: engine.sourceVideoWidth > 0 ? Int(engine.sourceVideoWidth) : nil,
+            videoHeight: engine.sourceVideoHeight > 0 ? Int(engine.sourceVideoHeight) : nil,
+            audioChannelCount: active.map { Int($0.channels) },
+            bitDepth: format?.bitDepth ?? nil
         )
     }
 }

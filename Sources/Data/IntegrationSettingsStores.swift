@@ -558,6 +558,42 @@ final class StreamBadgeSettingsStore: PreferenceStore {
         get { codable("stream_badge_rules", default: StreamBadgeRules()).normalized() }
         set { setCodable("stream_badge_rules", newValue.normalized()) }
     }
+
+    /// Draw the matched badges over the player chrome as well as on the sources screen.
+    ///
+    /// Off by default, as upstream has it: a pack is matched against a release name on the sources
+    /// screen and against the decoded stream here, and the second is a different claim — worth
+    /// opting into rather than appearing unannounced over someone's film.
+    var showsInPlayer: Bool {
+        get { bool("show_badges_in_player", default: false) }
+        set { setBool("show_badges_in_player", newValue) }
+    }
+
+    /// Which imported pack feeds the player, by its source URL. Empty means whichever is active,
+    /// which is upstream's `forPlayer(sourceUrl)` with a blank argument.
+    ///
+    /// Stored and honoured, but **not offered as a control here**, which is a deliberate gap. The
+    /// value only means something when the player draws from a different pack than the rows do,
+    /// and our model already keeps exactly one import active — so the choice this would present
+    /// is "the active pack" against "a specific pack", with three packs held. `SettingsOptionRow`
+    /// takes a `CaseIterable` enum and cannot list imports anyway, so offering it would mean a
+    /// pushed screen for a distinction nobody has asked for. A value arriving from a shared
+    /// account is still respected below.
+    var playerBadgeSource: String {
+        get { string("player_badge_source", default: "") }
+        set { setString("player_badge_source", newValue) }
+    }
+
+    /// The filters the player draws from: the chosen pack when it is still installed, otherwise
+    /// the active one. A pack removed after being chosen must not silently switch the player off.
+    var playerFilters: [CompiledStreamBadgeFilter] {
+        guard showsInPlayer else { return [] }
+        let all = rules
+        guard let chosen = all.imports.first(where: {
+            $0.sourceUrl.caseInsensitiveCompare(playerBadgeSource) == .orderedSame
+        }) else { return StreamBadgeMatcher.compile(all) }
+        return StreamBadgeMatcher.compile(StreamBadgeRules(imports: [chosen]))
+    }
 }
 
 // MARK: - Trailers (port of TrailerSettingsDataStore)

@@ -605,6 +605,21 @@ struct StreamBadgeSettingsCard: View {
                     action: { router.push(.streamBadgeRules) }
                 )
             }
+
+            // Only once a pack is installed: a toggle for badges nobody has imported offers to
+            // show nothing, and the sources screen falls back to the app's own badges there.
+            if settings.streamBadges.rules.hasImport {
+                SettingsCard(title: L10n.text("settings.integrations.in_the_player", fallback: "In the player")) {
+                    SettingsToggle(
+                        title: L10n.text("settings.integrations.badges_in_player", fallback: "Badges for what is playing"),
+                        subtitle: L10n.text(
+                            "settings.integrations.badges_in_player_sub",
+                            fallback: "Match the pack against the decoded stream and draw it with the player controls"
+                        ),
+                        isOn: $badges.showsInPlayer
+                    )
+                }
+            }
         }
     }
 

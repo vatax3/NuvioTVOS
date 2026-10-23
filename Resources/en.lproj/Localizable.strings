@@ -285,6 +285,7 @@
 "row.see_all" = "See all";
 "row.failed" = "Something went wrong";
 "card.almost_done" = "Almost done";
+"card.remaining_minutes" = "%@ min left";
 "poster_options.keep_it" = "Keep it";
 "discover.pick_catalog" = "Pick a catalog to browse.";
 "home.loading" = "Loading catalogs…";
@@ -659,6 +660,9 @@
 "settings.integrations.file_size" = "File size";
 "settings.integrations.seeders" = "Seeders";
 "settings.integrations.cache_status" = "Cache status";
+"settings.integrations.in_the_player" = "In the player";
+"settings.integrations.badges_in_player" = "Badges for what is playing";
+"settings.integrations.badges_in_player_sub" = "Match the pack against the decoded stream and draw it with the player controls";
 "settings.integrations.badge_rules" = "Badge rules";
 "settings.integrations.badge_rules_sub" = "Import a badge pack — managed from a phone";
 
