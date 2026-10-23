@@ -103,8 +103,8 @@ independent on purpose.
 | Detail | Hero + actions, seasons/episodes, cast, networks/studios, collections, comments, More like this |
 | Cast | Person photo, biography and filmography (TMDB) |
 | Browse | Paged TMDB listings for a network or studio |
-| Streams | Grouped per addon and per scraper, quality/HDR/codec/size/seeder chips, debrid cache state |
-| Player | Resume, progress persistence, per-stream proxy headers, Now Playing metadata, external subtitles, auto-play chaining |
+| Streams | Grouped per addon and per scraper, quality/HDR/codec/size/seeder chips, debrid cache state, resume progress for what you are part-way through |
+| Player | Resume, progress persistence, per-stream proxy headers, Now Playing metadata, external subtitles, auto-play chaining, and badges for what is actually playing when a badge pack is installed |
 | Comments | Trakt comments and reviews, spoilers hidden until revealed |
 | Search | Debounced fan-out across every search-capable catalog |
 | Discover | Browse any catalog by type and genre, standalone or folded into Search |
@@ -229,7 +229,8 @@ typing is handed to a phone on the same network. The addon configurator renders 
 configure URL as a QR code and takes the resulting manifest URL back. Beyond that the Apple TV
 serves the form itself over HTTP and whatever the phone saves lands straight in settings — which is
 the only sane way to enter a line like `{stream.size::>0["{stream.size::bytes} "||""]}`. Five pages
-now: the stream format editor, the stream badge rules, the plugin repositories, the custom poster
+now: the stream format editor, the stream badge rules — whose packs badge both the source list and,
+optionally, what the player is decoding — the plugin repositories, the custom poster
 URL, and the custom theme's accent colour — the last of which uses the phone's own colour picker,
 because choosing a hue with a D-pad is the reason such controls go untouched.
 

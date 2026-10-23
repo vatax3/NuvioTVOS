@@ -761,13 +761,13 @@ And **i18n**: Bengali, Hebrew, Croatian, Polish, Turkish, with the RTL plumbing 
 
 | Upstream | Ours |
 |---|---|
-| **Automatic subtitle sync** — `AutomaticSubtitleSync`, `AutoSyncTimelineRetime`, `EmbeddedSubtitleTimelineLoader` and eleven more files, ~7,800 lines. Aligns an addon subtitle against the *embedded* track's timeline and retimes it. | Open, and the largest single item they have ever shipped in one window. Adjacent to what 1.0.40 built — our sync-by-line is the manual form of the same correction. Needs the muxed track's cue timings, which mpv does not hand out as text; that question has to be answered before any of it can be scoped. |
+| **Automatic subtitle sync** — superseded: **declined**, and the doubt is resolved by their own code — see the beta.7 entry below, which is the live verdict. `AutomaticSubtitleSync`, `AutoSyncTimelineRetime`, `EmbeddedSubtitleTimelineLoader` and eleven more files, ~7,800 lines. Aligns an addon subtitle against the *embedded* track's timeline and retimes it. | Open, and the largest single item they have ever shipped in one window. Adjacent to what 1.0.40 built — our sync-by-line is the manual form of the same correction. Needs the muxed track's cue timings, which mpv does not hand out as text; that question has to be answered before any of it can be scoped. |
 | **`preload_next_episode_sources`** — fetch the next episode's streams before the card appears | **Ported in 1.0.45**, and it needed a cache first: `StremioClient` had none, so pressing the next-episode card re-asked every addon from nothing. |
 | **libmpv failure causes on the error screen** | **Ported in 1.0.45** as `MPVPlaybackFailure`. Ours showed `mpv_error_string` verbatim. |
-| **MDBList follow-ups** — external lists in the library, choosing which lists appear, sorting by release date, ratings on the hero and Continue Watching with a sortable provider order | Open. Extends 1.0.39 and is the obvious next lot. |
-| `random_episode_enabled`, stable shuffle targets in Continue Watching | Open, and small. |
-| `always_show_landscape_clearlogo`, global landscape poster mode | Open, and small. |
-| Press-and-hold on the audio-delay buttons | Open, and small. We own that area since 1.0.37. |
+| **MDBList follow-ups** — external lists in the library, choosing which lists appear, sorting by release date, ratings on the hero and Continue Watching with a sortable provider order | Open, **less one part**: the ratings strip is on the detail hero (`MetaDetailsView.swift:222`, `RatingsStrip` in `FocusableCard.swift:373`). The external/dynamic/liked lists, the visibility picker, release-date sorting and the provider order are not here — see the beta.8 entry, which measures what that lot actually costs. |
+| `random_episode_enabled`, stable shuffle targets in Continue Watching | **Already true here**, and this line had gone stale. The setting is `SettingsView.swift:666`, read as `settings.layout.randomEpisodeEnabled` at `MetaDetailsView.swift:344,415`; `EpisodeShuffleStore.swift:8` names upstream's stable-targets fix as the reason it exists. Shipped as our own work, which is why no parity pass closed the line. |
+| `always_show_landscape_clearlogo`, global landscape poster mode | **Already true here**, and this line had gone stale. `CardMetrics.swift:21-23` carries the key by name and `CardMetrics.swift:51-53` the poster override; the two controls are `SettingsView.swift:656-660`; drawn at `ContentCards.swift:41-45`. |
+| Press-and-hold on the audio-delay buttons | **Already true here**, and this line had gone stale. `PlayerRailStepper` takes `(Int) -> Void` — "the multiplier the hold ramp supplies" (`PlayerRailOverlay.swift:163`) — fed by the `UILongPressGestureRecognizer` at `PlayerChrome.swift:1860`. |
 | **`transparent_letterbox`** — a device-local toggle for true black HDR bars | **Declined, and the doubt is resolved.** This was our open "unverified" line since 1.0.0. Upstream's own implementation excludes the mpv engine (`internalPlayerEngine != MVP_PLAYER`): it works by letting an ExoPlayer SurfaceView punch through the window background. Ours is an mpv Metal layer over a window tvOS paints itself, so there is nothing to punch through to. |
 | **Torrent engine replacing TorrServer** | **N/A**, and the replacement changes nothing: the blocker was never which engine, it is that tvOS allows neither a subprocess nor downloaded executable code. |
 | More work on the parallel chunked downloader | **Still declined.** Unchanged reasoning; still gated on measuring a per-connection ceiling on hardware. |
@@ -820,7 +820,7 @@ chasing them turned up two defects of ours that no changelog named.
 | **Full episode descriptions**, **season tab repair**, **long press for episode options** in the in-player panel | **Ported in 1.0.47**: `FocusScrollingText` at fixed height, season on focus with upstream's 150 ms debounce, options on a held Select. The panel now also seeds the episode cache from metadata it already loaded, so the dialog's season-watched and previous-episodes rows are correct from the player for the first time. |
 | **Map OpenSubtitles' non-standard Spanish codes** (`spn`, `esp`) | **Adapted in 1.0.47, and our version of the bug was far worse** — see below. |
 | **Automatic subtitle sync on libmpv** | **Still declined, doubt now resolved by their own code.** *"mpv exposes no embedded subtitle timing while it plays, so only the container's own subtitle index can serve as the reference."* They demux the container themselves. The cost here is our own subtitle-index demuxer over range requests — not an mpv property we had missed. |
-| **Watch parties** (~2,500 lines) | Open and **portable**, which the usual reasoning would have got wrong: they run on upstream's own Supabase through `watch_party_*` RPCs, and `NuvioBackend` already speaks to it for account sync. What is new is the transport — Phoenix broadcast and presence over a Realtime WebSocket, with no SDK our side. Scoped as its own release. |
+| **Watch parties** (~2,500 lines) | **Ported**, across 1.0.48–1.0.50 — `Sources/Data/Party/` and `Sources/Features/Party/`, with its settings screen at `WatchPartySettingsContent.swift`. This line said "open" for three releases while two sections *below it in this file* described shipping it; see § *1.0.50: the feature was ported and did not interoperate*. The original triage, kept because it was right:  they run on upstream's own Supabase through `watch_party_*` RPCs, and `NuvioBackend` already speaks to it for account sync. What is new is the transport — Phoenix broadcast and presence over a Realtime WebSocket, with no SDK our side. Scoped as its own release. |
 | **Media servers — Jellyfin and Emby** (~2,700 lines) | Open. A second source type beside the Stremio addons; nothing on tvOS blocks it. |
 | **Ambient mode** | Open with a doubt: tvOS gives the screen to the system screensaver on the viewer's own delay, so an in-app slideshow competes with Aerial. |
 | **AFR: sort sampled timestamps, prefer a clean refresh multiple over 3:2 pulldown, drop a stale preflight** | **N/A, all three.** They exist because Android measures the frame rate from a downloaded file head and picks a `Display.Mode`. We hand `AVDisplayCriteria` to `AVDisplayManager` and tvOS picks: no timestamps sampled, no way to express "72 Hz over 60 Hz", no async preflight to go stale. See [DisplayModeMatcher.swift](../Sources/Features/Player/DisplayModeMatcher.swift). |
@@ -1151,10 +1151,10 @@ ours, both of which this pass closed.
 | **Load ratings before waiting for remote watch progress** | **Already true here.** Ratings, enrichment and *More like this* run in one task group after the meta lands; nothing in that path waits on remote progress. |
 | **Refresh the mpv track list once per file rather than on every progress tick** | **Already true here**, and recorded in the beta.7 pass for the same reason: ours is driven by an observed `track-list` property. |
 | **Detect HDR from the HEVC SPS when the container carries no colour info** | **Believed already true, not measured.** Theirs reads the container; mpv reports `video-params/gamma` from what it decoded, and AetherEngine reports the format it is presenting. Both are downstream of the bitstream rather than of the container, so the case should not arise — but no file without container colour info has been played to confirm it, and that is the honest state of it. |
-| **Resume progress and provider names on the streams screen** | **Open, small tier.** The provider name is already on every row (`addonName`); the resume pill is not. |
-| **Profile hygiene**: do not push profile settings when switching, clear the previous profile's screens, crash opening Manage Profiles, keep poster-menu watched toggles to the profile that made them, erase the local data of a profile deleted elsewhere | **Mostly not applicable, one open.** `ProfileScope` namespaces every per-profile store by id and the whole store graph is rebuilt on `activeProfileId`, so screens cannot carry over and a watched toggle cannot land in another profile's library. The crash is a Compose theming crash. What is genuinely open is erasing a profile deleted on another device: `ProfileScope.eraseStorage` exists and nothing calls it from a sync. |
-| **New MDBList dynamic and liked lists start hidden** | **Open.** The MDBList follow-up noted since 1.1.0-beta.2. |
-| **Badges for what is playing, and a badge pack to choose** | **Declined, with the doubt written down.** Our seven accents plus a custom one give a background that an imported badge set clashes with — the same reasoning that declined their hard-coded blue for episodes rated 9.7+. Worth revisiting as *our* badges rather than as a port. |
+| **Resume progress and provider names on the streams screen** | **Ported in 1.0.55.** The provider name was already on every row (`addonName`); the resume pill is now in the identity panel (`StreamsView.swift`, `resumePill`), keyed on `videoId` so a series shows the episode's own progress, and drawn only while `0 < fraction < 1`. It reuses `WatchProgressBar` and a `remainingLabel` lifted onto `WatchProgress` — which also localised that string, hard-coded English on the Continue Watching card since it shipped. |
+| **Profile hygiene**: do not push profile settings when switching, clear the previous profile's screens, crash opening Manage Profiles, keep poster-menu watched toggles to the profile that made them, erase the local data of a profile deleted elsewhere | **Mostly not applicable, one open.** `ProfileScope` namespaces every per-profile store by id and the whole store graph is rebuilt on `activeProfileId`, so screens cannot carry over and a watched toggle cannot land in another profile's library. The crash is a Compose theming crash. The last part was recorded as open and **was already true when it was written**: `ProfileStore.swift:503` erases the storage of every profile the server dropped, inside the merge loop, under the comment "A profile the server dropped is deleted here too, with its storage". Nothing in this row is open. |
+| **New MDBList dynamic and liked lists start hidden** | **Open, and not portable on its own** — this line understated it for three windows. It is a rule inside `MdbListLibraryRemote.kt:27-29`, and it presupposes everything around it: `/external/lists/user`, `/lists/liked`, a persisted set of hidden list keys and a cached snapshot to diff against. Our client calls `/lists/user` alone (`MDBListClient.swift:373`) and our surface lists every non-empty owned list as a rail. The cost is the MDBList library lot, for which their `docs/architecture/mdblist-library.md` publishes the whole endpoint contract — not a default to flip. |
+| **Badges for what is playing, and a badge pack to choose** | **Ported in 1.0.55, and the decline it replaces was wrong** — the only verdict this procedure has produced that was false rather than stale, so it is left visible. The motive recorded was that an imported badge set clashes with our accents. But imported packs have been drawn on the sources screen since **1.0.23**, in upstream's own file format, as line 71 of this same file says — the pack was never what the window added. What it added was *where*: matching a pack against the decoded stream instead of a release name. `PlaybackBadgeTokens.swift` builds upstream's `playbackMatchText` vocabulary from `PlayerStreamInfo`, `StreamBadgeMatcher.badges(matching:filters:)` takes the existing matcher by its other end, and `StreamRuleBadgeChip` already drew them. Off by default (`show_badges_in_player`), chrome-only, capped at four. One adaptation theirs does not need: a Dolby Vision 8.1 file reads as plain PQ in the source colorimetry, so both range strings are read or every DV file would badge HDR10 and never DV. |
 | **Background downloads and silent installs on Android 12+**, the update banner and its green check | **N/A.** tvOS has neither, and a sideloaded app cannot replace itself — settled in 1.0.24, where the banner tells and does not install. |
 | **Replace the libass renderer with the atlas pipeline from Plezy** | **N/A.** Our ASS rendering is mpv's own libass; there is no renderer of ours to replace. |
 | **Load ExoPlayer chapters when playback is tunneled**, ExoPlayer chapters off by default | **N/A.** Both are about their own extractor, and the second is a switch for a parser we do not have. |
@@ -1166,3 +1166,63 @@ Found on the way, in no changelog of theirs: `PartyRosterUITests` launched witho
 still answered `exists` from underneath it, so the first assertion passed and the only symptom was
 that focus never arrived — a working screen that looked broken, on every simulator nobody had used
 by hand. Fixed in 1.0.53.
+
+## The seventh window was empty, and this file was not
+
+Run on 2026-10-23. The window first:
+
+```
+gh api repos/NuvioMedia/NuvioTV/compare/1.1.0-beta.8...main  →  {"ahead":0, "commits":0, "files":0}
+```
+
+`1.1.0-beta.8` is upstream's newest release and their `main` has not moved since the tag, so there
+was nothing to read and the marker in [UPSTREAM-PARITY.md](UPSTREAM-PARITY.md) stays where it is.
+**The claim that file makes was already true.** What was not true was this file.
+
+### What the sweep found
+
+Seven verdicts here were wrong. Every one of them in the same direction but the last:
+
+| Row | Said | Is |
+|---|---|---|
+| `random_episode_enabled`, stable shuffle targets | Open, and small | Shipped — `SettingsView.swift:666`, `EpisodeShuffleStore.swift:8` |
+| `always_show_landscape_clearlogo` | Open, and small | Shipped — `CardMetrics.swift:21`, `SettingsView.swift:656` |
+| Press-and-hold on the audio-delay buttons | Open, and small | Shipped — the hold ramp's multiplier, `PlayerChrome.swift:1860` |
+| Erase a profile deleted elsewhere | Open | Shipped — `ProfileStore.swift:503`, and already so when the line was written |
+| **Watch parties** | Open and portable | Shipped across 1.0.48–1.0.50 — `Sources/Data/Party/` |
+| MDBList lists starting hidden | Open, small | Open, but **not portable alone**: a rule inside a subsystem we do not have |
+| **Badges for what is playing** | Declined | **The decline was false**, not stale — see below |
+
+Five were stale, and they are all the same mechanism. **A positive verdict is written the day the
+code lands, by whoever wrote it. An open line goes false later and in silence** — when the work
+arrives for some other reason, in a release that was not a parity pass, and nobody walks back
+through old windows looking for lines it closed. Shuffle, the clearlogo, the hold ramp, the profile
+erasure and the watch parties all arrived exactly that way. The watch-party line is the clearest
+case: it read "open" for three releases while two sections *below it in this same file* described
+shipping the feature and then debugging its interoperability.
+
+The badge line is worse and different. It was **classified**, and a classified line is one nobody
+reads again. It declined "badge packs and what-is-playing badges" on the grounds that an imported
+badge set clashes with this app's accents — but imported packs shipped in **1.0.23** and line 71 of
+this file says so. The reasoning answered a question that had been settled two years of releases
+earlier, and in doing so threw away the only thing the window actually contained. It is recorded as
+corrected rather than quietly rewritten, because the failure is instructive and the row is cheap.
+
+### What the sweep confirmed
+
+The other direction was checked too, and held. All 85 backticked identifiers in this file were
+resolved mechanically against the tree; 26 did not appear in `Sources/` and every one was
+explicable — upstream's own class names, Apple APIs this file cites as *absent*, AetherEngine
+package traits, vendored xcframeworks, and test names, which live in `Tests/` and `UITests/`.
+Fifteen named capabilities were then checked by hand — `stillWatching`, `PostPlayOverlay`, the four
+external players, the plugin runtime's PBKDF2 and AES, IntroDB, `LocalConfigServer`, mojibake
+repair, the seven display modes, the franchise row, the episode-options overlay, `AppUpdateCheck` —
+and all fifteen hold.
+
+So this file is reliable about what it ported and was not about what it still owed. That asymmetry
+is the finding, and it is why every row the sweep touched now carries a `file:line`. A row that
+asserts without citing cannot be contradicted without redoing the investigation, which is what let
+a false decline sit beside the line refuting it, in one document, for a whole window.
+
+The prose sections were deliberately not swept: they describe what happened on a date, and a dated
+account does not go stale. Only the tables claim to describe the present.

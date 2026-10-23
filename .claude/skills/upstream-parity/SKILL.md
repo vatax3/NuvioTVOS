@@ -123,6 +123,22 @@ a test can hold, because every other test you write is a conversation with yours
 Two documents answering one question is how a status goes stale, which has happened three times
 here. Keep the division above.
 
+**And close a line in the audit in the same commit that closes it in the code.** The 1.1.0-beta.8
+pass found seven wrong verdicts and five were the same mechanism: a positive verdict gets written
+the day the code lands, but an *open* line goes false later and silently, when the work arrives for
+another reason — our own bug fix, a different window — in a release nobody filed as a parity pass.
+Watch parties read "open" for three releases while two sections below that row described shipping
+them. So: a release that closes an open line closes it here too, and **every row carries a
+`file:line`**. A row that asserts without citing cannot be contradicted without redoing the
+investigation, which is how a false decline sat next to the line refuting it in the same file.
+
+One corollary, because that pass also found the costliest kind: **a declined line is the one to
+re-read, not the one to trust.** An item judged not applicable or declined is never looked at
+again, so a wrong reason survives indefinitely — where a missed item is caught by the next window.
+The beta.8 decline rejected what-is-playing badges because an imported badge pack would clash with
+our accents; the packs had shipped five releases earlier, and the decline threw away the only thing
+the window contained.
+
 ## 7. Ship it
 
 [docs/RELEASING.md](../../../docs/RELEASING.md) has the full procedure. The two contracts that
