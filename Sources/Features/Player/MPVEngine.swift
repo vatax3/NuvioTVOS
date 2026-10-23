@@ -45,6 +45,8 @@ final class MPVEngine {
     private(set) var audioTracks: [MPVTrack] = []
     private(set) var subtitleTracks: [MPVTrack] = []
     private(set) var chapters: [PlayerChapter] = []
+    /// mpv's `sub-text`: the line it is drawing right now, whoever authored it.
+    private(set) var currentCueText: String?
 
     /// From mpv's own `video-params/gamma`, which is the transfer function it decoded with.
     /// `pq` covers HDR10, HDR10+ and the Dolby Vision profiles mpv tone-maps from.
@@ -618,6 +620,7 @@ final class MPVEngine {
                 applySubtitleFont(family)
             }
         case "sub-text":
+            currentCueText = property.stringValue?.nilIfBlank
             if let family = subtitleFontResolver.familyForText(property.stringValue) {
                 applySubtitleFont(family)
             }

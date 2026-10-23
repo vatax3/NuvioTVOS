@@ -347,6 +347,12 @@ extension AetherEngineAdapter: PlayerEngineSurface {
     /// nothing is tone-mapped, so an HDR source is an HDR picture.
     var isHDRVideo: Bool { engine.videoFormat != .sdr }
 
+    /// The host draws the cues on this path, so the one on screen is the one the overlay would
+    /// draw at this instant — the same filter it applies.
+    var currentCueText: String? {
+        cues.first { $0.contains(position - subtitleDelay) }?.text
+    }
+
     /// The display handshake belongs to the engine on this path, so there is nothing to hand to
     /// `DisplayModeMatcher` — and handing it something would make two writers of one panel mode.
     var videoFormat: DisplayModeMatcher.VideoFormat? { nil }

@@ -590,6 +590,33 @@ enum SubtitlePlacement {
         return max(0, baseInset + clamped + lift)
     }
 
+    /// How long a deferred drop waits for a line change before giving up and dropping anyway.
+    ///
+    /// Upstream's three seconds. A still frame with one long cue on it would otherwise hold the
+    /// line high indefinitely, which is the opposite failure and just as visible.
+    static let dropTimeout: Double = 3
+
+    /// Whether the line may move to `target` now, or must stay at `applied` until the cue changes.
+    ///
+    /// Raising is immediate: the overlay that caused it is already on screen and the line has to
+    /// get out of its way. **Lowering is not**, and that asymmetry is the whole rule — the
+    /// transport hides on its own timer, usually in the middle of a sentence somebody is reading,
+    /// and dropping the line then slides the words out from under their eyes. Waiting for the
+    /// next cue moves it between lines instead, where nobody is looking.
+    ///
+    /// `isImmediate` covers the cases with no reading to protect: the appearance panel, where the
+    /// position *is* what is being looked at, and a picture with no cue on it at all.
+    static func settledLift(
+        target: Double,
+        applied: Double,
+        isImmediate: Bool,
+        hasCueOnScreen: Bool,
+        hasWaitedOut: Bool
+    ) -> Double {
+        guard target < applied, hasCueOnScreen, !isImmediate, !hasWaitedOut else { return target }
+        return applied
+    }
+
     /// The same distance, in the units `sub-margin-y` takes.
     static func mpvMarginY(offset: Double, obstructions: Obstructions = .init()) -> Double {
         inset(offset: offset, obstructions: obstructions) * mpvUnitsPerPoint

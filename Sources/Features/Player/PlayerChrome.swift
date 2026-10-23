@@ -111,6 +111,10 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
     /// The compact seek readout, drawn only while the transport is down. See
     /// `PlayerSeekOverlayPolicy` for why a horizontal press no longer reveals the transport.
     @State private var seekReadout: PlayerSeekReadout.Model?
+    /// What the renderers were last told, and since when a drop has been waiting for a line
+    /// change. Both only ever move through `commitSubtitleObstructions`.
+    @State private var appliedObstructions = SubtitlePlacement.Obstructions()
+    @State private var subtitleDropPendingSince: Date?
     @State private var seekReadoutDismiss: Task<Void, Never>?
     /// The diagnostic overlay. Off every session: it is reached from stream information, and a
     /// reading left on screen from last week is not a diagnostic, it is furniture.
@@ -166,6 +170,11 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
             picture
             interface
         }
+        // The two signals that can settle a deferred drop: the obstruction set itself moving, and
+        // the line changing underneath it. A timer is deliberately not one of them — the timeout
+        // is read when something else happens, so a still picture costs nothing.
+        .onChange(of: subtitleObstructions, initial: true) { _, _ in commitSubtitleObstructions() }
+        .onChange(of: engine.currentCueText) { _, _ in commitSubtitleObstructions() }
         // Sampled here rather than inside the sampler, so the loop lives and dies with the view
         // and cannot outlive playback. One second: fast enough to watch a buffer drain, slow
         // enough that reading the numbers is possible.
@@ -419,6 +428,45 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
             seekReadout: seekReadout != nil,
             previewingOffset: picker == .subtitleAppearance
         )
+    }
+
+    /// The obstruction set actually handed to the renderers, which lags the real one on the way
+    /// *down* only.
+    ///
+    /// The transport hides on a timer that knows nothing about what is being read, so the drop it
+    /// causes lands mid-sentence more often than not. Holding the previous set until the line
+    /// changes moves the subtitle between cues, where there is nothing to disturb. See
+    /// `SubtitlePlacement.settledLift` for the rule and why raising is never deferred.
+    private var settledObstructions: SubtitlePlacement.Obstructions {
+        let target = SubtitlePlacement.inset(offset: 0, obstructions: subtitleObstructions)
+        let applied = SubtitlePlacement.inset(offset: 0, obstructions: appliedObstructions)
+        let settled = SubtitlePlacement.settledLift(
+            target: target,
+            applied: applied,
+            isImmediate: subtitleObstructions.previewingOffset,
+            hasCueOnScreen: engine.currentCueText != nil,
+            hasWaitedOut: hasWaitedOutSubtitleDrop
+        )
+        return settled == target ? subtitleObstructions : appliedObstructions
+    }
+
+    /// Moves `appliedObstructions` to whatever the rule now allows, and starts or clears the
+    /// deferral clock with it.
+    private func commitSubtitleObstructions() {
+        let settled = settledObstructions
+        if settled == subtitleObstructions {
+            subtitleDropPendingSince = nil
+        } else if subtitleDropPendingSince == nil {
+            subtitleDropPendingSince = Date()
+        }
+        appliedObstructions = settled
+    }
+
+    /// Whether a deferred drop has been waiting longer than a line change is worth waiting for.
+    /// A paused frame holding one long cue would otherwise keep the line up indefinitely.
+    private var hasWaitedOutSubtitleDrop: Bool {
+        guard let since = subtitleDropPendingSince else { return false }
+        return Date().timeIntervalSince(since) >= SubtitlePlacement.dropTimeout
     }
 
     /// The player's current shape, as the input rules need to see it.
@@ -1524,7 +1572,7 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
             Color.black.ignoresSafeArea()
 
             videoSurface(PlayerSurfaceContext(
-                subtitleObstructions: subtitleObstructions,
+                subtitleObstructions: settledObstructions,
                 playbackSpeed: partyRate ?? viewerSpeed
             ))
             .ignoresSafeArea()

@@ -56,6 +56,13 @@ protocol PlayerEngineSurface: AnyObject, Observable {
     var audioTracks: [PlayerTrack] { get }
     var subtitleTracks: [PlayerTrack] { get }
 
+    /// The line of subtitle currently drawn, or nil when there is none.
+    ///
+    /// Only ever compared, never shown: it is the signal that the subtitle has changed, which is
+    /// when the line may move without sliding the words out from under whoever is reading them.
+    /// See `SubtitlePlacement.settledLift`.
+    var currentCueText: String? { get }
+
     /// Whether the picture being presented is HDR or Dolby Vision.
     ///
     /// Only used to decide the subtitle colour, which is why it is a plain `Bool` and not the
