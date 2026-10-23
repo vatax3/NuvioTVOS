@@ -1107,9 +1107,62 @@ Authored ASS styling is the one real regression on the default engine: Aether pu
 host draws them, so the overlay that already serves the AVFoundation path renders them as plain
 styled text. A file whose styling matters still has libass — on MPV, one press away.
 
-### Still unverified
+### Measured on 2026-10-21, and what is still not
 
-Everything above is read off the engine's own published state and a build. **No receiver has been
-read.** The measurement that settles this work is a REMUX MKV DD+ JOC and a TrueHD Atmos file on a
-real Apple TV behind an Atmos receiver, cross-checked against `audioDelivery` (`.streamCopy`
-expected) and `videoRoute` (`.loopback`). Their own benchmark does not cover Atmos either.
+An MKV E-AC-3 JOC played on a real Apple TV behind an Atmos receiver. The receiver went from
+*Multi In* at idle to *D Atmos* during playback — it follows the content, so the tvOS audio format
+is on Automatic and the Atmos is not a MAT stream being emitted regardless. Cross-checked against
+the panel: `videoRoute` `.loopback`, `audioDelivery` `.streamCopy`, codec EAC3 · Atmos, 6 channels,
+output range Dolby Vision.
+
+**So the question this work opened is closed**: an MKV E-AC-3 JOC now reaches HDMI intact, which
+neither previous engine could do. Two readings worth recording because they look wrong and are not
+— "6 channels" is the 5.1 bed, with the objects carried as metadata in the same stream, and a
+BT.2020 PQ source presented as Dolby Vision is profile 8.1, whose base layer is HDR10 plus an RPU.
+
+Still unmeasured, and genuinely different code paths rather than more of the same: TrueHD Atmos
+(object rendering through the `TrueHDObjectAudio` trait, not a stream copy), DTS:X at 7.1.4,
+DTS-HD MA announcing its EAC3 bridge in the log, and the fallback cascade on a real refusal.
+
+Out of the matrix by the viewer's own decision: native Dolby Vision switching and comparative power
+draw. tvOS *Match Content* is deliberately off on that Apple TV — Dolby Vision and a fixed frame
+rate are forced instead, to avoid the HDMI resynchronisation black screen at every switch. So
+`LoadOptions.matchContentEnabled` is inert there, frame-rate conversion on 23.976 is an accepted
+trade, and the panel's "display matching disabled" line is information rather than a warning on
+that installation. The mapping stays in the adapter: the setting is inert on that Apple TV, not on
+everyone's.
+
+## Upstream moved a sixth time: 1.1.0-beta.7 → 1.1.0-beta.8
+
+166 commits over six days (16–22 October), 219 files, one tag. Read over the network at the tag,
+per [the skill](../.claude/skills/upstream-parity/SKILL.md).
+
+The headline is chapters, and the interesting part is how little of it transfers: **272 of their
+lines exist because of a limitation we do not have.** Two of their small fixes landed on defects of
+ours, both of which this pass closed.
+
+| Upstream | Ours |
+|---|---|
+| **Chapters**: a panel, marks on the progress bar, exact seeks, buttons after subtitles and audio | **Ported in 1.0.54.** Their `MatroskaChapterLoader` reads the container over HTTP range requests, following the SeekHead to the Chapters element — and their own comment says why: ExoPlayer's Matroska extractor skips chapters, *"mpv lists them itself"*. Both engines here demux, so the port is their pure `PlayerChapters` rules, one protocol requirement and the panel. Their trap avoided on the way: `AetherEngine.selectChapter(id:)` resolves against **disc** chapters only and silently does nothing for a file's own, so media chapters are seeked to. |
+| **Separate HDR / Dolby Vision subtitle style** | **Ported in 1.0.54, and it matters more here than there.** Since 1.0.52 Dolby Vision is delivered natively instead of tone-mapped, so subtitle white is the panel's PQ peak rather than SDR white mapped down. Their 0–100 → 30–100% curve is kept for its floor: the dimmest setting is dim, not absent. Dimming scales colour and leaves alpha alone — an alpha-dimmed subtitle takes the colour of whatever is behind it. |
+| **Keep the subtitle lift steady on pause, letterboxed video and line changes** | **Ported in 1.0.54, and we had the defect their rule was written for.** Our lift shipped in 1.0.46 and reached mpv in 1.0.47; neither had the rule for coming back *down*. The transport hides on a timer that knows nothing about what is on screen, so the drop landed mid-sentence. Raising stays immediate, lowering waits for the cue to change, three seconds maximum. |
+| **Move the engine switch into more actions** | **Ported in 1.0.54.** Theirs is a two-way toggle; ours became a three-way cycle in 1.0.52 and was holding a place in the main row for what is a way out of a file one engine refuses. |
+| **Refresh the movie resume state on the detail screen** | **Already true here.** `LibraryStore` is `@Observable` and the *Play* label reads it in the view body, so the label re-evaluates when progress changes. Theirs needed an explicit refresh because their state is collected once. |
+| **Load ratings before waiting for remote watch progress** | **Already true here.** Ratings, enrichment and *More like this* run in one task group after the meta lands; nothing in that path waits on remote progress. |
+| **Refresh the mpv track list once per file rather than on every progress tick** | **Already true here**, and recorded in the beta.7 pass for the same reason: ours is driven by an observed `track-list` property. |
+| **Detect HDR from the HEVC SPS when the container carries no colour info** | **Believed already true, not measured.** Theirs reads the container; mpv reports `video-params/gamma` from what it decoded, and AetherEngine reports the format it is presenting. Both are downstream of the bitstream rather than of the container, so the case should not arise — but no file without container colour info has been played to confirm it, and that is the honest state of it. |
+| **Resume progress and provider names on the streams screen** | **Open, small tier.** The provider name is already on every row (`addonName`); the resume pill is not. |
+| **Profile hygiene**: do not push profile settings when switching, clear the previous profile's screens, crash opening Manage Profiles, keep poster-menu watched toggles to the profile that made them, erase the local data of a profile deleted elsewhere | **Mostly not applicable, one open.** `ProfileScope` namespaces every per-profile store by id and the whole store graph is rebuilt on `activeProfileId`, so screens cannot carry over and a watched toggle cannot land in another profile's library. The crash is a Compose theming crash. What is genuinely open is erasing a profile deleted on another device: `ProfileScope.eraseStorage` exists and nothing calls it from a sync. |
+| **New MDBList dynamic and liked lists start hidden** | **Open.** The MDBList follow-up noted since 1.1.0-beta.2. |
+| **Badges for what is playing, and a badge pack to choose** | **Declined, with the doubt written down.** Our seven accents plus a custom one give a background that an imported badge set clashes with — the same reasoning that declined their hard-coded blue for episodes rated 9.7+. Worth revisiting as *our* badges rather than as a port. |
+| **Background downloads and silent installs on Android 12+**, the update banner and its green check | **N/A.** tvOS has neither, and a sideloaded app cannot replace itself — settled in 1.0.24, where the banner tells and does not install. |
+| **Replace the libass renderer with the atlas pipeline from Plezy** | **N/A.** Our ASS rendering is mpv's own libass; there is no renderer of ours to replace. |
+| **Load ExoPlayer chapters when playback is tunneled**, ExoPlayer chapters off by default | **N/A.** Both are about their own extractor, and the second is a switch for a parser we do not have. |
+| Hard-coded colours to primitive tokens, duplicated code removed, never-shown views dropped from `PlayerView`, `strings.xml` renamed, RTL join-code fill, Hebrew code mapping | **N/A.** Compose and Android resource internals. |
+| Latin-American Spanish, Greek, Hebrew, French, Slovak, Vietnamese, Hungarian, Portuguese | **Declined.** Translation work, not engineering: two languages against thirty-six. |
+
+Found on the way, in no changelog of theirs: `PartyRosterUITests` launched without
+`-nuvioUITesting`, so on a clean container the onboarding wizard covered Settings. The party row
+still answered `exists` from underneath it, so the first assertion passed and the only symptom was
+that focus never arrived — a working screen that looked broken, on every simulator nobody had used
+by hand. Fixed in 1.0.53.
