@@ -19,8 +19,15 @@ final class PartyRosterUITests: XCTestCase {
         super.setUp()
         continueAfterFailure = false
         app = XCUIApplication()
+        // `-nuvioUITesting` is not decoration: a fresh test container is indistinguishable from
+        // a first install, so without it the onboarding wizard comes up over Settings. The party
+        // row still answers `exists` from underneath it — it is in the tree, just covered — and
+        // the only visible symptom is that focus never reaches it. This suite therefore passed
+        // only on a simulator that had been through onboarding by hand, and failed on every
+        // clean one.
         app.launchArguments = [
-            "-nuvioPartyHarness", "-startTab", "settings", "-settingsSection", "watchParty"
+            "-nuvioUITesting", "-nuvioPartyHarness",
+            "-startTab", "settings", "-settingsSection", "watchParty"
         ]
         app.launch()
     }

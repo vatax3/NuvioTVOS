@@ -16,7 +16,10 @@ final class ProfilePinUITests: XCTestCase {
         super.setUp()
         continueAfterFailure = false
         app = XCUIApplication()
-        app.launchArguments = ["-nuvioProfileHarness"]
+        // The profile gate happens to come up in front of the onboarding wizard, so this suite
+        // would pass without `-nuvioUITesting` — by luck, on the same clean-container trap that
+        // had `PartyRosterUITests` failing. Declared rather than relied upon.
+        app.launchArguments = ["-nuvioUITesting", "-nuvioProfileHarness"]
         app.launch()
     }
 
