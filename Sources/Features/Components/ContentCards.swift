@@ -376,10 +376,7 @@ struct ContinueWatchingCard: View {
         .frame(width: cardWidth, alignment: .leading)
     }
 
-    private var remainingLabel: String {
-        let remaining = Int(entry.progress.remainingSeconds / 60)
-        return remaining > 0 ? "\(remaining) min left" : L10n.text("card.almost_done", fallback: "Almost done")
-    }
+    private var remainingLabel: String { entry.progress.remainingLabel }
 }
 
 // MARK: - Episode card (port of EpisodesSection cards)

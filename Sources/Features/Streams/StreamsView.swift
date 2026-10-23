@@ -557,6 +557,8 @@ struct StreamsView: View {
                 }
             }
 
+            resumePill
+
             if model.totalCount > 0 {
                 Text("\(model.totalCount) sources\(model.filteredOutCount > 0 ? " · \(model.filteredOutCount) filtered" : "")")
                     .nuvioText(NuvioTextStyles.metadata)
@@ -782,6 +784,26 @@ struct StreamsView: View {
                 sourceBingeGroup: shared.bingeGroup
             )
         )
+    }
+
+    /// How far into *this* episode the viewer already is.
+    ///
+    /// Keyed on `videoId` rather than `contentId`, so a series shows the episode's own progress
+    /// and not the series'. Drawn only while there is something to resume: a finished title has
+    /// no resume point and an unstarted one has none yet, and a bar pinned at either end says
+    /// nothing while taking a line of a panel that is short of them.
+    @ViewBuilder
+    private var resumePill: some View {
+        if let progress = library.progress(forVideoId: request.videoId),
+           progress.fraction > 0, progress.fraction < 1 {
+            VStack(alignment: .leading, spacing: NuvioTheme.spacing.xs) {
+                WatchProgressBar(fraction: progress.fraction)
+                Text(progress.remainingLabel)
+                    .nuvioText(NuvioTextStyles.metadata)
+                    .foregroundStyle(colors.textSecondary)
+            }
+            .frame(maxWidth: dp(420))
+        }
     }
 
     private func banner(_ text: String, tint: Color) -> some View {

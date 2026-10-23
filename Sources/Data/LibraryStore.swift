@@ -24,6 +24,18 @@ struct WatchProgress: Codable, Hashable, Identifiable {
     func isFinished(threshold: Double) -> Bool { fraction >= threshold }
 
     var remainingSeconds: Double { max(0, durationSeconds - positionSeconds) }
+
+    /// "12 min left", or the near-the-end form when there is less than a minute of it.
+    ///
+    /// Shared by the Continue Watching card and the sources screen. It lived on the card as a
+    /// hard-coded English string — the one place a viewer reads a time and the only line of the
+    /// rail that `Scripts/check-localisation-keys.sh` could not see, because an interpolation is
+    /// not a key.
+    var remainingLabel: String {
+        let remaining = Int(remainingSeconds / 60)
+        guard remaining > 0 else { return L10n.text("card.almost_done", fallback: "Almost done") }
+        return L10n.format("card.remaining_minutes", fallback: "%@ min left", "\(remaining)")
+    }
 }
 
 /// An entry the user explicitly saved to their library.
