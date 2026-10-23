@@ -197,18 +197,48 @@ final class PlayerRemoteUITests: XCTestCase {
         )
     }
 
+    /// Presses Right until that transport control holds focus, then Left as far back, so the walk
+    /// does not depend on where in the row the control happens to sit.
+    @discardableResult
+    private func focus(
+        onControl identifier: String,
+        startingWith first: XCUIRemote.Button = .right,
+        steps: Int = 10
+    ) -> Bool {
+        let control = app.buttons["player.transport.\(identifier)"]
+        // The expanded actions are inserted *before* the chevron, so which way to walk depends on
+        // where the search starts — searching the wrong way first spends the budget on the end of
+        // the row. The second direction is the fallback, not an afterthought.
+        for direction in [first, first == .right ? .left : .right] {
+            for _ in 0..<steps {
+                if control.exists, control.hasFocus { return true }
+                XCUIRemote.shared.press(direction)
+                usleep(300_000)
+            }
+        }
+        return control.exists && control.hasFocus
+    }
+
     /// The oldest of these failures, and the one worth guarding hardest: Menu from inside a
     /// track or information panel used to close the panel *and* tear playback down, dropping
     /// the viewer back on the stream list. One press, one meaning.
     func testMenuFromAPanelClosesOnlyThePanel() {
         XCTAssertTrue(wait(for: { self.transportHoldsRemote }, timeout: 20))
 
-        // Walk to the trailing chevron, expand the row, then step onto Stream information.
-        for _ in 0..<6 { XCUIRemote.shared.press(.right); usleep(300_000) }
+        // Walk to the trailing chevron, expand the row, then onto Stream information.
+        //
+        // Searched for rather than counted. The row's contents are conditional — sources, the
+        // engine switch, chapters and the party button each appear only when they apply — so a
+        // fixed number of presses encodes one particular film in one particular build, and
+        // silently stops meaning what it says when a button moves. It did: 1.0.54 put the engine
+        // switch behind the chevron and this walk landed somewhere else entirely.
+        XCTAssertTrue(focus(onControl: "more"), "the chevron should be reachable")
         XCUIRemote.shared.press(.select)
         Thread.sleep(forTimeInterval: 1)
-        XCUIRemote.shared.press(.left)
-        usleep(500_000)
+        XCTAssertTrue(
+            focus(onControl: "info", startingWith: .left),
+            "Stream information should be behind the chevron"
+        )
         XCUIRemote.shared.press(.select)
 
         // Same generosity as `hideTransport`, and for the same reason: this walk is six timed
