@@ -56,6 +56,13 @@ protocol PlayerEngineSurface: AnyObject, Observable {
     var audioTracks: [PlayerTrack] { get }
     var subtitleTracks: [PlayerTrack] { get }
 
+    /// Whether the picture being presented is HDR or Dolby Vision.
+    ///
+    /// Only used to decide the subtitle colour, which is why it is a plain `Bool` and not the
+    /// colorimetry: a renderer needs to know that white will be rendered at the panel's PQ peak,
+    /// not which transfer function got it there.
+    var isHDRVideo: Bool { get }
+
     // MARK: Chapters
 
     /// The chapters the container lists, normalised — empty when the file has none, and also when

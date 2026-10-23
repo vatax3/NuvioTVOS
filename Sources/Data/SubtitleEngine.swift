@@ -113,8 +113,41 @@ struct SubtitleStyle: Equatable {
     /// by different means: mpv has a native filter for its embedded tracks, and sidecar files
     /// are drawn by Nuvio, so those go through `SubtitleSDHFilter`.
     var stripsSDH: Bool = false
+    /// Whether an HDR or Dolby Vision picture gets its own colour and brightness.
+    var hdrStyleEnabled: Bool = false
+    var hdrTextColor: Color = .white
+    /// 0–100. See `hdrBrightnessFactor`.
+    var hdrBrightness: Double = SubtitleStyle.hdrBrightnessDefault
 
     static let `default` = SubtitleStyle()
+
+    static let hdrBrightnessMin: Double = 0
+    static let hdrBrightnessMax: Double = 100
+    static let hdrBrightnessDefault: Double = 40
+
+    /// Maps the 0–100 setting onto 30%–100% of full brightness, upstream's curve: at zero the
+    /// text is dim rather than invisible, which is the difference between a brightness control
+    /// and a way to lose the subtitles altogether.
+    static func hdrBrightnessFactor(_ brightness: Double) -> Double {
+        (0.7 * min(hdrBrightnessMax, max(hdrBrightnessMin, brightness)) + 30) / 100
+    }
+
+    /// The style to render with on this picture.
+    ///
+    /// On an HDR or Dolby Vision picture with the override on, the HDR colour replaces the text
+    /// colour and every colour is scaled towards black by the brightness. Alpha is untouched:
+    /// dimming a background into invisibility is a different setting from dimming its colour.
+    ///
+    /// Unchanged on SDR and unchanged with the override off, so the common path returns `self`.
+    func forVideo(isHDR: Bool) -> SubtitleStyle {
+        guard isHDR, hdrStyleEnabled else { return self }
+        let factor = Self.hdrBrightnessFactor(hdrBrightness)
+        var dimmed = self
+        dimmed.textColor = hdrTextColor.scalingBrightness(by: factor)
+        dimmed.backgroundColor = backgroundColor.scalingBrightness(by: factor)
+        dimmed.outlineColor = outlineColor.scalingBrightness(by: factor)
+        return dimmed
+    }
 
     /// Base size before the viewer's scale. Matches the Compose default of 20sp.
     var fontSize: CGFloat { sp(20) * sizeScale }
@@ -171,6 +204,23 @@ extension Color {
 
     var alphaComponent: Double {
         Double(UIColor(self).cgColor.alpha)
+    }
+
+    /// The same colour scaled towards black, alpha untouched.
+    ///
+    /// Scaling the components rather than reducing opacity is deliberate: a dimmed-by-alpha
+    /// subtitle takes on the colour of whatever is behind it, which on a bright scene is the
+    /// opposite of making it comfortable to read.
+    func scalingBrightness(by factor: Double) -> Color {
+        guard let components = rgbComponents else { return self }
+        let scale = min(1, max(0, factor))
+        return Color(
+            .sRGB,
+            red: components.red * scale,
+            green: components.green * scale,
+            blue: components.blue * scale,
+            opacity: alphaComponent
+        )
     }
 }
 

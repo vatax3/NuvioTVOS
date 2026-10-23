@@ -225,6 +225,28 @@ final class PlayerSettingsStore: PreferenceStore {
         set { setDouble("subtitle_size", newValue) }
     }
 
+    /// A separate subtitle colour and brightness for HDR and Dolby Vision pictures.
+    ///
+    /// Off by default, and the reason it exists is the engine change in 1.0.52: with Dolby Vision
+    /// now delivered natively instead of tone-mapped, pure white subtitles are rendered at the
+    /// panel's PQ peak rather than at SDR white, which on a bright television is glare rather
+    /// than text. The raw keys are upstream's, for the shared account import.
+    var subtitleHDRStyleEnabled: Bool {
+        get { bool("subtitle_hdr_style_enabled", default: false) }
+        set { setBool("subtitle_hdr_style_enabled", newValue) }
+    }
+
+    var subtitleHDRTextColor: String {
+        get { string("subtitle_hdr_text_color", default: "#FFFFFFFF") }
+        set { setString("subtitle_hdr_text_color", newValue) }
+    }
+
+    /// 0–100, mapped onto 30%–100% of full brightness: even at zero the text stays readable.
+    var subtitleHDRBrightness: Double {
+        get { double("subtitle_hdr_brightness", default: SubtitleStyle.hdrBrightnessDefault) }
+        set { setDouble("subtitle_hdr_brightness", newValue) }
+    }
+
     var subtitleBold: Bool {
         get { bool("subtitle_bold", default: false) }
         set { setBool("subtitle_bold", newValue) }

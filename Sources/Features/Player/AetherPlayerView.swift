@@ -130,15 +130,25 @@ struct AetherPlayerView: View {
                 externalSubtitles: externalSubtitles,
                 matchesContent: frameRateMatchingMode != .off,
                 initialAspectMode: PlayerAspectMode(resizeMode: settings.player.resizeMode),
-                subtitleStyle: subtitleStyle
+                subtitleStyle: presentedSubtitleStyle(adapter)
             )
         }
         .onChange(of: context.playbackSpeed) { _, speed in
             adapter.setPlaybackSpeed(speed)
         }
         .onChange(of: context.subtitleObstructions) { _, obstructions in
-            adapter.applySubtitleStyle(subtitleStyle, obstructions: obstructions)
+            adapter.applySubtitleStyle(presentedSubtitleStyle(adapter), obstructions: obstructions)
         }
+        // The picture's colorimetry is only known once the engine has opened the file, so the HDR
+        // colour cannot be resolved where the style is composed. Re-applied when it resolves.
+        .onChange(of: adapter.isHDRVideo) { _, _ in
+            adapter.applySubtitleStyle(presentedSubtitleStyle(adapter), obstructions: context.subtitleObstructions)
+        }
+    }
+
+    /// The viewer's style, with the HDR colour and brightness applied when this picture is HDR.
+    private func presentedSubtitleStyle(_ adapter: AetherEngineAdapter) -> SubtitleStyle {
+        subtitleStyle.forVideo(isHDR: adapter.isHDRVideo)
     }
 
     /// AetherEngine takes a parsed `URL`; mpv takes the string as it stands. An addon link that has

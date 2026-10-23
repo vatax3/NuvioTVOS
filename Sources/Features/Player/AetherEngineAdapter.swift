@@ -343,6 +343,10 @@ extension AetherEngineAdapter: PlayerEngineSurface {
     /// cannot otherwise tell from a film with no soundtrack.
     var isSilentlyFallingBack: Bool { engine.audioDelivery == .droppedNoPipeline }
 
+    /// What the engine decided to present, which on this path is also what reaches the panel:
+    /// nothing is tone-mapped, so an HDR source is an HDR picture.
+    var isHDRVideo: Bool { engine.videoFormat != .sdr }
+
     /// The display handshake belongs to the engine on this path, so there is nothing to hand to
     /// `DisplayModeMatcher` — and handing it something would make two writers of one panel mode.
     var videoFormat: DisplayModeMatcher.VideoFormat? { nil }

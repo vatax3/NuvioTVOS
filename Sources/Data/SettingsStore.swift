@@ -225,7 +225,10 @@ final class AppSettings {
             outlineWidth: player.subtitleOutlineWidth,
             verticalOffset: player.subtitleVerticalOffset,
             assOverride: player.subtitleStyleOverride.mpvValue,
-            stripsSDH: player.subtitleStripSDH
+            stripsSDH: player.subtitleStripSDH,
+            hdrStyleEnabled: player.subtitleHDRStyleEnabled,
+            hdrTextColor: Color(argbHex: player.subtitleHDRTextColor),
+            hdrBrightness: player.subtitleHDRBrightness
         )
     }
 

@@ -419,6 +419,33 @@ struct PlaybackSettingsContent: View {
                         step: 0.5
                     )
                 }
+                SettingsToggle(
+                    title: L10n.text("settings.playback.hdr_subtitle_style", fallback: "Separate HDR style"),
+                    subtitle: L10n.text(
+                        "settings.playback.hdr_subtitle_style_sub",
+                        fallback: "On HDR and Dolby Vision, white is rendered at the panel's peak. Give those a colour and a brightness of their own."
+                    ),
+                    isOn: $player.subtitleHDRStyleEnabled
+                )
+                if player.subtitleHDRStyleEnabled {
+                    SettingsTextFieldRow(
+                        title: L10n.text("settings.playback.hdr_text_colour", fallback: "HDR text colour"),
+                        subtitle: L10n.text("settings.playback.hex_hint", fallback: "Hex, e.g. #FFFFFFFF"),
+                        placeholder: "#FFFFFFFF",
+                        text: $player.subtitleHDRTextColor
+                    )
+                    SettingsDecimalStepperRow(
+                        title: L10n.text("settings.playback.hdr_brightness", fallback: "HDR brightness"),
+                        subtitle: L10n.text(
+                            "settings.playback.hdr_brightness_sub",
+                            fallback: "Zero is the dimmest, not invisible."
+                        ),
+                        value: $player.subtitleHDRBrightness,
+                        range: SubtitleStyle.hdrBrightnessMin...SubtitleStyle.hdrBrightnessMax,
+                        step: 5,
+                        format: { String(format: "%.0f%%", $0) }
+                    )
+                }
                 SettingsDecimalStepperRow(
                     title: L10n.text("settings.playback.vertical_offset", fallback: "Vertical offset"),
                     subtitle: L10n.text(

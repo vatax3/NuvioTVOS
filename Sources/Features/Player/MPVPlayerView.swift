@@ -183,7 +183,12 @@ private struct MPVMetalSurface: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ controller: MPVMetalViewController, context: Context) {
-        controller.applySubtitleStyle(subtitleStyle, obstructions: subtitleObstructions)
+        // `isHDRVideo` only answers once mpv has decoded enough to know the transfer function, so
+        // the HDR colour arrives on a later update than the first — which is what this method is
+        // for. `applySubtitleStyle` dedups, so the repeat costs nothing.
+        controller.applySubtitleStyle(
+            subtitleStyle.forVideo(isHDR: engine.isHDRVideo), obstructions: subtitleObstructions
+        )
         controller.applyPlaybackSpeed(playbackSpeed)
     }
 }

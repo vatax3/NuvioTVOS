@@ -1365,3 +1365,8 @@
 "party.share_my_stream_sub" = "Les autres peuvent lire votre lien au lieu de choisir le leur. Il passe par votre compte debrid.";
 "player.chapters" = "Chapitres";
 "player.chapter_number" = "Chapitre %@";
+"settings.playback.hdr_subtitle_style" = "Style HDR distinct";
+"settings.playback.hdr_subtitle_style_sub" = "En HDR et en Dolby Vision, le blanc est rendu au pic de la dalle. Donnez-leur une couleur et une luminosité propres.";
+"settings.playback.hdr_text_colour" = "Couleur du texte en HDR";
+"settings.playback.hdr_brightness" = "Luminosité en HDR";
+"settings.playback.hdr_brightness_sub" = "Zéro est le plus sombre, pas l'invisible.";

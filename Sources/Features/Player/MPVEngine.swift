@@ -45,6 +45,13 @@ final class MPVEngine {
     private(set) var audioTracks: [MPVTrack] = []
     private(set) var subtitleTracks: [MPVTrack] = []
     private(set) var chapters: [PlayerChapter] = []
+
+    /// From mpv's own `video-params/gamma`, which is the transfer function it decoded with.
+    /// `pq` covers HDR10, HDR10+ and the Dolby Vision profiles mpv tone-maps from.
+    var isHDRVideo: Bool {
+        guard let transfer = videoFormat?.transfer?.lowercased() else { return false }
+        return ["pq", "smpte2084", "hlg", "arib-std-b67"].contains(transfer)
+    }
     private(set) var playbackSpeed: Double = 1
     private(set) var audioDelay: Double = 0
     private(set) var subtitleDelay: Double = 0

@@ -1365,3 +1365,8 @@
 "party.share_my_stream_sub" = "Friends can play your link instead of picking their own. It runs through your debrid account.";
 "player.chapters" = "Chapters";
 "player.chapter_number" = "Chapter %@";
+"settings.playback.hdr_subtitle_style" = "Separate HDR style";
+"settings.playback.hdr_subtitle_style_sub" = "On HDR and Dolby Vision, white is rendered at the panel's peak. Give those a colour and a brightness of their own.";
+"settings.playback.hdr_text_colour" = "HDR text colour";
+"settings.playback.hdr_brightness" = "HDR brightness";
+"settings.playback.hdr_brightness_sub" = "Zero is the dimmest, not invisible.";
