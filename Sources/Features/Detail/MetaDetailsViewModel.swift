@@ -28,6 +28,17 @@ final class MetaDetailsViewModel {
 
     var seasons: [Int] { meta?.seasons ?? [] }
 
+    /// Which season the picker should open on, given the episode the viewer is up to.
+    ///
+    /// Pure and static so the rule is testable without a store: the season of the episode *Play*
+    /// would resume, when the series actually lists that season, and otherwise the first one —
+    /// which is what the screen did unconditionally, and why a viewer deep into season four was
+    /// handed S1E1 every time they opened it.
+    nonisolated static func openingSeason(resuming video: Video?, in seasons: [Int]) -> Int? {
+        guard let season = video?.season, seasons.contains(season) else { return seasons.first }
+        return season
+    }
+
     var episodes: [Video] {
         meta?.episodes(inSeason: selectedSeason) ?? []
     }

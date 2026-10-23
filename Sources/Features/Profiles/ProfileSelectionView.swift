@@ -183,34 +183,42 @@ struct ProfileSelectionView: View {
 
     // MARK: PIN
 
+    /// Identity beside the keypad, for the reason given on `ProfileLockView`: stacked, the two
+    /// together came to about 1160pt and bled off the top and bottom of a 1080pt panel.
     private func pinChallenge(for profile: Profile) -> some View {
-        VStack(spacing: 0) {
-            ProfileAvatar(profile: profile, diameter: dp(96))
+        HStack(alignment: .center, spacing: NuvioTheme.spacing.xxl) {
+            VStack(spacing: 0) {
+                ProfileAvatar(profile: profile, diameter: dp(96))
 
-            Spacer().frame(height: dp(14))
+                Spacer().frame(height: dp(14))
 
-            Text(profile.name)
-                .nuvioText(NuvioTextStyles.headline)
-                .foregroundStyle(colors.textPrimary)
+                Text(profile.name)
+                    .nuvioText(NuvioTextStyles.headline)
+                    .foregroundStyle(colors.textPrimary)
 
-            Spacer().frame(height: NuvioTheme.spacing.sm)
+                Spacer().frame(height: NuvioTheme.spacing.sm)
 
-            Text(didFail ? L10n.text("profiles.wrong_pin") : L10n.text("profiles.enter_pin"))
-                .nuvioText(NuvioTextStyles.body)
-                .foregroundStyle(didFail ? colors.error : colors.textSecondary)
+                Text(didFail ? L10n.text("profiles.wrong_pin") : L10n.text("profiles.enter_pin"))
+                    .nuvioText(NuvioTextStyles.body)
+                    .foregroundStyle(didFail ? colors.error : colors.textSecondary)
 
-            Spacer().frame(height: dp(26))
+                Spacer().frame(height: dp(26))
 
-            HStack(spacing: dp(14)) {
-                ForEach(0..<4, id: \.self) { index in
-                    Circle()
-                        .fill(index < entry.count ? tint : colors.surfaceVariant)
-                        .frame(width: dp(18), height: dp(18))
+                HStack(spacing: dp(14)) {
+                    ForEach(0..<4, id: \.self) { index in
+                        Circle()
+                            .fill(index < entry.count ? tint : colors.surfaceVariant)
+                            .frame(width: dp(18), height: dp(18))
+                    }
                 }
-            }
-            .animation(NuvioMotion.quickTween, value: entry.count)
+                .animation(NuvioMotion.quickTween, value: entry.count)
 
-            Spacer().frame(height: dp(26))
+                Spacer().frame(height: NuvioTheme.spacing.lg)
+
+                Button(L10n.text("common.back")) { challenging = nil }
+                    .buttonStyle(NuvioRowButtonStyle(cornerRadius: NuvioTheme.radii.md))
+            }
+            .focusSection()
 
             PinKeypad(
                 onDigit: append,
@@ -219,11 +227,6 @@ struct ProfileSelectionView: View {
             )
             .disabled(isVerifying)
             .opacity(isVerifying ? NuvioTheme.effects.disabledAlpha : 1)
-
-            Spacer().frame(height: NuvioTheme.spacing.lg)
-
-            Button(L10n.text("common.back")) { challenging = nil }
-                .buttonStyle(NuvioRowButtonStyle(cornerRadius: NuvioTheme.radii.md))
         }
         .focusSection()
     }

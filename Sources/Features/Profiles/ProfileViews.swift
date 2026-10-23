@@ -18,36 +18,48 @@ struct ProfileLockView: View {
         ZStack {
             colors.background.ignoresSafeArea()
 
-            VStack(spacing: NuvioTheme.spacing.xl) {
-                ProfileAvatar(profile: profile, diameter: dp(120))
+            // Identity beside the keypad rather than above it. Stacked, this screen asked for
+            // about 1550pt of a 1080pt panel and simply clipped: the avatar off the top, the
+            // fallback button off the bottom. Vertical is the scarce axis on a 16:9 panel and
+            // horizontal is the abundant one, so the fix is the layout, not smaller keys.
+            HStack(alignment: .center, spacing: NuvioTheme.spacing.xxl) {
+                VStack(spacing: NuvioTheme.spacing.md) {
+                    ProfileAvatar(profile: profile, diameter: dp(96))
 
-                Text(profile.name)
-                    .nuvioText(NuvioTextStyles.display)
-                    .foregroundStyle(colors.textPrimary)
+                    Text(profile.name)
+                        .nuvioText(NuvioTextStyles.headline)
+                        .foregroundStyle(colors.textPrimary)
 
-                Text(didFail ? L10n.text("profiles.wrong_pin", fallback: "Wrong PIN — try again") : L10n.text("profiles.enter_pin", fallback: "Enter your PIN"))
-                    .nuvioText(NuvioTextStyles.bodyCompact)
-                    .foregroundStyle(didFail ? colors.error : colors.textSecondary)
+                    Text(didFail ? L10n.text("profiles.wrong_pin", fallback: "Wrong PIN — try again") : L10n.text("profiles.enter_pin", fallback: "Enter your PIN"))
+                        .nuvioText(NuvioTextStyles.bodyCompact)
+                        .foregroundStyle(didFail ? colors.error : colors.textSecondary)
 
-                pinDots
+                    pinDots
+
+                    if profiles.hasMultipleProfiles {
+                        Button(action: switchToPrimary) {
+                            Text(L10n.text("profiles.switch", fallback: "Use another profile"))
+                                .nuvioText(NuvioTextStyles.button)
+                                .padding(.horizontal, NuvioTheme.spacing.xl)
+                                .frame(height: NuvioTheme.components.buttonHeight)
+                        }
+                        .buttonStyle(NuvioPillButtonStyle(emphasis: .ghost))
+                    }
+                }
+                // Its own section, so a sideways press moves between the fallback button and the
+                // keypad instead of landing on whichever key is geometrically nearest.
+                .focusSection()
 
                 PinKeypad(
                     onDigit: append,
                     onDelete: { entry = String(entry.dropLast()) },
                     focus: $keypadFocus
                 )
-
-                if profiles.hasMultipleProfiles {
-                    Button(action: switchToPrimary) {
-                        Text(L10n.text("profiles.switch", fallback: "Use another profile"))
-                            .nuvioText(NuvioTextStyles.button)
-                            .padding(.horizontal, NuvioTheme.spacing.xl)
-                            .frame(height: NuvioTheme.components.buttonHeight)
-                    }
-                    .buttonStyle(NuvioPillButtonStyle(emphasis: .ghost))
-                }
             }
-            .padding(NuvioTheme.layout.tvSafeHorizontal)
+            // The horizontal overscan constant was applied on all four edges, so 96pt of it was
+            // charged vertically on top of the platform's own inset. Vertical has its own token.
+            .padding(.horizontal, NuvioTheme.layout.tvSafeHorizontal)
+            .padding(.vertical, NuvioTheme.layout.tvSafeVertical)
         }
         .environment(\.nuvioColors, colors)
         .onAppear { keypadFocus = 1 }
@@ -98,18 +110,23 @@ struct PinKeypad: View {
     var focus: FocusState<Int?>.Binding
 
     private let rows = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+    private let keyWidth = dp(76)
 
     var body: some View {
-        VStack(spacing: NuvioTheme.spacing.md) {
+        VStack(spacing: NuvioTheme.spacing.sm) {
             ForEach(rows, id: \.self) { row in
-                HStack(spacing: NuvioTheme.spacing.md) {
+                HStack(spacing: NuvioTheme.spacing.sm) {
                     ForEach(row, id: \.self) { digit in
                         key(label: "\(digit)") { onDigit(digit) }
                             .focused(focus, equals: digit)
                     }
                 }
             }
-            HStack(spacing: NuvioTheme.spacing.md) {
+            HStack(spacing: NuvioTheme.spacing.sm) {
+                // An empty cell of a key's width, so 0 sits under 8 rather than straddling the
+                // gap between the first two columns — which is where a two-key row lands when
+                // it is centred against three.
+                Color.clear.frame(width: keyWidth, height: NuvioTheme.components.buttonHeight)
                 key(label: "0") { onDigit(0) }
                     .focused(focus, equals: 0)
                 key(systemImage: "delete.left", action: onDelete)
@@ -133,7 +150,9 @@ struct PinKeypad: View {
                 }
             }
             .foregroundStyle(colors.textPrimary)
-            .frame(width: dp(86), height: dp(64))
+            // A key is a remote target, so its height is the app's own button height rather
+            // than a number of its own — 128pt tall keys made the pad 584pt, over half the panel.
+            .frame(width: keyWidth, height: NuvioTheme.components.buttonHeight)
         }
         .buttonStyle(NuvioRowButtonStyle(cornerRadius: NuvioTheme.radii.md, scaleOnFocus: true))
     }

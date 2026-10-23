@@ -25,6 +25,9 @@ struct MetaDetailsView: View {
     /// only reachable from this screen and dies with it.
     @State private var episodeOptions: EpisodeOptionsRequest?
     @State private var showsShuffleOptions = false
+    /// Whether the season picker has already been moved to where the viewer left off. One shot:
+    /// after that the selection belongs to whoever pressed a chip.
+    @State private var didSeedSeason = false
 
     var body: some View {
         GeometryReader { proxy in
@@ -60,6 +63,9 @@ struct MetaDetailsView: View {
             guard let meta = model.meta, meta.type == .series else { return }
             library.cacheEpisodes(meta.episodeRefs, forContentId: meta.id)
         }
+        // Open on the season the viewer is in the middle of, not on season 1. The episode list
+        // then agrees with the *Play* button beside it, which has always named this episode.
+        .onChange(of: model.meta?.id, initial: true) { _, _ in seedSeason() }
         .overlay {
             if let request = episodeOptions {
                 EpisodeOptionsDialog(
@@ -128,6 +134,7 @@ struct MetaDetailsView: View {
                     EpisodesSection(
                         model: model,
                         meta: meta,
+                        resumeEpisodeId: resumeEpisodeId(meta),
                         onPlay: playEpisode,
                         onLongPress: { episodeOptions = .init(video: $0, meta: meta) }
                     )
@@ -295,6 +302,30 @@ struct MetaDetailsView: View {
         guard meta.type == .series else { return nil }
         if let shuffled = shuffledTarget(meta) { return shuffled }
         return nextUp(meta)
+    }
+
+    /// Moves the season picker to the season holding the episode the viewer is up to.
+    ///
+    /// Seeded from `nextUp` rather than `playTarget`: `playTarget` falls through to a random
+    /// episode when shuffle is on and nothing is in progress, which would open the screen on a
+    /// different season every time. `nextUp` already resolves a resume point first, and that is
+    /// what "where I am" means.
+    private func seedSeason() {
+        guard !didSeedSeason, let meta = model.meta, meta.type == .series, !model.seasons.isEmpty
+        else { return }
+        didSeedSeason = true
+        guard let season = MetaDetailsViewModel.openingSeason(
+            resuming: nextUp(meta), in: model.seasons
+        ) else { return }
+        model.selectedSeason = season
+    }
+
+    /// The episode in the list to bring into view: the one *Play* would open, when it is in the
+    /// season on screen. It takes no focus — claiming it would open the screen scrolled past the
+    /// hero, with *Play* itself off screen.
+    private func resumeEpisodeId(_ meta: Meta) -> String? {
+        guard let target = nextUp(meta), target.season == model.selectedSeason else { return nil }
+        return target.id
     }
 
     private func nextUp(_ meta: Meta) -> Video? {
@@ -596,6 +627,8 @@ struct EpisodesSection: View {
 
     let model: MetaDetailsViewModel
     let meta: Meta
+    /// The episode to bring into view when the list appears, or nil to leave it at the start.
+    let resumeEpisodeId: String?
     let onPlay: (Video) -> Void
     let onLongPress: (Video) -> Void
 
@@ -618,33 +651,45 @@ struct EpisodesSection: View {
                 }
             }
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: NuvioTheme.components.row.itemSpacing) {
-                    ForEach(model.episodes) { episode in
-                        EpisodeCard(
-                            video: episode,
-                            fallbackImage: meta.backdropUrl,
-                            isWatched: library.isWatched(
-                                videoId: episode.id,
-                                threshold: settings.watchedThreshold
-                            ),
-                            progress: library.progress(forVideoId: episode.id)?.fraction ?? 0,
-                            blursUnwatched: settings.layout.blurUnwatchedEpisodes,
-                            showsRating: settings.layout.detailRatingsVisibility.showsEpisodeRating(
+            ScrollViewReader { scroller in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: NuvioTheme.components.row.itemSpacing) {
+                        ForEach(model.episodes) { episode in
+                            EpisodeCard(
+                                video: episode,
+                                fallbackImage: meta.backdropUrl,
                                 isWatched: library.isWatched(
                                     videoId: episode.id,
                                     threshold: settings.watchedThreshold
-                                )
-                            ),
-                            action: { onPlay(episode) },
-                            onLongPress: { onLongPress(episode) }
-                        )
+                                ),
+                                progress: library.progress(forVideoId: episode.id)?.fraction ?? 0,
+                                blursUnwatched: settings.layout.blurUnwatchedEpisodes,
+                                showsRating: settings.layout.detailRatingsVisibility.showsEpisodeRating(
+                                    isWatched: library.isWatched(
+                                        videoId: episode.id,
+                                        threshold: settings.watchedThreshold
+                                    )
+                                ),
+                                action: { onPlay(episode) },
+                                onLongPress: { onLongPress(episode) }
+                            )
+                            .id(episode.id)
+                        }
                     }
+                    .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)
+                    .padding(.vertical, NuvioTheme.spacing.sm)
                 }
-                .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)
-                .padding(.vertical, NuvioTheme.spacing.sm)
+                .scrollClipDisabled()
+                // Anchored where the rails anchor their focused card, so the episode in progress
+                // sits in the same place on screen as every other row's current item. Re-run when
+                // the episodes arrive, because a season enriched by TMDB replaces the whole list.
+                .onChange(of: resumeEpisodeId, initial: true) { _, id in
+                    bringIntoView(id, using: scroller)
+                }
+                .onChange(of: model.episodes.map(\.id)) { _, _ in
+                    bringIntoView(resumeEpisodeId, using: scroller)
+                }
             }
-            .scrollClipDisabled()
         }
         .focusSection()
         // Cache the stills so the Continue Watching rail can show the episode the viewer
@@ -660,6 +705,11 @@ struct EpisodesSection: View {
         .task(id: model.selectedSeason) {
             await model.enrichEpisodes(season: model.selectedSeason, settings: settings)
         }
+    }
+
+    private func bringIntoView(_ id: String?, using scroller: ScrollViewProxy) {
+        guard let id, model.episodes.contains(where: { $0.id == id }) else { return }
+        scroller.scrollTo(id, anchor: UnitPoint(x: NuvioTheme.layout.rowAnchor, y: 0.5))
     }
 }
 

@@ -176,7 +176,7 @@ struct PlayerTrack: Identifiable, Hashable {
     let id: Int64
     let title: String
     let language: String?
-    let isSelected: Bool
+    var isSelected: Bool
     /// mpv's `external` flag: true for the addon subtitles loaded with `sub-add`, false for
     /// what the container itself carries. It is the difference a viewer most wants to see
     /// in the list, because it predicts whether the timing will match this exact release.
@@ -215,6 +215,23 @@ struct PlayerTrack: Identifiable, Hashable {
         case "dvd_subtitle": return "VobSub"
         case "mov_text": return "TX3G"
         default: return codec.uppercased()
+        }
+    }
+}
+
+extension Array where Element == PlayerTrack {
+    /// The same tracks, with `isSelected` set from one identifier and nowhere else.
+    ///
+    /// `PlayerChrome` reads the current track off this flag alone, so an engine whose active track
+    /// is a separately published value has to re-mark the list every time that value moves — not
+    /// only when the list itself is republished. Deriving the flag inside the track-list observer
+    /// is how the Aether path came to leave *Off* checked while a subtitle was on screen.
+    func marking(selected id: Int64?) -> [PlayerTrack] {
+        map { track in
+            guard track.isSelected != (track.id == id) else { return track }
+            var marked = track
+            marked.isSelected = track.id == id
+            return marked
         }
     }
 }

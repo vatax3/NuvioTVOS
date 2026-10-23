@@ -39,6 +39,10 @@ final class AetherEngineAdapter {
     /// starts — mpv's `sub-add` has nothing to attach to any earlier, so that is where it belongs
     /// — and on this engine they are already listed, so the repeat is refused here.
     @ObservationIgnored private var declaredSubtitleURLs: Set<String> = []
+    /// Which track each list has selected, remembered rather than read back from the engine at the
+    /// moment a list arrives: the two are published independently and in either order.
+    @ObservationIgnored private var activeAudioTrackID: Int64?
+    @ObservationIgnored private var activeSubtitleTrackID: Int64?
 
     // MARK: Mirrored state
 
@@ -168,17 +172,44 @@ final class AetherEngineAdapter {
             .receive(on: RunLoop.main)
             .sink { [weak self] in self?.hasRenderedFrame = $0 }
             .store(in: &sinks)
+        // Four subscriptions for two lists, because on this engine the list and the selection are
+        // two independent publishers. The engine switches track by mutating `activeAudioTrackIndex`
+        // / `activeSubtitleTrackIndex` and leaves the arrays alone, so a flag derived inside the
+        // array's own observer is a snapshot taken before any selection is resolved — and stays
+        // frozen afterwards. Which is what left *Off* checked with a subtitle on screen, and the
+        // audio list with no checkmark at all whenever a switch did not happen to rebuild it.
         engine.$audioTracks
             .receive(on: RunLoop.main)
             .sink { [weak self] tracks in
-                self?.audioTracks = tracks.map { PlayerTrack($0, isSelected: $0.id == self?.engine.activeAudioTrackIndex) }
-                self?.refreshStreamInfo()
+                guard let self else { return }
+                audioTracks = tracks.map { PlayerTrack($0) }.marking(selected: activeAudioTrackID)
+                refreshStreamInfo()
+            }
+            .store(in: &sinks)
+        engine.$activeAudioTrackIndex
+            .receive(on: RunLoop.main)
+            .sink { [weak self] index in
+                guard let self else { return }
+                activeAudioTrackID = index.map(Int64.init)
+                audioTracks = audioTracks.marking(selected: activeAudioTrackID)
+                // The panel names the active track's codec and channel count, so it moves with the
+                // selection rather than only with the list.
+                refreshStreamInfo()
             }
             .store(in: &sinks)
         engine.$subtitleTracks
             .receive(on: RunLoop.main)
             .sink { [weak self] tracks in
-                self?.subtitleTracks = tracks.map { PlayerTrack($0, isSelected: $0.id == self?.engine.activeSubtitleTrackIndex) }
+                guard let self else { return }
+                subtitleTracks = tracks.map { PlayerTrack($0) }.marking(selected: activeSubtitleTrackID)
+            }
+            .store(in: &sinks)
+        engine.$activeSubtitleTrackIndex
+            .receive(on: RunLoop.main)
+            .sink { [weak self] index in
+                guard let self else { return }
+                activeSubtitleTrackID = index.map(Int64.init)
+                subtitleTracks = subtitleTracks.marking(selected: activeSubtitleTrackID)
             }
             .store(in: &sinks)
         engine.$subtitleCues
@@ -260,7 +291,7 @@ final class AetherEngineAdapter {
 
     private func refreshStreamInfo() {
         let format = engine.sourceVideoStreamFormat
-        let active = engine.audioTracks.first { $0.id == engine.activeAudioTrackIndex }
+        let active = engine.audioTracks.first { Int64($0.id) == activeAudioTrackID }
         streamInfo = PlayerStreamInfo(
             videoCodec: engine.sourceVideoCodecName,
             resolution: engine.sourceVideoWidth > 0
@@ -421,12 +452,15 @@ private extension PlayerTrack {
     /// One track, in the chrome's vocabulary. `isAtmos` and `isDTSX` are folded into the codec
     /// label because that is the line a viewer reads, and a bed channel count is not the answer
     /// they are looking for on an Atmos track.
-    init(_ track: TrackInfo, isSelected: Bool?) {
+    ///
+    /// Selection is deliberately not a parameter: it is applied afterwards by
+    /// `marking(selected:)`, from the one publisher that actually carries it.
+    init(_ track: TrackInfo) {
         self.init(
             id: Int64(track.id),
             title: track.name,
             language: track.language,
-            isSelected: isSelected ?? false,
+            isSelected: false,
             isExternal: track.isExternal,
             isDefault: track.isDefault,
             isForced: track.isForced,

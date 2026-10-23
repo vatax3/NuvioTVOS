@@ -209,6 +209,16 @@ final class ProfileStore {
     )
 
     init() {
+        #if DEBUG
+        // A staged household, so the PIN screens can be looked at without setting one up by hand.
+        // Never persisted — `persist()` refuses while it is active, so the harness leaves the
+        // device exactly as it found it.
+        if ProfileHarness.isActive {
+            profiles = ProfileHarness.profiles
+            isLocked = false
+            return
+        }
+        #endif
         profiles = file.load() ?? []
         if profiles.isEmpty {
             profiles = [
@@ -576,11 +586,20 @@ final class ProfileStore {
         return activate(profile, unlocked: true)
     }
 
-    private func persist() { file.save(profiles) }
+    private func persist() {
+        #if DEBUG
+        // A staged household is never written out. Without this the harness would leave two
+        // profiles behind on the device, and every later test launching the app would meet the
+        // chooser instead of the screen it came for — which is exactly how this session lost an
+        // afternoon to a contaminated simulator.
+        if ProfileHarness.isActive { return }
+        #endif
+        file.save(profiles)
+    }
 
     /// SHA-256 of the PIN. Not a defence against an attacker with the device — it stops the PIN
     /// being visible to anyone who opens the preferences file, which is the actual threat here.
-    private static func hash(_ pin: String) -> String {
+    nonisolated static func hash(_ pin: String) -> String {
         let salted = Data(("nuvio-profile-pin:" + pin).utf8)
         return SHA256.hash(data: salted).map { String(format: "%02x", $0) }.joined()
     }
