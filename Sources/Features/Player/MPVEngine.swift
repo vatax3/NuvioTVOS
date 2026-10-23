@@ -297,6 +297,13 @@ final class MPVEngine {
         command(["seek", String(seconds), "absolute"])
     }
 
+    /// `exact` decodes forward from the keyframe to the frame asked for. Slower, and the right
+    /// trade for a chapter: a keyframe seek can land seconds away, which on a chapter boundary
+    /// means landing in the chapter the viewer was trying to leave.
+    func seek(toExactly seconds: Double) {
+        command(["seek", String(seconds), "absolute+exact"])
+    }
+
     func selectAudioTrack(_ id: Int64) { command(["set", "aid", String(id)]) }
 
     func selectSubtitleTrack(_ id: Int64?) {

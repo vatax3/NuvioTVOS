@@ -74,6 +74,13 @@ protocol PlayerEngineSurface: AnyObject, Observable {
     /// that whole file has no counterpart here.
     var chapters: [PlayerChapter] { get }
 
+    /// Seeks to exactly this time rather than to the nearest keyframe.
+    ///
+    /// Scrubbing wants the keyframe — it is what makes a long drag answer instantly. A chapter
+    /// jump does not: landing a few seconds inside the chapter before the one that was picked is
+    /// the whole of what the control was asked to avoid.
+    func seek(toExactly seconds: Double)
+
     // MARK: Picture and sound settings the player itself exposes
 
     var audioDelay: Double { get }
@@ -187,6 +194,12 @@ enum PlayerAspectMode: String, CaseIterable, Identifiable {
         case .fixedHeight: self = .fitHeight
         }
     }
+}
+
+extension PlayerEngineSurface {
+    /// Most engines seek exactly already — AetherEngine hands AVPlayer a zero tolerance either
+    /// side — so this is only overridden where the distinction exists.
+    func seek(toExactly seconds: Double) { seek(to: seconds) }
 }
 
 /// A selectable track the source carries, for the transport menus.

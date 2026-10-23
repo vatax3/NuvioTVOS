@@ -693,6 +693,7 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
                 Capsule()
                     .fill(colors.secondary)
                     .frame(width: proxy.size.width * fraction)
+                chapterMarks(width: proxy.size.width)
             }
         }
         .frame(height: controlFocus == .progress ? NuvioTheme.spacing.md : NuvioTheme.spacing.sm)
@@ -983,6 +984,26 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
         }
     }
 
+    /// Hairlines on the bar where the chapters begin, drawn over both the played and unplayed
+    /// parts so a boundary is visible on either side of the playhead.
+    ///
+    /// The one at zero is skipped: it is the start of the bar, and a mark there reads as a defect
+    /// rather than as information.
+    @ViewBuilder
+    private func chapterMarks(width: CGFloat) -> some View {
+        let duration = engine.duration
+        if duration > 0 {
+            ForEach(engine.chapters) { chapter in
+                if chapter.start > 0, chapter.start < duration {
+                    Rectangle()
+                        .fill(.white.opacity(0.55))
+                        .frame(width: NuvioTheme.strokes.thin)
+                        .offset(x: width * (chapter.start / duration))
+                }
+            }
+        }
+    }
+
     /// The chapter list, opening on the chapter playing so the viewer starts where they are.
     private var chaptersOverlay: some View {
         let current = PlayerChapters.index(in: engine.chapters, at: engine.position)
@@ -998,7 +1019,7 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
                     ) {
                         // The panel stays up: chapter skipping is something a viewer does twice in
                         // a row, and closing it would make the second press a navigation instead.
-                        engine.seek(to: chapter.start)
+                        engine.seek(toExactly: chapter.start)
                     }
                 }
             }
