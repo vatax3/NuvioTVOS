@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import UIKit
 
 // MARK: - Records
 
@@ -130,6 +131,11 @@ final class LibraryStore {
         migrateDeletionQueue()
         restoreFromDurableCopies()
         refreshTopShelf()
+        backgroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.flushProgress() }
+        }
     }
 
     // MARK: Progress
@@ -147,6 +153,7 @@ final class LibraryStore {
         preview: MetaPreview?
     ) {
         guard duration > 0 else { return }
+        let isNewRow = progress[videoId] == nil
         progress[videoId] = WatchProgress(
             contentId: contentId,
             contentType: contentType,
@@ -159,6 +166,35 @@ final class LibraryStore {
         )
         if let preview { previewCache["\(contentType)|\(contentId)"] = preview }
         cancelProgressDeletion(videoId)
+        // The player reports every five seconds, and each write re-encodes every row and
+        // rebuilds the Top Shelf. Coalesced: the in-memory row is current at once (sync pushes
+        // from it), the disk catches up within `progressWriteInterval`, and leaving the app
+        // flushes it. A row that did not exist is written at once: a resume point that is new is
+        // the one a viewer would notice losing.
+        if isNewRow { persistProgress() } else { scheduleProgressWrite() }
+    }
+
+    /// How long a playback tick may sit in memory before it reaches disk.
+    static let progressWriteInterval: Duration = .seconds(30)
+    @ObservationIgnored private var pendingProgressWrite: Task<Void, Never>?
+    @ObservationIgnored private var backgroundObserver: NSObjectProtocol?
+
+    private func scheduleProgressWrite() {
+        guard pendingProgressWrite == nil else { return }
+        // Holds the store strongly on purpose: a profile switch releases this store, and the
+        // write must still land in the files of the profile that watched.
+        pendingProgressWrite = Task { @MainActor [self] in
+            try? await Task.sleep(for: Self.progressWriteInterval)
+            guard !Task.isCancelled else { return }
+            pendingProgressWrite = nil
+            persistProgress()
+        }
+    }
+
+    /// Writes a pending playback tick now. Called on leaving the app, where a suspended process
+    /// may never run the timer.
+    func flushProgress() {
+        guard pendingProgressWrite != nil else { return }
         persistProgress()
     }
 
@@ -394,7 +430,14 @@ final class LibraryStore {
     }
 
     func cache(_ preview: MetaPreview) {
-        previewCache["\(preview.apiType)|\(preview.id)"] = preview
+        cache([preview])
+    }
+
+    /// One write for the lot: a remote refresh seeds a preview per row, and writing the whole
+    /// cache once per row made a large history quadratic.
+    func cache(_ previews: [MetaPreview]) {
+        guard !previews.isEmpty else { return }
+        for preview in previews { previewCache["\(preview.apiType)|\(preview.id)"] = preview }
         persistPreviews()
     }
 
@@ -407,10 +450,18 @@ final class LibraryStore {
     /// Applies a row that arrived from the account. Distinct from `record`/`toggleLibrary` so a
     /// pulled row cannot be mistaken for a local action and pushed straight back.
     func adoptProgress(_ incoming: WatchProgress) {
+        adoptProgress([incoming])
+    }
+
+    /// The batch form, and the one sync should use. Each persist re-encodes every row, fits the
+    /// durable budget and rebuilds the Top Shelf; doing that once per pulled row meant a
+    /// two-thousand-row pull did it two thousand times on the main actor.
+    func adoptProgress(_ rows: [WatchProgress]) {
         // A row this device removed must not come back before the deletion has been pushed —
         // the same rule the saved library already follows below, and for the same reason.
-        guard !pendingProgressDeletions.contains(incoming.videoId) else { return }
-        progress[incoming.videoId] = incoming
+        let accepted = rows.filter { !pendingProgressDeletions.contains($0.videoId) }
+        guard !accepted.isEmpty else { return }
+        for row in accepted { progress[row.videoId] = row }
         persistProgress()
     }
 
@@ -481,6 +532,8 @@ final class LibraryStore {
     // MARK: Persistence
 
     private func persistProgress() {
+        pendingProgressWrite?.cancel()
+        pendingProgressWrite = nil
         progressFile.save(progress)
         // Only what a viewer would notice losing. `fraction > 0.01` is the same floor the
         // Continue Watching rail applies, so this is exactly the rail plus nothing.

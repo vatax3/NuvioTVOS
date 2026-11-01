@@ -19,7 +19,11 @@ final class RemoteProgressService {
     private(set) var lastRefresh: Date?
     /// Rows already looked up on TMDB, successfully or not. A title with genuinely no still on
     /// TMDB must not be retried on every appearance of Home.
-    private var enrichedVideoIds: Set<String> = []
+    /// Attempts per episode this session. Counted before the request, so two overlapping passes
+    /// do not both ask; capped rather than one-shot, because a single timeout used to cost the
+    /// row its still until the profile was rebuilt. Upstream's bounded hydration retry.
+    private var enrichmentAttempts: [String: Int] = [:]
+    private static let enrichmentAttemptLimit = 3
 
     private let client: StremioClient
 
@@ -51,19 +55,23 @@ final class RemoteProgressService {
             let token = settings.tracking.traktAccessToken
             guard !clientId.isEmpty, !token.isEmpty else { return }
             let items = await TraktClient.shared.playbackProgress(clientId: clientId, token: token)
+            var adopted: [WatchProgress] = []
             for item in items {
                 guard let entry = Self.progress(from: item) else { continue }
-                adopt(entry, into: library)
+                if shouldAdopt(entry, into: library) { adopted.append(entry) }
                 if library.cachedPreview(contentType: entry.contentType, contentId: entry.contentId) == nil,
                    let preview = await preview(for: item, addons: addons) {
                     library.cache(preview)
                 }
             }
+            library.adoptProgress(adopted)
         } else if source == .mdblist {
             guard let token = await MDBListSession.token(settings.tracking) else { return }
+            var adopted: [WatchProgress] = []
+            defer { library.adoptProgress(adopted) }
             for item in await MDBListClient.shared.playback(token: token) {
                 guard let entry = Self.progress(from: item) else { continue }
-                adopt(entry, into: library)
+                if shouldAdopt(entry, into: library) { adopted.append(entry) }
                 // MDBList's playback rows carry no artwork, so unlike the Simkl branch there is
                 // nothing to seed a preview from. The rail falls back to whatever the addon
                 // cached when the title was last opened.
@@ -75,11 +83,17 @@ final class RemoteProgressService {
             let items = (try? await SimklClient.shared.playbackProgress(
                 clientId: clientId, token: token
             )) ?? []
+            var adopted: [WatchProgress] = []
+            var previews: [MetaPreview] = []
+            defer {
+                library.adoptProgress(adopted)
+                library.cache(previews)
+            }
             for item in items {
                 guard let entry = Self.progress(from: item) else { continue }
-                adopt(entry, into: library)
+                if shouldAdopt(entry, into: library) { adopted.append(entry) }
                 if library.cachedPreview(contentType: entry.contentType, contentId: entry.contentId) == nil {
-                    library.cache(MetaPreview(
+                    previews.append(MetaPreview(
                         id: item.contentId,
                         type: item.type,
                         rawType: item.type.apiString(),
@@ -185,13 +199,13 @@ final class RemoteProgressService {
         lastRefresh = nil
     }
 
-    private func adopt(_ entry: WatchProgress, into library: LibraryStore) {
+    private func shouldAdopt(_ entry: WatchProgress, into library: LibraryStore) -> Bool {
         // A position recorded on this device is the better one: it has a real duration and is
         // the exact point the engine can seek to. Remote percentages only fill gaps/newer rows.
         if let local = library.progress(forVideoId: entry.videoId), local.updatedAt >= entry.updatedAt {
-            return
+            return false
         }
-        library.adoptProgress(entry)
+        return true
     }
 
     /// Maps one Trakt resume point onto our record.
@@ -285,8 +299,9 @@ final class RemoteProgressService {
 
         for entry in missing.prefix(Self.enrichmentBudget) {
             let key = entry.progress.videoId
-            guard !enrichedVideoIds.contains(key) else { continue }
-            enrichedVideoIds.insert(key)
+            let attempts = enrichmentAttempts[key, default: 0]
+            guard attempts < Self.enrichmentAttemptLimit else { continue }
+            enrichmentAttempts[key] = attempts + 1
 
             guard let imdbId = entry.preview.imdbId ?? Self.imdbId(fromContentId: entry.progress.contentId),
                   let season = entry.progress.season,
@@ -305,6 +320,7 @@ final class RemoteProgressService {
             )
             guard let still = details.first(where: { $0.episode == episode })?.still else { continue }
             library.cacheEpisodeThumbnail(still, forVideoId: key)
+            enrichmentAttempts[key] = Self.enrichmentAttemptLimit
         }
     }
 

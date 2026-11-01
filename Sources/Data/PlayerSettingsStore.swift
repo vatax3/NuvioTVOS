@@ -247,6 +247,16 @@ final class PlayerSettingsStore: PreferenceStore {
         set { setDouble("subtitle_hdr_brightness", newValue) }
     }
 
+    /// Dim the player's own controls on HDR video too, by the same brightness curve.
+    ///
+    /// Off by default, and only meaningful with the HDR style on, as upstream has it: the
+    /// transport's white text and fills are drawn at the panel's peak on an HDR picture just as a
+    /// subtitle is, and a bar raised in a dark scene is the brightest thing in the room.
+    var subtitleHDRDimPlayerControls: Bool {
+        get { bool("subtitle_hdr_dim_player_controls", default: false) }
+        set { setBool("subtitle_hdr_dim_player_controls", newValue) }
+    }
+
     var subtitleBold: Bool {
         get { bool("subtitle_bold", default: false) }
         set { setBool("subtitle_bold", newValue) }

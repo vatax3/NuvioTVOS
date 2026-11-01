@@ -60,7 +60,10 @@ final class AvatarCatalog {
         let path = storagePath.trimmingCharacters(in: .whitespacesAndNewlines)
         if path.lowercased().hasPrefix("http") { return path }
         guard !base.isEmpty else { return path }
-        return "\(base)/\(path)"
+        // A leading slash would give `base//path`, which the storage host answers with a 400.
+        let relative = path.drop(while: { $0 == "/" })
+        let root = base.hasSuffix("/") ? String(base.dropLast()) : base
+        return "\(root)/\(relative)"
     }
 }
 

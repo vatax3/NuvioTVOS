@@ -11,6 +11,11 @@ struct PlayerChromeState: Equatable {
     var controlsVisible = false
     /// A panel is covering the picture — a track chooser, the sources list, stream info.
     var panelOpen = false
+    /// The engine has decided this is a live stream. See `PlayerLivePolicy`.
+    var isLive = false
+    /// The chapters the file lists, which the host turns into skip segments when the titles say
+    /// what they are. Carried here because the chrome is the only layer that sees the engine.
+    var chapters: [PlayerChapter] = []
 }
 
 /// When the skip card is on screen, and whether it may take the remote.

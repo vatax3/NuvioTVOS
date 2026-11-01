@@ -1292,6 +1292,7 @@
 "option.lang_ja" = "Japonais";
 "option.lang_ko" = "Coréen";
 "option.lang_zh" = "Chinois";
+"option.lang_he" = "Hébreu";
 
 /* FirstRunView.swift */
 "firstrun.experience_title" = "Que voulez-vous voir ?";
@@ -1374,3 +1375,5 @@
 "settings.playback.hdr_text_colour" = "Couleur du texte en HDR";
 "settings.playback.hdr_brightness" = "Luminosité en HDR";
 "settings.playback.hdr_brightness_sub" = "Zéro est le plus sombre, pas l'invisible.";
+"settings.playback.hdr_dim_controls" = "Atténuer les commandes du lecteur";
+"settings.playback.hdr_dim_controls_sub" = "Afficher aussi les commandes du lecteur à la luminosité HDR.";

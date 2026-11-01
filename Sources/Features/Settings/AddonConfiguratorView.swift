@@ -117,8 +117,28 @@ struct AddonConfiguratorView: View {
 
 /// Renders a QR code with Core Image. `CIQRCodeGenerator` is available on tvOS, so no bundled
 /// library is needed.
+///
+/// Memoised, because every caller asks from a view body. The sign-in screen redraws once a second
+/// for its countdown, and each redraw built a fresh `CIContext` and rendered the code again on the
+/// main thread — upstream's "jank on the QR sign-in screen", which we had in the same place.
+@MainActor
 enum QRCodeRenderer {
+    private static let context = CIContext()
+    private static let cache: NSCache<NSString, UIImage> = {
+        let cache = NSCache<NSString, UIImage>()
+        cache.countLimit = 16
+        return cache
+    }()
+
     static func image(for string: String, scale: CGFloat = 10) -> UIImage? {
+        let key = "\(scale)|\(string)" as NSString
+        if let cached = cache.object(forKey: key) { return cached }
+        guard let image = render(string, scale: scale) else { return nil }
+        cache.setObject(image, forKey: key)
+        return image
+    }
+
+    private static func render(_ string: String, scale: CGFloat) -> UIImage? {
         let filter = CIFilter.qrCodeGenerator()
         filter.message = Data(string.utf8)
         // Medium correction keeps the code readable when a TV panel softens the edges.
@@ -126,7 +146,6 @@ enum QRCodeRenderer {
 
         guard let output = filter.outputImage else { return nil }
         let scaled = output.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-        let context = CIContext()
         guard let cgImage = context.createCGImage(scaled, from: scaled.extent) else { return nil }
         return UIImage(cgImage: cgImage)
     }

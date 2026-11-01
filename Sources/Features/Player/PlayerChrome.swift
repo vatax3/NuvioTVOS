@@ -11,6 +11,7 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(\.dismiss) private var dismiss
     @Environment(\.resetFocus) private var resetFocus
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(AppSettings.self) private var settings
 
     let request: PlaybackRequest
@@ -169,12 +170,23 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
         ZStack {
             picture
             interface
+                // Multiplied rather than faded: opacity would let the picture through the bar.
+                .colorMultiply(Color(white: controlsBrightness))
         }
         // The two signals that can settle a deferred drop: the obstruction set itself moving, and
         // the line changing underneath it. A timer is deliberately not one of them — the timeout
         // is read when something else happens, so a still picture costs nothing.
         .onChange(of: subtitleObstructions, initial: true) { _, _ in commitSubtitleObstructions() }
         .onChange(of: engine.currentCueText) { _, _ in commitSubtitleObstructions() }
+        .onChange(of: engine.isPaused) { _, _ in commitSubtitleObstructions() }
+        // The timeout was only ever re-read when something else redrew the chrome, so a held
+        // drop over a still frame could outlive it indefinitely. Re-committed at the deadline.
+        .task(id: subtitleDropPendingSince) {
+            guard subtitleDropPendingSince != nil else { return }
+            try? await Task.sleep(for: .seconds(SubtitlePlacement.dropTimeout))
+            guard !Task.isCancelled else { return }
+            commitSubtitleObstructions()
+        }
         // Sampled here rather than inside the sampler, so the loop lives and dies with the view
         // and cannot outlive playback. One second: fast enough to watch a buffer drain, slow
         // enough that reading the numbers is possible.
@@ -253,7 +265,17 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
             // Same 5s cadence as the AVFoundation path.
             guard position - lastPersistedPosition >= 5 || lastPersistedPosition == 0 else { return }
             lastPersistedPosition = position
+            // A live window's "duration" is what has loaded so far: nothing to resume or scrobble.
+            guard !engine.isLive else { return }
             onProgress(position, engine.duration, false)
+        }
+        // Leaving the app used to do nothing: the engine kept decoding a picture nobody could see
+        // and the resume point was whatever the last five-second tick had written. Paused, and
+        // the position written now, so coming back finds the frame that was left.
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .background else { return }
+            if !engine.isPaused { engine.setPaused(true) }
+            persist(completed: false)
         }
         .onChange(of: engine.didEnd) { _, ended in
             if ended { onFinished() }
@@ -414,7 +436,21 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
 
     /// What the host needs to know about this engine's own chrome.
     private var chromeState: PlayerChromeState {
-        PlayerChromeState(controlsVisible: controlsInteractable, panelOpen: picker != nil)
+        PlayerChromeState(
+            controlsVisible: controlsInteractable,
+            panelOpen: picker != nil,
+            isLive: engine.isLive,
+            chapters: engine.chapters
+        )
+    }
+
+    private var controlsBrightness: Double {
+        SubtitleStyle.playerControlsBrightness(
+            isHDRVideo: engine.isHDRVideo,
+            hdrStyleEnabled: settings.player.subtitleHDRStyleEnabled,
+            dimsControls: settings.player.subtitleHDRDimPlayerControls,
+            brightness: settings.player.subtitleHDRBrightness
+        )
     }
 
     /// Where mpv should put its own subtitles, given what else is on screen.
@@ -443,7 +479,11 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
         let settled = SubtitlePlacement.settledLift(
             target: target,
             applied: applied,
-            isImmediate: subtitleObstructions.previewingOffset,
+            isImmediate: SubtitlePlacement.dropsImmediately(
+                isPlaying: !engine.isPaused,
+                previewing: subtitleObstructions.previewingOffset,
+                controlsVisible: showsControls
+            ),
             hasCueOnScreen: engine.currentCueText != nil,
             hasWaitedOut: hasWaitedOutSubtitleDrop
         )
@@ -613,8 +653,14 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
     /// measuring, and the rest are dropped rather than wrapped onto a second line.
     @ViewBuilder
     private var playbackBadges: some View {
-        let badges = StreamBadgeMatcher.badges(
-            matching: playbackBadgeTokens(engine.streamInfo, languages: activeAudioLanguages),
+        // Kept apart, so a lookahead in a pattern cannot run from one into the other.
+        let metadata = [request.filename, request.streamName].compactMap { $0?.nilIfBlank }
+        let badges = StreamBadgeMatcher.playerBadges(
+            decoder: refinedPlaybackBadgeTokens(
+                playbackBadgeTokens(engine.streamInfo, languages: activeAudioLanguages),
+                metadata: metadata
+            ),
+            metadata: metadata,
             filters: settings.streamBadges.playerFilters
         )
         if !badges.isEmpty {
@@ -1593,7 +1639,7 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
     }
 
     private func persist(completed: Bool) {
-        guard engine.duration > 0 else { return }
+        guard engine.duration > 0, !engine.isLive else { return }
         onProgress(engine.position, engine.duration, completed)
     }
 

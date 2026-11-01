@@ -1292,6 +1292,7 @@
 "option.lang_ja" = "Japanese";
 "option.lang_ko" = "Korean";
 "option.lang_zh" = "Chinese";
+"option.lang_he" = "Hebrew";
 
 /* FirstRunView.swift */
 "firstrun.experience_title" = "How much do you want to see?";
@@ -1374,3 +1375,5 @@
 "settings.playback.hdr_text_colour" = "HDR text colour";
 "settings.playback.hdr_brightness" = "HDR brightness";
 "settings.playback.hdr_brightness_sub" = "Zero is the dimmest, not invisible.";
+"settings.playback.hdr_dim_controls" = "Dim player controls";
+"settings.playback.hdr_dim_controls_sub" = "Draw the player's controls at the HDR brightness too.";

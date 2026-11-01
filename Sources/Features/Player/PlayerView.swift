@@ -39,6 +39,11 @@ struct PlayerView: View {
     /// AniSkip intervals are deliberately owned by the player rather than the detail screen:
     /// an episode can be started from Continue Watching, a deep link, or the stream picker.
     @State private var skipSegments: [SkipSegment] = []
+    /// The two sources `skipSegments` is merged from, kept apart so either can arrive or change
+    /// without losing the other. See `ChapterSkipSegments.merge`.
+    @State private var apiSkipSegments: [SkipSegment] = []
+    @State private var chapterSkipSegments: [SkipSegment] = []
+    @State private var lastChapters: [PlayerChapter] = []
     @State private var skipLookupKey: String?
     @State private var dismissedSkipSegments: Set<String> = []
     @State private var playbackPosition: Double = 0
@@ -225,6 +230,9 @@ struct PlayerView: View {
         .onChange(of: scenePhase) { _, phase in
             // Coming back from the background can clear the flag underneath us.
             if phase == .active { PlaybackWakeLock.reassert() }
+            // The chrome writes its position on the same change; the hop lets that land first,
+            // so the flush carries it rather than the previous tick.
+            if phase == .background { Task { library.flushProgress() } }
         }
         // Ten seconds of the card being the only thing on screen, then it steps aside — Android's
         // `SKIP_INTRO_AUTO_HIDE_TIMEOUT_MS`. The countdown is bound to a state that stops running
@@ -248,7 +256,9 @@ struct PlayerView: View {
         }
         // A new segment starts its own life: an outro should not arrive already spent because
         // the intro's countdown ran out an hour ago.
-        .onChange(of: activeSkipSegment?.id) { _, _ in skipAutoHidden = false }
+        // Keyed on the kind, not the segment: chapters replacing a provider's intro mid-segment is
+        // the same intro to the viewer, and restarting the countdown made the card reappear.
+        .onChange(of: activeSkipSegment?.kind) { _, _ in skipAutoHidden = false }
         // A command from the room, while this device is paused.
         //
         // The loop is driven by the engine's position, and a paused engine publishes none — so a
@@ -273,6 +283,16 @@ struct PlayerView: View {
             } else {
                 schedulePauseOverlay(paused: isPaused)
             }
+        }
+        // mpv only knows a stream is live once its window has grown, by which time the first
+        // ticks have written a resume point. That row is withdrawn here rather than left on
+        // Continue Watching pointing past the end of a window that has moved on.
+        .onChange(of: engineChrome.isLive) { _, live in
+            guard live, library.progress(forVideoId: request.videoId) != nil else { return }
+            library.clearProgress(videoId: request.videoId)
+        }
+        .onChange(of: engineChrome.chapters) { _, chapters in
+            adoptChapterSkipSegments(chapters)
         }
     }
 
@@ -711,7 +731,7 @@ struct PlayerView: View {
     /// what the strip along the card's bottom edge draws, so the two never disagree.
     private var skipCountdownKey: String {
         let running = SkipSegmentVisibility.runsAutoHideCountdown(skipVisibility)
-        return "\(activeSkipSegment?.id ?? "-")|\(running)"
+        return "\(activeSkipSegment?.kind.rawValue ?? "-")|\(running)"
     }
 
     @ViewBuilder
@@ -970,8 +990,11 @@ struct PlayerView: View {
     private func observePlaybackTime(_ position: Double, _ duration: Double) {
         playbackPosition = position
         if duration.isFinite, duration > 0 {
+            let durationWasUnknown = playbackDuration == 0
             playbackDuration = duration
             loadSkipSegmentsIfNeeded(duration: duration)
+            // The last chapter ends at the duration, so chapters that arrived first are read now.
+            if durationWasUnknown, !lastChapters.isEmpty { adoptChapterSkipSegments(lastChapters) }
         }
         autoSkipIfEnabled()
         syncWithPartyIfNeeded(position: position, duration: duration)
@@ -1142,6 +1165,25 @@ struct PlayerView: View {
         )
     }
 
+    /// Chapters arrive from the engine whenever its list changes, and are empty again when the
+    /// engine is replaced by a fallback — which is what clears segments derived from a file the
+    /// new engine may not be playing the same way.
+    private func adoptChapterSkipSegments(_ chapters: [PlayerChapter]) {
+        lastChapters = chapters
+        let derived = settings.player.skipIntroEnabled
+            ? ChapterSkipSegments.segments(from: chapters, duration: playbackDuration)
+            : []
+        guard derived != chapterSkipSegments else { return }
+        chapterSkipSegments = derived
+        remergeSkipSegments()
+    }
+
+    private func remergeSkipSegments() {
+        skipSegments = ChapterSkipSegments.merge(
+            api: apiSkipSegments, chapters: chapterSkipSegments, isMovie: request.episode == nil
+        )
+    }
+
     private func loadSkipSegmentsIfNeeded(duration: Double) {
         guard settings.player.skipIntroEnabled, duration > 0, skipLookupKey == nil else { return }
         guard request.episode != nil else {
@@ -1252,7 +1294,8 @@ struct PlayerView: View {
             let merged = SkipIntroClient.merge([aniSkip, animeSkip, await introDb])
 
             guard skipLookupKey == key else { return }
-            skipSegments = merged
+            apiSkipSegments = merged
+            remergeSkipSegments()
         }
     }
 
@@ -1274,7 +1317,8 @@ struct PlayerView: View {
                 baseURL: introDbUrl, imdbId: imdbId
             )
             guard skipLookupKey == key else { return }
-            skipSegments = segments
+            apiSkipSegments = segments
+            remergeSkipSegments()
         }
     }
 
@@ -1344,8 +1388,8 @@ struct PlayerView: View {
     }
 
     private func scrobble(position: Double, duration: Double) {
-        guard !didSendTrackingStop, let credentials = traktCredentials, let imdbId = request.imdbId,
-              duration > 0 else { return }
+        guard !didSendTrackingStop, !isLivePlayback, let credentials = traktCredentials,
+              let imdbId = request.imdbId, duration > 0 else { return }
         let percent = min(max(position / duration * 100, 0), 100)
         // One `start`, then periodic updates only when the needle has actually moved.
         let action: TraktClient.ScrobbleAction = didScrobbleStart ? .pause : .start
@@ -1411,7 +1455,8 @@ struct PlayerView: View {
     }
 
     private func simklScrobble(position: Double, duration: Double) {
-        guard !didSendTrackingStop, !simklSessionActive, duration > 0, let credentials = simklCredentials,
+        guard !didSendTrackingStop, !simklSessionActive, !isLivePlayback, duration > 0,
+              let credentials = simklCredentials,
               !(request.imdbId ?? request.contentId).isEmpty else { return }
         let percent = min(100, max(0, position / duration * 100))
         // Matches Android: resuming something already beyond Simkl's completion threshold must
@@ -1461,7 +1506,8 @@ struct PlayerView: View {
     }
 
     private func mdbListScrobble(position: Double, duration: Double) {
-        guard !didSendTrackingStop, !mdbListSessionActive, duration > 0, mdbListScrobbleAllowed
+        guard !didSendTrackingStop, !mdbListSessionActive, !isLivePlayback, duration > 0,
+              mdbListScrobbleAllowed
         else { return }
         let percent = min(100, max(0, position / duration * 100))
         // As with Simkl: resuming something already past the completion threshold must not write
@@ -1772,8 +1818,14 @@ struct PlayerView: View {
         return progress.positionSeconds
     }
 
+    /// Live: by the engine's own account, or by the catalogue type. Either way there is no
+    /// position to come back to — see `PlayerLivePolicy`.
+    private var isLivePlayback: Bool {
+        engineChrome.isLive || PlayerLivePolicy.isLiveContentType(request.contentType)
+    }
+
     private func persist(position: Double, duration: Double, completed: Bool) {
-        guard duration > 0 || completed else { return }
+        guard duration > 0 || completed, !isLivePlayback else { return }
         if completed {
             guard let existing = library.progress(forVideoId: request.videoId) else { return }
             library.markWatched(

@@ -32,17 +32,30 @@ final class NuvioSyncService {
     private static let enabledKey = "nuvio.sync_enabled"
     private let log = Logger(subsystem: "com.nuvio.tvos", category: "NuvioSync")
     private var runningTask: Task<Void, Never>?
+    /// The local profile the running pass belongs to.
+    private var runningProfileId: String?
+    /// A pass asked for by a different profile while one was running. Dropping it, as this used
+    /// to, meant switching profiles mid-sync left the new profile unsynced until the next launch.
+    private var pendingPass: (@MainActor () -> Void)?
 
     /// Stops a pass mid-flight. Signing out has to do this before the local data is removed,
     /// or a pull already in progress adopts rows into stores that are about to be deleted.
     func cancel() {
         runningTask?.cancel()
         runningTask = nil
+        runningProfileId = nil
+        pendingPass = nil
     }
 
     // MARK: Entry point
 
-    /// Full two-way pass. Serialised — a second request while one is running is a no-op.
+    /// Full two-way pass. Serialised: a second request for the same profile while one is running
+    /// is a no-op; one for another profile runs once the current pass ends.
+    ///
+    /// Everything that names a profile — its id, its server index, whether it borrows the
+    /// primary's addons and plugins — is captured when the pass starts. Reading them live, after
+    /// the awaits, let a profile switch mid-pass push the old profile's lists under the new
+    /// profile's index, or under the primary's.
     func sync(
         account: NuvioAccountStore,
         library: LibraryStore,
@@ -52,10 +65,33 @@ final class NuvioSyncService {
         profiles: ProfileStore,
         settings: AppSettings
     ) {
-        guard isEnabled, account.isSignedIn, runningTask == nil else { return }
+        guard isEnabled, account.isSignedIn else { return }
+        let startingProfile = profiles.activeProfile
+        let startingProfileId = profiles.activeProfileId
+        if runningTask != nil {
+            if runningProfileId != startingProfileId {
+                pendingPass = { [weak self] in
+                    self?.sync(
+                        account: account, library: library, collections: collections,
+                        addons: addons, plugins: plugins, profiles: profiles, settings: settings
+                    )
+                }
+            }
+            return
+        }
+        let isPrimary = startingProfileId == ProfileScope.primaryProfileId
+        let sharesAddons = !isPrimary && (startingProfile?.usesPrimaryAddons ?? false)
+        let sharesPlugins = !isPrimary && (startingProfile?.usesPrimaryPlugins ?? false)
+        runningProfileId = startingProfileId
 
         runningTask = Task {
-            defer { runningTask = nil }
+            defer {
+                runningTask = nil
+                runningProfileId = nil
+                let next = pendingPass
+                pendingPass = nil
+                next?()
+            }
             await account.ensureFreshSession()
             guard account.isSignedIn else {
                 status = .failed("Not signed in.")
@@ -69,7 +105,9 @@ final class NuvioSyncService {
                 status = .syncing("Profiles")
                 try await syncProfiles(profiles: profiles)
 
-                let profileId = Self.remoteProfileId(for: profiles)
+                // Resolved after the profile pull, which may assign the index, but for the profile
+                // the pass started with rather than whichever is active by now.
+                let profileId = Self.remoteProfileId(for: profiles, localId: startingProfileId)
 
                 status = .syncing("Library")
                 try await syncLibrary(library: library, profileId: profileId)
@@ -86,14 +124,14 @@ final class NuvioSyncService {
                 status = .syncing("Addons")
                 try await syncAddons(
                     addons: addons,
-                    profileId: ProfileScope.sharesPrimaryAddons ? 1 : profileId,
+                    profileId: sharesAddons ? 1 : profileId,
                     ownerId: account.syncOwnerId
                 )
 
                 status = .syncing("Plugins")
                 try await syncPlugins(
                     plugins: plugins,
-                    profileId: ProfileScope.sharesPrimaryPlugins ? 1 : profileId,
+                    profileId: sharesPlugins ? 1 : profileId,
                     ownerId: account.syncOwnerId
                 )
 
@@ -112,7 +150,11 @@ final class NuvioSyncService {
     /// stored on the profile rather than derived from its position, which would silently
     /// re-point a profile's rows the moment the list is reordered.
     static func remoteProfileId(for profiles: ProfileStore) -> Int {
-        profiles.activeProfile?.remoteIndex ?? 1
+        remoteProfileId(for: profiles, localId: profiles.activeProfileId)
+    }
+
+    static func remoteProfileId(for profiles: ProfileStore, localId: String) -> Int {
+        profiles.profiles.first { $0.id == localId }?.remoteIndex ?? 1
     }
 
     private var originParameters: [String: AnyJSONValue] {
@@ -224,22 +266,24 @@ final class NuvioSyncService {
         ).compactMap(\.value)
 
         var toPush: [WatchProgress] = []
+        var toAdopt: [WatchProgress] = []
         var remoteKeys = Set<String>()
 
         for entry in remote {
             remoteKeys.insert(entry.progress_key)
             let incoming = entry.asWatchProgress()
             guard let local = library.progress(forVideoId: incoming.videoId) else {
-                library.adoptProgress(incoming)
+                toAdopt.append(incoming)
                 continue
             }
             // Whichever side watched more recently wins; equal timestamps keep the local row.
             if incoming.updatedAt > local.updatedAt {
-                library.adoptProgress(incoming)
+                toAdopt.append(incoming)
             } else if local.updatedAt > incoming.updatedAt {
                 toPush.append(local)
             }
         }
+        library.adoptProgress(toAdopt)
 
         // Local rows the server has never seen.
         for (_, progress) in library.progress where !remoteKeys.contains(Self.progressKey(progress)) {

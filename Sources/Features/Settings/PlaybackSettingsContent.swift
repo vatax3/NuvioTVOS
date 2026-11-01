@@ -445,6 +445,14 @@ struct PlaybackSettingsContent: View {
                         step: 5,
                         format: { String(format: "%.0f%%", $0) }
                     )
+                    SettingsToggle(
+                        title: L10n.text("settings.playback.hdr_dim_controls", fallback: "Dim player controls"),
+                        subtitle: L10n.text(
+                            "settings.playback.hdr_dim_controls_sub",
+                            fallback: "Draw the player's controls at the HDR brightness too."
+                        ),
+                        isOn: $player.subtitleHDRDimPlayerControls
+                    )
                 }
                 SettingsDecimalStepperRow(
                     title: L10n.text("settings.playback.vertical_offset", fallback: "Vertical offset"),

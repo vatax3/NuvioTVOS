@@ -242,6 +242,9 @@ struct CompiledStreamBadgeFilter {
     /// one, a substring test rejects most candidates before the regex engine is asked — the rules
     /// run against every field of every row of every source list, so the cheap test is worth it.
     let literalHint: String?
+    /// The pack's group for this filter — "resolution", "audio" — or empty. The player uses it to
+    /// stop a filename from contradicting what the decoder already established.
+    var groupId: String = ""
 }
 
 enum StreamBadgeMatcher {
@@ -261,7 +264,8 @@ enum StreamBadgeMatcher {
                 return CompiledStreamBadgeFilter(
                     badge: filter.badge,
                     expression: expression,
-                    literalHint: literalHint(for: filter.pattern)
+                    literalHint: literalHint(for: filter.pattern),
+                    groupId: filter.groupId
                 )
             }
     }
@@ -345,6 +349,43 @@ enum StreamBadgeMatcher {
             out.append(filter.badge)
         }
         return out
+    }
+
+    /// Two-phase matching for the player. Port of upstream's `matchedPlayerBadges`.
+    ///
+    /// The decoder's account comes first and every filter is tried against it. Then the filename
+    /// and stream name are tried — but only for filters in a group the decoder left uncovered.
+    /// That is the point of it: a release name can say what the decoder cannot ("WEB-DL",
+    /// "REMUX"), and it can also be wrong about what the decoder does know — a multi-audio file
+    /// named for its first track, a 1080p label on a 2160p file. A group the decoder answered is
+    /// not reopened by the name.
+    static func playerBadges(
+        decoder: [String],
+        metadata: [String],
+        filters: [CompiledStreamBadgeFilter]
+    ) -> [StreamBadge] {
+        guard !filters.isEmpty else { return [] }
+        // Collapsed so a newline inside a stream name does not defeat a single-line pattern.
+        let meta = metadata.map(collapsingWhitespace).filter { !$0.isEmpty }
+        let decoderHits = filters.map { !decoder.isEmpty && matches($0, decoder) }
+        let covered = Set(zip(filters, decoderHits).compactMap { filter, hit in
+            hit && !filter.groupId.isEmpty ? filter.groupId : nil
+        })
+        var seen = Set<String>()
+        var out: [StreamBadge] = []
+        for (filter, decoderHit) in zip(filters, decoderHits) {
+            let hit = decoderHit
+                || ((filter.groupId.isEmpty || !covered.contains(filter.groupId)) && matches(filter, meta))
+            guard hit else { continue }
+            let key = filter.badge.imageURL.isEmpty ? filter.badge.name : filter.badge.imageURL
+            guard seen.insert(key).inserted else { continue }
+            out.append(filter.badge)
+        }
+        return out
+    }
+
+    private static func collapsingWhitespace(_ text: String) -> String {
+        text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 
     private static func matches(_ filter: CompiledStreamBadgeFilter, _ candidates: [String]) -> Bool {

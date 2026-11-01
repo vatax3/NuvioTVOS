@@ -42,8 +42,15 @@ enum SubtitleSDHFilter {
         var buffer = ""
         var depth = 0
         var opener: Character?
+        // `[John]: Hello` is a speaker label written as an annotation. Dropping the bracket alone
+        // left ": Hello" on screen, so the colon that follows a removed annotation goes with it.
+        var dropsFollowingColon = false
 
         for character in text {
+            if dropsFollowingColon {
+                dropsFollowingColon = false
+                if character == ":" { continue }
+            }
             if character == "[" || character == "(" {
                 if depth == 0 { opener = character; buffer = "" }
                 depth += 1
@@ -53,7 +60,11 @@ enum SubtitleSDHFilter {
                 depth -= 1
                 guard depth == 0 else { continue }
                 // Parenthesised dialogue is put back, brackets and shouted asides are not.
-                if opener == "(", !isShouted(buffer) { result += "(\(buffer))" }
+                if opener == "(", !isShouted(buffer) {
+                    result += "(\(buffer))"
+                } else {
+                    dropsFollowingColon = true
+                }
                 buffer = ""
                 continue
             }

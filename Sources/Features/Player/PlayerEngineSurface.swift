@@ -30,6 +30,9 @@ protocol PlayerEngineSurface: AnyObject, Observable {
     var bufferedPosition: Double { get }
     var didEnd: Bool { get }
     var playbackSpeed: Double { get }
+    /// A live stream: no resume point is written for it and nothing is scrobbled.
+    /// See `PlayerLivePolicy`.
+    var isLive: Bool { get }
 
     // MARK: Health
 
@@ -275,6 +278,20 @@ extension Array where Element == PlayerTrack {
 }
 
 /// What the information panel prints about the stream.
+extension PlayerStreamInfo {
+    /// "23.976 fps", "24 fps", "29.97 fps": up to three decimals, trailing zeros dropped.
+    ///
+    /// mpv's `%.3g` printed 23.976 as "24 fps" and 29.97 as "30 fps" — the one difference the
+    /// line exists to show when checking frame-rate matching — and AetherEngine's `%.3f` printed
+    /// "24.000 fps". One formatter for both engines.
+    static func frameRateLabel(_ fps: Double) -> String {
+        var text = String(format: "%.3f", fps)
+        while text.hasSuffix("0") { text.removeLast() }
+        if text.hasSuffix(".") { text.removeLast() }
+        return "\(text) fps"
+    }
+}
+
 struct PlayerStreamInfo: Hashable {
     var videoCodec: String?
     var resolution: String?

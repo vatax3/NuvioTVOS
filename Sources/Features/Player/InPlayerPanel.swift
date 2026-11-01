@@ -356,6 +356,8 @@ private struct InPlayerSourceRow: View {
     let isCurrent: Bool
     let isLoading: Bool
     let requestsInitialFocus: Bool
+    /// Told when this row has taken the initial focus, so no later row takes it again.
+    var onClaimedInitialFocus: () -> Void = {}
     let action: () -> Void
 
     var body: some View {
@@ -408,6 +410,7 @@ private struct InPlayerSourceRow: View {
         .disabled(isLoading)
         .onAppear {
             guard requestsInitialFocus else { return }
+            onClaimedInitialFocus()
             Task { @MainActor in focused = true }
         }
     }
@@ -460,6 +463,10 @@ struct InPlayerSourcesPanel: View {
 
     @State private var model = StreamsViewModel()
     @State private var selectedAddon: String?
+    /// The initial focus is placed once. Results stream in group by group, and each new first
+    /// row — or the playing source arriving late in a slower addon — used to take focus again
+    /// from wherever the viewer had got to. Upstream's "source navigation during scraping".
+    @State private var initialFocusPlaced = false
 
     private var sourceRequest: StreamRequest? { request.sourceRequest }
     private var displayedGroups: [AddonStreams] {
@@ -516,8 +523,9 @@ struct InPlayerSourcesPanel: View {
                                 cache: model.cacheState(for: stream),
                                 isCurrent: isCurrent(stream),
                                 isLoading: model.resolvingKey == stream.stableKey,
-                                requestsInitialFocus: isCurrent(stream)
-                                    || (!hasCurrentSource && groupIndex == 0 && streamIndex == 0)
+                                requestsInitialFocus: !initialFocusPlaced && (isCurrent(stream)
+                                    || (!hasCurrentSource && groupIndex == 0 && streamIndex == 0)),
+                                onClaimedInitialFocus: { initialFocusPlaced = true }
                             ) {
                                 Task { await select(stream) }
                             }

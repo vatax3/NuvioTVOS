@@ -766,7 +766,7 @@ enum DebridStreamEncode: String, SettingsOption {
 }
 
 enum DebridStreamLanguage: String, SettingsOption {
-    case en, hi, it, es, fr, de, pt, pl, cs, la, ja, ko, zh, multi, unknown
+    case en, hi, it, es, fr, de, pt, pl, cs, la, ja, ko, zh, he, multi, unknown
 
     var displayName: String {
         switch self {
@@ -783,6 +783,7 @@ enum DebridStreamLanguage: String, SettingsOption {
         case .ja: return L10n.text("option.lang_ja", fallback: "Japanese")
         case .ko: return L10n.text("option.lang_ko", fallback: "Korean")
         case .zh: return L10n.text("option.lang_zh", fallback: "Chinese")
+        case .he: return L10n.text("option.lang_he", fallback: "Hebrew")
         case .multi: return "Multi"
         case .unknown: return L10n.text("option.unknown", fallback: "Unknown")
         }

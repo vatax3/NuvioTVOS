@@ -119,6 +119,7 @@ struct MediaLanguage: Identifiable, Hashable, Sendable {
     static func normalise(_ code: String) -> String {
         let lower = code.lowercased().replacingOccurrences(of: "_", with: "-")
         if let exact = all.first(where: { $0.code.lowercased() == lower }) { return exact.code.lowercased() }
+        if let alias = nameAliases[lower] { return alias }
         let base = String(lower.split(separator: "-").first ?? "")
         if let alias = threeLetterAliases[base] { return alias }
         if let exact = all.first(where: { $0.code.lowercased() == base }) { return exact.code.lowercased() }
@@ -146,6 +147,17 @@ struct MediaLanguage: Identifiable, Hashable, Sendable {
         "vie": "vi", "ukr": "uk", "bul": "bg", "hrv": "hr", "srp": "sr", "slv": "sl",
         "est": "et", "lav": "lv", "lit": "lt", "ind": "id", "cat": "ca",
         "esp": "es", "spn": "es", "pob": "pt", "scc": "sr", "scr": "hr",
-        "zht": "zh", "zhe": "zh", "ze": "zh"
+        "zht": "zh", "zhe": "zh", "ze": "zh",
+        // Upstream's mapping (1.1.0-beta.9): Montenegrin tracks arrive as `cnr`, `mne` or `me`
+        // and were shown as an unrecognised "MNE" group of their own. Not a catalogue entry —
+        // upstream's list does not offer it — so a Serbian preference is what picks them.
+        "cnr": "sr-me", "mne": "sr-me", "me": "sr-me"
+    ]
+
+    /// Whole values that resolve before the region is stripped: a language name some subtitle
+    /// addons send in place of a code, and the one regional code kept although the catalogue
+    /// does not list it (upstream keeps `sr-me` beside `pt-br` and `es-419`).
+    private static let nameAliases: [String: String] = [
+        "montenegrin": "sr-me", "sr-me": "sr-me"
     ]
 }

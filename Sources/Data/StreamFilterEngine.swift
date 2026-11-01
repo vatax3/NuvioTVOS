@@ -22,7 +22,9 @@ struct ParsedStreamAttributes: Hashable, Sendable {
 }
 
 enum StreamAttributeParser {
-    static func parse(_ stream: Stream) -> ParsedStreamAttributes {
+    /// - Parameter title: what is being played, when the caller knows it. Its words are removed
+    ///   before languages are read, so "The French Dispatch" is not a French release.
+    static func parse(_ stream: Stream, title: String? = nil) -> ParsedStreamAttributes {
         let haystack = [
             stream.name, stream.title, stream.description, stream.behaviorHints?.filename
         ]
@@ -38,7 +40,7 @@ enum StreamAttributeParser {
         attributes.audioTags = audioTags(in: lower)
         attributes.audioChannels = audioChannels(in: lower)
         attributes.encode = encode(in: lower)
-        attributes.languages = languages(in: lower)
+        attributes.languages = languages(in: languageSearchText(stream, title: title))
         attributes.releaseGroup = releaseGroup(in: haystack)
         attributes.sizeBytes = stream.behaviorHints?.videoSize ?? size(in: haystack)
         attributes.seeders = QualityParser.seeders(haystack)
@@ -155,18 +157,78 @@ enum StreamAttributeParser {
 
     // MARK: Languages
 
-    private static func languages(in text: String) -> [DebridStreamLanguage] {
-        var languages: [DebridStreamLanguage] = []
-        let checks: [(String, DebridStreamLanguage)] = [
-            ("multi", .multi), ("english", .en), ("hindi", .hi), ("italian", .it),
-            ("spanish", .es), ("french", .fr), ("vff", .fr), ("vfq", .fr), ("truefrench", .fr),
-            ("german", .de), ("portuguese", .pt), ("polish", .pl), ("czech", .cs),
-            ("latino", .la), ("japanese", .ja), ("korean", .ko), ("chinese", .zh)
-        ]
-        for (needle, language) in checks where text.contains(needle) && !languages.contains(language) {
-            languages.append(language)
+    /// Port of upstream's `languageAliases` (1.1.0-beta.9): the words release names use for a
+    /// language besides its code. Ours used to know only the long names, so `Movie.ITA.ENG` had
+    /// no language at all and a required language hid it. Short words that are common in titles —
+    /// `por`, `chi`, `fra` — are left out on purpose, as upstream leaves them out. `vff`/`vfq`
+    /// are ours, kept from before: French dubbing tags upstream does not list.
+    static let languageAliases: [DebridStreamLanguage: [String]] = [
+        .en: ["eng", "english"],
+        .hi: ["hin", "hindi"],
+        .it: ["ita", "italian", "italiano"],
+        .es: ["spa", "esp", "spanish", "espanol", "castellano"],
+        .fr: ["fre", "french", "truefrench", "vff", "vfq"],
+        .de: ["ger", "deu", "german", "deutsch"],
+        .pt: ["portuguese", "portugues"],
+        .pl: ["pol", "polish"],
+        .cs: ["cze", "czech"],
+        .la: ["latino"],
+        .ja: ["jpn", "japanese"],
+        .ko: ["kor", "korean"],
+        .zh: ["chinese"],
+        .he: ["heb", "hebrew"]
+    ]
+
+    /// One whole-word pattern per language, code first. Whole words because a substring test
+    /// read "multi" in "Multiverse" and "english" in "Englishman".
+    private static let languagePatterns: [(DebridStreamLanguage, NSRegularExpression)] =
+        DebridStreamLanguage.allCases.compactMap { language in
+            guard language != .unknown else { return nil }
+            let tokens = [language.rawValue] + (languageAliases[language] ?? [])
+            let alternatives = tokens.map(NSRegularExpression.escapedPattern(for:)).joined(separator: "|")
+            guard let regex = try? NSRegularExpression(
+                pattern: "(^|[^a-z0-9])(\(alternatives))([^a-z0-9]|$)"
+            ) else { return nil }
+            return (language, regex)
         }
-        return languages
+
+    static func languages(in text: String) -> [DebridStreamLanguage] {
+        let range = NSRange(text.startIndex..., in: text)
+        return languagePatterns.compactMap { language, regex in
+            regex.firstMatch(in: text, range: range) == nil ? nil : language
+        }
+    }
+
+    /// The stream's text with the title taken out of each field once.
+    ///
+    /// Once, not everywhere: in `French.2020.FRENCH.1080p` the first "french" is the title and
+    /// the second is the language, and a release name repeats the title only as a language word.
+    /// Per field, because the title appears once in each of them.
+    static func languageSearchText(_ stream: Stream, title: String?) -> String {
+        let fields = [stream.name, stream.title, stream.description, stream.behaviorHints?.filename]
+            .compactMap { $0?.lowercased() }
+        guard let titlePattern = title.flatMap(titleRegex) else { return fields.joined(separator: " ") }
+        return fields.map { text in
+            let range = NSRange(text.startIndex..., in: text)
+            guard let match = titlePattern.firstMatch(in: text, range: range),
+                  let found = Range(match.range, in: text)
+            else { return text }
+            return text.replacingCharacters(in: found, with: " ")
+        }
+        .joined(separator: " ")
+    }
+
+    /// The title's words in order, separated by anything that is not a letter or digit — so
+    /// "The Italian Job" matches `The.Italian.Job`, `the_italian_job` and `The Italian Job`.
+    private static func titleRegex(_ title: String) -> NSRegularExpression? {
+        let words = title.lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+            .map(NSRegularExpression.escapedPattern(for:))
+        guard !words.isEmpty else { return nil }
+        return try? NSRegularExpression(
+            pattern: "(?<![a-z0-9])\(words.joined(separator: "[^a-z0-9]+"))(?![a-z0-9])"
+        )
     }
 
     // MARK: Release group

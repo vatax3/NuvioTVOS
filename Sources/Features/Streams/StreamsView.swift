@@ -177,13 +177,15 @@ final class StreamsViewModel {
 
         var pluginGroups = await runPluginScrapers(request: request, settings: settings)
 
-        // Parse once; both filtering and the row chips read from this.
+        // Parse once; both filtering and the row chips read from this. The show's name rather
+        // than the episode's: it is what a release name starts with.
+        let languageTitle = request.contentName?.nilIfBlank ?? request.title
         var parsed: [String: ParsedStreamAttributes] = [:]
         for (_, streams) in collected {
-            for stream in streams { parsed[stream.stableKey] = StreamAttributeParser.parse(stream) }
+            for stream in streams { parsed[stream.stableKey] = StreamAttributeParser.parse(stream, title: languageTitle) }
         }
         for group in pluginGroups {
-            for stream in group.streams { parsed[stream.stableKey] = StreamAttributeParser.parse(stream) }
+            for stream in group.streams { parsed[stream.stableKey] = StreamAttributeParser.parse(stream, title: languageTitle) }
         }
         attributes = parsed
         applyBadgeRules(

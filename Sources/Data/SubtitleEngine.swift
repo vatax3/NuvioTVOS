@@ -132,6 +132,15 @@ struct SubtitleStyle: Equatable {
         (0.7 * min(hdrBrightnessMax, max(hdrBrightnessMin, brightness)) + 30) / 100
     }
 
+    /// How bright the player's chrome is drawn: 1 unless the picture is HDR, the HDR style is on
+    /// and the viewer asked for the controls to follow it. Upstream's `playerControlsBrightness`.
+    static func playerControlsBrightness(
+        isHDRVideo: Bool, hdrStyleEnabled: Bool, dimsControls: Bool, brightness: Double
+    ) -> Double {
+        guard isHDRVideo, hdrStyleEnabled, dimsControls else { return 1 }
+        return hdrBrightnessFactor(brightness)
+    }
+
     /// The style to render with on this picture.
     ///
     /// On an HDR or Dolby Vision picture with the override on, the HDR colour replaces the text
@@ -606,6 +615,15 @@ enum SubtitlePlacement {
     ///
     /// `isImmediate` covers the cases with no reading to protect: the appearance panel, where the
     /// position *is* what is being looked at, and a picture with no cue on it at all.
+    /// When a drop needs no waiting at all. Port of upstream's `shouldApplySubtitleLiftImmediately`
+    /// (1.1.0-beta.9), which revised the rule above: once the transport has actually gone, the
+    /// line comes down at once. Holding it there left a subtitle floating over an empty band of
+    /// picture for a whole cue, which read as a bug rather than as courtesy. The hold now only
+    /// covers drops while the controls are still drawn — the seek readout leaving, say.
+    static func dropsImmediately(isPlaying: Bool, previewing: Bool, controlsVisible: Bool) -> Bool {
+        !isPlaying || previewing || !controlsVisible
+    }
+
     static func settledLift(
         target: Double,
         applied: Double,

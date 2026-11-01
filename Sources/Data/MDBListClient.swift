@@ -303,7 +303,16 @@ actor MDBListClient {
         return nil
     }
 
-    func refresh(refreshToken: String, clientId: String) async -> Tokens? {
+    /// What a refresh attempt established. Only `.rejected` means the session is over: a timeout,
+    /// a cancelled task or a 5xx says nothing about the refresh token, and treating them as a
+    /// refusal signed viewers out whenever a scrobble was cancelled mid-refresh.
+    enum RefreshOutcome {
+        case renewed(Tokens)
+        case rejected
+        case unavailable
+    }
+
+    func refresh(refreshToken: String, clientId: String) async -> RefreshOutcome {
         guard let (status, data) = try? await IntegrationHTTP.postForm(
             "\(base)/oauth/token/",
             fields: [
@@ -311,11 +320,21 @@ actor MDBListClient {
                 "grant_type": "refresh_token",
                 "refresh_token": refreshToken
             ]
-        ), (200..<300).contains(status) else { return nil }
-        // MDBList may answer a refresh without reissuing the refresh token, in which case the one
-        // just used is still the current one. Losing it here would sign the viewer out silently at
-        // the next expiry.
-        return Self.tokens(from: data, fallbackRefreshToken: refreshToken)
+        ) else { return .unavailable }
+        return Self.refreshOutcome(status: status, data: data, refreshToken: refreshToken)
+    }
+
+    /// Pure, so the classification can be tested against literal responses.
+    nonisolated static func refreshOutcome(status: Int, data: Data, refreshToken: String) -> RefreshOutcome {
+        if (200..<300).contains(status) {
+            // MDBList may answer a refresh without reissuing the refresh token, in which case the
+            // one just used is still the current one. Losing it here would sign the viewer out
+            // silently at the next expiry.
+            guard let tokens = tokens(from: data, fallbackRefreshToken: refreshToken) else { return .unavailable }
+            return .renewed(tokens)
+        }
+        if [400, 401, 403].contains(status) || errorCode(in: data) == "invalid_grant" { return .rejected }
+        return .unavailable
     }
 
     /// `POST /oauth/revoke_token/`. Best effort: the local session is cleared either way, and a
@@ -562,11 +581,18 @@ actor MDBListClient {
         )) != nil
     }
 
+    // Built once: this runs for every row of every playback and watched listing.
+    // `ISO8601DateFormatter` is thread-safe.
+    private static let fractionalDate: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+    private static let plainDate = ISO8601DateFormatter()
+
     static func date(_ value: String?) -> Date? {
         guard let value = value?.nilIfBlank else { return nil }
-        let withFraction = ISO8601DateFormatter()
-        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return withFraction.date(from: value) ?? ISO8601DateFormatter().date(from: value)
+        return fractionalDate.date(from: value) ?? plainDate.date(from: value)
     }
 }
 

@@ -125,7 +125,9 @@ enum CustomPosterURL {
         contentType: String,
         shape: PosterShape = .poster
     ) -> String? {
-        guard let pattern = pattern.trimmingCharacters(in: .whitespacesAndNewlines).nilIfBlank
+        guard let pattern = decodingPlaceholders(
+            pattern.trimmingCharacters(in: .whitespacesAndNewlines)
+        ).nilIfBlank
         else { return nil }
         if multiNamespaceDomains.contains(where: pattern.contains) {
             return resolveAcrossNamespaces(
@@ -178,12 +180,29 @@ enum CustomPosterURL {
         return url
     }
 
+    /// A pattern copied out of a browser or the phone app arrives percent-encoded —
+    /// `%7Bshape%7D` — and none of its placeholders matched, so the raw template was requested
+    /// and every card fell back to the addon's art. Port of upstream's fix: the three characters
+    /// a placeholder is made of are decoded, case-insensitively, and nothing else is touched, so
+    /// an encoded space or slash elsewhere in the URL is left as the service expects it.
+    static func decodingPlaceholders(_ pattern: String) -> String {
+        guard pattern.contains("%") else { return pattern }
+        return pattern
+            .replacingOccurrences(of: "%7B", with: "{", options: .caseInsensitive)
+            .replacingOccurrences(of: "%7D", with: "}", options: .caseInsensitive)
+            .replacingOccurrences(of: "%7C", with: "|", options: .caseInsensitive)
+    }
+
+    /// Compiled once: this runs for every card a row draws.
+    private static let alternativesPattern = try? NSRegularExpression(
+        pattern: "\\{([a-z_]+(?:\\|[a-z_]+)+)\\}"
+    )
+
     /// `{imdb_id|kitsu_id|tvdb_id}` — the namespaces the service accepts, most preferred first.
     private static func resolveAlternatives(
         in pattern: String, values: [String: String]
     ) -> String? {
-        guard let regex = try? NSRegularExpression(pattern: "\\{([a-z_]+(?:\\|[a-z_]+)+)\\}")
-        else { return pattern }
+        guard let regex = alternativesPattern else { return pattern }
         var url = pattern
         let matches = regex.matches(
             in: pattern, range: NSRange(pattern.startIndex..., in: pattern)
@@ -251,7 +270,7 @@ extension MetaPreview {
     /// it leaves landscape and square cards alone rather than stretching a portrait into them.
     func withCustomPoster(pattern: String) -> MetaPreview {
         guard !pattern.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return self }
-        let supportsShape = pattern.contains("{shape}")
+        let supportsShape = CustomPosterURL.decodingPlaceholders(pattern).contains("{shape}")
         guard supportsShape || posterShape == .poster else { return self }
 
         let ids = CustomPosterURL.ids(metaId: id, imdbId: imdbId)

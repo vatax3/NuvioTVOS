@@ -1226,3 +1226,64 @@ a false decline sit beside the line refuting it, in one document, for a whole wi
 
 The prose sections were deliberately not swept: they describe what happened on a date, and a dated
 account does not go stale. Only the tables claim to describe the present.
+
+## Upstream moved a seventh time: 1.1.0-beta.8 → 1.1.0-beta.9
+
+259 commits over nine days (22–31 October), 263 files, 54 changelog lines, one tag. Read over the
+network at the tag, per [the skill](../.claude/skills/upstream-parity/SKILL.md).
+
+Most of the window is theirs alone: libass rendering moved onto video frames, Simkl and MDBList got
+an index for their library snapshot, a large accessibility pass, five translations. What transfers
+is small. What their reasons turned up here is not: **ten defects of ours**, several worse than the
+ones they fixed, and two of them able to lose a viewer's data or session.
+
+### Defects of ours, found by reading why they needed a change
+
+| Upstream | Ours |
+|---|---|
+| **Propagate cancellation instead of converting it in the Trakt refresh** | **Same defect, on MDBList, and worse.** Our Trakt client never refreshes, but `MDBListClient.refresh` swallowed every failure with `try?`, and `MDBListSession.renew` cleared the session on any nil. A timeout, being offline, or a scrobble task cancelled mid-refresh **signed the viewer out of MDBList**. Fixed in 1.0.56: a three-way `RefreshOutcome` (`MDBListClient.swift:309`). Only a 400/401/403 or `invalid_grant` clears the session (`MDBListSession.swift:49`). |
+| **Pin plugin sync to the profile that started it** | **Same defect, across the whole pass.** `NuvioSyncService` read the remote profile index after an await, and read the borrow-the-primary flags many awaits later. A profile switch mid-pass could push one profile's addon and plugin lists under another's index, or over the primary's. A sync requested by the new profile was dropped while the old pass ran. Fixed in 1.0.56: everything is captured at the start (`NuvioSyncService.swift:70`), and a request from another profile runs when the current pass ends (`:73`). |
+| **Don't save resume progress for live streams** | **Same defect on mpv and AetherEngine.** Both reported the live window as a duration, so every live channel wrote a resume point and scrobbled. Fixed in 1.0.56 with their rule: a duration that grows 10 s past its first reading is live (`PlayerLivePolicy.swift:22`, `MPVEngine.swift:594`), plus AetherEngine's own `isLive` (`AetherEngineAdapter.swift:175`) and the `channel` type. Progress and all three scrobbles are gated (`PlayerView.swift:1823`). The row the first ticks wrote before detection is withdrawn (`:290`). AVPlayer was already safe: a live item's duration is indefinite. |
+| **Release the decoder when the app goes to the background** | **Same defect.** Leaving the app did nothing: the engine kept decoding, and the resume point was the last five-second tick. Now the chrome pauses the engine and writes the position (`PlayerChrome.swift:276`). The engine is not torn down, because tvOS suspends it and resuming in place is the better return. |
+| **Eliminate playback tracking CPU and memory spikes** (Simkl, MDBList) | **Their hot path is N/A; we had our own.** We keep no tracker snapshot, so there is nothing to index. But every 5 s tick re-encoded the whole progress store, fitted the durable budget and rebuilt the Top Shelf. A sync pull did that **once per row**, up to 2,000 times on the main actor. Fixed in 1.0.56 with a batch `adoptProgress` (`LibraryStore.swift:459`) used by Nuvio sync and all three remote refreshes. Tick writes are coalesced to 30 s (`:182`); a new resume point is still written at once, and leaving the app flushes. |
+| **Stop re-decoding badge rules for every batch of streams** | **Same defect, in a hotter place.** The sources screen compiled once per load. The player decoded the packs and recompiled every regex on **every chrome redraw**. Memoised on the stored bytes (`IntegrationSettingsStores.swift:593`). |
+| **Honour a percent-encoded `{shape}` in custom poster patterns** | **Same defect, worse:** no placeholder matched at all, so the raw template was requested and every card fell back. Fixed with their decode of `%7B` `%7D` `%7C` and nothing else (`CustomPosterURL.swift:188`). The alternatives regex, compiled per card, is now static (`:197`). |
+| **Remove main-thread jank on the QR sign-in screen** | **Same defect.** The screen redraws every second for its countdown, and each redraw built a `CIContext` and rendered the code again. Seven screens call the renderer from a view body, so the fix is in the renderer: one context and a small cache (`AddonConfiguratorView.swift:125`). |
+| **Fix source navigation during scraping** | **Same defect.** Each new first row, or the playing source arriving late, took focus back from wherever the viewer had got to. Initial focus is now placed once (`InPlayerPanel.swift:469`). |
+| **Fix subtitle lift after player controls hide** | **Their revision of the rule we ported in 1.0.54, so we had the old behaviour.** Upstream now drops the line at once when the controls have gone or playback is paused (`SubtitleEngine.swift:623`); the hold only covers drops while the controls are still drawn. Separately, our 3 s timeout was only re-read on some other redraw, so on a still frame the hold could last indefinitely. It is now re-committed at the deadline (`PlayerChrome.swift:184`). |
+
+Smaller, on the way:
+- **Frame rate.** mpv printed 23.976 as "24 fps" and AetherEngine printed "24.000 fps". One formatter now serves both (`PlayerEngineSurface.swift:287`).
+- **Episode stills.** A failed TMDB attempt was permanent until the profile was rebuilt. It now gets three attempts (`RemoteProgressService.swift:26`), their bounded hydration retry.
+- **`[John]: Hello`** lost its bracket but kept the colon (`SubtitleSDHFilter.swift`).
+- **MDBList dates.** Two formatters were built per parsed date (`MDBListClient.swift:586`).
+- **Avatar URLs.** A leading `/` gave `base//path` (`AvatarCatalog.swift:64`).
+
+### The rest of the window
+
+| Upstream | Ours |
+|---|---|
+| **Derive skip intro intervals from chapter titles**, and reset the button timer when chapters replace API intervals | **Ported in 1.0.56.** `ChapterSkipSegments.swift:50` uses their patterns literally: OP/ED/credits/recap/intro, post-credits checked first and never offered, 5–240 s, and Intro ignored beside an Opening. On episodes, chapters win per kind and the providers fill the gaps. On films, chapters are used only when IntroDB has nothing, because its credits marks feed the post-play card. Chapters reach the host through `PlayerChromeState` (`PlayerView.swift:1171`) and are cleared when an engine fallback reports none. The countdown is now keyed on the segment's kind (`:261`), which fixes the timer reset in the same change. |
+| **Dim player controls on HDR video** | **Ported in 1.0.56.** `subtitle_hdr_dim_player_controls`, their key (`PlayerSettingsStore.swift:255`), shown under the HDR style. Applied as a colour multiply on the chrome (`PlayerChrome.swift:174`), because opacity would let the picture through the bar. Not on AVPlayer, whose controls AVKit draws. |
+| **Recognise language words in release names; ignore title words when reading stream languages** | **Ported in 1.0.56, and ours was further behind than theirs was.** We matched long names as substrings: no `ITA`, `ENG`, `CASTELLANO`; "multi" matched "Multiverse"; "The Italian Job" was Italian. Now we use their alias table (`StreamFilterEngine.swift:165`) with whole-word codes, and leave out `por` `chi` `fra` as they do. The first title match is removed per field (`:207`). Hebrew was added as a language. `vff`/`vfq` stay, as ours. |
+| **Improve player badge codec detection and add filename matching** | **Ported in 1.0.56.** AC-4, PCM, and the Dolby Vision base codec from its sample-entry prefix (`PlaybackBadgeTokens.swift:70`); reading "Dolby Vision" as HEVC badged AV1 DV x265. The filename may sharpen what the decoder confirms, never add a format (`:156`). This matters most for Atmos on mpv, which does not surface JOC in Matroska. Two-phase group matching: the name cannot reopen a group the decoder answered (`StreamBadgeRules.swift:362`). |
+| **Map Montenegrin subtitles into Serbian (Montenegro)** | **Ported in 1.0.56.** `cnr` `mne` `me` and "Montenegrin" map to `sr-me` (`MediaLanguage.swift:154`). As upstream, this is not a catalogue entry, so a Serbian preference picks those tracks. |
+| **Bluetooth media controls for internal mpv**, refresh the session after pause and seek, keep stream URLs out of media ids | **Open, and a defect of ours rather than only a port.** AetherEngine owns the now-playing session (`AetherEngineAdapter.swift:133`), but we never fill it or register its commands, so the card is empty and the commands do nothing. mpv publishes nothing at all. Needs an iPhone remote and a Bluetooth controller to verify, so it is its own release. No URL is exposed on any engine today. |
+| **Long-press back to force-exit from post-play** | **N/A on tvOS.** Holding Back belongs to the system (it returns to the Home screen) and is never delivered to the app. Back already closes the card and a second press exits. |
+| **Scope the stream audio delay to its audio language** | **Already true in effect.** Our delay is per session and never saved per stream, so it cannot follow the viewer into another language. Persisting it would be a new feature, not this fix. |
+| Startup order (plugins after addons and watch progress), keep playing when progress cannot be saved, autoplay for episodes picked in the player, no source name on the paused player, DNS-VPN posters, SDH lines ending in a colon, controls during session seeks, update banner on light accents, the phone add-on confirmation | **Already true here.** `NuvioSyncService` already runs addons → plugins after progress. No save path can throw into playback. The in-player episode list goes through `autoPlayIfConfigured`. The pause card names no source. Poster loads are never gated on reachability. Labels are only removed when shouted. Session seeks do not raise the transport. The banner never draws text on the accent. The confirmation is a system alert. |
+| **Consolidated accessibility improvements** | **Declined for this pass, and the state written down:** about sixteen labels in the app; toggles, steppers, the PIN pad and poster cards carry no VoiceOver label or value; nothing is announced. It deserves its own audit rather than a side lot. |
+| ASS onto video frames, ASS render mode, libass overlay geometry and redraws, buffer stalls under libass, forced-subtitle selection (shipped and reverted) | **N/A.** Our ASS is mpv's own libass inside the render; there is no overlay of theirs to align or move. |
+| Tunnelled playback to USB audio, release-the-decoder internals, logo PNG upscaling, updater dex metadata, session volume, Bluetooth `MediaSession` plumbing | **N/A.** Android platform internals. |
+| Torrent engine 0.1.6, engine error reporting, keeping the local torrent alive for external players | **N/A.** No torrent engine here; see *Declined since 0.8.9*. |
+| Jellyfin title lookup after details expire | **N/A while media servers are open.** We have no media server source. |
+| Supporter avatars: sanitised path, fallback on failure | **N/A.** Supporter perks are declined; the standard catalogue loads by URL. |
+| MKV Tracks placed after the Clusters | **N/A.** Their own range-request reader; both our engines demux. |
+| Compose focus (add-on manager after QR, settings destinations, add-ons page, provider test, plugin add), QR overlay corners, hero recomposition | **N/A.** Compose layout and focus internals. The debrid and layout settings diffs (390 and 103 lines) are this work. |
+| RTL alignment of server URLs, diagnostics and refresh-rate values | **N/A.** We ship English and French. |
+| Greek, Turkish, Bulgarian, Slovak, French | **Declined.** Translation work. |
+| CI, Gradle, unit-test repairs | **N/A.** |
+
+Open after this window: now-playing and remote commands (above), and image downsampling. `ImageLoader`
+keeps a full-resolution `UIImage(data:)` (`RemoteImage.swift:45`), so a large logo is decoded on the
+main thread the first time it is drawn. That one wants measuring before it is changed.

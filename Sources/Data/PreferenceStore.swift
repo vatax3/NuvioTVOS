@@ -189,6 +189,11 @@ class PreferenceStore {
         persist(key, value.map(\.rawValue))
     }
 
+    /// The stored bytes of a JSON-backed slot, for a caller that caches what it decodes from them.
+    func codableData(_ key: String) -> Data? {
+        storage[key] as? Data
+    }
+
     /// JSON-backed slot for the composite values (stream preferences, badge rules).
     func codable<T: Codable>(_ key: String, default fallback: T) -> T {
         guard let data = storage[key] as? Data,

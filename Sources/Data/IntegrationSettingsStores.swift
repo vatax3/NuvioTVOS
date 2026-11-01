@@ -586,8 +586,26 @@ final class StreamBadgeSettingsStore: PreferenceStore {
 
     /// The filters the player draws from: the chosen pack when it is still installed, otherwise
     /// the active one. A pack removed after being chosen must not silently switch the player off.
+    ///
+    /// Memoised on the stored bytes and the chosen source. The player reads this from its view
+    /// body, so without the cache every chrome redraw decoded the packs and recompiled every
+    /// regex in them — upstream's "re-decoding badge rules for every batch", in a hotter place.
     var playerFilters: [CompiledStreamBadgeFilter] {
         guard showsInPlayer else { return [] }
+        let key = PlayerFilterCacheKey(data: codableData("stream_badge_rules"), source: playerBadgeSource)
+        if let cached = playerFilterCache, cached.key == key { return cached.filters }
+        let filters = compilePlayerFilters()
+        playerFilterCache = (key, filters)
+        return filters
+    }
+
+    private struct PlayerFilterCacheKey: Equatable {
+        let data: Data?
+        let source: String
+    }
+    @ObservationIgnored private var playerFilterCache: (key: PlayerFilterCacheKey, filters: [CompiledStreamBadgeFilter])?
+
+    private func compilePlayerFilters() -> [CompiledStreamBadgeFilter] {
         let all = rules
         guard let chosen = all.imports.first(where: {
             $0.sourceUrl.caseInsensitiveCompare(playerBadgeSource) == .orderedSame

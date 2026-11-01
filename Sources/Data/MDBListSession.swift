@@ -11,9 +11,10 @@ import Foundation
 ///
 /// - refresh *before* the expiry rather than after a 401, because half the writes here answer 200
 ///   with a body saying nothing changed, and a 401 is not reliably what an expired token produces;
-/// - **a refresh that fails clears the session.** Leaving a dead token in place would keep the
-///   account looking connected on the Tracking screen for as long as nobody pressed anything,
-///   which is the state that makes a viewer think the app lost their data.
+/// - **a refresh the server refuses clears the session.** Leaving a dead token in place would keep
+///   the account looking connected on the Tracking screen for as long as nobody pressed anything.
+///   A refresh that merely did not complete — offline, timed out, cancelled — keeps it: the next
+///   call tries again, where clearing it would sign the viewer out over a network blip.
 @MainActor
 enum MDBListSession {
     /// Refresh this far before the stated expiry. A token that dies mid-request is the failure
@@ -38,14 +39,16 @@ enum MDBListSession {
             settings.clearMDBListSession()
             return nil
         }
-        guard let tokens = await MDBListClient.shared.refresh(
-            refreshToken: refreshToken, clientId: clientId
-        ) else {
+        switch await MDBListClient.shared.refresh(refreshToken: refreshToken, clientId: clientId) {
+        case .renewed(let tokens):
+            store(tokens, in: settings)
+            return tokens.accessToken
+        case .rejected:
             settings.clearMDBListSession()
             return nil
+        case .unavailable:
+            return nil
         }
-        store(tokens, in: settings)
-        return tokens.accessToken
     }
 
     static func store(_ tokens: MDBListClient.Tokens, in settings: TrackingSettingsStore) {

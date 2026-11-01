@@ -50,6 +50,7 @@ final class AetherEngineAdapter {
     private(set) var isBuffering = true
     private(set) var position: Double = 0
     private(set) var duration: Double = 0
+    private(set) var isLive = false
     private(set) var bufferedPosition: Double = 0
     private(set) var didEnd = false
     private(set) var errorMessage: String?
@@ -168,6 +169,12 @@ final class AetherEngineAdapter {
         engine.$duration
             .receive(on: RunLoop.main)
             .sink { [weak self] in self?.duration = $0 }
+            .store(in: &sinks)
+        // Latched: a live item never becomes a VOD mid-session, and a momentary false while the
+        // engine rejoins the edge must not re-open the progress path.
+        engine.$isLive
+            .receive(on: RunLoop.main)
+            .sink { [weak self] live in if live { self?.isLive = true } }
             .store(in: &sinks)
         engine.$hasFirstFrameReadyForDisplay
             .receive(on: RunLoop.main)
@@ -307,7 +314,7 @@ final class AetherEngineAdapter {
             videoCodec: engine.sourceVideoCodecName,
             resolution: engine.sourceVideoWidth > 0
                 ? "\(engine.sourceVideoWidth)×\(engine.sourceVideoHeight)" : nil,
-            frameRate: engine.sourceVideoFrameRate.map { String(format: "%.3f fps", $0) },
+            frameRate: engine.sourceVideoFrameRate.map { PlayerStreamInfo.frameRateLabel(Double($0)) },
             sourceRange: [format?.colorPrimariesLabel, format?.transferLabel]
                 .compactMap { $0 }.joined(separator: " · ").nilIfBlank,
             // Nothing is tone-mapped on this engine: the source colorimetry reaches the panel, or

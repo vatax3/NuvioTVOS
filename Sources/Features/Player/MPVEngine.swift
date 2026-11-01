@@ -31,6 +31,9 @@ final class MPVEngine {
     private(set) var isBuffering = true
     private(set) var position: Double = 0
     private(set) var duration: Double = 0
+    /// Latched once the duration has grown past `PlayerLivePolicy.growthThreshold`.
+    private(set) var isLive = false
+    @ObservationIgnored private var durationGrowth = PlayerLivePolicy.DurationGrowth()
     /// Media time up to which the demuxer has data. Android draws it behind the played fill so
     /// a stalling source is visible before it stops.
     private(set) var bufferedPosition: Double = 0
@@ -592,6 +595,8 @@ final class MPVEngine {
             if let value = property.data?.assumingMemoryBound(to: Double.self).pointee,
                value.isFinite, value > 0 {
                 duration = value
+                durationGrowth.observe(value)
+                if durationGrowth.grew, !isLive { isLive = true }
             }
         case "demuxer-cache-time":
             if let value = property.data?.assumingMemoryBound(to: Double.self).pointee,
@@ -730,7 +735,7 @@ final class MPVEngine {
         streamInfo = StreamInfo(
             videoCodec: codec,
             resolution: width.flatMap { width in height.map { "\(width) × \($0)" } },
-            frameRate: fps.map { String(format: "%.3g fps", $0) },
+            frameRate: fps.map(PlayerStreamInfo.frameRateLabel),
             sourceRange: Self.colorimetry(
                 gamma: propertyString("video-params/gamma"),
                 primaries: propertyString("video-params/primaries")

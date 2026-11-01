@@ -64,10 +64,24 @@ private func resolutionTokens(width: Int?, height: Int?) -> [String] {
     }
 }
 
+/// A Dolby Vision sample entry names the base codec in its prefix: `dvhe`/`dvh1` are HEVC,
+/// `dvav`/`dva1` AVC, `dav1` AV1. Reading "Dolby Vision" as HEVC, as this used to, badged an AV1
+/// Dolby Vision file x265.
+private func dolbyVisionBase(_ codec: String) -> String? {
+    let lower = codec.lowercased()
+    if lower.hasPrefix("dvhe") || lower.hasPrefix("dvh1") { return "HEVC" }
+    if lower.hasPrefix("dvav") || lower.hasPrefix("dva1") { return "AVC" }
+    if lower.hasPrefix("dav1") { return "AV1" }
+    return nil
+}
+
 private func videoCodecTokens(_ codec: String?) -> [String] {
     guard let codec = codec?.nilIfBlank else { return [] }
+    if let base = dolbyVisionBase(codec) {
+        return videoCodecTokens(base) + ["DV", "DoVi", "Dolby Vision"]
+    }
     switch codec.uppercased() {
-    case let name where name.contains("HEVC") || name.contains("H265") || name.contains("DOLBY VISION"):
+    case let name where name.contains("HEVC") || name.contains("H265"):
         return ["HEVC", "H.265", "H265", "x265"]
     case let name where name.contains("AVC") || name.contains("H264"):
         return ["AVC", "H.264", "H264", "x264"]
@@ -86,12 +100,16 @@ private func audioCodecTokens(_ codec: String?) -> [String] {
     let label = codec.uppercased()
     var out: [String] = []
 
-    if label.contains("E-AC-3") || label.contains("EAC3") {
+    if label.contains("E-AC-3") || label.contains("EAC3") || label.contains("EC-3") {
         out += ["DD+", "DDP", "EAC3"]
     } else if label.contains("AC-3") || label.contains("AC3") {
         out += ["DD", "AC3"]
+    } else if label.contains("AC-4") || label.contains("AC4") {
+        out += ["AC-4", "AC4"]
     } else if label.contains("TRUEHD") {
         out += ["TrueHD"]
+    } else if label.hasPrefix("PCM") || label.contains("LPCM") {
+        out += ["PCM"]
     } else if label.contains("DTS") {
         out.append("DTS")
         if label.contains("HD") { out.append("DTS-HD") }
@@ -113,4 +131,49 @@ private func channelsToken(_ channels: Int?) -> String? {
     case 8: return "7.1"
     default: return nil
     }
+}
+
+// MARK: - What the file's name can add
+
+private let refineDTSHDMA = try? NSRegularExpression(
+    pattern: #"dts-?hd[ ._-]?ma\b|master[ ._-]?audio"#, options: .caseInsensitive
+)
+private let refineDTSX = try? NSRegularExpression(pattern: #"\bdts[ ._:-]?x\b"#, options: .caseInsensitive)
+private let refineHDR10Plus = try? NSRegularExpression(pattern: #"\bhdr10\+"#, options: .caseInsensitive)
+
+private func matches(_ regex: NSRegularExpression?, _ text: String) -> Bool {
+    regex?.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
+}
+
+/// Details the decoder cannot report but the filename or stream name can confirm. Port of
+/// upstream's `refinePlaybackText`.
+///
+/// Each one is added **only when the decoder already confirms the base format**: Atmos when
+/// E-AC-3 or TrueHD is what is playing, DTS-HD MA when DTS-HD is, DTS:X when DTS is, HDR10+ when
+/// HDR10 is. A name alone never adds a format; it can only sharpen one. Atmos in particular is
+/// invisible to mpv in Matroska, where the JOC flag is not surfaced, so without this an Atmos file
+/// played through mpv never earned its badge.
+func refinedPlaybackBadgeTokens(_ tokens: [String], metadata: [String]) -> [String] {
+    guard !tokens.isEmpty, !metadata.isEmpty else { return tokens }
+    let joined = metadata.joined(separator: " ")
+    let set = Set(tokens)
+    var extra: [String] = []
+    if !set.isDisjoint(with: ["DD+", "DDP", "EAC3", "TrueHD"]), !set.contains("Atmos"),
+       joined.range(of: "atmos", options: .caseInsensitive) != nil {
+        extra.append("Atmos")
+    }
+    if set.contains("DTS-HD"), !set.contains("DTS-HD MA"), matches(refineDTSHDMA, joined) {
+        extra.append("DTS-HD MA")
+    }
+    if set.contains("DTS"), !set.contains("DTS:X"), matches(refineDTSX, joined) {
+        extra.append("DTS:X")
+    }
+    if set.contains("HDR10"), !set.contains("HDR10+"), matches(refineHDR10Plus, joined) {
+        extra.append("HDR10+")
+    }
+    guard !extra.isEmpty else { return tokens }
+    // The joined candidate is rebuilt, so a pattern spanning facts sees the additions too.
+    let base = tokens.count > 1 ? Array(tokens.dropLast()) : tokens
+    let all = base + extra
+    return all + [all.joined(separator: " ")]
 }
