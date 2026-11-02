@@ -333,7 +333,8 @@
 "settings.layout.classic_focus_gradient_subtitle" = "Tint the backdrop toward the focused poster";
 "settings.layout.modern_sidebar" = "Modern sidebar";
 "settings.layout.glass_blur" = "Glass blur";
-"settings.layout.collapsed_by_default" = "Collapsed by default";
+"settings.layout.sidebar_when_closed" = "Sidebar when closed";
+"settings.layout.sidebar_when_closed_subtitle" = "Hidden: full-width content, move left from the edge to open the menu";
 "settings.layout.glass_side_panels" = "Glass side panels";
 "settings.layout.poster_cards" = "Poster cards";
 "settings.layout.poster_cards_footnote" = "Sizes are in Android dp and scale automatically to the tvOS point grid.";
@@ -1256,6 +1257,8 @@
 "option.discover_sidebar" = "Its own sidebar entry";
 "option.discover_search" = "Inside Search";
 "option.hidden" = "Hidden";
+"option.sidebar_icons" = "Icons";
+"option.sidebar_hidden" = "Hidden";
 "option.recently_watched" = "Recently watched";
 "option.this_device" = "This device";
 "option.trakt_collection" = "Trakt collection";

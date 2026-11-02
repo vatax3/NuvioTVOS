@@ -6,7 +6,22 @@ private struct ShellLeadingInsetKey: EnvironmentKey {
     static let defaultValue: CGFloat = 0
 }
 
+private struct ShellRailTrailingEdgeKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 0
+}
+
 extension EnvironmentValues {
+    /// Where the closed sidebar's icons end on screen, in global coordinates, plus a little air.
+    /// Zero when nothing is drawn there (hidden rail, classic rail, outside the shell).
+    ///
+    /// Not the same as `shellLeadingInset`: the tvOS 26 glass buttons draw wider than the column
+    /// reserved for them, so the icons overhang the start of the content. Horizontal rows clip
+    /// against this rather than against their own edge — see `clippedHorizontalScroller`.
+    var shellRailTrailingEdge: CGFloat {
+        get { self[ShellRailTrailingEdgeKey.self] }
+        set { self[ShellRailTrailingEdgeKey.self] = newValue }
+    }
+
     /// How far a screen's content has been pushed right by the shell's navigation column.
     ///
     /// Every destination is laid out *beside* the sidebar rather than under it — see
@@ -58,11 +73,36 @@ extension View {
     /// The sandwich is the standard answer: pad the bounds outwards vertically, clip to those
     /// bounds, then take the padding back out of the layout. Horizontal is clipped at the real
     /// edge; vertical is not clipped at all.
+    ///
+    /// The leading edge is also pulled in past the sidebar's icons where they overhang the row,
+    /// so cards scrolled off the start disappear before they slide under the glass.
     func clippedHorizontalScroller(overhang: CGFloat = NuvioTheme.spacing.lg) -> some View {
-        scrollClipDisabled()
+        modifier(HorizontalScrollerClip(overhang: overhang))
+    }
+}
+
+private struct HorizontalScrollerClip: ViewModifier {
+    @Environment(\.shellRailTrailingEdge) private var railTrailingEdge
+    let overhang: CGFloat
+    @State private var minX: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .scrollClipDisabled()
             .padding(.vertical, overhang)
-            .clipped()
+            .clipShape(LeadingInsetRectangle(inset: max(0, railTrailingEdge - minX)))
             .padding(.vertical, -overhang)
+            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minX } action: { minX = $0 }
+    }
+}
+
+/// A rectangle with its leading edge moved in by `inset`.
+private struct LeadingInsetRectangle: Shape {
+    var inset: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        Path(CGRect(x: rect.minX + min(inset, rect.width), y: rect.minY,
+                    width: max(0, rect.width - inset), height: rect.height))
     }
 }
 

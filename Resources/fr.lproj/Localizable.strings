@@ -333,7 +333,8 @@
 "settings.layout.classic_focus_gradient_subtitle" = "Teinter le fond vers l’affiche sélectionnée";
 "settings.layout.modern_sidebar" = "Barre latérale Moderne";
 "settings.layout.glass_blur" = "Flou de verre";
-"settings.layout.collapsed_by_default" = "Repliée par défaut";
+"settings.layout.sidebar_when_closed" = "Barre repliée";
+"settings.layout.sidebar_when_closed_subtitle" = "Masquée : contenu pleine largeur, allez à gauche depuis le bord pour ouvrir le menu";
 "settings.layout.glass_side_panels" = "Panneaux latéraux en verre";
 "settings.layout.poster_cards" = "Cartes d’affiches";
 "settings.layout.poster_cards_footnote" = "Les tailles sont en dp Android et s’adaptent automatiquement à la grille en points de tvOS.";
@@ -1256,6 +1257,8 @@
 "option.discover_sidebar" = "Sa propre entrée dans la barre latérale";
 "option.discover_search" = "Dans Rechercher";
 "option.hidden" = "Masqué";
+"option.sidebar_icons" = "Icônes";
+"option.sidebar_hidden" = "Masquée";
 "option.recently_watched" = "Vus récemment";
 "option.this_device" = "Cet appareil";
 "option.trakt_collection" = "Collection Trakt";

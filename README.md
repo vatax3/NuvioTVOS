@@ -98,7 +98,7 @@ independent on purpose.
 
 | Screen | Notes |
 | --- | --- |
-| Shell | Modern floating pill that blooms into the glass sidebar panel on D-pad Left; classic always-open rail as an option |
+| Shell | Modern floating pill that blooms into the glass sidebar panel on D-pad Left, or a hidden sidebar for full-width content; classic always-open rail as an option |
 | Home | All three layouts — Modern (full-bleed hero), Classic, Grid |
 | Detail | Hero + actions, seasons/episodes, cast, networks/studios, collections, comments, More like this |
 | Cast | Person photo, biography and filmography (TMDB) |

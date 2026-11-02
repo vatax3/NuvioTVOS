@@ -28,6 +28,13 @@ struct SidebarScaffold<Content: View>: View {
     /// Set by any directional press, cleared when a destination is opened. While the reclaim
     /// loop below is running, a move means the viewer has taken over and it must stand down.
     @State private var hasMovedSinceTabChange = false
+    /// Hidden rail: the invisible strip at the left edge that a leftward move lands on.
+    @FocusState private var isEdgeFocused: Bool
+    /// Hidden rail: the rows are on screen and taking focus, the content not yet disabled.
+    @State private var isRevealingHiddenRail = false
+    /// Where the closed icons actually end on screen. The glass buttons draw wider than
+    /// `railColumnWidth` allows for, so this is measured rather than derived from the tokens.
+    @State private var closedRailMaxX: CGFloat = 0
     @Namespace private var shellFocus
 
     private var tokens: NuvioSidebarComponentTokens { NuvioTheme.components.sidebar }
@@ -40,6 +47,19 @@ struct SidebarScaffold<Content: View>: View {
 
     /// `modern_sidebar_enabled` off means the classic always-open rail: no pill, no bloom.
     private var isModernSidebar: Bool { settings.layout.modernSidebarEnabled }
+
+    /// `sidebar_hidden`: nothing on screen while closed, so content runs the full width. The
+    /// menu sits exactly where it always does — a leftward move from the edge of the content
+    /// brings it in — only the icons are gone.
+    private var isHiddenRail: Bool { isModernSidebar && settings.layout.sidebarHidden }
+
+    /// The strip a hidden rail keeps at the left edge: wide enough to be a focus target to the
+    /// left of every row, narrow enough not to read as a margin. Screens keep their own
+    /// `tvSafeHorizontal`, which is what actually covers overscan.
+    private var hiddenRailEdgeWidth: CGFloat { dp(12) }
+
+    /// What the panel draws as: open, or about to be (see `revealHiddenRail`).
+    private var showsPanel: Bool { isExpanded || isRevealingHiddenRail }
 
     /// Where the content starts. Every destination gets the same gap, and the gap is at least
     /// the rail's own width — which is the point, not a detail of spacing.
@@ -57,6 +77,7 @@ struct SidebarScaffold<Content: View>: View {
     /// over the column without moving a single focusable frame. See `bleedingLeading`.
     private var contentLeadingOffset: CGFloat {
         guard isModernSidebar else { return NuvioTheme.components.sidebar.expandedWidth }
+        guard !isHiddenRail else { return hiddenRailEdgeWidth }
         return max(NuvioTheme.layout.sidebarContentOffset, railColumnWidth)
     }
 
@@ -81,6 +102,7 @@ struct SidebarScaffold<Content: View>: View {
     /// more. The expanded panel deliberately overflows this rather than widening it.
     private var railColumnWidth: CGFloat {
         guard isModernSidebar else { return NuvioTheme.components.sidebar.expandedWidth }
+        guard !isHiddenRail else { return hiddenRailEdgeWidth }
         // The pill is the leading visual plus the dp(5) it is padded by on each side.
         return railLeadingPadding + NuvioTheme.components.sidebar.leadingVisual + dp(10)
             + NuvioTheme.spacing.sm
@@ -105,26 +127,13 @@ struct SidebarScaffold<Content: View>: View {
 
     private var shellBody: some View {
         HStack(spacing: 0) {
-            sidebar
-                .padding(.leading, railLeadingPadding)
-                .padding(.top, NuvioTheme.spacing.lg)
-                .padding(.bottom, NuvioTheme.spacing.md)
-                .padding(.trailing, NuvioTheme.spacing.sm)
-                .frame(width: railColumnWidth, alignment: isExpanded ? .topLeading : .leading)
-                // Full height *before* the focus section, which is the whole trick. A
-                // directional move only considers candidates whose frame overlaps the band it
-                // projects, and the pill sits at the very top — from a row further down the
-                // screen there is simply nothing to the left of it. A focus section spanning the
-                // full height is always in that band, and the engine redirects into it to the
-                // nearest focusable item, which is the pill.
-                .frame(maxHeight: .infinity, alignment: .top)
-                .focusSection()
-                // RIGHT is the way back to the content. It cannot be left to the focus engine:
-                // the content is disabled while the panel is open, so there is nothing to the
-                // right to move to until the panel closes.
-                .onMoveCommand { direction in
-                    if direction == .right, isExpanded { collapse() }
+            Group {
+                if isHiddenRail {
+                    hiddenRailEdge
+                } else {
+                    panelColumn(width: railColumnWidth)
                 }
+            }
                 .zIndex(1)
 
             content
@@ -140,6 +149,12 @@ struct SidebarScaffold<Content: View>: View {
                 // What the column took, so a screen's backdrop can give it back. Nothing about
                 // the layout changes — see `fullBleedLeading`, which paints rather than moves.
                 .environment(\.shellLeadingInset, contentLeadingOffset)
+                // Where scrolled rows have to stop so nothing passes under the icons.
+                .environment(
+                    \.shellRailTrailingEdge,
+                    isModernSidebar && !isHiddenRail && closedRailMaxX > 0
+                        ? closedRailMaxX + NuvioTheme.spacing.sm : 0
+                )
                 // Android's `sidebarBlocksContentKeys`: while the panel is open the content
                 // stops taking input entirely. Without it the panel — which overlays the
                 // content rather than displacing it — competes with whatever sits underneath,
@@ -147,25 +162,35 @@ struct SidebarScaffold<Content: View>: View {
                 // collapses out from under the viewer.
                 .disabled(isExpanded)
         }
+        // A hidden rail's panel is drawn over the content with its own frame. Rows that merely
+        // overflow a column this narrow are not reachable by the focus engine.
+        .overlay(alignment: .topLeading) {
+            if isHiddenRail, showsPanel {
+                panelColumn(width: nil)
+            }
+        }
         .background(colors.background)
         .focusScope(shellFocus)
         .onMoveCommand { _ in
             hasUserNavigated = true
             hasMovedSinceTabChange = true
         }
-        // Android's `BackHandler` on the root routes: back opens the drawer and puts focus on
-        // the current destination rather than leaving the screen. Without it the panel is only
-        // reachable by a directional move, which the Home hero can swallow.
-        .onExitCommand { toggleFromBackButton() }
+        // No `onExitCommand` here, deliberately. Android's root `BackHandler` opens the drawer;
+        // on tvOS Back on a top-level screen leaves the app, as it does in every other Apple TV
+        // app, and the menu is reached by moving left. Pushed screens and dialogs keep their
+        // own Back handling.
         .onChange(of: focusedTab) { _, newValue in
             updateExpansion(focusedTab: newValue)
         }
         .onChange(of: hasUserNavigated) { _, _ in
             updateExpansion(focusedTab: focusedTab)
+            edgeReached()
         }
+        .onChange(of: isEdgeFocused) { _, _ in edgeReached() }
         .onChange(of: isModernSidebar, initial: true) { _, _ in
             updateExpansion(focusedTab: focusedTab)
         }
+        .onChange(of: settings.layout.sidebarCollapsedStyle) { _, _ in collapse() }
         // Switching destination swaps the whole content subtree. `collapse()` releases the
         // sidebar's focus on the next tick, and if the incoming screen has not laid out
         // anything focusable by then — which is every screen whose first row is waiting on a
@@ -179,12 +204,71 @@ struct SidebarScaffold<Content: View>: View {
         }
     }
 
-    /// Back opens the panel on the current destination; pressing it again hands focus back to
-    /// the content. Android exits the app on that second press, which tvOS neither allows nor
-    /// expects — the Home button already does it.
-    private func toggleFromBackButton() {
-        guard router.contentHasFocusableViews else { return }
-        if isExpanded { collapse() } else { expand() }
+    /// The sidebar with its paddings, the full-height focus section and RIGHT-to-close.
+    private func panelColumn(width: CGFloat?) -> some View {
+        sidebar
+            // Only the closed icons count: the open panel covers content that is disabled
+            // anyway, and measuring it would clip every row to the panel's width.
+            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxX } action: { maxX in
+                if !showsPanel { closedRailMaxX = maxX }
+            }
+            .padding(.leading, railLeadingPadding)
+            .padding(.top, NuvioTheme.spacing.lg)
+            .padding(.bottom, NuvioTheme.spacing.md)
+            .padding(.trailing, NuvioTheme.spacing.sm)
+            .frame(width: width, alignment: showsPanel ? .topLeading : .leading)
+            // Full height *before* the focus section, which is the whole trick. A
+            // directional move only considers candidates whose frame overlaps the band it
+            // projects, and the pill sits at the very top — from a row further down the
+            // screen there is simply nothing to the left of it. A focus section spanning the
+            // full height is always in that band, and the engine redirects into it to the
+            // nearest focusable item, which is the pill.
+            .frame(maxHeight: .infinity, alignment: .top)
+            .focusSection()
+            // RIGHT is the way back to the content. It cannot be left to the focus engine:
+            // the content is disabled while the panel is open, so there is nothing to the
+            // right to move to until the panel closes.
+            .onMoveCommand { direction in
+                if direction == .right, isExpanded { collapse() }
+            }
+    }
+
+    /// Hidden rail, closed: one invisible focus target spanning the full height of the left
+    /// edge. It is what a leftward move from any row lands on — the same full-height trick the
+    /// icon column relies on — and landing on it is what opens the menu. Disabled while the
+    /// panel is open or closing, so focus released by the rows never falls back onto it and
+    /// re-opens the menu.
+    private var hiddenRailEdge: some View {
+        Color.clear
+            .frame(width: hiddenRailEdgeWidth)
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .focusable()
+            .focusEffectDisabled()
+            .focused($isEdgeFocused)
+            .disabled(isExpanded || isDismissing || !router.contentHasFocusableViews)
+            .accessibilityHidden(true)
+            .focusSection()
+    }
+
+    private func edgeReached() {
+        guard isEdgeFocused, hasUserNavigated, !isDismissing else { return }
+        revealHiddenRail()
+    }
+
+    /// Opening disables the content, and a hidden rail has no rows until it opens. Doing both at
+    /// once leaves focus nowhere at all. So the rows come in first and take focus from the edge
+    /// while the content is still live, and only then is the content shut off behind them.
+    private func revealHiddenRail() {
+        guard isHiddenRail, !isExpanded, !isRevealingHiddenRail else { return }
+        withAnimation(NuvioMotion.sidebarPanelIn) { isRevealingHiddenRail = true }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(16))
+            focusedTab = router.selectedTab
+            try? await Task.sleep(for: .milliseconds(16))
+            isExpanded = true
+            isRevealingHiddenRail = false
+        }
     }
 
     /// The engine only picks a default when the scope has a candidate, so this retries across
@@ -210,7 +294,7 @@ struct SidebarScaffold<Content: View>: View {
                 // engine takes the nearest thing that is — the rail — and stays there once the
                 // posters arrive. Used to be a reason to give up, which is why the app could open
                 // with the menu lit and the content dead.
-                if focusedTab == nil {
+                if focusedTab == nil, !isEdgeFocused {
                     // Something in the content has taken focus, which is the whole objective.
                     // Asked of UIKit rather than of `@FocusState`, which reports back only what
                     // was last requested — see `FocusSystemProbe`.
@@ -219,14 +303,6 @@ struct SidebarScaffold<Content: View>: View {
                 resetFocus(in: shellFocus)
             }
         }
-    }
-
-    private func expand() {
-        guard isModernSidebar, !isExpanded else { return }
-        hasUserNavigated = true
-        isDismissing = false
-        withAnimation(NuvioMotion.sidebarPanelIn) { isExpanded = true }
-        focusedTab = router.selectedTab
     }
 
     /// Closing has to happen in this order, and it is the whole reason the panel is not simply
@@ -246,6 +322,11 @@ struct SidebarScaffold<Content: View>: View {
             try? await Task.sleep(for: .milliseconds(250))
             isDismissing = false
         }
+        // A hidden rail's rows leave with the panel, so there is no pill for focus to settle on.
+        if isHiddenRail {
+            hasMovedSinceTabChange = false
+            reclaimContentFocus()
+        }
     }
 
     private func updateExpansion(focusedTab: RootTab?) {
@@ -254,11 +335,11 @@ struct SidebarScaffold<Content: View>: View {
             if !isExpanded { isExpanded = true }
             return
         }
-        // `sidebar_collapsed_by_default` off means the panel starts — and stays — open.
-        guard settings.layout.sidebarCollapsedByDefault else {
-            if !isExpanded { isExpanded = true }
-            return
-        }
+        // Hidden: only the edge opens the panel — see `edgeReached`.
+        guard !isHiddenRail else { return }
+        // `sidebar_collapsed_by_default` off is deliberately ignored. Honouring it kept the panel
+        // open over disabled content with nothing focused, so a profile that synced it from
+        // Android had no way to reach anything — Settings included.
         guard !isDismissing else { return }
         // Focus arriving on the pill — via LEFT — is what opens the panel. Focus leaving is not
         // what closes it; `collapse()` is, so that the order above is always respected.
@@ -276,14 +357,14 @@ struct SidebarScaffold<Content: View>: View {
                     SidebarItemView(
                         tab: tab,
                         isSelected: router.selectedTab == tab,
-                        showsLabel: isExpanded,
+                        showsLabel: showsPanel,
                         action: { select(tab) }
                     )
                     .focused($focusedTab, equals: tab)
                     .disabled(!router.contentHasFocusableViews)
                 }
 
-                if isExpanded, profiles.hasMultipleProfiles,
+                if showsPanel, profiles.hasMultipleProfiles,
                    let active = profiles.activeProfile {
                     profileRow(active)
                 }
@@ -292,18 +373,18 @@ struct SidebarScaffold<Content: View>: View {
             // a leftward move resolving from a row halfway down the screen: the column's focus
             // section spans the full height, and the engine redirects into it to the nearest
             // focusable item — which is much nearer from the middle than from the top corner.
-            .frame(maxHeight: .infinity, alignment: isExpanded ? .top : .center)
+            .frame(maxHeight: .infinity, alignment: showsPanel ? .top : .center)
         }
-        .padding(.horizontal, isExpanded ? NuvioTheme.spacing.sm : 0)
-        .padding(.vertical, isExpanded ? NuvioTheme.spacing.sm : 0)
-        .frame(width: isExpanded ? tokens.expandedWidth : nil, alignment: .leading)
-        .frame(maxHeight: .infinity, alignment: isExpanded ? .top : .center)
+        .padding(.horizontal, showsPanel ? NuvioTheme.spacing.sm : 0)
+        .padding(.vertical, showsPanel ? NuvioTheme.spacing.sm : 0)
+        .frame(width: showsPanel ? tokens.expandedWidth : nil, alignment: .leading)
+        .frame(maxHeight: .infinity, alignment: showsPanel ? .top : .center)
         .background {
-            if isExpanded {
+            if showsPanel {
                 panelBackground
             }
         }
-        .animation(NuvioMotion.sidebarPanelIn, value: isExpanded)
+        .animation(NuvioMotion.sidebarPanelIn, value: showsPanel)
     }
 
     /// The active profile, sitting under the destinations, opening the chooser.
@@ -340,7 +421,9 @@ struct SidebarScaffold<Content: View>: View {
     /// is a strip of icons, one per destination: `drawerItems.forEach { LegacySidebarButton(…) }`
     /// runs in both states, and only `expanded` changes, which is what fills the band and lets a
     /// viewer see where they can go without opening anything.
-    private var visibleTabs: [RootTab] { tabs }
+    private var visibleTabs: [RootTab] {
+        isHiddenRail && !showsPanel ? [] : tabs
+    }
 
     /// `glass_sidepanel_enabled` chooses the gradient-over-material glass; with it off the
     /// panel is a plain surface fill. `modern_sidebar_blur_enabled` controls the blur pass

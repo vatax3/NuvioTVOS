@@ -641,7 +641,11 @@ struct LayoutSettingsContent: View {
             SettingsCard(title: L10n.text("settings.section.sidebar", fallback: "Sidebar")) {
                 SettingsToggle(title: L10n.text("settings.layout.modern_sidebar", fallback: "Modern sidebar"), systemImage: "sidebar.leading", isOn: $layout.modernSidebarEnabled)
                 SettingsToggle(title: L10n.text("settings.layout.glass_blur", fallback: "Glass blur"), isOn: $layout.modernSidebarBlurEnabled)
-                SettingsToggle(title: L10n.text("settings.layout.collapsed_by_default", fallback: "Collapsed by default"), isOn: $layout.sidebarCollapsedByDefault)
+                SettingsOptionRow(
+                    title: L10n.text("settings.layout.sidebar_when_closed", fallback: "Sidebar when closed"),
+                    subtitle: L10n.text("settings.layout.sidebar_when_closed_subtitle", fallback: "Hidden: full-width content, move left from the edge to open the menu"),
+                    selection: $layout.sidebarCollapsedStyle
+                )
                 SettingsToggle(title: L10n.text("settings.layout.glass_side_panels", fallback: "Glass side panels"), isOn: $layout.glassSidePanelEnabled)
             }
 

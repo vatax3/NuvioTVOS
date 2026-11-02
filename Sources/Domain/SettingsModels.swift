@@ -450,6 +450,18 @@ enum DetailRatingsVisibility: String, SettingsOption {
 
 // MARK: - Layout
 
+/// What the sidebar looks like while closed. `hidden` is tvOS-only — see `LayoutSettingsStore`.
+enum SidebarCollapsedStyle: String, SettingsOption {
+    case icons = "ICONS"
+    case hidden = "HIDDEN"
+    var displayName: String {
+        switch self {
+        case .icons: return L10n.text("option.sidebar_icons", fallback: "Icons")
+        case .hidden: return L10n.text("option.sidebar_hidden", fallback: "Hidden")
+        }
+    }
+}
+
 enum DiscoverLocation: String, SettingsOption {
     case sidebar = "SIDEBAR"
     case searchTab = "SEARCH"

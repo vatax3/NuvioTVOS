@@ -38,9 +38,19 @@ final class LayoutSettingsStore: PreferenceStore {
         set { setBool("modern_sidebar_blur_enabled", newValue) }
     }
 
-    var sidebarCollapsedByDefault: Bool {
-        get { bool("sidebar_collapsed_by_default", default: true) }
-        set { setBool("sidebar_collapsed_by_default", newValue) }
+    /// No icon column while closed: content runs full width and a leftward move from the edge
+    /// brings the menu in. tvOS-only, so it lives under its own key rather than stretching
+    /// Android's boolean.
+    var sidebarHidden: Bool {
+        get { bool("sidebar_hidden", default: false) }
+        set { setBool("sidebar_hidden", newValue) }
+    }
+
+    /// The choice the settings screen offers. Android's `sidebar_collapsed_by_default` is not
+    /// read on tvOS any more — see `SidebarScaffold.updateExpansion`.
+    var sidebarCollapsedStyle: SidebarCollapsedStyle {
+        get { sidebarHidden ? .hidden : .icons }
+        set { sidebarHidden = newValue == .hidden }
     }
 
     var glassSidePanelEnabled: Bool {

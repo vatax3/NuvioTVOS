@@ -92,7 +92,9 @@ struct CatalogRowView: View {
                 // vertical room stops either from being clipped by the scroll view.
                 .padding(.vertical, NuvioTheme.spacing.sm)
             }
-            .scrollClipDisabled()
+            // Clipped sideways only: cards scrolled past the start used to slide out of the
+            // content and under the sidebar's glass icons.
+            .clippedHorizontalScroller()
         }
     }
 
@@ -176,7 +178,7 @@ struct ContinueWatchingRow: View {
                 .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)
                 .padding(.vertical, NuvioTheme.spacing.sm)
             }
-            .scrollClipDisabled()
+            .clippedHorizontalScroller()
         }
         .padding(.vertical, NuvioTheme.components.row.verticalPadding)
         .focusSection()

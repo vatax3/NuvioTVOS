@@ -96,7 +96,9 @@ final class PartyRosterUITests: XCTestCase {
             wait(for: { self.app.buttons["settings.party.open"].exists }),
             "ending should return to Settings"
         )
+        // Back on a top-level screen now leaves the app, as on any Apple TV app, so the app going
+        // to the background is expected; what must not happen is the app dying.
         XCUIRemote.shared.press(.menu)
-        XCTAssertEqual(app.state, .runningForeground)
+        XCTAssertNotEqual(app.state, .notRunning, "Back after ending a party must not crash the app")
     }
 }

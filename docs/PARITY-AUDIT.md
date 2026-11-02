@@ -139,6 +139,21 @@ path and AVFoundation refuses.
   priority controls and their DV7 stack — and it removes the need for the last of those.
 - **Supporter perks omitted.** Monetisation belongs to the official project.
 - **tvOS-native focus and geometry** rather than pixel-identical Compose.
+- **Back on a top-level screen leaves the app.** Upstream's root `BackHandler` opens the drawer;
+  every other Apple TV app treats that press as "go home", so the shell no longer handles it and
+  the menu is reached by moving left
+  ([SidebarScaffold.swift:178](../Sources/Features/Shell/SidebarScaffold.swift#L178)). Pushed
+  screens and dialogs keep their own Back.
+- **`sidebar_collapsed_by_default` is not honoured.** Off, it left the panel open over disabled
+  content with nothing focused — every screen, Settings included, out of reach — so the control
+  is gone and a value synced from Android is ignored
+  ([SidebarScaffold.swift:340](../Sources/Features/Shell/SidebarScaffold.swift#L340)).
+- **A hidden sidebar, which upstream does not have.** `sidebar_hidden` drops the icon column so
+  content runs full width; a full-height invisible strip at the left edge is what a leftward move
+  lands on, and landing there opens the menu
+  ([SidebarScaffold.swift:241](../Sources/Features/Shell/SidebarScaffold.swift#L241),
+  [LayoutSettingsStore.swift:44](../Sources/Data/LayoutSettingsStore.swift#L44)). Requested in
+  issue #5.
 - **No cached tracking snapshot.** Upstream holds a Simkl snapshot and applies a receipt to it
   after each write, so the interface reflects a mutation before the next sync. Our Trakt and
   Simkl list screens fetch when they appear, so there is no snapshot to reconcile — the same

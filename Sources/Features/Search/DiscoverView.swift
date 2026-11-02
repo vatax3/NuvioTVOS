@@ -296,7 +296,7 @@ struct ChipRow<Content: View>: View {
                 .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)
                 .padding(.vertical, NuvioTheme.spacing.xs)
             }
-            .scrollClipDisabled()
+            .clippedHorizontalScroller()
         }
         .focusSection()
     }
