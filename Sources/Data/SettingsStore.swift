@@ -255,7 +255,8 @@ final class AppSettings {
         PlayerAudioMix.Options(
             amplificationDb: player.persistAudioAmplification ? player.audioAmplificationDb : 0,
             centerMixLevelDb: player.centerMixLevelDb,
-            normalizesDownmix: player.downmixNormalization
+            normalizesDownmix: player.downmixNormalization,
+            lfeLevel: player.downmixLfeLevel
         )
     }
 
@@ -316,19 +317,30 @@ final class AppSettings {
         return value > 0 ? Date(timeIntervalSince1970: value) : nil
     }
 
-    /// One object per namespace, so a key cannot collide across stores.
-    func exportSyncedSettings() -> [String: AnyJSONValue] {
-        var out: [String: AnyJSONValue] = [:]
-        for (name, store) in syncedStores {
-            out[name] = .object(store.exportForSync())
-        }
-        return out
+    /// The profile settings blob, in the Android app's shape. See `SettingsBlob`.
+    func exportSyncedSettings(preserving remote: [String: AnyJSON]? = nil) -> [String: AnyJSONValue] {
+        SettingsBlob.export(
+            Dictionary(uniqueKeysWithValues: syncedStores.map { ($0.0, $0.1.storedValuesForSync()) }),
+            preserving: remote
+        )
     }
 
     func importSyncedSettings(_ payload: [String: AnyJSON]) {
+        guard SettingsBlob.isCurrentShape(payload) else {
+            // Written by an earlier build of this app. Read it the old way, once: the next push
+            // replaces it with the shared shape.
+            let legacy = SettingsBlob.legacyChanges(from: payload)
+            for (name, store) in syncedStores {
+                guard let values = legacy[name] else { continue }
+                store.importFromSync(values)
+            }
+            return
+        }
+        let local = Dictionary(uniqueKeysWithValues: syncedStores.map { ($0.0, $0.1.storedValuesForSync()) })
+        let changes = SettingsBlob.changes(from: payload, local: local)
         for (name, store) in syncedStores {
-            guard case .object(let values)? = payload[name] else { continue }
-            store.importFromSync(values)
+            guard let change = changes[name] else { continue }
+            store.applySyncChange(change)
         }
     }
 

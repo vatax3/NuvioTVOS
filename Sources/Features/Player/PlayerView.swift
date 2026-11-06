@@ -889,6 +889,7 @@ struct PlayerView: View {
         isPaused = paused
         isLoading = loading
         if !loading {
+            if !hasStartedPlayback { rememberLinkForReuse() }
             hasStartedPlayback = true
             showParentalGuideIfReady()
         }
@@ -1398,13 +1399,33 @@ struct PlayerView: View {
         lastScrobbleProgress = percent
 
         Task {
+            let numbers = await traktNumbers(imdbId: imdbId, credentials: credentials)
             await TraktClient.shared.scrobble(
                 action: action, imdbId: imdbId, type: ContentType.from(request.contentType),
-                season: request.season, episode: request.episode,
+                season: numbers.season, episode: numbers.episode,
                 progressPercent: percent,
                 clientId: credentials.clientId, token: credentials.token
             )
         }
+    }
+
+    /// The addon's episode in Trakt's numbering. See `EpisodeNumbering`.
+    private func traktNumbers(
+        imdbId: String, credentials: (clientId: String, token: String)
+    ) async -> (season: Int?, episode: Int?) {
+        guard ContentType.from(request.contentType) == .series,
+              let season = request.season, let episode = request.episode
+        else { return (request.season, request.episode) }
+        let numbers = await EpisodeNumbering.shared.traktNumbers(
+            season: season, episode: episode, videoId: request.videoId,
+            imdbId: imdbId, source: numberingSource,
+            clientId: credentials.clientId, token: credentials.token
+        )
+        return (numbers.season, numbers.episode)
+    }
+
+    private var numberingSource: EpisodeNumbering.Source {
+        EpisodeNumbering.Source(contentId: request.contentId, library: library, addons: addons)
     }
 
     private func scrobbleStop(progressPercent explicitPercent: Double? = nil) {
@@ -1418,9 +1439,10 @@ struct PlayerView: View {
         didSendTrackingStop = true
         if let credentials = traktCredentials, let imdbId = request.imdbId {
             Task {
+                let numbers = await traktNumbers(imdbId: imdbId, credentials: credentials)
                 await TraktClient.shared.scrobble(
                     action: .stop, imdbId: imdbId, type: ContentType.from(request.contentType),
-                    season: request.season, episode: request.episode,
+                    season: numbers.season, episode: numbers.episode,
                     progressPercent: percent,
                     clientId: credentials.clientId, token: credentials.token
                 )
@@ -1528,13 +1550,23 @@ struct PlayerView: View {
         _ action: MDBListClient.ScrobbleAction, percent: Double
     ) async {
         guard let token = await MDBListSession.token(settings.tracking) else { return }
+        // MDBList numbers episodes as TMDB does. See `EpisodeNumbering`.
+        var season = request.season, episode = request.episode
+        if ContentType.from(request.contentType) == .series, let s = season, let e = episode {
+            let numbers = await EpisodeNumbering.shared.mdbListNumbers(
+                season: s, episode: e, videoId: request.videoId,
+                source: numberingSource, imdbId: request.imdbId, tmdbApiKey: settings.tmdb.apiKey
+            )
+            season = numbers.season
+            episode = numbers.episode
+        }
         await MDBListClient.shared.scrobble(
             action,
             contentId: request.contentId,
             contentType: ContentType.from(request.contentType),
             imdbId: request.imdbId,
-            season: request.season,
-            episode: request.episode,
+            season: season,
+            episode: episode,
             progressPercent: percent,
             token: token
         )
@@ -1808,6 +1840,30 @@ struct PlayerView: View {
             release: settings.player.preferBingeGroupNextEpisode ? playingRelease : nil
         )
         router.openStreams(next)
+    }
+
+    /// Recorded once playback has actually started, as upstream does, so a link that never
+    /// played is not offered again. Live channels have no "same place" to come back to.
+    private func rememberLinkForReuse() {
+        guard settings.player.reuseLastLinkEnabled, !isLivePlayback,
+              let name = request.streamName?.nilIfBlank ?? request.sourceAddonName?.nilIfBlank
+        else { return }
+        LastStreamLinkStore.save(
+            LastStreamLink(
+                url: request.streamURL,
+                streamName: name,
+                filename: request.filename,
+                headers: request.headers,
+                addonName: request.sourceAddonName,
+                addonLogo: request.sourceAddonLogo,
+                description: request.sourceDescription,
+                bingeGroup: request.sourceBingeGroup,
+                sourceStableKey: request.sourceStableKey,
+                cachedAt: Date()
+            ),
+            contentType: request.contentType,
+            videoId: request.videoId
+        )
     }
 
     private var resumePosition: Double {

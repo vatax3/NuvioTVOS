@@ -366,8 +366,7 @@ struct MetaDetailsView: View {
         meta.videos
             .compactMap { video -> (Video, WatchProgress)? in
                 guard let progress = library.progress(forVideoId: video.id),
-                      progress.fraction > 0.01,
-                      !progress.isFinished(threshold: settings.watchedThreshold)
+                      progress.isInProgress(threshold: settings.watchedThreshold)
                 else { return nil }
                 return (video, progress)
             }
@@ -559,7 +558,9 @@ struct MetaDetailsView: View {
             }
             return L10n.format("detail.play_episode", fallback: "Play %@", code)
         }
-        if let progress = library.progress(forVideoId: meta.id), progress.fraction > 0.01 {
+        // A finished film restarts from the top (`PlayerView.resumePosition`), so it is *Play*.
+        if let progress = library.progress(forVideoId: meta.id),
+           progress.isInProgress(threshold: settings.watchedThreshold) {
             return L10n.text("detail.resume", fallback: "Resume")
         }
         return L10n.text("detail.play", fallback: "Play")

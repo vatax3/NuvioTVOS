@@ -235,6 +235,9 @@ struct EpisodeOptionsDialog: View {
         }
         let sent = targets
         let preview = meta.preview()
+        // The list is on screen already; the numbering service need not fetch it again.
+        EpisodeNumbering.shared.remember(meta.episodeRefs, forContentId: meta.id)
+        let numbering = EpisodeNumbering.Source(contentId: meta.id, library: library, addons: addons)
         Task {
             for target in sent {
                 await tracking.watched(
@@ -246,6 +249,7 @@ struct EpisodeOptionsDialog: View {
                     season: target.season,
                     episode: target.episode,
                     videoId: target.videoId,
+                    numbering: numbering,
                     removing: !watched,
                     settings: settings
                 )

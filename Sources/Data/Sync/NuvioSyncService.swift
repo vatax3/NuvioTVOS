@@ -530,13 +530,15 @@ final class NuvioSyncService {
         if let payload = remote?.settings_json,
            (remoteUpdatedAt ?? .distantPast) > (localUpdatedAt ?? .distantPast) {
             settings.importSyncedSettings(payload)
-            return
+            // A row in this app's old shape is replaced by the shared one straight away, so the
+            // Android app on the same account can read it. See `SettingsBlob`.
+            guard !SettingsBlob.isCurrentShape(payload) else { return }
         }
 
         var parameters = originParameters
         parameters["p_profile_id"] = .int(profileId)
         parameters["p_platform"] = .string("tv")
-        parameters["p_settings_json"] = .object(settings.exportSyncedSettings())
+        parameters["p_settings_json"] = .object(settings.exportSyncedSettings(preserving: remote?.settings_json))
         try await NuvioBackend.shared.rpcVoid("sync_push_profile_settings_blob", parameters: parameters)
     }
 }

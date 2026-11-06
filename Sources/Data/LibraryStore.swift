@@ -24,6 +24,15 @@ struct WatchProgress: Codable, Hashable, Identifiable {
 
     func isFinished(threshold: Double) -> Bool { fraction >= threshold }
 
+    /// Any saved position short of the watched threshold. The single rule for "started": the
+    /// player resumes from any position, so Continue Watching, *Resume* and *Play*'s next-up
+    /// anchor have to agree with it. They used three floors (1%, 1%, 2%), so a title could sit on
+    /// the rail while *Play* ignored it, or show *Resume* on a film the player would restart.
+    /// Upstream dropped its own start threshold for the same reason in 1.1.0-beta.11.
+    func isInProgress(threshold: Double) -> Bool {
+        positionSeconds > 0 && !isFinished(threshold: threshold)
+    }
+
     var remainingSeconds: Double { max(0, durationSeconds - positionSeconds) }
 
     /// "12 min left", or the near-the-end form when there is less than a minute of it.
@@ -56,7 +65,19 @@ struct ContinueWatchingEntry: Identifiable, Hashable {
     /// True when the row points at an episode the viewer has not started — the case the
     /// "blur next up" preference is about.
     var isNextUp: Bool = false
+    /// The offered episode's air date, for a projected Next Up row. It decides whether the card
+    /// may be marked watched: an episode that has not aired cannot have been seen.
+    var episodeReleased: Date?
     var id: String { progress.videoId }
+
+    /// The episode a long press on this card marks watched, or nil for a film.
+    var markableEpisode: PosterOptionsRequest.Episode? {
+        guard let season = progress.season, let episode = progress.episode else { return nil }
+        return .init(
+            videoId: progress.videoId, season: season, episode: episode,
+            hasAired: episodeReleased.map { $0 <= Date() } ?? true
+        )
+    }
 }
 
 // MARK: - Store
@@ -241,7 +262,7 @@ final class LibraryStore {
     ) -> [ContinueWatchingEntry] {
         let cutoff = Self.cutoffDate(withinDays: withinDays)
         let unfinished = progress.values
-            .filter { $0.fraction > 0.01 && !$0.isFinished(threshold: threshold) }
+            .filter { $0.isInProgress(threshold: threshold) }
             .filter { item in cutoff.map { item.updatedAt >= $0 } ?? true }
             .sorted { $0.updatedAt > $1.updatedAt }
 
@@ -347,7 +368,8 @@ final class LibraryStore {
                 preview: preview,
                 episodeTitle: String(format: "S%02dE%02d", next.season, next.episode),
                 episodeThumbnail: next.thumbnail ?? episodeThumbnails[next.videoId],
-                isNextUp: true
+                isNextUp: true,
+                episodeReleased: next.released
             ))
         }
         return entries

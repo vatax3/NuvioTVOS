@@ -175,7 +175,9 @@ final class StreamsViewModel {
             }
         }
 
-        var pluginGroups = await runPluginScrapers(request: request, settings: settings)
+        var pluginGroups = await runPluginScrapers(
+            request: request, settings: settings, allowingCache: !retainingResults
+        )
 
         // Parse once; both filtering and the row chips read from this. The show's name rather
         // than the episode's: it is what a release name starts with.
@@ -235,7 +237,8 @@ final class StreamsViewModel {
 
     private func runPluginScrapers(
         request: StreamRequest,
-        settings: AppSettings
+        settings: AppSettings,
+        allowingCache: Bool
     ) async -> [AddonStreams] {
         guard !pluginScrapers.isEmpty else { return [] }
 
@@ -260,7 +263,8 @@ final class StreamsViewModel {
                         season: request.season,
                         episode: request.episode,
                         scraperId: scraper.id,
-                        tmdbApiKey: settings.tmdb.apiKey
+                        tmdbApiKey: settings.tmdb.apiKey,
+                        allowingCache: allowingCache
                     )
                     return (scraper, results)
                 }
@@ -278,14 +282,25 @@ final class StreamsViewModel {
                 : scraper.name
             var bucket = sections[label] ?? (scraper.logo, [])
             for (index, result) in results.enumerated() {
-                bucket.streams.append(result.asStream(sourceName: label, occurrence: index))
+                bucket.streams.append(result.asStream(
+                    sourceName: label,
+                    scraperId: scraper.id,
+                    // Named only when the section is a repository, for the heading over its rows.
+                    scraperName: label == scraper.name ? nil : scraper.name,
+                    occurrence: index
+                ))
             }
             sections[label] = bucket
         }
 
         return sections
             .sorted { $0.key.localizedCaseInsensitiveCompare($1.key) == .orderedAscending }
-            .map { AddonStreams(addonName: $0.key, addonLogo: $0.value.logo, streams: $0.value.streams) }
+            .map {
+                AddonStreams(
+                    addonName: $0.key, addonLogo: $0.value.logo,
+                    streams: PluginProviderHeading.grouped($0.value.streams)
+                )
+            }
     }
 
     /// The request carries an IMDb id; TMDB's `find` endpoint converts it.
@@ -834,6 +849,19 @@ struct StreamsView: View {
         // screen was reached by auto-advance.
         let release = PlaybackSessionStore.shared.consumeRelease(for: request.videoId)
 
+        // `stream_reuse_last_link_enabled`: the link this title last played from, within the
+        // window, goes first — before any ranking, as upstream orders it.
+        if settings.player.reuseLastLinkEnabled,
+           let cached = LastStreamLinkStore.valid(
+               contentType: request.contentType,
+               videoId: request.videoId,
+               maxAgeHours: settings.player.reuseLastLinkCacheHours
+           ) {
+            didAutoPlay = true
+            await play(Self.stream(reusing: cached), sourceStableKey: cached.sourceStableKey)
+            return
+        }
+
         // Arrived here by auto-advance: the release that was playing is almost always the right
         // one for the next episode — same encode, same audio, same subtitle timing. Trying it
         // first is what `stream_auto_play_prefer_bingegroup_next_episode` asks for, and it
@@ -907,11 +935,14 @@ struct StreamsView: View {
         return next
     }
 
-    private func play(_ stream: Stream) async {
+    /// - Parameter sourceStableKey: the row a reused link was first chosen from, so the
+    ///   player's Sources panel marks that row rather than the stand-in built for the link.
+    private func play(_ stream: Stream, sourceStableKey: String? = nil) async {
         let result = await model.playableURL(for: stream, settings: settings)
         guard case .success(let url) = result else { return }
 
-        let playback = makePlaybackRequest(stream: stream, url: url)
+        var playback = makePlaybackRequest(stream: stream, url: url)
+        if let sourceStableKey { playback.sourceStableKey = sourceStableKey }
         let installed = ExternalPlayerLauncher.installed
 
         // Where the stream opens: internally, in a chosen external app, or ask each time.
@@ -957,6 +988,23 @@ struct StreamsView: View {
             onlyPreferred: false
         )
         return ordered.first?.url.nilIfBlank
+    }
+
+    /// A stand-in row for a reused link: the resolved URL and everything the player shows about
+    /// the source, as it was when it last played.
+    static func stream(reusing link: LastStreamLink) -> Stream {
+        Stream(
+            name: link.streamName,
+            description: link.description,
+            url: link.url,
+            behaviorHints: StreamBehaviorHints(
+                bingeGroup: link.bingeGroup,
+                proxyHeaders: link.headers.isEmpty ? nil : ProxyHeaders(request: link.headers),
+                filename: link.filename
+            ),
+            addonName: link.addonName ?? "",
+            addonLogo: link.addonLogo
+        )
     }
 
     private func makePlaybackRequest(stream: Stream, url: String) -> PlaybackRequest {
@@ -1030,7 +1078,17 @@ private struct StreamGroupSection: View {
             }
 
             VStack(spacing: NuvioTheme.spacing.sm) {
-                ForEach(group.streams) { stream in
+                ForEach(Array(group.streams.enumerated()), id: \.element.id) { index, stream in
+                    if let heading = PluginProviderHeading.heading(
+                        for: stream, after: index > 0 ? group.streams[index - 1] : nil
+                    ) {
+                        Text(heading)
+                            .nuvioText(NuvioTextStyles.metadata)
+                            .foregroundStyle(colors.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.leading, NuvioTheme.spacing.lg)
+                            .padding(.top, index > 0 ? NuvioTheme.spacing.sm : 0)
+                    }
                     StreamRow(
                         stream: stream,
                         attributes: model.attributes[stream.stableKey],

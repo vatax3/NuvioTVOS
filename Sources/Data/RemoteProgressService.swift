@@ -57,7 +57,15 @@ final class RemoteProgressService {
             let items = await TraktClient.shared.playbackProgress(clientId: clientId, token: token)
             var adopted: [WatchProgress] = []
             for item in items {
-                guard let entry = Self.progress(from: item) else { continue }
+                guard var entry = Self.progress(from: item) else { continue }
+                if let season = entry.season, let episode = entry.episode, item.type == .series,
+                   let mapped = await EpisodeNumbering.shared.addonEpisode(
+                       forTraktSeason: season, episode: episode, imdbId: item.imdbId,
+                       source: .init(contentId: entry.contentId, library: library, addons: addons),
+                       clientId: clientId, token: token
+                   ) {
+                    entry = Self.relabel(entry, as: mapped)
+                }
                 if shouldAdopt(entry, into: library) { adopted.append(entry) }
                 if library.cachedPreview(contentType: entry.contentType, contentId: entry.contentId) == nil,
                    let preview = await preview(for: item, addons: addons) {
@@ -70,7 +78,16 @@ final class RemoteProgressService {
             var adopted: [WatchProgress] = []
             defer { library.adoptProgress(adopted) }
             for item in await MDBListClient.shared.playback(token: token) {
-                guard let entry = Self.progress(from: item) else { continue }
+                guard var entry = Self.progress(from: item) else { continue }
+                if item.contentType == .series, let season = entry.season, let episode = entry.episode,
+                   let mapped = await EpisodeNumbering.shared.addonEpisode(
+                       forMDBListSeason: season, episode: episode,
+                       source: .init(contentId: entry.contentId, library: library, addons: addons),
+                       imdbId: Self.imdbId(fromContentId: entry.contentId),
+                       tmdbApiKey: settings.tmdb.apiKey
+                   ) {
+                    entry = Self.relabel(entry, as: mapped)
+                }
                 if shouldAdopt(entry, into: library) { adopted.append(entry) }
                 // MDBList's playback rows carry no artwork, so unlike the Simkl branch there is
                 // nothing to seed a preview from. The rail falls back to whatever the addon
@@ -206,6 +223,16 @@ final class RemoteProgressService {
             return false
         }
         return true
+    }
+
+    /// A resume point moved onto the addon's episode, keyed by the addon's own video id so the
+    /// episode list, the watched badge and Next Up all find it. See `EpisodeNumbering`.
+    nonisolated static func relabel(_ entry: WatchProgress, as mapped: EpisodeRemap.Entry) -> WatchProgress {
+        var moved = entry
+        moved.season = mapped.season
+        moved.episode = mapped.episode
+        moved.videoId = mapped.videoId?.nilIfBlank ?? "\(entry.contentId):\(mapped.season):\(mapped.episode)"
+        return moved
     }
 
     /// Maps one Trakt resume point onto our record.

@@ -517,6 +517,14 @@ struct InPlayerSourcesPanel: View {
                 ForEach(Array(displayedGroups.enumerated()), id: \.element.id) { groupIndex, group in
                     InPlayerPanelSection(title: group.addonName) {
                         ForEach(Array(group.streams.enumerated()), id: \.element.id) { streamIndex, stream in
+                            if let heading = PluginProviderHeading.heading(
+                                for: stream, after: streamIndex > 0 ? group.streams[streamIndex - 1] : nil
+                            ) {
+                                Text(heading)
+                                    .nuvioText(NuvioTextStyles.metadata)
+                                    .foregroundStyle(colors.textSecondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
                             InPlayerSourceRow(
                                 stream: stream,
                                 attributes: model.attributes[stream.stableKey],

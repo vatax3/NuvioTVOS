@@ -290,6 +290,15 @@ struct PlaybackSettingsContent: View {
                     range: PlayerAudioMix.centerMixRangeDb,
                     format: { $0 == 0 ? L10n.text("settings.playback.default", fallback: "Default") : "\($0 > 0 ? "+" : "")\($0) dB" }
                 )
+                // Off on a 5.1 or 7.1 output: the LFE has a channel of its own there, so there is
+                // nothing to fold. Upstream disables the row the same way.
+                SettingsOptionRow(
+                    title: L10n.text("settings.playback.lfe_level", fallback: "LFE level on downmix"),
+                    subtitle: L10n.text("settings.playback.lfe_level_sub", fallback: "How much of the subwoofer channel is kept when the output has none"),
+                    systemImage: "speaker.wave.3.fill",
+                    selection: $player.downmixLfeLevel
+                )
+                .disabled(player.audioOutputChannels == .surround51 || player.audioOutputChannels == .surround71)
                 SettingsToggle(
                     title: L10n.text("settings.playback.prevent_clipping", fallback: "Prevent downmix clipping"),
                     subtitle: L10n.text("settings.playback.prevent_clipping_subtitle", fallback: "Trades some level for headroom when 5.1 is folded to stereo"),
@@ -599,6 +608,31 @@ struct PlaybackSettingsContent: View {
                         title: L10n.text("settings.playback.remember_release", fallback: "Remember the release across episodes"),
                         subtitle: L10n.text("settings.playback.remember_release_sub", fallback: "Carry the source you chose into the rest of the run"),
                         isOn: $player.preferBingeGroupNextEpisode
+                    )
+                }
+            }
+
+            SettingsCard(
+                title: L10n.text("settings.playback.reuse_link", fallback: "Reuse last link"),
+                footnote: L10n.text(
+                    "settings.playback.reuse_link_footnote",
+                    fallback: "Reopening a title within the window plays the link it last played from, skipping the source list. Debrid links can expire sooner."
+                )
+            ) {
+                SettingsToggle(
+                    title: L10n.text("settings.playback.reuse_link_toggle", fallback: "Play the last link again"),
+                    subtitle: L10n.text("settings.playback.reuse_link_toggle_sub", fallback: "For a title or episode you opened recently"),
+                    systemImage: "arrow.uturn.forward",
+                    isOn: $player.reuseLastLinkEnabled
+                )
+                if player.reuseLastLinkEnabled {
+                    SettingsStepperRow(
+                        title: L10n.text("settings.playback.reuse_link_hours", fallback: "Keep links for"),
+                        subtitle: L10n.text("settings.playback.reuse_link_hours_sub", fallback: "How long a link stays reusable"),
+                        systemImage: "clock",
+                        value: $player.reuseLastLinkCacheHours,
+                        range: LastStreamLinkStore.hoursRange,
+                        format: { "\($0) h" }
                     )
                 }
             }

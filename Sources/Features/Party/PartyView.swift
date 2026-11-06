@@ -251,7 +251,7 @@ extension PartyMedia {
 /// `InPlayerPanel` carries the same modifier and the same note, learned the same way: a handler
 /// that returns early still swallows the press. Pushed onto the navigation stack with no
 /// `onDismiss`, this screen could not be left at all.
-private struct OptionalExitCommand: ViewModifier {
+struct OptionalExitCommand: ViewModifier {
     let action: (() -> Void)?
 
     @ViewBuilder

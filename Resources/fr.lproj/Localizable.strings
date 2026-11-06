@@ -1380,3 +1380,14 @@
 "settings.playback.hdr_brightness_sub" = "Zéro est le plus sombre, pas l'invisible.";
 "settings.playback.hdr_dim_controls" = "Atténuer les commandes du lecteur";
 "settings.playback.hdr_dim_controls_sub" = "Afficher aussi les commandes du lecteur à la luminosité HDR.";
+
+/* Upstream 1.1.0-beta.11 pass */
+"poster_options.mark_episode_watched" = "Marquer %@ comme vu";
+"settings.playback.lfe_level" = "Niveau LFE au repli";
+"settings.playback.lfe_level_sub" = "Part du caisson de basses conservée quand la sortie n’en a pas";
+"settings.playback.reuse_link" = "Réutiliser le dernier lien";
+"settings.playback.reuse_link_footnote" = "Rouvrir un titre dans ce délai relance le lien de la dernière lecture, sans passer par la liste des sources. Les liens debrid peuvent expirer plus tôt.";
+"settings.playback.reuse_link_toggle" = "Relancer le dernier lien";
+"settings.playback.reuse_link_toggle_sub" = "Pour un titre ou un épisode ouvert récemment";
+"settings.playback.reuse_link_hours" = "Conserver les liens";
+"settings.playback.reuse_link_hours_sub" = "Durée pendant laquelle un lien reste réutilisable";

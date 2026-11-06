@@ -3,12 +3,12 @@
 Nuvio for Apple TV is a port of [NuvioMedia/NuvioTV](https://github.com/NuvioMedia/NuvioTV), the
 Android TV app. This file records how far the port has been reconciled against it.
 
-**Reconciled through: `1.1.0-beta.9` (2026-10-31).**
+**Reconciled through: `1.1.0-beta.11` (2026-11-05).**
 
 > The per-release tables below stop at `0.8.9-beta`. Everything after it is reconciled in
 > [PARITY-AUDIT.md](PARITY-AUDIT.md), window by window — 0.8.12-beta, 1.0.0 and 1.1.0-beta.2 each
 > have a section there with the same three verdicts, as do 1.1.0-beta.5, 1.1.0-beta.7,
-> 1.1.0-beta.8 and 1.1.0-beta.9. The tables were not backfilled because two
+> 1.1.0-beta.8, 1.1.0-beta.9 and 1.1.0-beta.11. The tables were not backfilled because two
 > documents answering one question is how a status goes stale, which this project has now had
 > happen three times. **This file owns the marker and the pre-0.8.9 history; the audit owns
 > everything since.**
@@ -150,4 +150,6 @@ The same verdict, for the three windows the audit covers. Each is argued at leng
 | **RTL layout and text direction** (~20 commits) | 1.1.0-beta.2 | N/A while the app ships English and French. Becomes real the day a right-to-left table is added. |
 | **Their localisation updates** | every window | Same as above: our strings are our own. The gap that remains is *languages* — two against thirty-six — which is translation work, not engineering. |
 | **Supporter perks** | 0.8.7 | Monetisation belongs to the upstream project. |
+| **Night mode (audio compression)** | 1.1.0-beta.10 | Not a judgement on the feature: our libmpv's libavfilter ships thirteen audio filters and no compressor or limiter. Needs a rebuilt FFmpeg. |
+| **Preferred plugin provider first on next episode** | 1.1.0-beta.10 | A latency gain for their in-player plugin-only prefetch; our next episode goes through the full streams screen. |
 | **Their accessibility pass** | 1.1.0-beta.9 | Not refused: deferred to an audit of its own. Ours has about sixteen VoiceOver labels and no announcements, so their fixes (duplicate descriptions, merged overlays) answer problems one step past where we are. |

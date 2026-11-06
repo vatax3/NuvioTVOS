@@ -34,6 +34,7 @@ enum NextEpisodeSourceMatch {
     enum Reason: Equatable {
         case bingeGroup
         case filename
+        case pluginVariant
     }
 
     /// The stream to play for `season`/`episode`, or nil to let the ordinary ranking decide.
@@ -43,6 +44,18 @@ enum NextEpisodeSourceMatch {
         if let group = release.bingeGroup?.nilIfBlank,
            let match = bingeGroupMatch(in: streams, group: group) {
             return (match, .bingeGroup)
+        }
+        // A plugin's marker is ours, not the addon's, and it carries episode words; it matches by
+        // provider and variant rather than by equality. See `PluginBingeGroup`.
+        if let group = release.bingeGroup?.nilIfBlank, PluginBingeGroup.scraperId(of: group) != nil {
+            if let index = PluginBingeGroup.indexOfMatch(
+                target: group, candidates: streams.map { $0.behaviorHints?.bingeGroup }
+            ) {
+                return (streams[index], .pluginVariant)
+            }
+            // The playing provider has no such variant this episode: no guess, the ordinary
+            // ranking (and its fallback preference) decides.
+            return nil
         }
         if let match = filenameMatch(in: streams, release: release, season: season, episode: episode) {
             return (match, .filename)

@@ -109,6 +109,12 @@ struct MediaLanguage: Identifiable, Hashable, Sendable {
         if let match = all.first(where: { $0.code.lowercased() == normalised }) {
             return match.displayName
         }
+        // OpenSubtitles' code for Cantonese. Read as a locale, `CA` is Canada.
+        if normalised == "zh-ca" {
+            let chinese = Locale.current.localizedString(forLanguageCode: "zh")?.capitalized ?? "Chinese"
+            let cantonese = Locale.current.localizedString(forLanguageCode: "yue")?.capitalized ?? "Cantonese"
+            return "\(chinese) (\(cantonese))"
+        }
         return Locale.current.localizedString(forLanguageCode: normalised)?.capitalized
             ?? Locale.current.localizedString(forIdentifier: raw)?.capitalized
             ?? raw.uppercased()
@@ -151,13 +157,18 @@ struct MediaLanguage: Identifiable, Hashable, Sendable {
         // Upstream's mapping (1.1.0-beta.9): Montenegrin tracks arrive as `cnr`, `mne` or `me`
         // and were shown as an unrecognised "MNE" group of their own. Not a catalogue entry —
         // upstream's list does not offer it — so a Serbian preference is what picks them.
-        "cnr": "sr-me", "mne": "sr-me", "me": "sr-me"
+        "cnr": "sr-me", "mne": "sr-me", "me": "sr-me",
+        // Upstream's mapping (1.1.0-beta.10): Cantonese arrives as `yue`, and as OpenSubtitles'
+        // own `zhc` / `zc`. It joins Chinese the way Montenegrin joins Serbian, so a Chinese
+        // preference picks it, while staying distinct from Mandarin tracks.
+        "yue": "zh-ca", "zhc": "zh-ca", "zc": "zh-ca"
     ]
 
     /// Whole values that resolve before the region is stripped: a language name some subtitle
     /// addons send in place of a code, and the one regional code kept although the catalogue
     /// does not list it (upstream keeps `sr-me` beside `pt-br` and `es-419`).
     private static let nameAliases: [String: String] = [
-        "montenegrin": "sr-me", "sr-me": "sr-me"
+        "montenegrin": "sr-me", "sr-me": "sr-me",
+        "cantonese": "zh-ca", "chinese (cantonese)": "zh-ca", "zh-ca": "zh-ca"
     ]
 }

@@ -81,6 +81,25 @@ class PreferenceStore {
         return out
     }
 
+    /// Everything stored except secrets, as stored — for `SettingsBlob.export`, which decides
+    /// per key what is carried and how.
+    func storedValuesForSync() -> [String: Any] {
+        storage.filter { !secureKeys.contains($0.key) }
+    }
+
+    /// Applies what `SettingsBlob.changes` worked out for this store: typed values to write, and
+    /// keys to return to their defaults. Not stamped as a local change.
+    func applySyncChange(_ change: SettingsBlob.StoreChange) {
+        isApplyingSyncedValues = true
+        defer { isApplyingSyncedValues = false }
+        for (key, value) in change.set where !secureKeys.contains(key) {
+            persist(key, value.raw)
+        }
+        for key in change.remove where !secureKeys.contains(key) {
+            persist(key, nil)
+        }
+    }
+
     /// Applies a synced blob. Values go through `persist` so both the observed dictionary and
     /// UserDefaults stay in step and the UI updates immediately.
     func importFromSync(_ values: [String: AnyJSON]) {

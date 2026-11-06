@@ -157,12 +157,11 @@ struct NextUpOptions: Equatable {
 /// recent. Both halves of that matter: recency alone would break the rewatch case the preference
 /// exists for, and position alone is the bug above.
 enum NextUpAnchor {
-    /// Below this a position is a mis-press or a few seconds of a title card, not a place to
-    /// resume from. Matches the floor the Continue Watching rail already applies.
-    static let resumeFloor: Double = 0.02
-
+    /// The same rule as the Continue Watching rail and the player: see
+    /// `WatchProgress.isInProgress`. This used a 2% floor of its own, so an episode at 1.5% was on
+    /// the rail while *Play* skipped past it.
     static func isResumable(_ progress: WatchProgress, threshold: Double) -> Bool {
-        !progress.isFinished(threshold: threshold) && progress.fraction >= resumeFloor
+        progress.isInProgress(threshold: threshold)
     }
 
     /// - Parameters:

@@ -102,14 +102,20 @@ struct AdvancedSettingsContent: View {
             .disabled(speedTest.isRunning)
             .opacity(speedTest.isRunning ? NuvioTheme.effects.disabledAlpha : 1)
 
+            // Focus stops, as upstream made its diagnostics rows in 1.1.0-beta.11: these appear
+            // below the last button on the page, and a tvOS scroll view only scrolls to what can
+            // be focused, so on a tall page the results could sit under the bottom edge.
             if let latency = speedTest.latencyMilliseconds {
                 SettingsInfoRow(title: L10n.text("settings.advanced.latency", fallback: "Latency"), value: "\(Int(latency)) ms")
+                    .focusable()
             }
             if let throughput = speedTest.megabitsPerSecond {
                 SettingsInfoRow(title: L10n.text("settings.advanced.download", fallback: "Download"), value: String(format: "%.1f Mbps", throughput))
+                    .focusable()
             }
             if let error = speedTest.error {
                 SettingsInfoRow(title: L10n.text("settings.advanced.error", fallback: "Error"), value: error, tint: colors.error)
+                    .focusable()
             }
         }
     }
@@ -139,9 +145,9 @@ final class NetworkSpeedTester {
                 self.isOnline = path.status == .satisfied
                 if !self.isOnline {
                     self.connectionDescription = L10n.text("settings.advanced.offline", fallback: "Offline")
-                } else if path.usesInterfaceType(.wiredEthernet) {
+                } else if Self.physicalInterface(of: path) == .wiredEthernet {
                     self.connectionDescription = L10n.text("settings.advanced.ethernet", fallback: "Ethernet")
-                } else if path.usesInterfaceType(.wifi) {
+                } else if Self.physicalInterface(of: path) == .wifi {
                     self.connectionDescription = "Wi-Fi"
                 } else {
                     self.connectionDescription = L10n.text("settings.advanced.connected", fallback: "Connected")
@@ -152,6 +158,20 @@ final class NetworkSpeedTester {
     }
 
     deinit { monitor.cancel() }
+
+    /// The link the traffic actually leaves on. Behind a VPN the path runs over the tunnel,
+    /// whose interface type is `.other`, so the label fell back to a bare "Connected"; the
+    /// physical link is still among the available interfaces. Upstream's 1.1.0-beta.10 fix
+    /// labels it the same way.
+    nonisolated static func physicalInterface(of path: NWPath) -> NWInterface.InterfaceType? {
+        if path.usesInterfaceType(.wiredEthernet) { return .wiredEthernet }
+        if path.usesInterfaceType(.wifi) { return .wifi }
+        guard path.usesInterfaceType(.other) else { return nil }
+        let types = path.availableInterfaces.map(\.type)
+        if types.contains(.wiredEthernet) { return .wiredEthernet }
+        if types.contains(.wifi) { return .wifi }
+        return nil
+    }
 
     func run() {
         guard !isRunning else { return }

@@ -587,6 +587,10 @@ struct Stream: Codable, Hashable, Identifiable, Sendable {
     var badges: [StreamBadge] = []
     /// Disambiguates genuine duplicates coming from the same addon.
     var occurrence: Int = 0
+    /// The plugin scraper a stream came from, when its section is a whole repository
+    /// (`group_streams_by_repository`). `addonName` is then the repository, and this is what
+    /// the provider heading above the row names.
+    var pluginSourceName: String?
 
     var id: String { stableKey }
 

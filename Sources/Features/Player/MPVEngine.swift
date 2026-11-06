@@ -204,7 +204,9 @@ final class MPVEngine {
         setOption("audio-normalize-downmix", audioMix.normalizesDownmix ? "yes" : "no")
         // The dialogue control. Passed to libswresample rather than set on mpv, because mpv has
         // no centre-level option of its own — it is the resampler that folds the channels.
-        if let swresample = PlayerAudioMix.swresampleOptions(centerMixDb: audioMix.centerMixLevelDb) {
+        if let swresample = PlayerAudioMix.swresampleOptions(
+            centerMixDb: audioMix.centerMixLevelDb, lfe: audioMix.lfeLevel
+        ) {
             setOption("audio-swresample-o", swresample)
         }
         applySubtitleStyle(subtitleStyle, asOption: true)

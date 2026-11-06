@@ -353,7 +353,11 @@ struct ContinueWatchingCard: View {
             // The rail this card sits in is the one the dialog exists for: a resume point could
             // be created from anywhere and removed from nowhere.
             .onSelectHold(isFocused: isFocused, swallowsNextPress: $swallowsNextPress) {
-                router.posterOptions = .init(preview: entry.preview, isNextUpSuggestion: entry.isNextUp)
+                router.posterOptions = .init(
+                    preview: entry.preview,
+                    isNextUpSuggestion: entry.isNextUp,
+                    continueWatchingEpisode: entry.markableEpisode
+                )
             }
             .accessibilityIdentifier("card.continue.\(entry.preview.id)")
             .focusedIfAvailable(focusBinding, equals: entry.preview.rowKey)

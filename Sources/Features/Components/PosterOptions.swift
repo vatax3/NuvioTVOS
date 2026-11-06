@@ -19,6 +19,7 @@ enum PosterOptionsPolicy {
         case addToLibrary
         case removeFromLibrary
         case markWatched
+        case markEpisodeWatched
         case markUnwatched
         case removeFromContinueWatching
         case dismissNextUp
@@ -31,7 +32,7 @@ enum PosterOptionsPolicy {
             switch self {
             case .addToLibrary: return "plus"
             case .removeFromLibrary: return "checkmark"
-            case .markWatched: return "eye.fill"
+            case .markWatched, .markEpisodeWatched: return "eye.fill"
             case .markUnwatched: return "eye.slash"
             case .removeFromContinueWatching: return "xmark"
             case .dismissNextUp: return "bell.slash"
@@ -63,6 +64,9 @@ enum PosterOptionsPolicy {
         /// Whether the viewer has Trakt lists of their own to file this into. Without any, the
         /// row would open a dialog saying "no lists".
         var hasTraktLists: Bool = false
+        /// Set for a Continue Watching card of a series: whether its episode may be marked
+        /// watched (it has aired). Nil everywhere else.
+        var continueWatchingEpisodeAired: Bool? = nil
     }
 
     /// The rows, in the order they are drawn.
@@ -75,7 +79,12 @@ enum PosterOptionsPolicy {
     static func actions(for context: Context) -> [Action] {
         var actions: [Action] = [context.isInLibrary ? .removeFromLibrary : .addToLibrary]
 
-        if context.type == .movie || context.canWalkEpisodes {
+        if context.type == .series, let aired = context.continueWatchingEpisodeAired {
+            // A Continue Watching card stands for one episode, so that is what it marks — as
+            // upstream's card does since 1.1.0-beta.10. The series-wide row here marked every
+            // episode of a show the viewer is in the middle of, one press from the rail.
+            if aired { actions.append(.markEpisodeWatched) }
+        } else if context.type == .movie || context.canWalkEpisodes {
             actions.append(context.isWatched ? .markUnwatched : .markWatched)
         }
         if context.hasTraktLists {
@@ -101,7 +110,16 @@ struct PosterOptionsRequest: Identifiable, Hashable {
     /// Set by the Continue Watching rail for a row it projected rather than one the viewer
     /// started. Only those can be dismissed — there is no resume point to remove.
     var isNextUpSuggestion: Bool = false
+    /// The episode a Continue Watching card stands for. Nil from every other surface.
+    var continueWatchingEpisode: Episode? = nil
     var id: String { preview.rowKey }
+
+    struct Episode: Hashable {
+        var videoId: String
+        var season: Int
+        var episode: Int
+        var hasAired: Bool
+    }
 }
 
 struct PosterOptionsDialog: View {
@@ -135,7 +153,8 @@ struct PosterOptionsDialog: View {
             isNextUpSuggestion: request.isNextUpSuggestion,
             canWalkEpisodes: SeriesWatchedWalk.canWalk(cachedEpisodes),
             hasTraktLists: settings.connectedTrackingProviders.contains(.trakt)
-                && preview.imdbId?.nilIfBlank != nil
+                && preview.imdbId?.nilIfBlank != nil,
+            continueWatchingEpisodeAired: request.continueWatchingEpisode?.hasAired
         )
     }
 
@@ -255,6 +274,14 @@ struct PosterOptionsDialog: View {
         case .addToLibrary: return L10n.text("poster_options.add_to_library")
         case .removeFromLibrary: return L10n.text("poster_options.remove_from_library")
         case .markWatched: return L10n.text("poster_options.mark_watched")
+        case .markEpisodeWatched:
+            guard let episode = request.continueWatchingEpisode else {
+                return L10n.text("poster_options.mark_watched")
+            }
+            return L10n.format(
+                "poster_options.mark_episode_watched", fallback: "Mark %@ watched",
+                String(format: "S%02dE%02d", episode.season, episode.episode)
+            )
         case .markUnwatched: return L10n.text("poster_options.mark_unwatched")
         case .removeFromContinueWatching: return L10n.text("poster_options.remove_from_continue_watching")
         case .dismissNextUp: return L10n.text("poster_options.dismiss_next_up")
@@ -287,6 +314,11 @@ struct PosterOptionsDialog: View {
                 Task { await markSeries(watched: watched) }
             } else {
                 markMovie(watched: watched)
+            }
+
+        case .markEpisodeWatched:
+            if let episode = request.continueWatchingEpisode {
+                Task { await markEpisode(episode) }
             }
 
         case .removeFromContinueWatching:
@@ -359,6 +391,34 @@ struct PosterOptionsDialog: View {
             season: nil,
             episode: nil,
             removing: !watched,
+            settings: settings
+        )
+    }
+
+    /// Marks the one episode a Continue Watching card stands for, locally and on the tracking
+    /// service, the same write the episode list makes.
+    private func markEpisode(_ episode: PosterOptionsRequest.Episode) async {
+        let duration = library.progress(forVideoId: episode.videoId)?.durationSeconds ?? 1
+        library.markWatched(
+            contentId: preview.id,
+            contentType: preview.rawType,
+            videoId: episode.videoId,
+            season: episode.season,
+            episode: episode.episode,
+            duration: max(duration, 1)
+        )
+        guard let imdb = preview.imdbId?.nilIfBlank else { return }
+        await tracking.watched(
+            imdbId: imdb,
+            trackingIds: preview.trackingIds,
+            title: preview.name,
+            year: preview.year,
+            type: preview.type,
+            season: episode.season,
+            episode: episode.episode,
+            videoId: episode.videoId,
+            numbering: .init(contentId: preview.id, library: library, addons: addons),
+            removing: false,
             settings: settings
         )
     }

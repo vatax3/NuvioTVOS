@@ -41,6 +41,23 @@ actor PluginRuntime {
     /// Guards against a runaway scraper pulling down a huge body.
     private let maxResponseBytes = 1024 * 1024
 
+    /// Finished runs, so the in-player Sources panel does not re-run every scraper that the
+    /// streams screen ran a moment ago. Addon streams already had this (`StremioClient`, the same
+    /// five minutes); plugins re-ran their whole search, network and all, on every open.
+    /// Upstream's 1.1.0-beta.10 fix to its own search cache is what pointed at the gap.
+    private struct CacheKey: Hashable {
+        var scraperId: String
+        var codeHash: Int
+        var tmdbId: String
+        var mediaType: String
+        var season: Int?
+        var episode: Int?
+    }
+    private var cache: [CacheKey: (results: [LocalScraperResult], at: Date)] = [:]
+    static let cacheTTL: TimeInterval = 5 * 60
+    private static let cacheLimit = 60
+
+    /// - Parameter allowingCache: `false` for an explicit refresh, which asks for a new search.
     func execute(
         code: String,
         tmdbId: String,
@@ -49,8 +66,36 @@ actor PluginRuntime {
         episode: Int?,
         scraperId: String,
         settings: [String: Any] = [:],
-        tmdbApiKey: String = ""
+        tmdbApiKey: String = "",
+        allowingCache: Bool = true
     ) async -> [LocalScraperResult] {
+        let key = CacheKey(
+            scraperId: scraperId, codeHash: code.hashValue, tmdbId: tmdbId,
+            mediaType: mediaType, season: season, episode: episode
+        )
+        if allowingCache, let hit = cache[key], Date().timeIntervalSince(hit.at) < Self.cacheTTL {
+            return hit.results
+        }
+        let results = await run(
+            key: key, code: code, settings: settings, tmdbApiKey: tmdbApiKey
+        )
+        // An empty run is often a scraper's site being slow or down, so it is not remembered:
+        // the next open should try again rather than show nothing for five minutes.
+        if !results.isEmpty {
+            if cache.count >= Self.cacheLimit,
+               let oldest = cache.min(by: { $0.value.at < $1.value.at })?.key {
+                cache.removeValue(forKey: oldest)
+            }
+            cache[key] = (results, Date())
+        }
+        return results
+    }
+
+    private func run(
+        key: CacheKey, code: String, settings: [String: Any], tmdbApiKey: String
+    ) async -> [LocalScraperResult] {
+        let tmdbId = key.tmdbId, mediaType = key.mediaType
+        let season = key.season, episode = key.episode, scraperId = key.scraperId
         let work = Task.detached(priority: .userInitiated) { [self] in
             run(
                 code: code, tmdbId: tmdbId, mediaType: mediaType,

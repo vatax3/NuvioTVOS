@@ -17,6 +17,7 @@ enum PlayerAudioMix {
         var amplificationDb: Int = 0
         var centerMixLevelDb: Int = 0
         var normalizesDownmix: Bool = false
+        var lfeLevel: DownmixLfeLevel = .off
     }
 
     // MARK: Amplification
@@ -54,12 +55,20 @@ enum PlayerAudioMix {
         return defaultCenterMixLevel * pow(10.0, Double(clamped) / 20.0)
     }
 
-    /// `--audio-swresample-o`, or nothing at all when the dial is at zero.
+    /// `--audio-swresample-o`, or nothing at all when neither the dial nor the LFE level is set.
     ///
     /// Nothing at all is the point: passing the default back explicitly would still build a
     /// resampler context for a setting the viewer never touched.
-    static func swresampleOptions(centerMixDb: Int) -> String? {
-        guard centerMixDb != 0 else { return nil }
-        return String(format: "center_mix_level=%.4f", centerMixLevel(db: centerMixDb))
+    static func swresampleOptions(centerMixDb: Int, lfe: DownmixLfeLevel = .off) -> String? {
+        var parts: [String] = []
+        if centerMixDb != 0 {
+            parts.append(String(format: "center_mix_level=%.4f", centerMixLevel(db: centerMixDb)))
+        }
+        // Folded into the centre, or into the front pair at -3 dB when the layout has no centre.
+        // Only reached when the output has no LFE of its own; otherwise nothing is downmixed.
+        if lfe != .off {
+            parts.append(String(format: "lfe_mix_level=%.4f", lfe.level))
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: ",")
     }
 }

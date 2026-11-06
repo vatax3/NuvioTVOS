@@ -87,9 +87,10 @@ final class NextUpAnchorTests: XCTestCase {
 
     // MARK: What does not count as a resume point
 
-    /// A few seconds is a mis-press or a title card, not a place to come back to — and treating
-    /// it as one would hand the button to whatever the viewer last opened by accident.
-    func testASecondOrTwoIsNotAResumePoint() {
+    /// Any saved position counts, as on the rail and in the player (1.0.58, upstream's
+    /// 1.1.0-beta.11 rule). This used a 2% floor of its own, so a recent episode at 0.5% sat on
+    /// Continue Watching and resumed from the rail while *Play* offered a different one.
+    func testAnyRecentPositionIsAResumePoint() {
         let glance = progress(season: 4, episode: 1, fraction: 0.005, daysAgo: 1)
         let furthest = progress(season: 6, episode: 1, fraction: 1, daysAgo: 20)
 
@@ -97,7 +98,7 @@ final class NextUpAnchorTests: XCTestCase {
             furthest: furthest, entries: [glance, furthest], threshold: threshold
         )
 
-        XCTAssertEqual(anchor?.videoId, furthest.videoId)
+        XCTAssertEqual(anchor?.videoId, glance.videoId)
     }
 
     func testAFinishedEpisodeIsNotAResumePoint() {

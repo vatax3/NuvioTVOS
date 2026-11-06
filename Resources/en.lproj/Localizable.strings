@@ -1380,3 +1380,14 @@
 "settings.playback.hdr_brightness_sub" = "Zero is the dimmest, not invisible.";
 "settings.playback.hdr_dim_controls" = "Dim player controls";
 "settings.playback.hdr_dim_controls_sub" = "Draw the player's controls at the HDR brightness too.";
+
+/* Upstream 1.1.0-beta.11 pass */
+"poster_options.mark_episode_watched" = "Mark %@ watched";
+"settings.playback.lfe_level" = "LFE level on downmix";
+"settings.playback.lfe_level_sub" = "How much of the subwoofer channel is kept when the output has none";
+"settings.playback.reuse_link" = "Reuse last link";
+"settings.playback.reuse_link_footnote" = "Reopening a title within the window plays the link it last played from, skipping the source list. Debrid links can expire sooner.";
+"settings.playback.reuse_link_toggle" = "Play the last link again";
+"settings.playback.reuse_link_toggle_sub" = "For a title or episode you opened recently";
+"settings.playback.reuse_link_hours" = "Keep links for";
+"settings.playback.reuse_link_hours_sub" = "How long a link stays reusable";

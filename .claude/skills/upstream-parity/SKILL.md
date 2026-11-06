@@ -105,6 +105,13 @@ match, and the difference has now cost two releases:
   envelope from theirs, and one channel event was not implemented at all. A decode that fails
   drops the message in silence, so the symptom is a feature that looks unimplemented.
 
+- The settings blob was the third, and the oldest: shipped with account sync, wrong for every
+  release since, found only in 1.1.0-beta.11 by reading their encoder for an unrelated one-line
+  change. Their shape is `{version, features: {feature: {key: {type, value}}}}`; ours was flat,
+  and both apps write the same row. It now goes through a manifest generated from their source
+  (`Scripts/gen-upstream-settings-manifest.sh <tag>`) — **rerun it on every pass**, because a
+  value under a key their DataStore types differently throws on their side, not ours.
+
 So, for anything shared with their app: read the **sender and the receiver** in their source, not
 the data class. `@SerialName` tells you the field names; only the call site tells you whether the
 object is wrapped. Pin the shapes with a round-trip test against literals — it is the one thing

@@ -605,6 +605,24 @@ actor TMDBClient {
         }
     }
 
+    /// The show's regular seasons and how many episodes each has (specials left out), for
+    /// `EpisodeNumbering`. Empty when TMDB has nothing or no key is set.
+    func seasonCounts(tmdbId: Int, apiKey: String) async -> [Int: Int] {
+        guard !apiKey.isEmpty else { return [:] }
+        struct Season: Decodable { let season_number: Int?; let episode_count: Int? }
+        struct Show: Decodable { let seasons: [Season]? }
+        guard let show = try? await IntegrationHTTP.get(
+            "\(base)/tv/\(tmdbId)?api_key=\(apiKey)&language=en-US", as: Show.self
+        ) else { return [:] }
+        var counts: [Int: Int] = [:]
+        for season in show.seasons ?? [] {
+            guard let number = season.season_number, number > 0,
+                  let count = season.episode_count, count > 0 else { continue }
+            counts[number] = count
+        }
+        return counts
+    }
+
     /// The TMDB id behind an IMDb id, without pulling the whole detail payload with it. Used by
     /// the Continue Watching enrichment, which needs an id and one still, nothing more.
     func tmdbId(imdbId: String, type: ContentType, apiKey: String) async -> Int? {
@@ -899,6 +917,31 @@ actor TraktClient {
         )
     }
 
+
+    // MARK: Episode numbering
+
+    /// Every regular episode of a show in Trakt's numbering, specials left out, with titles —
+    /// what `EpisodeNumbering` matches an addon's list against.
+    func showEpisodes(id: String, clientId: String, token: String) async -> [EpisodeRemap.Entry] {
+        struct Episode: Decodable { let season: Int?; let number: Int?; let title: String? }
+        struct Season: Decodable { let number: Int?; let episodes: [Episode]? }
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        guard let seasons = try? await IntegrationHTTP.get(
+            "\(base)/shows/\(encoded)/seasons?extended=episodes",
+            headers: headers(clientId: clientId, token: token),
+            as: [Season].self
+        ) else { return [] }
+        return seasons
+            .filter { ($0.number ?? 0) > 0 }
+            .sorted { ($0.number ?? 0) < ($1.number ?? 0) }
+            .flatMap { season in
+                (season.episodes ?? []).compactMap { episode -> EpisodeRemap.Entry? in
+                    guard let number = episode.number, let seasonNumber = episode.season ?? season.number
+                    else { return nil }
+                    return EpisodeRemap.Entry(season: seasonNumber, episode: number, title: episode.title)
+                }
+            }
+    }
 
     // MARK: Custom lists
 

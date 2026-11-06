@@ -62,7 +62,7 @@ card is 252 pt here and occupies the identical fraction of the screen.
 
 ## Upstream parity
 
-Reconciled through NuvioTV **`1.1.0-beta.9`** (2026-10-31). That means every upstream release up
+Reconciled through NuvioTV **`1.1.0-beta.11`** (2026-11-05). That means every upstream release up
 to that tag has been read and each change ported, judged not applicable, or declined with a reason
 — not that the two apps have the same feature set, which they cannot. The version lines are
 independent on purpose.
@@ -148,7 +148,9 @@ metadata) and the marquee-on-focus card titles.
 - **Account sync** — sign in by scanning a QR code with a phone (the same
   `start_tv_login_session` / `poll_tv_login_session` / `tv-logins-exchange` flow the Android app
   uses), then two-way sync of library, watch progress, collections, addons, plugin repositories
-  and settings, per profile, at launch and when the player closes. Watch progress resolves per
+  and settings, per profile, at launch and when the player closes. Settings travel in the Android
+  app's own blob format, typed key for key, so the two apps share one profile's settings; the
+  keys the Android app keeps per device stay on each device here too. Watch progress resolves per
   item by which device watched it most recently; library removals are tombstoned and pushed
   before the pull so a deletion cannot be undone by the next sync.
 - **Watch parties** — watch the same thing in step with other people, each on their own

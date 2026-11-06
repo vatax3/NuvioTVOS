@@ -23,7 +23,7 @@ enum TopShelfSnapshotPublisher {
 
     static func publish(progress: [String: WatchProgress], previews: [String: MetaPreview]) {
         let ordered = progress.values
-            .filter { $0.fraction > 0.01 && $0.fraction < 0.9 }
+            .filter { $0.positionSeconds > 0 && $0.fraction < 0.9 }
             .sorted { $0.updatedAt > $1.updatedAt }
 
         var seen = Set<String>()

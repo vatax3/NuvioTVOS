@@ -1302,3 +1302,54 @@ Smaller, on the way:
 Open after this window: now-playing and remote commands (above), and image downsampling. `ImageLoader`
 keeps a full-resolution `UIImage(data:)` (`RemoteImage.swift:45`), so a large logo is decoded on the
 main thread the first time it is drawn. That one wants measuring before it is changed.
+
+## Upstream moved an eighth time: 1.1.0-beta.9 → 1.1.0-beta.11
+
+Two tags in five days (3 and 5 November), 144 commits, 153 files, 31 engineering lines plus
+translations. Read over the network at each tag. The weight of the window is theirs alone: a
+subtitle auto-sync rework, benchmarks and baseline profiles, Android memory budgets. Two items were
+big enough to put to the viewer, and both were ported in this release: anime episode renumbering and
+reusing the last link.
+
+The finding that matters is in no changelog line. Upstream added `night_mode` and
+`downmix_lfe_level` to the keys their settings blob keeps on the device; reading that list meant
+reading their encoder, and **our settings sync had never interoperated with theirs**.
+
+### Defects of ours, found by reading why they needed a change
+
+| Upstream | Ours |
+|---|---|
+| **Keep `night_mode` and `downmix_lfe_level` out of the profile settings blob** (one line in `ProfileSettingsSyncService`) | **Our whole settings blob was the wrong shape, and destroyed theirs.** Both apps push the same row (`sync_push_profile_settings_blob`, `p_platform: "tv"`). Theirs is `{version: 1, features: {player_settings: {key: {type, value}}}}`; ours was `{player: {key: value}}`. Neither read the other's, and whichever pushed last replaced the other's settings. We also pushed every key they keep local: engine, output layout, centre mix, amplification, frame-rate matching. Fixed in 1.0.58 by writing their shape (`SettingsBlob.swift:31`). Each key goes under their feature with their declared type, from a manifest generated out of their source (`Scripts/gen-upstream-settings-manifest.sh`, `UpstreamSettingsManifest.swift`). A value that cannot be converted losslessly is skipped, because a wrong-typed value under a known key **throws on Android's read**. Their exclusions are ported and apply both ways (`:113`). The type check reads CoreFoundation types, because `UserDefaults` hands back `NSNumber` and `as? Bool` accepts a 1 (`:191`). A push carries over the remote entries we do not hold (`:267`), since their import clears each feature it receives. A row in our old shape is read once and replaced at once (`NuvioSyncService.swift:535`, `SettingsBlob.swift:408`). Sixteen keys differ in type: four colours (hex here, ARGB `Int` there) and four numbers convert; eight do not (subtitle size and offset, card depth ×3, hero and poster-screen lists, resize mode) and stay out, pinned by `SettingsBlobContractTests`. |
+| **Stop the player from repeating finished source searches** | **Same defect, worse, for plugins.** Addon streams are cached for five minutes (`StremioClient.swift:519`), but every opening of the in-player Sources panel re-ran every plugin scraper: JavaScript, network and all. Now cached the same way, an explicit refresh excepted, and empty runs are not remembered (`PluginRuntime.swift:57`). |
+| **Let Back leave the profile PIN screen** | **Same symptom, different cause.** The PIN step had no Back handler, so Back left the app instead of returning to the profiles. Now it returns (`ProfileSelectionView.swift:58`), installed only while a PIN is asked for, with the conditional modifier from `PartyView`. |
+| **Remove the Continue Watching start threshold** | **Same defect, in five places.** The rail kept rows above 1%, *Play*'s next-up anchor needed 2%, the detail *Resume* label 1% (shown even on a **finished** film the player restarts), and Top Shelf 1%. The player resumes from any position. Now there is one rule, `isInProgress` (`LibraryStore.swift:32`): used by the rail (`:265`), the anchor (`NextUpProjection.swift:163`) and *Resume* (`MetaDetailsView.swift:369`). |
+| **Mark as watched in the Continue Watching menu** | **Ours existed, and marked the whole series.** A long press on a Continue Watching card offered the series-wide row, one press from marking every episode of a show in progress. On a series card it now marks that episode only, once aired (`PosterOptions.swift:82`, `:400`), as theirs does. Catalogue posters keep the series-wide row. |
+| **Fix blocked scroll in advanced settings** | **Possibly the same.** The speed-test results appear below the last button on the page, and a tvOS scroll view only scrolls to something focusable. They are now focus stops (`AdvancedSettingsContent.swift:110`). Not observed on hardware either way. |
+| **Label a VPN's underlying Wi-Fi or Ethernet** | **A milder form.** Behind a VPN the path's interface is the tunnel, so the label read "Connected". It now names the physical interface from the available interfaces (`AdvancedSettingsContent.swift:166`). Untested behind a real VPN. |
+
+### The rest of the window
+
+| Upstream | Ours |
+|---|---|
+| **Remap anime episodes between add-on and TMDB numbering** (MDBList), **keep add-on numbers when the add-on has the episode** (Trakt) | **Ported in 1.0.58, and the Trakt half was an unrecorded gap from before this window**: we had no renumbering at all. `EpisodeRemap.swift:22` is their matcher (video id, then a real title, then position). `EpisodeNumbering.swift:17` applies their three rules. Writes to Trakt are remapped when season structures differ: scrobbles at `PlayerView.swift:1413`, history at `TrackingWriter.swift:150`. Trakt reads are remapped only for an episode the addon lacks (`RemoteProgressService.swift:63`). MDBList (TMDB numbering) keeps a show's numbers when both sides have the same seasons, both ways (`PlayerView.swift:1556`, `RemoteProgressService.swift:84`). MDBList's half needs the viewer's TMDB key; upstream uses its build key. Neither service's watched history is read back here, so reads are the resume points only. |
+| **Fixed /reuse link stream info** | **Ported in 1.0.58, after a silent removal.** `stream_reuse_last_link_enabled` was ported once and removed in August as a setting nothing read (a6aff47); no audit line recorded it. It is back with their defaults (off, 24 h, 1–168): `PlayerSettingsStore.swift:383`. The link is saved once playback starts (`PlayerView.swift:1847`) and played first on the streams screen (`StreamsView.swift:855`), with the addon, logo and description their fix added. Stored per profile (`LastStreamLink.swift:26`). |
+| **Preserve plugin stream variants in binge group autoplay**, search every source from the episode picker | **Ported in 1.0.58.** Plugin streams carry their synthetic `local-plugin-{id}|tokens` group byte for byte (`PluginStore.swift:338`), which watch parties also exchange. Their variant matcher (`PluginBingeGroup.swift:47`) is a branch of next-episode matching (`NextEpisodeSourceMatch.swift:54`), pinned by their own test literals. |
+| **Run the preferred plugin scraper first on next episode**, record provider plays | **Declined.** A latency gain for their in-player plugin-only prefetch; our next episode goes through the full streams screen. |
+| **Group stream cards under plugin provider headings** | **Ported in 1.0.58.** With repository grouping on, rows are grouped per provider with a heading (`PluginBingeGroup.swift:158`, `StreamsView.swift:1082`, and the in-player list). |
+| **Added LFE level option for FFmpeg downmix** | **Ported in 1.0.58, and the same loss was ours:** libswresample drops the LFE when folding to a layout without one. `downmix_lfe_level` (`PlayerSettingsStore.swift:179`) reaches mpv as `lfe_mix_level` (`PlayerAudioMix.swift:70`); the row is off on 5.1/7.1 outputs (`PlaybackSettingsContent.swift:296`). |
+| **Added night mode for audio playback** | **Declined, with the reason measured.** Upward compression with a limiter. Our libmpv's libavfilter is built with thirteen audio filters (`aformat amix anull aresample areverse asetrate atempo atrim equalizer firequalizer pan superequalizer volume`); no `acompressor`, no `alimiter`, no `dynaudnorm`. It needs a new FFmpeg build, which is a decision of its own. |
+| **Map Cantonese subtitles into Chinese** | **Ported in 1.0.58.** `yue` `zhc` `zc` and the names map to `zh-ca` (`MediaLanguage.swift:164`), labelled "Chinese (Cantonese)" rather than Locale's "Chinese (Canada)" (`:113`). |
+| **Keep the player's engine when the same stream restarts** | **Already true here.** Retries remount the engine subtree, keeping the session override (`PlayerView.swift:174`, `:628`). Another source is a new player. |
+| **Prepare links off the main thread** | **Already true here.** Prepared links go into a dictionary; no list is rewritten (`StreamsView.swift:351`). |
+| **Detect HDR from the decoder input format**, HLG from the HEVC alternative-transfer SEI | **Already true / N/A.** `isHDRVideo` reads `video-params/gamma`, the decoded frames (`MPVEngine.swift:56`); FFmpeg handles the SEI. Their fix is to their own MKV extractor. |
+| **Fixed episode selection delay in player UI** | **Already true here.** It waited on a first DataStore read; our settings are synchronous. |
+| **Fix "Hide Unreleased Content" reset** | **N/A.** Their second sync channel for home-catalog settings overwrote it; we have one channel, the blob above. |
+| **Improved background decoder release opt-in** | **N/A.** tvOS suspends the app; 1.0.56 pauses on background. |
+| **Subtitle auto-sync** ×10 (ASS/SSA via libass, no-fit tracking, dialogue matching) | **Declined**, consistently with the beta.7 verdict in *Declined since 0.8.9*. |
+| Memory budgets for low-RAM TVs, HUD maxMemory, benchmark gate and baseline profiles | **N/A.** Android heap and build tooling. |
+| Focus restoration on add-ons and plugins, add-on chip focus, shuffle button and tab-divider styling, fullscreen trailer gradient, app logo loading | **N/A.** Compose focus and layout, and no YouTube trailer path. |
+| RTL ×4 (stream info, network test, sliders, subtitle offset) | **N/A.** English and French only. |
+| Hebrew, Vietnamese, Spanish, Greek, French, Polish, Bulgarian, pt-BR, es-419, Slovak, and more | **Declined.** Translation work. |
+
+Still open from earlier windows: now-playing and remote commands, the accessibility audit, image
+downsampling, media servers.

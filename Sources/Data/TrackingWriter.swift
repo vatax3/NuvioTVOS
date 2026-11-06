@@ -129,6 +129,9 @@ final class TrackingWriteService {
         /// episode number in it — `mal:42203:7` — which is the only shape Simkl's anime
         /// catalogue can be addressed by. See `SimklAnimeAddressing`.
         videoId: String? = nil,
+        /// The series' addon episode list, for translating an episode into the service's own
+        /// numbering. Nil for a film or a whole show. See `EpisodeNumbering`.
+        numbering: EpisodeNumbering.Source? = nil,
         removing: Bool = false,
         settings: AppSettings
     ) async {
@@ -139,6 +142,29 @@ final class TrackingWriteService {
             lastResult = .local
             return
         }
+        // Simkl is addressed by the addon's own ids (`videoId`) and needs no translation.
+        var serviceSeason = season, serviceEpisode = episode
+        if type == .series, let numbering, let s = season, let e = episode {
+            switch provider {
+            case .trakt:
+                let numbers = await EpisodeNumbering.shared.traktNumbers(
+                    season: s, episode: e, videoId: videoId, imdbId: imdbId, source: numbering,
+                    clientId: settings.tracking.traktClientId, token: settings.tracking.traktAccessToken
+                )
+                serviceSeason = numbers.season
+                serviceEpisode = numbers.episode
+            case .mdblist:
+                let numbers = await EpisodeNumbering.shared.mdbListNumbers(
+                    season: s, episode: e, videoId: videoId, source: numbering,
+                    imdbId: imdbId, tmdbApiKey: settings.tmdb.apiKey
+                )
+                serviceSeason = numbers.season
+                serviceEpisode = numbers.episode
+            case .simkl:
+                break
+            }
+        }
+        let season = serviceSeason, episode = serviceEpisode
         lastResult = await perform(provider: provider, settings: settings) {
             switch provider {
             case .trakt:

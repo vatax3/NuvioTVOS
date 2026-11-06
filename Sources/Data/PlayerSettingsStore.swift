@@ -176,6 +176,12 @@ final class PlayerSettingsStore: PreferenceStore {
         set { setBool("downmix_normalization_enabled", newValue) }
     }
 
+    /// `downmix_lfe_level`: see `DownmixLfeLevel`. Local to the device, like the output layout.
+    var downmixLfeLevel: DownmixLfeLevel {
+        get { option("downmix_lfe_level", default: .off) }
+        set { setOption("downmix_lfe_level", newValue) }
+    }
+
     // MARK: - Subtitles
 
     /// Defaults to the television's own language, where Android defaults to nothing.
@@ -373,6 +379,22 @@ final class PlayerSettingsStore: PreferenceStore {
     }
 
     // MARK: - Link reuse
+
+    /// `stream_reuse_last_link_enabled`: reopen a title within the window and play the link it
+    /// last played from. Off by default, as upstream reads it. See `LastStreamLink`.
+    var reuseLastLinkEnabled: Bool {
+        get { bool("stream_reuse_last_link_enabled", default: false) }
+        set { setBool("stream_reuse_last_link_enabled", newValue) }
+    }
+
+    /// `stream_reuse_last_link_cache_hours`, 1–168, 24 by default as upstream reads it.
+    var reuseLastLinkCacheHours: Int {
+        get {
+            let range = LastStreamLinkStore.hoursRange
+            return min(range.upperBound, max(range.lowerBound, int("stream_reuse_last_link_cache_hours", default: 24)))
+        }
+        set { setInt("stream_reuse_last_link_cache_hours", newValue) }
+    }
 
     // MARK: - Overlays
 

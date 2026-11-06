@@ -312,7 +312,14 @@ final class PluginStore {
 extension LocalScraperResult {
     /// Presents a scraper result as a `Stream`, so plugin sources go through exactly the same
     /// filtering, badge parsing, debrid resolution and playback path as addon streams.
-    func asStream(sourceName: String, occurrence: Int) -> Stream {
+    /// - Parameters:
+    ///   - sourceName: the section the stream is listed under — the scraper, or its repository.
+    ///   - scraperId: gives the stream a `PluginBingeGroup`, so next-episode auto-play can stay
+    ///     on the same provider and variant.
+    ///   - scraperName: set only when `sourceName` is the repository, for the provider heading.
+    func asStream(
+        sourceName: String, scraperId: String, scraperName: String? = nil, occurrence: Int
+    ) -> Stream {
         // A direct URL or a magnet: `Stream.streamURL()` / `torrentMagnetURI()` already sort
         // that out, and `effectiveInfoHash` picks the hash up from the magnet when absent here.
         var detailParts: [String] = []
@@ -327,13 +334,17 @@ extension LocalScraperResult {
             description: detailParts.isEmpty ? nil : detailParts.joined(separator: " • "),
             url: url,
             infoHash: infoHash?.nilIfBlank,
-            behaviorHints: headers.map {
-                StreamBehaviorHints(proxyHeaders: ProxyHeaders(request: $0))
-            },
+            behaviorHints: StreamBehaviorHints(
+                bingeGroup: PluginBingeGroup.make(
+                    scraperId: scraperId, name: name, title: title, language: language, quality: quality
+                ),
+                proxyHeaders: headers.map { ProxyHeaders(request: $0) }
+            ),
             addonName: sourceName,
             addonLogo: nil,
             quality: quality?.nilIfBlank,
-            occurrence: occurrence
+            occurrence: occurrence,
+            pluginSourceName: scraperName
         )
     }
 }

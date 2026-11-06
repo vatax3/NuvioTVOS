@@ -222,6 +222,31 @@ enum HDRPeakDetection: String, SettingsOption {
     }
 }
 
+/// `downmix_lfe_level`: how much of the LFE channel is folded in when the output layout has
+/// none. libswresample drops it by default (`lfe_mix_level` 0), so a 5.1 film downmixed to
+/// stereo lost its low end entirely. Values are upstream's, which this key shares.
+enum DownmixLfeLevel: String, SettingsOption {
+    case off = "off"
+    case half = "50"
+    case full = "100"
+
+    var level: Double {
+        switch self {
+        case .off: return 0
+        case .half: return 0.5
+        case .full: return 1
+        }
+    }
+
+    var displayName: String {
+        switch self {
+        case .off: return L10n.text("option.off", fallback: "Off")
+        case .half: return "50%"
+        case .full: return "100%"
+        }
+    }
+}
+
 enum AudioOutputChannels: String, SettingsOption {
     case auto = "AUTO"
     case stereo = "STEREO"

@@ -52,6 +52,10 @@ struct ProfileSelectionView: View {
             .padding(.horizontal, NuvioTheme.layout.tvSafeHorizontal)
         }
         .animation(NuvioMotion.slowTween, value: tint)
+        // Back on the PIN step returns to the profiles, as upstream's 1.1.0-beta.11 fix makes it.
+        // Without a handler the press went to the system and left the app. Installed only while
+        // a PIN is asked for: on the chooser itself Back keeps leaving the app.
+        .modifier(OptionalExitCommand(action: challenging == nil ? nil : { challenging = nil }))
         .onChange(of: challenging) { _, profile in
             entry = ""
             didFail = false
