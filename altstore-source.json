@@ -40,6 +40,16 @@
       ],
       "versions": [
         {
+          "version": "1.0.58",
+          "buildVersion": "60",
+          "date": "2026-11-06",
+          "localizedDescription": "### Fixed\n- **Settings sync with the Android app.** Profile settings are now written in the Android app's own format. Previously each app replaced the other's synced settings and neither could read them. Settings that belong to a device (player engine, output channels, dialogue level, amplification, frame-rate matching) are no longer sent to other devices. Settings saved by earlier versions are read once and converted.\n- **Anime episode numbering on Trakt and MDBList.** When an addon splits a show into seasons differently from Trakt or TMDB, scrobbles, watched marks and resume points are now translated to the right episode, matched by title and then by position. Episodes the addon numbers the same way keep their numbers.\n- **Continue Watching: \"Mark watched\"** on a series card now marks that episode, once it has aired, instead of the whole series.\n- **Resume points:** Continue Watching, the series *Play* button and the *Resume* label now agree. Any saved position counts. A finished film shows *Play* rather than *Resume*.\n- **Profile PIN:** Back on the PIN screen returns to the profile list instead of leaving the app.\n- **Plugin sources** are no longer searched again each time the in-player Sources panel opens; results are reused for five minutes, and Refresh still searches again.\n- **Network settings** name the underlying Wi-Fi or Ethernet connection behind a VPN, and speed-test results can be scrolled to.\n\n### Added\n- **Reuse last link** (Settings → Playback, off by default): reopening a title within the chosen window (1 to 168 hours, 24 by default) plays the link it last played from, with its source details.\n- **LFE level on downmix** (Settings → Playback → Mixing): Off, 50% or 100% of the subwoofer channel is kept when multichannel audio is folded to a layout without one.\n- **Next-episode auto-play stays on the same plugin source** and quality when the source is a plugin.\n- **Plugin provider headings** in the source lists when plugins are grouped by repository.\n- **Cantonese subtitles** are recognised and grouped with Chinese.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.58/Nuvio-1.0.58-tvOS-unsigned.ipa",
+          "size": 41154874,
+          "minOSVersion": "18.0",
+          "sha256": "43aa8459d44b005ff42cf17f48558f1bda81b819e9102445db7942b773010a3f"
+        },
+        {
           "version": "1.0.57",
           "buildVersion": "59",
           "date": "2026-11-02",
@@ -496,11 +506,11 @@
         ],
         "privacy": {}
       },
-      "version": "1.0.57",
-      "versionDate": "2026-11-02",
-      "versionDescription": "### Added\n\n- **Hidden sidebar.** Settings → Layout → Sidebar when closed offers *Icons* or *Hidden*. With\n  *Hidden*, nothing is drawn at the left edge while the menu is closed and every screen uses the\n  full width. Moving left from the start of any row opens the menu on the current destination;\n  moving right or choosing a destination closes it.\n\n### Changed\n\n- **Back leaves the app from a top-level screen** (Home, Search, Library, Settings), as in other\n  Apple TV apps, instead of opening the menu. On detail pages, the player and dialogs, Back still\n  returns to the previous screen. The menu opens by moving left, in both sidebar modes.\n- **The \"Collapsed by default\" option has been removed.** Turned off, it kept the menu open over\n  the screen with nothing selectable, leaving the app unresponsive. The sidebar now always starts\n  closed, including when that preference arrives through sync from the Android TV app.\n\n### Fixed\n\n- **Posters no longer slide under the sidebar icons** when a row is scrolled. Rows on Home,\n  Continue Watching, collections and Discover now end just before the icons.",
-      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.57/Nuvio-1.0.57-tvOS-unsigned.ipa",
-      "size": 41046775,
+      "version": "1.0.58",
+      "versionDate": "2026-11-06",
+      "versionDescription": "### Fixed\n- **Settings sync with the Android app.** Profile settings are now written in the Android app's own format. Previously each app replaced the other's synced settings and neither could read them. Settings that belong to a device (player engine, output channels, dialogue level, amplification, frame-rate matching) are no longer sent to other devices. Settings saved by earlier versions are read once and converted.\n- **Anime episode numbering on Trakt and MDBList.** When an addon splits a show into seasons differently from Trakt or TMDB, scrobbles, watched marks and resume points are now translated to the right episode, matched by title and then by position. Episodes the addon numbers the same way keep their numbers.\n- **Continue Watching: \"Mark watched\"** on a series card now marks that episode, once it has aired, instead of the whole series.\n- **Resume points:** Continue Watching, the series *Play* button and the *Resume* label now agree. Any saved position counts. A finished film shows *Play* rather than *Resume*.\n- **Profile PIN:** Back on the PIN screen returns to the profile list instead of leaving the app.\n- **Plugin sources** are no longer searched again each time the in-player Sources panel opens; results are reused for five minutes, and Refresh still searches again.\n- **Network settings** name the underlying Wi-Fi or Ethernet connection behind a VPN, and speed-test results can be scrolled to.\n\n### Added\n- **Reuse last link** (Settings → Playback, off by default): reopening a title within the chosen window (1 to 168 hours, 24 by default) plays the link it last played from, with its source details.\n- **LFE level on downmix** (Settings → Playback → Mixing): Off, 50% or 100% of the subwoofer channel is kept when multichannel audio is folded to a layout without one.\n- **Next-episode auto-play stays on the same plugin source** and quality when the source is a plugin.\n- **Plugin provider headings** in the source lists when plugins are grouped by repository.\n- **Cantonese subtitles** are recognised and grouped with Chinese.",
+      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.58/Nuvio-1.0.58-tvOS-unsigned.ipa",
+      "size": 41154874,
       "minOSVersion": "18.0"
     }
   ],
