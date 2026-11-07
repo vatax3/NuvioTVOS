@@ -1353,3 +1353,37 @@ reading their encoder, and **our settings sync had never interoperated with thei
 
 Still open from earlier windows: now-playing and remote commands, the accessibility audit, image
 downsampling, media servers.
+
+## Upstream moved a ninth time: 1.1.0-beta.11 → 1.1.0-beta.12
+
+One tag (6 November), 26 commits, 34 files, five engineering lines plus translations. Read over the
+network at the tag. The window is small; what it led to is not. Reading the restored-subtitle fix
+meant reading the feature it fixes, and **per-title audio and subtitle memory, which upstream has
+had since March, was never ported here and never recorded**. Reading the Anime-Skip fixes turned
+up a second unrecorded gap: **`kitsu:` ids, which the most common anime addon serves, had no skip
+marks at all.** Both are closed in 1.0.59.
+
+### Defects of ours, found by reading why they needed a change
+
+| Upstream | Ours |
+|---|---|
+| **Drop open-ended Anime-Skip segments** | **Same defect.** Anime-Skip marks points, not ranges, and we closed the last one at the episode's length, so a lone *Intro* or *Recap* offered to skip the whole rest of the episode. Now their rule (`IntegrationClients.swift:1752`): a segment ends at the next mark, and an open-ended one survives only if it is an ending in the second half of `baseDuration` (now part of the query, `:1662`). Kept adaptation: it closes at the episode's length, not `Double.MAX_VALUE`. |
+| **Pick the most complete Anime-Skip entry for an episode**, prefer AniSkip | **Same defect, and a false parity claim.** We took the first community entry for an episode, often a lone marker; now the one covering the most kinds, then the most segments, earlier on a tie (`IntegrationClients.swift:1730`). Our merge order was AniSkip, Anime-Skip, IntroDB *last*, under a comment calling it upstream's; theirs has always put IntroDB first, and is now IntroDB → AniSkip → Anime-Skip (`:1511`, used at `PlayerView.swift:1273`). The wrong order came in with 2b24f1c, an unrelated commit. |
+| **Query Anime-Skip for Kitsu/MAL even without an IntroDB mapping** | **Worse here: Kitsu had nothing.** We parsed only `mal:` ids, and gave those AniSkip alone. Both are read now (`PlayerView.swift:1465`) and routed as their `getSkipIntervalsForMal/Kitsu` are (`:1344`): Simkl trades the id for MAL, AniList, IMDb and the TVDB numbering (`IntegrationClients.swift:1935`, redirect by any source at `:1989`). AniSkip by MAL, Anime-Skip by AniList, IntroDB by IMDb. On the IMDb path, Anime-Skip had depended on ARM even when Simkl had already answered the AniList id; it uses Simkl's first now (`PlayerView.swift:1305`). Needs the viewer's Simkl client id; without one a `mal:` id keeps AniSkip and a `kitsu:` id has no marks. |
+| **Keep restored subtitle preference** | **The whole feature was missing.** Their `TrackPreferenceDataStore` (2026-03-17) remembers the audio and subtitle picked for a title and restores them on its next episode. **Ported in 1.0.59**, under their exact keys and values, `"<field>\|<contentId>"` (`TrackMemory.swift:41`). Their settings blob syncs the `track_preference` feature, so it does here too (`SettingsBlob.swift:47`), typed by field because the keys are per title (`:149`); a pick on the Android app is what this app restores. Picks are captured in the transport (`PlayerChrome.swift:501`, `:507`) and restored by their matcher: track id, then name, then language with the forced flag and regional variant (`TrackMemory.swift:156`, `:190`). Addon subtitles by exact addon and id only, an embedded pick falling back to an addon in its language (`PlayerChrome.swift:460`). The restore waits for every addon track, because mpv's `sub-add … select` makes each one active as it loads, with a ten-second limit (`:442`). Their beta.12 fix — a later save wrote the restored subtitle away — holds by construction: a pick reads the stored memory and changes only its own half (`TrackMemory.swift:222`). AVPlayer: addon subtitles and *Off* are remembered and restored (`PlayerView.swift:500`, `:688`); its embedded tracks are chosen in AVKit's own picker, which the app cannot see, so only the remembered audio *language* leads its selection, as it does every engine's (`:671`). |
+
+### The rest of the window
+
+| Upstream | Ours |
+|---|---|
+| **Auto-scroll truncated hero descriptions on Home**, and its carousel-hold fixes | **Ported in 1.0.59.** `hero_description_auto_scroll_enabled`, off by default (`LayoutSettingsStore.swift:70`), synced in `layout_settings`. Their timings, three passes and edge fades (`AutoScrollingText.swift:10`), on the hero description (`HomeView.swift:473`); the toggle shows while the hero is on (`SettingsView.swift:631`). Reduce Motion stands in for their animations-off check. The carousel hold is N/A: our hero follows focus, with no auto-advance and no hero trailer. |
+| **Let AutoSync search further** when a restored subtitle does not fit | **Declined**, consistently with the beta.7 verdict: AutoSync is not ported. |
+| Subtitle delay per video and speed per title, in the same `track_preference` feature | **Declined, and carried.** A delay is deliberately not persisted here (`SubtitleOverlay.swift:25`). Their entries are imported and pushed back untouched, so the Android app keeps them (`SettingsBlob.swift:149`). |
+| **End Exo playback when the video renderer never reaches end of stream** | **N/A.** ExoPlayer waits on every renderer's `isEnded`; mpv reports end-of-file itself and AVPlayer posts `didPlayToEndTime`. |
+| Vietnamese, Bengali, French, Hungarian, Japanese, Turkish | **Declined.** Translation work. |
+
+Regenerated: `UpstreamSettingsManifest.swift` at 1.1.0-beta.12 (265 keys; one new,
+`hero_description_auto_scroll_enabled`).
+
+Still open from earlier windows: now-playing and remote commands, the accessibility audit, image
+downsampling, media servers, night mode (needs an FFmpeg build with `acompressor`).

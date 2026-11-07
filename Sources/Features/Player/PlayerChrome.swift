@@ -84,6 +84,11 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
     @State private var showsControls = true
     @State private var hideTask: Task<Void, Never>?
     @State private var lastPersistedPosition: Double = 0
+    /// What is left to restore of this title's remembered tracks. Each half is applied once, then
+    /// cleared; a pick by the viewer clears its half first, so a late restore never undoes it.
+    @State private var pendingAudio: TrackMemory.Track?
+    @State private var pendingSubtitle: TrackMemory.Subtitle?
+    @State private var subtitleRestoreDeadline: Task<Void, Never>?
     @State private var picker: TrackPicker?
     /// The speed the viewer themselves chose, remembered so a party correction can hand it back
     /// when it finishes rather than resetting everyone to 1×.
@@ -256,10 +261,13 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
             seekReadoutDismiss?.cancel()
             aspectFlashTask?.cancel()
             focusRetry?.cancel()
+            subtitleRestoreDeadline?.cancel()
             persist(completed: false)
             engine.destroy()
             DisplayModeMatcher.restore(mode: settings.player.frameRateMatchingMode)
         }
+        .onChange(of: engine.audioTracks) { _, _ in restoreRememberedTracks() }
+        .onChange(of: engine.subtitleTracks) { _, _ in restoreRememberedTracks() }
         .onChange(of: engine.position) { _, position in
             onPlaybackTime(position, engine.duration)
             // Same 5s cadence as the AVFoundation path.
@@ -425,7 +433,95 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
         for subtitle in request.subtitles.prefix(8) {
             engine.addSubtitle(url: subtitle.url, title: subtitle.displayLanguage)
         }
+        let memory = settings.trackPreference.memory(forContentId: request.contentId)
+        pendingAudio = memory?.audio
+        pendingSubtitle = memory?.subtitle
+        if pendingSubtitle != nil {
+            // An addon subtitle that never loads must not hold the restore back for ever.
+            subtitleRestoreDeadline = Task {
+                try? await Task.sleep(for: .seconds(10))
+                guard !Task.isCancelled else { return }
+                restoreRememberedTracks(force: true)
+            }
+        }
+        restoreRememberedTracks()
         scheduleHide()
+    }
+
+    // MARK: Track memory
+
+    private var addonSubtitles: [Subtitle] { Array(request.subtitles.prefix(8)) }
+
+    /// Upstream's `applyPersistedTrackPreference`, for the engines whose tracks this chrome lists.
+    ///
+    /// The subtitle half waits for every addon track to arrive: mpv's `sub-add … select` makes
+    /// each newly loaded addon track the active one, so a choice applied before the last of them
+    /// loads would simply be replaced.
+    private func restoreRememberedTracks(force: Bool = false) {
+        if let audio = pendingAudio, !engine.audioTracks.isEmpty {
+            pendingAudio = nil
+            if let match = TrackMemory.match(audio, in: engine.audioTracks), !match.isSelected {
+                engine.selectAudioTrack(match.id)
+            }
+        }
+
+        guard let subtitle = pendingSubtitle else { return }
+        let tracks = engine.subtitleTracks
+        let addonsLoaded = tracks.filter(\.isExternal).count >= addonSubtitles.count
+        // The file's own tracks arrive with the first track list; until then there is nothing
+        // to match against. The deadline applies what can be applied if either never comes.
+        guard force || (!tracks.isEmpty && addonsLoaded) else { return }
+        pendingSubtitle = nil
+        subtitleRestoreDeadline?.cancel()
+
+        switch subtitle {
+        case .disabled:
+            if tracks.contains(where: \.isSelected) { engine.selectSubtitleTrack(nil) }
+        case .embedded(let remembered):
+            let embedded = tracks.filter { !$0.isExternal }
+            if let match = TrackMemory.match(remembered, in: embedded) {
+                if !match.isSelected { engine.selectSubtitleTrack(match.id) }
+            } else if let language = remembered.language.map(MediaLanguage.normalise),
+                      let addon = addonSubtitles.first(where: { MediaLanguage.normalise($0.lang) == language }),
+                      let track = TrackMemory.externalTrack(for: addon, in: tracks, addonSubtitles: addonSubtitles) {
+                // Upstream's fallback: the file no longer carries that track, an addon has it.
+                if !track.isSelected { engine.selectSubtitleTrack(track.id) }
+            }
+        case .addon(let id, _, _, let addonName):
+            // Exact addon and id only, as upstream: a looser match must not override the normal
+            // choice, which prefers the file's own tracks.
+            if let addon = addonSubtitles.first(where: { $0.id == id && ($0.addonName ?? "") == addonName }),
+               let track = TrackMemory.externalTrack(for: addon, in: tracks, addonSubtitles: addonSubtitles),
+               !track.isSelected {
+                engine.selectSubtitleTrack(track.id)
+            }
+        }
+    }
+
+    private func chooseAudioTrack(_ track: PlayerTrack) {
+        pendingAudio = nil
+        engine.selectAudioTrack(track.id)
+        settings.trackPreference.rememberAudio(TrackMemory.track(track), forContentId: request.contentId)
+    }
+
+    private func chooseSubtitleTrack(_ track: PlayerTrack?) {
+        pendingSubtitle = nil
+        subtitleRestoreDeadline?.cancel()
+        engine.selectSubtitleTrack(track?.id)
+        let remembered: TrackMemory.Subtitle
+        if let track {
+            if track.isExternal,
+               let addon = TrackMemory.addonSubtitle(
+                for: track, in: engine.subtitleTracks, addonSubtitles: addonSubtitles
+               ) {
+                remembered = TrackMemory.remembered(addon: addon)
+            } else {
+                remembered = .embedded(TrackMemory.track(track))
+            }
+        } else {
+            remembered = .disabled
+        }
+        settings.trackPreference.rememberSubtitle(remembered, forContentId: request.contentId)
     }
 
     // MARK: Remote input
@@ -1179,7 +1275,7 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
                         // The panel stays mounted while mpv changes the active stream: it only
                         // needs an `aid` command, and rebuilding the player here is what used
                         // to produce a visible black-frame flash.
-                        engine.selectAudioTrack(track.id)
+                        chooseAudioTrack(track)
                     }
                 }
             }
@@ -1232,7 +1328,7 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
                     title: L10n.text("player.off"),
                     isSelected: !hasSelection,
                     requestsInitialFocus: !hasSelection
-                ) { engine.selectSubtitleTrack(nil) }
+                ) { chooseSubtitleTrack(nil) }
 
                 ForEach(engine.subtitleTracks) { track in
                     PlayerRailCard(
@@ -1241,7 +1337,7 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
                         metadata: track.details.joined(separator: " · "),
                         isSelected: track.isSelected,
                         requestsInitialFocus: track.isSelected
-                    ) { engine.selectSubtitleTrack(track.id) }
+                    ) { chooseSubtitleTrack(track) }
                 }
             }
 

@@ -43,7 +43,8 @@ enum SettingsBlob {
         "mdblist": "mdblist_settings",
         "skipIntro": "animeskip_settings",
         "streamBadges": "stream_badge_settings",
-        "trailers": "trailer_settings"
+        "trailers": "trailer_settings",
+        "trackPreference": "track_preference"
     ]
 
     struct Location: Hashable, Sendable {
@@ -122,9 +123,6 @@ enum SettingsBlob {
             if key == "trailer_allow_4k" { return true }
         case "plugin_settings":
             if key != "group_streams_by_repository" { return true }
-        case "track_preference":
-            // Per-title track memory upstream; nothing here lives in it.
-            return true
         default:
             break
         }
@@ -140,8 +138,21 @@ enum SettingsBlob {
     }
 
     static func upstreamType(_ location: Location) -> SettingsBlobType? {
-        UpstreamSettingsManifest.keys[location.feature]?[location.key]
+        if location.feature == "track_preference" { return trackPreferenceType(location.key) }
+        return UpstreamSettingsManifest.keys[location.feature]?[location.key]
             ?? extraUpstreamKeys[location.feature]?[location.key]
+    }
+
+    /// `track_preference` keys are per title (`"<field>|<contentId>"`), so no manifest can list
+    /// them; upstream's `TrackPreferenceDataStore` types them by field. Delay and speed are carried
+    /// for the Android app and never read here.
+    static func trackPreferenceType(_ key: String) -> SettingsBlobType? {
+        guard let bar = key.firstIndex(of: "|"), key.index(after: bar) < key.endIndex else { return nil }
+        switch key[..<bar] {
+        case "sub_delay_ms": return .int
+        case "playback_speed": return .float
+        default: return .string
+        }
     }
 
     /// The store and key a remote entry lands in.

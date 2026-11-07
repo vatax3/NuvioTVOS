@@ -470,10 +470,13 @@ struct ModernHeroInfo: View {
                 }
 
                 if let description = item.description?.nilIfBlank {
-                    Text(description)
+                    AutoScrollingText(
+                        text: description,
+                        lineLimit: 3,
+                        isEnabled: settings.layout.heroDescriptionAutoScrollEnabled
+                    )
                         .nuvioText(NuvioTextStyles.bodyCompact)
                         .foregroundStyle(colors.textSecondary)
-                        .lineLimit(3)
                         .multilineTextAlignment(.leading)
                         .frame(maxWidth: dp(520), alignment: .leading)
                 }

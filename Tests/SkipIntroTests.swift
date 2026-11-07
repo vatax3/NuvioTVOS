@@ -161,7 +161,7 @@ final class SkipIntroTests: XCTestCase {
         {"at":180.25,"type":{"name":"Canon"}},
         {"at":1290,"type":{"name":"Credits"}}
       ]},
-      {"season":"1","number":"3","timestamps":[{"at":5,"type":{"name":"Recap"}}]}
+      {"season":"1","number":"3","timestamps":[{"at":5,"type":{"name":"Recap"}},{"at":60,"type":{"name":"Canon"}}]}
     ]}}
     """
 
@@ -181,8 +181,8 @@ final class SkipIntroTests: XCTestCase {
         XCTAssertEqual(segments[1].kind, .outro)
     }
 
-    /// The last timestamp has no successor. Upstream closes it with `Double.MAX_VALUE`, which
-    /// would offer to skip the entire rest of the file; the episode's duration is the real end.
+    /// The last timestamp has no successor. Upstream closes an ending with `Double.MAX_VALUE`,
+    /// which would put the skip target past the file; the episode's duration is the real end.
     func testFinalTimestampIsClosedWithTheEpisodeDuration() throws {
         let response = try decode(animeSkipPayload, as: SkipIntroClient.AnimeSkipResponse.self)
         let segments = SkipIntroClient.segments(

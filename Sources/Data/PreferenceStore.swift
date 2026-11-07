@@ -163,6 +163,9 @@ class PreferenceStore {
 
     func setString(_ key: String, _ value: String) { persist(key, value) }
 
+    /// Removes a key, for stores whose keys are per item rather than declared.
+    func remove(_ key: String) { persist(key, nil) }
+
     func secureString(_ key: String, default fallback: String) -> String {
         precondition(secureKeys.contains(key), "Only declared secure keys may use secureString")
         let namespacedKey = "\(namespace).\(key)"

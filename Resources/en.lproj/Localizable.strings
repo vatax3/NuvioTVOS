@@ -329,6 +329,8 @@
 "settings.layout.hero_section" = "Hero section";
 "settings.layout.fullscreen_backdrop" = "Full-screen backdrop";
 "settings.layout.fullscreen_backdrop_subtitle" = "Let the hero image fill the whole screen in Modern view";
+"settings.layout.hero_description_auto_scroll" = "Auto-scroll descriptions";
+"settings.layout.hero_description_auto_scroll_subtitle" = "Slowly scroll long descriptions on the Home screen instead of cutting them off";
 "settings.layout.classic_focus_gradient" = "Classic focus gradient";
 "settings.layout.classic_focus_gradient_subtitle" = "Tint the backdrop toward the focused poster";
 "settings.layout.modern_sidebar" = "Modern sidebar";

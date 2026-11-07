@@ -329,6 +329,8 @@
 "settings.layout.hero_section" = "Section vedette";
 "settings.layout.fullscreen_backdrop" = "Image de fond plein écran";
 "settings.layout.fullscreen_backdrop_subtitle" = "Laisser l’image vedette occuper tout l’écran en vue Moderne";
+"settings.layout.hero_description_auto_scroll" = "Défilement des descriptions";
+"settings.layout.hero_description_auto_scroll_subtitle" = "Faire défiler lentement les longues descriptions de l’accueil au lieu de les couper";
 "settings.layout.classic_focus_gradient" = "Dégradé de focus Classique";
 "settings.layout.classic_focus_gradient_subtitle" = "Teinter le fond vers l’affiche sélectionnée";
 "settings.layout.modern_sidebar" = "Barre latérale Moderne";

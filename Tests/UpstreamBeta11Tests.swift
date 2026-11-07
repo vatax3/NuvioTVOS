@@ -132,7 +132,8 @@ final class SettingsBlobContractTests: XCTestCase {
     }
 
     func testManifestCoversTheFeaturesTheBlobCarries() {
-        for feature in Set(SettingsBlob.storeFeature.values) {
+        // `track_preference` keys are per title, typed by field (`trackPreferenceType`).
+        for feature in Set(SettingsBlob.storeFeature.values) where feature != "track_preference" {
             XCTAssertNotNil(UpstreamSettingsManifest.keys[feature], feature)
         }
     }

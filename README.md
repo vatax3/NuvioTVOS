@@ -62,7 +62,7 @@ card is 252 pt here and occupies the identical fraction of the screen.
 
 ## Upstream parity
 
-Reconciled through NuvioTV **`1.1.0-beta.11`** (2026-11-05). That means every upstream release up
+Reconciled through NuvioTV **`1.1.0-beta.12`** (2026-11-06). That means every upstream release up
 to that tag has been read and each change ported, judged not applicable, or declined with a reason
 — not that the two apps have the same feature set, which they cannot. The version lines are
 independent on purpose.
@@ -133,12 +133,15 @@ metadata) and the marquee-on-focus card titles.
   (device-code OAuth, watchlist and static lists, resume points, watched marks and scrobbling).
 - **Metadata** — TMDB enrichment (artwork, logos, cast, certifications, recommendations, networks,
   studios), MDBList aggregated ratings — from a pasted API key, or from a connected account when
-  there is none — and AniSkip intro/outro segments.
+  there is none — and intro, recap and outro segments from IntroDB, AniSkip and Anime-Skip,
+  for IMDb, MAL and Kitsu ids.
 - **Artwork** — optionally fetched from a URL of your own instead of each addon's, for a
   rating-overlay service such as RatingPosterDB, with a per-screen switch and a fall back to the
   addon's own poster for any title the pattern cannot address.
 - **Subtitles** — external SubRip/WebVTT tracks from every `subtitles` addon, language-ordered and
-  auto-selected, drawn with the configured size, weight, colours, outline and offset.
+  auto-selected, drawn with the configured size, weight, colours, outline and offset. The audio
+  and subtitle picked for a title are remembered and restored on its next episode, under the
+  Android app's keys, so the choice follows the profile between the two apps.
 - **Plugins** — local JS scrapers in JavaScriptCore, matching the Android runtime's `getStreams`
   contract and injected globals, with a Swift HTML parser and CSS selector engine standing in for
   jsoup's `cheerio` shim.

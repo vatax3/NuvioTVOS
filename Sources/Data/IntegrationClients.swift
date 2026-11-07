@@ -1505,6 +1505,15 @@ actor SkipIntroClient {
         return chosen.values.sorted { $0.start < $1.start }
     }
 
+    /// Upstream's `mergeByPriority` order: IntroDB, then AniSkip, then Anime-Skip as the fallback
+    /// (1.1.0-beta.12 moved AniSkip above Anime-Skip). Ours had IntroDB *last* since 2b24f1c,
+    /// under a comment claiming that was upstream's order; it never was.
+    nonisolated static func byPriority(
+        introDb: [SkipSegment], aniSkip: [SkipSegment], animeSkip: [SkipSegment]
+    ) -> [[SkipSegment]] {
+        [introDb, aniSkip, animeSkip]
+    }
+
     /// IntroDB covers everything AniSkip does not — ordinary series rather than anime — and is
     /// where the Android app gets intro, recap and outro marks for the rest of the catalogue.
     ///
@@ -1650,7 +1659,7 @@ actor SkipIntroClient {
 
         for showId in await animeSkipShowIds(anilistId: anilistId, clientId: trimmed) {
             let query = "{ findEpisodesByShowId(showId: \"\(showId)\") "
-                + "{ season number timestamps { at type { name } } } }"
+                + "{ season number baseDuration timestamps { at type { name } } } }"
             guard let response = try? await IntegrationHTTP.post(
                 Self.animeSkipEndpoint,
                 headers: ["X-Client-ID": trimmed],
@@ -1686,6 +1695,8 @@ actor SkipIntroClient {
             /// Strings on the wire, not numbers — GraphQL ids rather than integers.
             let season: String?
             let number: String?
+            /// The duration the timestamps were recorded against, when the submitter gave one.
+            var baseDuration: Double? = nil
             let timestamps: [Timestamp]?
         }
         struct DataBlock: Decodable, Sendable {
@@ -1695,26 +1706,67 @@ actor SkipIntroClient {
         let data: DataBlock?
     }
 
-    /// Anime-Skip publishes **points in time, not ranges**: a timestamp marks where a section
-    /// begins, and it runs until the next one. The final timestamp has no successor, so it is
-    /// closed with the episode's own duration — upstream uses `Double.MAX_VALUE` there, which
-    /// would offer to skip the entire remainder of the file.
+    /// Every community entry for the requested episode, reduced to the most complete one.
+    /// Port of upstream's `bestAnimeSkipIntervals` (1.1.0-beta.12): a show can hold several
+    /// entries for one episode number, some of them a lone marker, and taking the first — as this
+    /// did — often meant taking the incomplete one.
     nonisolated static func segments(
         from episodes: [AnimeSkipResponse.Episode],
         episode: Int,
         season: Int?,
         episodeLength: Double
     ) -> [SkipSegment] {
-        guard let match = episodes.first(where: { candidate in
+        let matching = episodes.filter { candidate in
             candidate.number.flatMap(Int.init) == episode
                 && (season == nil || candidate.season.flatMap(Int.init) == season)
-        }), let timestamps = match.timestamps else { return [] }
+        }
+        return best(of: matching.map {
+            intervals(from: $0.timestamps ?? [], baseDuration: $0.baseDuration, episodeLength: episodeLength)
+        })
+    }
 
+    /// The entry covering the most kinds (opening / ending / recap), then the one with the most
+    /// segments. On a full tie the earlier entry wins, as Kotlin's `maxWithOrNull` keeps the first.
+    nonisolated static func best(of candidates: [[SkipSegment]]) -> [SkipSegment] {
+        var chosen: [SkipSegment] = []
+        var chosenScore = (kinds: 0, count: 0)
+        for candidate in candidates where !candidate.isEmpty {
+            let score = (kinds: Set(candidate.map(\.kind)).count, count: candidate.count)
+            if chosen.isEmpty || score > chosenScore {
+                chosen = candidate
+                chosenScore = score
+            }
+        }
+        return chosen
+    }
+
+    /// Anime-Skip publishes **points in time, not ranges**: a timestamp marks where a section
+    /// begins, and it runs until the next one. Port of upstream's `toAnimeSkipIntervals`
+    /// (1.1.0-beta.12). The last timestamp has no known end: only an ending may run to the end of
+    /// the episode, and only when it starts in the second half (when the duration is known). An
+    /// open-ended intro or recap is dropped — closed at the episode's length, as this used to,
+    /// it offered to skip the whole rest of the episode.
+    ///
+    /// Adaptation: the surviving ending closes at the episode's length rather than upstream's
+    /// `Double.MAX_VALUE`, which would put a skip target past the end of the file.
+    nonisolated static func intervals(
+        from timestamps: [AnimeSkipResponse.Timestamp],
+        baseDuration: Double?,
+        episodeLength: Double
+    ) -> [SkipSegment] {
         let sorted = timestamps.sorted { $0.at < $1.at }
         return sorted.enumerated().compactMap { index, timestamp in
             guard let kind = animeSkipKind(timestamp.type.name) else { return nil }
-            let end = index + 1 < sorted.count ? sorted[index + 1].at : episodeLength
-            guard end > timestamp.at else { return nil }
+            let end: Double
+            if index + 1 < sorted.count {
+                end = sorted[index + 1].at
+                guard end > timestamp.at else { return nil }
+            } else if kind == .outro, baseDuration.map({ timestamp.at >= $0 / 2 }) ?? true {
+                end = episodeLength
+                guard end > timestamp.at else { return nil }
+            } else {
+                return nil
+            }
             return SkipSegment(kind: kind, start: timestamp.at, end: end)
         }
     }
@@ -1792,6 +1844,7 @@ actor SkipIntroClient {
             // Simkl has answered these as both a number and a string.
             let mal: FlexibleInt?
             let anilist: FlexibleInt?
+            var imdb: String? = nil
         }
         let ids: Ids?
     }
@@ -1860,6 +1913,64 @@ actor SkipIntroClient {
     ) async -> SimklIdResolution.Redirect? {
         await simklRedirectLookup(imdbId: imdbId, clientId: clientId)
     }
+
+    /// What Simkl knows about an anime addressed by its own `mal:` or `kitsu:` id.
+    struct SimklAnimeIds: Sendable, Equatable {
+        var malId: Int?
+        var anilistId: Int?
+        var imdbId: String?
+        /// The TVDB season and episode of the requested anime episode, for IntroDB.
+        var tvdb: (season: Int, episode: Int)?
+
+        static func == (lhs: Self, rhs: Self) -> Bool {
+            lhs.malId == rhs.malId && lhs.anilistId == rhs.anilistId && lhs.imdbId == rhs.imdbId
+                && lhs.tvdb?.season == rhs.tvdb?.season && lhs.tvdb?.episode == rhs.tvdb?.episode
+        }
+    }
+
+    /// Port of upstream's `resolveIds(source, id)` plus `resolveEpisodeTvdb`, which their
+    /// `getSkipIntervalsForMal/Kitsu` use: a Kitsu id reaches AniSkip only through the MAL id
+    /// Simkl holds for it, Anime-Skip only through the AniList id, and IntroDB only through the
+    /// IMDb id and the TVDB numbering.
+    func simklAnimeIds(
+        source: String, id: String, episode: Int, clientId: String
+    ) async -> SimklAnimeIds? {
+        guard !clientId.isEmpty else { return nil }
+        let cacheKey = "simkl-\(source)-\(id)"
+
+        let redirect: SimklIdResolution.Redirect
+        if let cached = simklRedirectCache[cacheKey], let cached { redirect = cached }
+        else if simklRedirectCache[cacheKey] != nil { return nil }
+        else {
+            let located = await simklRedirectLookup(source: source, id: id, clientId: clientId)
+            simklRedirectCache[cacheKey] = located
+            guard let located else { return nil }
+            redirect = located
+        }
+
+        let common = "client_id=\(clientId)"
+        let details = try? await IntegrationHTTP.get(
+            "https://api.simkl.com/\(redirect.type)/\(redirect.simklId)?extended=full&\(common)",
+            as: SimklDetails.self
+        )
+        var mappings = simklEpisodeCache[redirect.simklId]
+        if mappings == nil {
+            let episodes = (try? await IntegrationHTTP.get(
+                "https://api.simkl.com/\(redirect.type)/episodes/\(redirect.simklId)?\(common)",
+                as: [SimklEpisode].self
+            )) ?? []
+            mappings = SimklIdResolution.mappings(
+                from: episodes.map { ($0.episode, $0.tvdb?.season, $0.tvdb?.episode) }
+            )
+            simklEpisodeCache[redirect.simklId] = mappings
+        }
+        return SimklAnimeIds(
+            malId: details?.ids?.mal?.value,
+            anilistId: details?.ids?.anilist?.value,
+            imdbId: details?.ids?.imdb?.nilIfBlank,
+            tvdb: SimklIdResolution.tvdb(for: episode, in: mappings ?? [])
+        )
+    }
 }
 
 /// An IMDb id traded for the `(type, simklId)` pair every other Simkl endpoint is addressed by.
@@ -1870,9 +1981,18 @@ actor SkipIntroClient {
 func simklRedirectLookup(
     imdbId: String, clientId: String
 ) async -> SimklIdResolution.Redirect? {
-    guard let url = URL(
-        string: "https://api.simkl.com/redirect?to=simkl&imdb=\(imdbId)&client_id=\(clientId)"
-    ) else { return nil }
+    await simklRedirectLookup(source: "imdb", id: imdbId, clientId: clientId)
+}
+
+/// The same trade for any id Simkl indexes: `imdb`, `mal`, `kitsu`, `anilist`.
+func simklRedirectLookup(
+    source: String, id: String, clientId: String
+) async -> SimklIdResolution.Redirect? {
+    guard let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+          let url = URL(
+            string: "https://api.simkl.com/redirect?to=simkl&\(source)=\(encoded)&client_id=\(clientId)"
+          )
+    else { return nil }
     let session = URLSession(
         configuration: .ephemeral, delegate: NoRedirectDelegate(), delegateQueue: nil
     )

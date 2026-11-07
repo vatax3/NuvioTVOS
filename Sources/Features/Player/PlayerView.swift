@@ -312,7 +312,7 @@ struct PlayerView: View {
                 request: request,
                 resumeAt: recoveryResumePosition ?? resumePosition,
                 subtitleStyle: settings.subtitleStyle,
-                audioLanguages: settings.audioTrackLanguages,
+                audioLanguages: audioLanguagePreference,
                 subtitleLanguages: settings.subtitleTrackLanguages,
                 frameRateMatchingMode: settings.player.frameRateMatchingMode,
                 addonCues: subtitles.cues,
@@ -407,7 +407,7 @@ struct PlayerView: View {
                 audioOutput: settings.player.mpvAudioOutput,
                 audioChannels: settings.player.audioOutputChannels,
                 audioMix: settings.playerAudioMix,
-                audioLanguages: settings.audioTrackLanguages,
+                audioLanguages: audioLanguagePreference,
                 subtitleLanguages: settings.subtitleTrackLanguages,
                 prefersForcedSubtitles: settings.player.subtitleUseForcedSubtitles,
                 hdrPeakDetection: settings.player.hdrPeakDetection,
@@ -495,7 +495,13 @@ struct PlayerView: View {
                 subtitleTracks: subtitles.available,
                 subtitleOrganization: settings.player.subtitleOrganizationMode,
                 selectedSubtitle: subtitles.selected,
-                onSelectSubtitle: { subtitles.select($0) },
+                onSelectSubtitle: { choice in
+                    subtitles.select(choice)
+                    settings.trackPreference.rememberSubtitle(
+                        choice.map(TrackMemory.remembered(addon:)) ?? .disabled,
+                        forContentId: request.contentId
+                    )
+                },
                 seekTarget: requestedSeek,
                 onSeekApplied: { requestedSeek = nil },
                 pauseRequest: requestedPause,
@@ -503,7 +509,7 @@ struct PlayerView: View {
                 onChooseSource: request.sourceRequest == nil ? nil : { showsSourcePanel = true },
                 onSwitchEngine: nextEngine().map { next in { engineOverride = next } },
                 frameRateMatchingMode: settings.player.frameRateMatchingMode,
-                audioLanguages: settings.audioTrackLanguages,
+                audioLanguages: audioLanguagePreference,
                 onPlaybackState: { paused, loading in
                     observePlaybackState(paused: paused, loading: loading)
                 },
@@ -659,6 +665,17 @@ struct PlayerView: View {
 
     /// Addon-supplied tracks. The picker lives in the transport bar; a preferred language is
     /// switched on straight away so the viewer does not have to open it every episode.
+    /// The viewer's audio languages, led by the one remembered for this title. Every engine
+    /// then starts on it without a visible switch; on mpv and AetherEngine the chrome still
+    /// matches the exact track (`TrackMemory.match`), which a language alone cannot name.
+    private var audioLanguagePreference: [String] {
+        let remembered = settings.trackPreference.memory(forContentId: request.contentId)?.audio?.language
+        guard let remembered = remembered?.nilIfBlank else { return settings.audioTrackLanguages }
+        return [remembered] + settings.audioTrackLanguages.filter {
+            MediaLanguage.normalise($0) != MediaLanguage.normalise(remembered)
+        }
+    }
+
     private func loadSubtitles() async {
         let ordered = SubtitleSelector.order(
             request.subtitles,
@@ -667,6 +684,20 @@ struct PlayerView: View {
             onlyPreferred: settings.player.subtitleShowOnlyPreferredLanguages
         )
         subtitles.available = ordered
+
+        // The title's remembered subtitle first, by upstream's rule for addon subtitles: the
+        // exact addon and id, or nothing — a looser match must not beat the normal choice.
+        switch settings.trackPreference.memory(forContentId: request.contentId)?.subtitle {
+        case .addon(let id, _, _, let addonName):
+            if subtitles.selected == nil,
+               let match = ordered.first(where: { $0.id == id && ($0.addonName ?? "") == addonName }) {
+                subtitles.select(match)
+            }
+        case .disabled:
+            return
+        default:
+            break
+        }
 
         if subtitles.selected == nil,
            let automatic = SubtitleSelector.autoSelection(
@@ -1193,10 +1224,10 @@ struct PlayerView: View {
         }
 
         let ids = [request.videoId, request.contentId, request.imdbId ?? ""]
-        let directMAL = ids.lazy.compactMap(Self.malEpisode(from:)).first
+        let directAnime = ids.lazy.compactMap(Self.animeEpisode(from:)).first
         let key: String
-        if let directMAL {
-            key = "mal:\(directMAL.id):\(directMAL.episode)"
+        if let directAnime {
+            key = "\(directAnime.source):\(directAnime.id):\(directAnime.episode)"
         } else if let imdbId = ids.lazy.first(where: { $0.hasPrefix("tt") }),
                   let episode = request.episode {
             key = "imdb:\(imdbId.split(separator: ":")[0]):\(episode)"
@@ -1209,95 +1240,146 @@ struct PlayerView: View {
         let animeSkipClientId = settings.skipIntro.animeSkipEnabled
             ? settings.skipIntro.animeSkipClientId
             : ""
+        let simklClientId = settings.tracking.simklClientId
         let imdbId = ids.lazy.first(where: { $0.hasPrefix("tt") })
             .map { String($0.split(separator: ":")[0]) }
         let season = request.season
         let episode = request.episode
 
         Task {
-            // All three at once, then merged category by category. Asking them in turn and taking
-            // the first non-empty answer loses segments whenever a provider is partly populated,
-            // which is normal: IntroDB has an intro but no outro for some titles, and the outro
-            // AniSkip holds would never have been asked for.
-            async let introDb: [SkipSegment] = {
-                guard let imdbId, let season, let episode else { return [] }
-                // An empty setting means "use the public endpoint", not "skip this provider".
-                return await SkipIntroClient.shared.introDbSegments(
-                    baseURL: introDbUrl, imdbId: imdbId, season: season, episode: episode
+            let merged: [SkipSegment]
+            if let directAnime {
+                merged = await Self.animeIdSkipSegments(
+                    directAnime, imdbId: imdbId, season: season, episode: episode,
+                    duration: duration, introDbUrl: introDbUrl,
+                    animeSkipClientId: animeSkipClientId, simklClientId: simklClientId
                 )
-            }()
-
-            async let anime: (aniSkip: [SkipSegment], animeSkip: [SkipSegment]) = {
-                if let directMAL {
-                    // A `mal:` id names the title outright, so no mapping is needed and there is
-                    // no AniList id to reach Anime-Skip with.
-                    let segments = await SkipIntroClient.shared.segments(
-                        malId: directMAL.id, episode: directMAL.episode, episodeLength: duration
-                    )
-                    return (segments, [])
-                }
-                guard let imdbId, let episode else { return ([], []) }
-
-                // Simkl first. ARM indexes a flat per-season array of MAL ids, which is wrong
-                // whenever anime numbering and TVDB numbering disagree — and it gets the episode
-                // number wrong the same way, so a second cour asks AniSkip about episode 1 when
-                // the anime calls it 13. Simkl answers both. See `SimklIdResolution`.
-                let simkl = await SkipIntroClient.shared.simklResolution(
-                    imdbId: imdbId,
-                    season: season ?? 1,
-                    episode: episode,
-                    clientId: settings.tracking.simklClientId
+            } else {
+                merged = await Self.imdbSkipSegments(
+                    imdbId: imdbId, season: season, episode: episode, duration: duration,
+                    introDbUrl: introDbUrl, animeSkipClientId: animeSkipClientId,
+                    simklClientId: simklClientId
                 )
-                if let malId = simkl?.malId {
-                    let found = await SkipIntroClient.shared.segments(
-                        malId: malId,
-                        episode: simkl?.animeEpisode ?? episode,
-                        episodeLength: duration
-                    )
-                    if !found.isEmpty {
-                        return (found, await Self.animeSkipSegments(
-                            entries: await SkipIntroClient.shared.armEntries(imdbId: imdbId),
-                            season: season, episode: episode, episodeLength: duration,
-                            clientId: animeSkipClientId
-                        ))
-                    }
-                }
-
-                // Kept as the fallback rather than removed, as upstream did: the Simkl client id
-                // is the viewer's here rather than shipped, and no marks at all is worse.
-                let entries = await SkipIntroClient.shared.armEntries(imdbId: imdbId)
-                guard !entries.isEmpty else { return ([], []) }
-
-                let aniSkip: [SkipSegment]
-                if let malId = SkipIntroClient.malId(
-                    fromSeasonEntries: entries.map(\.myanimelist), season: season ?? 1
-                ) {
-                    aniSkip = await SkipIntroClient.shared.segments(
-                        malId: malId, episode: episode, episodeLength: duration
-                    )
-                } else {
-                    aniSkip = []
-                }
-
-                let animeSkip = await Self.animeSkipSegments(
-                    entries: entries,
-                    season: season,
-                    episode: episode,
-                    episodeLength: duration,
-                    clientId: animeSkipClientId
-                )
-                return (aniSkip, animeSkip)
-            }()
-
-            let (aniSkip, animeSkip) = await anime
-            // Priority order, as upstream: AniSkip knows anime natively, Anime-Skip second,
-            // IntroDB last because it is the broadest and the least specific.
-            let merged = SkipIntroClient.merge([aniSkip, animeSkip, await introDb])
-
+            }
             guard skipLookupKey == key else { return }
             apiSkipSegments = merged
             remergeSkipSegments()
         }
+    }
+
+    /// The IMDb path. All providers at once, then merged category by category: asking them in
+    /// turn and taking the first non-empty answer loses segments whenever a provider is partly
+    /// populated, which is normal.
+    private static func imdbSkipSegments(
+        imdbId: String?, season: Int?, episode: Int?, duration: Double,
+        introDbUrl: String, animeSkipClientId: String, simklClientId: String
+    ) async -> [SkipSegment] {
+        async let introDb: [SkipSegment] = {
+            guard let imdbId, let season, let episode else { return [] }
+            // An empty setting means "use the public endpoint", not "skip this provider".
+            return await SkipIntroClient.shared.introDbSegments(
+                baseURL: introDbUrl, imdbId: imdbId, season: season, episode: episode
+            )
+        }()
+
+        async let anime: (aniSkip: [SkipSegment], animeSkip: [SkipSegment]) = {
+            guard let imdbId, let episode else { return ([], []) }
+
+            // Simkl first. ARM indexes a flat per-season array of MAL ids, which is wrong
+            // whenever anime numbering and TVDB numbering disagree — and it gets the episode
+            // number wrong the same way, so a second cour asks AniSkip about episode 1 when
+            // the anime calls it 13. Simkl answers both. See `SimklIdResolution`.
+            let simkl = await SkipIntroClient.shared.simklResolution(
+                imdbId: imdbId, season: season ?? 1, episode: episode, clientId: simklClientId
+            )
+            let animeEpisode = simkl?.animeEpisode ?? episode
+            var aniSkip: [SkipSegment] = []
+            if let malId = simkl?.malId {
+                aniSkip = await SkipIntroClient.shared.segments(
+                    malId: malId, episode: animeEpisode, episodeLength: duration
+                )
+            }
+            // Anime-Skip needs only the AniList id (upstream's cb06272b), so Simkl's is used
+            // directly; ARM is asked only for what Simkl did not answer.
+            var animeSkip: [SkipSegment] = []
+            if let anilistId = simkl?.anilistId, !animeSkipClientId.isEmpty {
+                animeSkip = await SkipIntroClient.shared.animeSkipSegments(
+                    anilistId: anilistId, episode: animeEpisode, season: nil,
+                    episodeLength: duration, clientId: animeSkipClientId
+                )
+            }
+            guard aniSkip.isEmpty || animeSkip.isEmpty else { return (aniSkip, animeSkip) }
+
+            // Kept as the fallback rather than removed, as upstream did: the Simkl client id
+            // is the viewer's here rather than shipped, and no marks at all is worse.
+            let entries = await SkipIntroClient.shared.armEntries(imdbId: imdbId)
+            guard !entries.isEmpty else { return (aniSkip, animeSkip) }
+
+            if aniSkip.isEmpty, let malId = SkipIntroClient.malId(
+                fromSeasonEntries: entries.map(\.myanimelist), season: season ?? 1
+            ) {
+                aniSkip = await SkipIntroClient.shared.segments(
+                    malId: malId, episode: episode, episodeLength: duration
+                )
+            }
+            if animeSkip.isEmpty {
+                animeSkip = await Self.animeSkipSegments(
+                    entries: entries, season: season, episode: episode,
+                    episodeLength: duration, clientId: animeSkipClientId
+                )
+            }
+            return (aniSkip, animeSkip)
+        }()
+
+        let (aniSkip, animeSkip) = await anime
+        return SkipIntroClient.merge(SkipIntroClient.byPriority(
+            introDb: await introDb, aniSkip: aniSkip, animeSkip: animeSkip
+        ))
+    }
+
+    /// The `mal:` / `kitsu:` path, as upstream's `getSkipIntervalsForMal` / `ForKitsu`. Simkl
+    /// trades the id for the others: MAL for AniSkip (a Kitsu id has none of its own), AniList
+    /// for Anime-Skip, and IMDb plus TVDB numbering for IntroDB. Without a Simkl client id only a
+    /// `mal:` id gets anything — AniSkip, directly.
+    private static func animeIdSkipSegments(
+        _ anime: AnimeEpisodeId, imdbId: String?, season: Int?, episode: Int?,
+        duration: Double, introDbUrl: String, animeSkipClientId: String, simklClientId: String
+    ) async -> [SkipSegment] {
+        let resolved = await SkipIntroClient.shared.simklAnimeIds(
+            source: anime.source, id: anime.id, episode: anime.episode, clientId: simklClientId
+        )
+
+        async let aniSkip: [SkipSegment] = {
+            let malId = anime.source == "mal" ? Int(anime.id) : resolved?.malId
+            guard let malId else { return [] }
+            return await SkipIntroClient.shared.segments(
+                malId: malId, episode: anime.episode, episodeLength: duration
+            )
+        }()
+
+        async let animeSkip: [SkipSegment] = {
+            guard let anilistId = resolved?.anilistId, !animeSkipClientId.isEmpty else { return [] }
+            return await SkipIntroClient.shared.animeSkipSegments(
+                anilistId: anilistId, episode: anime.episode, season: nil,
+                episodeLength: duration, clientId: animeSkipClientId
+            )
+        }()
+
+        async let introDb: [SkipSegment] = {
+            guard let imdb = imdbId ?? resolved?.imdbId else { return [] }
+            // The request's own numbering when it carries one, else Simkl's TVDB mapping.
+            let introSeason = season ?? resolved?.tvdb?.season
+            guard let introSeason else { return [] }
+            let introEpisode = (season != nil ? episode : nil)
+                ?? resolved?.tvdb?.episode ?? anime.episode
+            return await SkipIntroClient.shared.introDbSegments(
+                baseURL: introDbUrl, imdbId: imdb, season: introSeason, episode: introEpisode
+            )
+        }()
+
+        return SkipIntroClient.merge(SkipIntroClient.byPriority(
+            introDb: await introDb, aniSkip: await aniSkip, animeSkip: await animeSkip
+        ))
     }
 
     /// A film's marks come from IntroDB alone: the anime providers are keyed by episode and
@@ -1371,12 +1453,23 @@ struct PlayerView: View {
         router.openStreams(episode)
     }
 
-    private static func malEpisode(from id: String) -> (id: Int, episode: Int)? {
+    struct AnimeEpisodeId: Equatable {
+        var source: String
+        var id: String
+        var episode: Int
+    }
+
+    /// `mal:<id>:<episode>` and `kitsu:<id>:<episode>`, as the anime addons write them.
+    /// Upstream routes both (`getSkipIntervalsForMal` / `ForKitsu`); this read only `mal:`, so a
+    /// Kitsu episode had no skip marks at all.
+    nonisolated static func animeEpisode(from id: String) -> AnimeEpisodeId? {
         let parts = id.split(separator: ":")
-        guard parts.count >= 3, parts[0].lowercased() == "mal",
-              let malId = Int(parts[1]), let episode = Int(parts[2])
+        guard parts.count >= 3 else { return nil }
+        let source = parts[0].lowercased()
+        guard source == "mal" || source == "kitsu",
+              !parts[1].isEmpty, let episode = Int(parts[2])
         else { return nil }
-        return (malId, episode)
+        return AnimeEpisodeId(source: source, id: String(parts[1]), episode: episode)
     }
 
     // MARK: Trakt

@@ -154,6 +154,8 @@ final class AppSettings {
     let skipIntro = SkipIntroSettingsStore()
     let streamBadges = StreamBadgeSettingsStore()
     let trailers = TrailerSettingsStore()
+    /// Per-title audio and subtitle memory, under upstream's `track_preference` keys.
+    let trackPreference = TrackPreferenceStore()
 
     /// Fraction of a video that counts as watched — used by Continue Watching and episode ticks.
     var watchedThreshold: Double { player.watchedThresholdFraction }
@@ -306,7 +308,8 @@ final class AppSettings {
         [
             ("app", app), ("player", player), ("layout", layout), ("debrid", debrid),
             ("tracking", tracking), ("tmdb", tmdb), ("mdblist", mdblist),
-            ("skipIntro", skipIntro), ("streamBadges", streamBadges), ("trailers", trailers)
+            ("skipIntro", skipIntro), ("streamBadges", streamBadges), ("trailers", trailers),
+            ("trackPreference", trackPreference)
         ]
     }
 

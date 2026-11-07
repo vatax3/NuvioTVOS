@@ -111,6 +111,9 @@ match, and the difference has now cost two releases:
   and both apps write the same row. It now goes through a manifest generated from their source
   (`Scripts/gen-upstream-settings-manifest.sh <tag>`) — **rerun it on every pass**, because a
   value under a key their DataStore types differently throws on their side, not ours.
+  `track_preference` rides the same blob with per-title keys (`"<field>|<contentId>"`) no
+  manifest can list; `SettingsBlob.trackPreferenceType` types them by field, and any field they
+  add there needs a line in it.
 
 So, for anything shared with their app: read the **sender and the receiver** in their source, not
 the data class. `@SerialName` tells you the field names; only the call site tells you whether the

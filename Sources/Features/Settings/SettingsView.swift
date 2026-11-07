@@ -626,6 +626,13 @@ struct LayoutSettingsContent: View {
 
             SettingsCard(title: L10n.text("settings.section.hero", fallback: "Hero")) {
                 SettingsToggle(title: L10n.text("settings.layout.hero_section", fallback: "Hero section"), systemImage: "rectangle.inset.filled", isOn: $layout.heroSectionEnabled)
+                if layout.heroSectionEnabled {
+                    SettingsToggle(
+                        title: L10n.text("settings.layout.hero_description_auto_scroll", fallback: "Auto-scroll descriptions"),
+                        subtitle: L10n.text("settings.layout.hero_description_auto_scroll_subtitle", fallback: "Slowly scroll long descriptions on the Home screen instead of cutting them off"),
+                        isOn: $layout.heroDescriptionAutoScrollEnabled
+                    )
+                }
                 SettingsToggle(
                     title: L10n.text("settings.layout.fullscreen_backdrop", fallback: "Full-screen backdrop"),
                     subtitle: L10n.text("settings.layout.fullscreen_backdrop_subtitle", fallback: "Let the hero image fill the whole screen in Modern view"),

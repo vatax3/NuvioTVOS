@@ -152,4 +152,5 @@ The same verdict, for the three windows the audit covers. Each is argued at leng
 | **Supporter perks** | 0.8.7 | Monetisation belongs to the upstream project. |
 | **Night mode (audio compression)** | 1.1.0-beta.10 | Not a judgement on the feature: our libmpv's libavfilter ships thirteen audio filters and no compressor or limiter. Needs a rebuilt FFmpeg. |
 | **Preferred plugin provider first on next episode** | 1.1.0-beta.10 | A latency gain for their in-player plugin-only prefetch; our next episode goes through the full streams screen. |
+| **Persisting the subtitle delay per video and the speed per title** | 1.1.0-beta.12 | Part of their track memory, which is ported; these two are not. A delay corrects one release against one subtitle file, so it is deliberately not kept here. Their entries ride the shared settings blob untouched, so the Android app keeps them. |
 | **Their accessibility pass** | 1.1.0-beta.9 | Not refused: deferred to an audit of its own. Ours has about sixteen VoiceOver labels and no announcements, so their fixes (duplicate descriptions, merged overlays) answer problems one step past where we are. |

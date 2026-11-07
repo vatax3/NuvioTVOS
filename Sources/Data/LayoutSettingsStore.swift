@@ -65,6 +65,13 @@ final class LayoutSettingsStore: PreferenceStore {
         set { setBool("hero_section_enabled", newValue) }
     }
 
+    /// `hero_description_auto_scroll_enabled` (upstream 1.1.0-beta.12): scroll a hero
+    /// description too long for its lines instead of cutting it off. Off by default, as upstream.
+    var heroDescriptionAutoScrollEnabled: Bool {
+        get { bool("hero_description_auto_scroll_enabled", default: false) }
+        set { setBool("hero_description_auto_scroll_enabled", newValue) }
+    }
+
     var modernHeroFullScreenBackdrop: Bool {
         get { bool("modern_hero_full_screen_backdrop", default: true) }
         set { setBool("modern_hero_full_screen_backdrop", newValue) }
