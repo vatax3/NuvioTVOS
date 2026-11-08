@@ -2,6 +2,7 @@
 import AVFoundation
 import Combine
 import Foundation
+import MediaPlayer
 import Observation
 import QuartzCore
 import PlayerEngineKit
@@ -387,6 +388,11 @@ extension AetherEngineAdapter: PlayerEngineSurface {
     func togglePause() { engine.togglePlayPause() }
 
     func setPaused(_ paused: Bool) { paused ? engine.pause() : engine.play() }
+
+    /// Nil on the software path and until the native host exists; the chrome re-checks.
+    var nowPlayingSession: MPNowPlayingSession? { engine.videoNowPlayingSession }
+
+    func stageNowPlayingIdentity(_ info: [String: Any]) { engine.setVideoNowPlayingInfo(info) }
 
     func seek(by seconds: Double) { seek(to: position + seconds) }
 

@@ -1,4 +1,5 @@
 import Foundation
+import MediaPlayer
 
 /// What the player chrome needs from whichever engine is underneath it.
 ///
@@ -147,6 +148,15 @@ protocol PlayerEngineSurface: AnyObject, Observable {
     func applySubtitleStyle(_ style: SubtitleStyle, obstructions: SubtitlePlacement.Obstructions)
     func activateAudioSession()
     func destroy()
+
+    // MARK: Now Playing
+
+    /// The system Now Playing session the engine owns, if any. AetherEngine owns one on its native
+    /// path; an engine without one leaves the chrome to publish through the shared centres.
+    var nowPlayingSession: MPNowPlayingSession? { get }
+    /// Title and artwork for that session. The session merges elapsed time, rate and duration
+    /// from its own player.
+    func stageNowPlayingIdentity(_ info: [String: Any])
 }
 
 /// What the chrome knows and the picture needs.
@@ -207,6 +217,9 @@ enum PlayerAspectMode: String, CaseIterable, Identifiable {
 }
 
 extension PlayerEngineSurface {
+    var nowPlayingSession: MPNowPlayingSession? { nil }
+    func stageNowPlayingIdentity(_ info: [String: Any]) {}
+
     /// Most engines seek exactly already — AetherEngine hands AVPlayer a zero tolerance either
     /// side — so this is only overridden where the distinction exists.
     func seek(toExactly seconds: Double) { seek(to: seconds) }

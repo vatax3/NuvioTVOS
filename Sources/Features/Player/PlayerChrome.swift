@@ -89,6 +89,8 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
     @State private var pendingAudio: TrackMemory.Track?
     @State private var pendingSubtitle: TrackMemory.Subtitle?
     @State private var subtitleRestoreDeadline: Task<Void, Never>?
+    /// The system Now Playing card and remote commands (`NowPlayingPublisher`).
+    @State private var nowPlaying = NowPlayingPublisher()
     @State private var picker: TrackPicker?
     /// The speed the viewer themselves chose, remembered so a party correction can hand it back
     /// when it finishes rather than resetting everyone to 1×.
@@ -262,13 +264,21 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
             aspectFlashTask?.cancel()
             focusRetry?.cancel()
             subtitleRestoreDeadline?.cancel()
+            nowPlaying.unbind()
             persist(completed: false)
             engine.destroy()
             DisplayModeMatcher.restore(mode: settings.player.frameRateMatchingMode)
         }
         .onChange(of: engine.audioTracks) { _, _ in restoreRememberedTracks() }
         .onChange(of: engine.subtitleTracks) { _, _ in restoreRememberedTracks() }
-        .onChange(of: engine.position) { _, position in
+        // AetherEngine's session exists only once its native host does, which is after load:
+        // re-binding then moves the card from the shared centres onto it.
+        .onChange(of: engine.hasRenderedFrame) { _, _ in bindNowPlaying() }
+        .onChange(of: engine.isLive) { _, _ in nowPlaying.unbind(); bindNowPlaying() }
+        .onChange(of: engine.playbackSpeed) { _, _ in nowPlaying.update(engine: engine) }
+        .onChange(of: engine.position) { previous, position in
+            // A jump, not the clock running: the system extrapolates between updates.
+            if abs(position - previous) > 2 { nowPlaying.update(engine: engine) }
             onPlaybackTime(position, engine.duration)
             // Same 5s cadence as the AVFoundation path.
             guard position - lastPersistedPosition >= 5 || lastPersistedPosition == 0 else { return }
@@ -289,6 +299,8 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
             if ended { onFinished() }
         }
         .onChange(of: engine.isPaused) { _, paused in
+            nowPlaying.update(engine: engine)
+            bindNowPlaying()
             if paused { wakeControls() } else { scheduleHide() }
             onPlaybackState(paused, isStalled)
         }
@@ -445,7 +457,12 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
             }
         }
         restoreRememberedTracks()
+        bindNowPlaying()
         scheduleHide()
+    }
+
+    private func bindNowPlaying() {
+        nowPlaying.bind(engine: engine, request: request, onNextEpisode: onPlayNextEpisode)
     }
 
     // MARK: Track memory

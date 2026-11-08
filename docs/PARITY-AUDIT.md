@@ -1283,7 +1283,7 @@ Smaller, on the way:
 | **Recognise language words in release names; ignore title words when reading stream languages** | **Ported in 1.0.56, and ours was further behind than theirs was.** We matched long names as substrings: no `ITA`, `ENG`, `CASTELLANO`; "multi" matched "Multiverse"; "The Italian Job" was Italian. Now we use their alias table (`StreamFilterEngine.swift:165`) with whole-word codes, and leave out `por` `chi` `fra` as they do. The first title match is removed per field (`:207`). Hebrew was added as a language. `vff`/`vfq` stay, as ours. |
 | **Improve player badge codec detection and add filename matching** | **Ported in 1.0.56.** AC-4, PCM, and the Dolby Vision base codec from its sample-entry prefix (`PlaybackBadgeTokens.swift:70`); reading "Dolby Vision" as HEVC badged AV1 DV x265. The filename may sharpen what the decoder confirms, never add a format (`:156`). This matters most for Atmos on mpv, which does not surface JOC in Matroska. Two-phase group matching: the name cannot reopen a group the decoder answered (`StreamBadgeRules.swift:362`). |
 | **Map Montenegrin subtitles into Serbian (Montenegro)** | **Ported in 1.0.56.** `cnr` `mne` `me` and "Montenegrin" map to `sr-me` (`MediaLanguage.swift:154`). As upstream, this is not a catalogue entry, so a Serbian preference picks those tracks. |
-| **Bluetooth media controls for internal mpv**, refresh the session after pause and seek, keep stream URLs out of media ids | **Open, and a defect of ours rather than only a port.** AetherEngine owns the now-playing session (`AetherEngineAdapter.swift:133`), but we never fill it or register its commands, so the card is empty and the commands do nothing. mpv publishes nothing at all. Needs an iPhone remote and a Bluetooth controller to verify, so it is its own release. No URL is exposed on any engine today. |
+| **Bluetooth media controls for internal mpv**, refresh the session after pause and seek, keep stream URLs out of media ids | **Closed in 1.0.62 — see *Backlog: Now Playing and remote commands* below.** Was: **open, and a defect of ours rather than only a port.** AetherEngine owns the now-playing session (`AetherEngineAdapter.swift:133`), but we never fill it or register its commands, so the card is empty and the commands do nothing. mpv publishes nothing at all. Needs an iPhone remote and a Bluetooth controller to verify, so it is its own release. No URL is exposed on any engine today. |
 | **Long-press back to force-exit from post-play** | **N/A on tvOS.** Holding Back belongs to the system (it returns to the Home screen) and is never delivered to the app. Back already closes the card and a second press exits. |
 | **Scope the stream audio delay to its audio language** | **Already true in effect.** Our delay is per session and never saved per stream, so it cannot follow the viewer into another language. Persisting it would be a new feature, not this fix. |
 | Startup order (plugins after addons and watch progress), keep playing when progress cannot be saved, autoplay for episodes picked in the player, no source name on the paused player, DNS-VPN posters, SDH lines ending in a colon, controls during session seeks, update banner on light accents, the phone add-on confirmation | **Already true here.** `NuvioSyncService` already runs addons → plugins after progress. No save path can throw into playback. The in-player episode list goes through `autoPlayIfConfigured`. The pause card names no source. Poster loads are never gated on reachability. Labels are only removed when shouted. Session seeks do not raise the transport. The banner never draws text on the accent. The confirmation is a system alert. |
@@ -1433,3 +1433,22 @@ nothing new: 76 keys, all with verdicts.
 | Vietnamese, Greek, French, Swedish, Polish, Hungarian | **Declined.** Translation work. |
 
 Regenerated: `UpstreamSettingsManifest.swift` at 1.1.0-beta.13 (265 keys, none new).
+
+## Backlog: Now Playing and remote commands (1.0.62)
+
+From the backlog (`parity-backlog`), not an upstream window; the marker does not move. Open since
+1.1.0-beta.9 as a defect of ours: during playback the system Now Playing card was empty, and the
+iPhone Remote, Control Center and Bluetooth controllers did nothing.
+
+| Upstream | Ours |
+|---|---|
+| **Player `MediaSession`**: title, "S1:E2 – episode" or year, poster or backdrop artwork (`PlayerMediaSessionMetadata.kt`) | **Ported.** `NowPlayingPublisher.swift:38` publishes the title and the line the streams screen already builds ("S01E01 · Episode"); artwork is the poster, else the backdrop, decoded before it is wrapped (`:126`). Adaptation: no media id at all, so no stream URL or name can reach the session, which is what their URL rule protects. |
+| **mpv session commands**: play/pause, seek in the item, seek back and forward, none of it live (`MpvMediaSessionPlayer.kt`) | **Ported, for both custom engines.** Play, pause, toggle, scrub, skip ±10 s like the transport, and next episode when one has aired (`:142`, policy at `:26`); seeking is off on live streams. Commands go straight to the engine, so a watch party publishes them, or refuses them for a guest, as it does a press in the transport. |
+| *Where it lives* | AetherEngine's native path owns an `MPNowPlayingSession` that tracks the clock itself; the engine hook hands it over (`PlayerEngineSurface.swift:156`, `AetherEngineAdapter.swift:393`). mpv and Aether's software path publish through the shared centres, with the clock written when it jumps (`NowPlayingPublisher.swift:109`). The session appears only once Aether's native host exists, so the chrome re-binds on the first frame (`PlayerChrome.swift:276`) and unbinds on exit (`:267`). Checked in the simulator through the player harness: mpv binds the shared centres with six commands; Aether starts there and moves to its own session about a second later. AVPlayer is unchanged: `AVPlayerViewController` publishes its own card. |
+
+Not verified here: the card and buttons on the iPhone Remote and a Bluetooth controller against a
+real Apple TV.
+
+Still open from earlier windows: the accessibility audit, image downsampling, media servers, night
+mode (needs an FFmpeg build with `acompressor`; AetherEngine's `AVSampleBufferAudioRenderer` path
+has no hook either, checked 2026-11-08).

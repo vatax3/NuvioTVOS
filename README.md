@@ -104,7 +104,7 @@ independent on purpose.
 | Cast | Person photo, biography and filmography (TMDB) |
 | Browse | Paged TMDB listings for a network or studio |
 | Streams | Grouped per addon and per scraper, quality/HDR/codec/size/seeder chips, debrid cache state, resume progress for what you are part-way through |
-| Player | Resume, progress persistence, per-stream proxy headers, Now Playing metadata, external subtitles, auto-play chaining, and badges for what is actually playing when a badge pack is installed |
+| Player | Resume, progress persistence, per-stream proxy headers, the Now Playing card and remote commands (iPhone Remote, Bluetooth controllers) on every engine, external subtitles, auto-play chaining, and badges for what is actually playing when a badge pack is installed |
 | Comments | Trakt comments and reviews, spoilers hidden until revealed |
 | Search | Debounced fan-out across every search-capable catalog |
 | Discover | Browse any catalog by type and genre, standalone or folded into Search |
