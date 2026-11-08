@@ -475,21 +475,41 @@ enum StreamFilterEngine {
 
     // MARK: Auto-play selection
 
-    /// Port of the auto-play rules: picks the source to start without showing the list.
-    static func autoPlayCandidate(
-        from streams: [Stream],
-        attributes: [String: ParsedStreamAttributes],
-        mode: StreamAutoPlayMode,
-        source: StreamAutoPlaySource,
-        regex: String,
-        preferredQuality: String,
-        cacheStates: [String: DebridCacheResult]
-    ) -> Stream? {
-        guard mode != .off, !streams.isEmpty else { return nil }
+    /// Which addon and plugin streams auto-play may choose from. Port of the scoping in upstream's
+    /// `StreamAutoPlaySelector.selectAutoPlayStream`: the source first, then the selected names,
+    /// an empty selection meaning all.
+    struct AutoPlayScope: Equatable {
+        var source: StreamAutoPlaySource = .allSources
+        /// Names of the installed addons. A stream from any other name is a plugin's, as upstream
+        /// tells the two apart.
+        var installedAddonNames: Set<String> = []
+        var selectedAddons: Set<String> = []
+        var selectedPlugins: Set<String> = []
+        var pluginsEnabled = true
+        var debridFilter: StreamAutoPlayDebridFilter = .off
 
-        let pool = streams.filter { stream in
+        static let all = AutoPlayScope()
+
+        func admits(_ stream: Stream, cacheStates: [String: DebridCacheResult]) -> Bool {
+            // Plugins-only with plugins switched off would admit nothing; upstream falls back.
+            let source = !pluginsEnabled && self.source == .enabledPluginsOnly
+                ? .installedAddonsOnly : self.source
+            let isAddon = installedAddonNames.contains(stream.addonName)
             switch source {
-            case .anyAddon:
+            case .allSources: break
+            case .installedAddonsOnly: if !isAddon { return false }
+            case .enabledPluginsOnly: if isAddon { return false }
+            }
+            if isAddon {
+                if !selectedAddons.isEmpty, !selectedAddons.contains(stream.addonName) { return false }
+            } else {
+                // `addonName` is the repository when plugins are grouped by it; the plugin's own
+                // name is what the selection lists.
+                let plugin = stream.pluginSourceName ?? stream.addonName
+                if !selectedPlugins.isEmpty, !selectedPlugins.contains(plugin) { return false }
+            }
+            switch debridFilter {
+            case .off:
                 return true
             case .debridOnly:
                 return stream.isTorrent || stream.streamURL() != nil
@@ -498,6 +518,21 @@ enum StreamFilterEngine {
                 return cacheStates[hash]?.state == .cached
             }
         }
+    }
+
+    /// Port of the auto-play rules: picks the source to start without showing the list.
+    static func autoPlayCandidate(
+        from streams: [Stream],
+        attributes: [String: ParsedStreamAttributes],
+        mode: StreamAutoPlayMode,
+        scope: AutoPlayScope,
+        regex: String,
+        preferredQuality: String,
+        cacheStates: [String: DebridCacheResult]
+    ) -> Stream? {
+        guard mode != .off, !streams.isEmpty else { return nil }
+
+        let pool = streams.filter { scope.admits($0, cacheStates: cacheStates) }
         guard !pool.isEmpty else { return nil }
 
         switch mode {

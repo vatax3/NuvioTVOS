@@ -1243,6 +1243,13 @@
 "option.any_source" = "Any source";
 "option.debrid_only" = "Debrid sources only";
 "option.cached_only" = "Cached sources only";
+"option.installed_addons_only" = "Installed addons only";
+"option.enabled_plugins_only" = "Enabled plugins only";
+"option.debrid_filter_off" = "Any link";
+"settings.playback.autoplay_addons" = "Addons";
+"settings.playback.autoplay_plugins" = "Plugins";
+"settings.playback.autoplay_selection_sub" = "None selected means all of them";
+"settings.playback.autoplay_debrid_filter" = "Links";
 "option.recently_added" = "Recently added";
 "option.first_added" = "First added";
 "option.title_asc" = "Title, A–Z";

@@ -349,13 +349,31 @@ enum StreamAutoPlayMode: String, SettingsOption {
     }
 }
 
+/// `stream_auto_play_source`, with upstream's values (`PlayerSettingsDataStore.kt`). The key is
+/// shared with the Android app through the settings blob; until 1.0.60 ours carried values of its
+/// own (`ANY`, `DEBRID_ONLY`, `CACHED_ONLY`) that each app read as the other's default.
 enum StreamAutoPlaySource: String, SettingsOption {
-    case anyAddon = "ANY"
+    case allSources = "ALL_SOURCES"
+    case installedAddonsOnly = "INSTALLED_ADDONS_ONLY"
+    case enabledPluginsOnly = "ENABLED_PLUGINS_ONLY"
+    var displayName: String {
+        switch self {
+        case .allSources: return L10n.text("option.any_source", fallback: "Any source")
+        case .installedAddonsOnly: return L10n.text("option.installed_addons_only", fallback: "Installed addons only")
+        case .enabledPluginsOnly: return L10n.text("option.enabled_plugins_only", fallback: "Enabled plugins only")
+        }
+    }
+}
+
+/// `stream_auto_play_debrid_filter`: this app's own narrowing, kept from the values the source
+/// setting used to hold. Upstream has no equivalent, so it travels as an Apple-TV-only key.
+enum StreamAutoPlayDebridFilter: String, SettingsOption {
+    case off = "OFF"
     case debridOnly = "DEBRID_ONLY"
     case cachedOnly = "CACHED_ONLY"
     var displayName: String {
         switch self {
-        case .anyAddon: return L10n.text("option.any_source", fallback: "Any source")
+        case .off: return L10n.text("option.debrid_filter_off", fallback: "Any link")
         case .debridOnly: return L10n.text("option.debrid_only", fallback: "Debrid sources only")
         case .cachedOnly: return L10n.text("option.cached_only", fallback: "Cached sources only")
         }

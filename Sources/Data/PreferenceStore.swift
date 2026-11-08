@@ -87,6 +87,14 @@ class PreferenceStore {
         storage.filter { !secureKeys.contains($0.key) }
     }
 
+    /// Writes a store makes to itself — renaming a key, converting old values — are not a change
+    /// the viewer made, so they must not stamp the settings as newer than the account's.
+    func migrating(_ body: () -> Void) {
+        isApplyingSyncedValues = true
+        defer { isApplyingSyncedValues = false }
+        body()
+    }
+
     /// Applies what `SettingsBlob.changes` worked out for this store: typed values to write, and
     /// keys to return to their defaults. Not stamped as a local change.
     func applySyncChange(_ change: SettingsBlob.StoreChange) {

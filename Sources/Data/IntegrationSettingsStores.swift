@@ -470,7 +470,38 @@ final class MDBListSettingsStore: PreferenceStore {
 @Observable
 @MainActor
 final class SkipIntroSettingsStore: PreferenceStore {
-    init() { super.init(namespace: "skipintro") }
+    init(defaults: UserDefaults = .standard) {
+        super.init(namespace: "skipintro", defaults: defaults)
+        migrateAutoSkipKey()
+    }
+
+    /// Until 1.0.60 the set lived under a name of ours, `auto_skip_segment_kinds`, so it never
+    /// met the Android app's `auto_skip_segment_types` in the synced settings.
+    private func migrateAutoSkipKey() {
+        guard let old = storedValue("auto_skip_segment_kinds") as? [String] else { return }
+        migrating {
+            if storedValue("auto_skip_segment_types") == nil {
+                let kinds = old.compactMap(SkipSegment.Kind.init(rawValue:))
+                setStringList("auto_skip_segment_types", kinds.compactMap(Self.upstreamName).sorted())
+            }
+            remove("auto_skip_segment_kinds")
+        }
+    }
+
+    /// Upstream's `AutoSkipSegmentType.storedValue`.
+    static func upstreamName(_ kind: SkipSegment.Kind) -> String? {
+        switch kind {
+        case .intro: return "intro"
+        case .recap: return "recap"
+        case .outro: return "outro"
+        case .movieCredits: return "movie-credits"
+        case .mixed, .postCredits: return nil
+        }
+    }
+
+    static func kind(upstreamName name: String) -> SkipSegment.Kind? {
+        SkipSegment.Kind.allUpstreamNamed.first { upstreamName($0) == name }
+    }
 
     var animeSkipEnabled: Bool {
         get { bool("animeskip_enabled", default: false) }
@@ -503,8 +534,8 @@ final class SkipIntroSettingsStore: PreferenceStore {
     /// The `auto_skip_intro` and `auto_skip_outro` keys this replaces were never read by
     /// anything, so nothing is migrated — there is no setting to carry over.
     var autoSkipSegmentKinds: Set<SkipSegment.Kind> {
-        get { Set(stringList("auto_skip_segment_kinds").compactMap(SkipSegment.Kind.init(rawValue:))) }
-        set { setStringList("auto_skip_segment_kinds", newValue.map(\.rawValue).sorted()) }
+        get { Set(stringList("auto_skip_segment_types").compactMap(Self.kind(upstreamName:))) }
+        set { setStringList("auto_skip_segment_types", newValue.compactMap(Self.upstreamName).sorted()) }
     }
 
     func autoSkips(_ kind: SkipSegment.Kind) -> Bool {

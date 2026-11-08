@@ -8,6 +8,17 @@ import SwiftUI
 struct PlaybackSettingsContent: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(AppSettings.self) private var settings
+    @Environment(AddonStore.self) private var addonStore
+    @Environment(PluginStore.self) private var pluginStore
+
+    /// Names as the streams screen lists them, which is what the selections are matched against.
+    private var autoPlayAddonNames: [String] {
+        Array(Set(addonStore.addons.map(\.displayName))).sorted()
+    }
+
+    private var autoPlayPluginNames: [String] {
+        Array(Set(pluginStore.enabledScrapers.map(\.name))).sorted()
+    }
 
     enum Tab: String, CaseIterable, Identifiable {
         case general, video, audio, subtitles, autoPlay, buffering, network, advanced
@@ -498,7 +509,31 @@ struct PlaybackSettingsContent: View {
                 if player.streamAutoPlayMode != .off {
                     SettingsOptionRow(
                         title: L10n.text("settings.playback.only_consider", fallback: "Only consider"),
+                        options: player.pluginsEnabled
+                            ? Array(StreamAutoPlaySource.allCases) : [.allSources, .installedAddonsOnly],
                         selection: $player.streamAutoPlaySource
+                    )
+                    // Upstream's two selection lists; nothing selected means every one.
+                    if player.streamAutoPlaySource != .enabledPluginsOnly, !autoPlayAddonNames.isEmpty {
+                        SettingsNameMultiSelectRow(
+                            title: L10n.text("settings.playback.autoplay_addons", fallback: "Addons"),
+                            subtitle: L10n.text("settings.playback.autoplay_selection_sub", fallback: "None selected means all of them"),
+                            names: autoPlayAddonNames,
+                            selection: $player.streamAutoPlaySelectedAddons
+                        )
+                    }
+                    if player.pluginsEnabled, player.streamAutoPlaySource != .installedAddonsOnly,
+                       !autoPlayPluginNames.isEmpty {
+                        SettingsNameMultiSelectRow(
+                            title: L10n.text("settings.playback.autoplay_plugins", fallback: "Plugins"),
+                            subtitle: L10n.text("settings.playback.autoplay_selection_sub", fallback: "None selected means all of them"),
+                            names: autoPlayPluginNames,
+                            selection: $player.streamAutoPlaySelectedPlugins
+                        )
+                    }
+                    SettingsOptionRow(
+                        title: L10n.text("settings.playback.autoplay_debrid_filter", fallback: "Links"),
+                        selection: $player.streamAutoPlayDebridFilter
                     )
                 }
                 if player.streamAutoPlayMode == .matchRegex {

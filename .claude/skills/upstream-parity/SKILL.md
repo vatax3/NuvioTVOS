@@ -60,6 +60,23 @@ understate any window whose weight is a feature needing no key.
 **The largest changed files**, from the sort above. That is what catches a 2,500-line subsystem
 that shipped with one preference.
 
+**And a third, over the whole tree rather than the window: every upstream key we never name.**
+The two indexes above only see what changed, so a feature upstream had before 0.8.9 and we never
+ported stays invisible — 1.0.59 found per-title track memory and Kitsu skip marks that way, and
+1.0.60 found two settings sharing a key or a meaning with theirs and disagreeing. After
+regenerating the manifest:
+
+```
+grep -oE '^ +"[a-z0-9_]+": \.' Sources/Data/Sync/UpstreamSettingsManifest.swift | grep -oE '[a-z0-9_]+' | sort -u > up.txt
+grep -rhoE '"[a-z0-9_]+' --include='*.swift' --exclude='UpstreamSettingsManifest.swift' \
+  --exclude='SettingsBlob.swift' Sources | tr -d '"' | sort -u > ours.txt
+comm -23 up.txt ours.txt | grep -v '^migration_'
+```
+
+Most of what it prints is ExoPlayer and buffer tuning. Each line that is not needs a verdict, and
+a key we *do* name needs its values compared with their enum: the same key with other values is
+the costliest kind, because each app silently reads the other's choice as its own default.
+
 ## 4. Four verdicts, not three
 
 - **Ported** — built here, with the adaptation named.

@@ -6,7 +6,24 @@ import Observation
 @Observable
 @MainActor
 final class PlayerSettingsStore: PreferenceStore {
-    init() { super.init(namespace: "player") }
+    init(defaults: UserDefaults = .standard) {
+        super.init(namespace: "player", defaults: defaults)
+        migrateAutoPlaySource()
+    }
+
+    /// The source setting's old values were this app's own. `ANY` is upstream's `ALL_SOURCES`;
+    /// the two debrid narrowings move to a key of their own, so a viewer using one keeps it.
+    private func migrateAutoPlaySource() {
+        guard let raw = storedValue("stream_auto_play_source") as? String,
+              StreamAutoPlaySource(rawValue: raw) == nil else { return }
+        migrating {
+            if let filter = StreamAutoPlayDebridFilter(rawValue: raw), filter != .off,
+               storedValue("stream_auto_play_debrid_filter") == nil {
+                setOption("stream_auto_play_debrid_filter", filter)
+            }
+            setOption("stream_auto_play_source", StreamAutoPlaySource.allSources)
+        }
+    }
 
     // MARK: - Engine
 
@@ -323,8 +340,24 @@ final class PlayerSettingsStore: PreferenceStore {
     }
 
     var streamAutoPlaySource: StreamAutoPlaySource {
-        get { option("stream_auto_play_source", default: .anyAddon) }
+        get { option("stream_auto_play_source", default: .allSources) }
         set { setOption("stream_auto_play_source", newValue) }
+    }
+
+    /// Upstream's `stream_auto_play_selected_addons` / `_plugins`: names, empty meaning all.
+    var streamAutoPlaySelectedAddons: [String] {
+        get { stringList("stream_auto_play_selected_addons") }
+        set { setStringList("stream_auto_play_selected_addons", newValue.sorted()) }
+    }
+
+    var streamAutoPlaySelectedPlugins: [String] {
+        get { stringList("stream_auto_play_selected_plugins") }
+        set { setStringList("stream_auto_play_selected_plugins", newValue.sorted()) }
+    }
+
+    var streamAutoPlayDebridFilter: StreamAutoPlayDebridFilter {
+        get { option("stream_auto_play_debrid_filter", default: .off) }
+        set { setOption("stream_auto_play_debrid_filter", newValue) }
     }
 
     var streamAutoPlayRegex: String {

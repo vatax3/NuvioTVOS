@@ -1387,3 +1387,19 @@ Regenerated: `UpstreamSettingsManifest.swift` at 1.1.0-beta.12 (265 keys; one ne
 
 Still open from earlier windows: now-playing and remote commands, the accessibility audit, image
 downsampling, media servers, night mode (needs an FFmpeg build with `acompressor`).
+
+## Two settings the key sweep found (1.0.60)
+
+No upstream window: a comparison of upstream's 265 preference keys with every key this tree names
+(the third index in the parity skill, § 3). Of the 79 it lists, almost all are ExoPlayer, buffer
+and Dolby Vision conversion settings with verdicts above. Two were ours and wrong, in the way the
+settings blob was: both apps sync one row, and these keys did not agree.
+
+| Upstream | Ours |
+|---|---|
+| **`stream_auto_play_source`**: `ALL_SOURCES`, `INSTALLED_ADDONS_ONLY`, `ENABLED_PLUGINS_ONLY`, with `stream_auto_play_selected_addons` / `_plugins` | **Same key, other values.** Ours held `ANY`, `DEBRID_ONLY`, `CACHED_ONLY` since d6fdb15, so each app read the other's choice as its own default, and the two selection lists did not exist. Now their values (`SettingsModels.swift:355`) and their scoping, source then selected names, empty meaning all, plugins-only falling back to addons when plugins are off (`StreamFilterEngine.swift:481`). Plugins are matched by the scraper's own name, since a stream's addon name is the repository when grouped. Lists in Settings → Playback (`PlaybackSettingsContent.swift:518`), fed from the names the streams screen uses (`StreamsView.swift:847`). Our two debrid narrowings are kept under a key of our own, `stream_auto_play_debrid_filter` (`SettingsModels.swift:370`), and old values migrate (`PlayerSettingsStore.swift:16`) without stamping the settings as locally changed (`PreferenceStore.swift:92`). |
+| **`auto_skip_segment_types`** in `player_settings`, values `intro` `recap` `outro` `movie-credits` | **Same set, other name.** Ours was `auto_skip_segment_kinds` in the skip-intro store with `movieCredits`, so it never synced. Now their key and values (`IntegrationSettingsStores.swift:536`), routed to their feature (`SettingsBlob.swift:71`), migrated once (`IntegrationSettingsStores.swift:480`). |
+
+Still without a verdict from the sweep: `resolution_matching_enabled` (likely N/A: tvOS's display
+criteria carry dynamic range and frame rate, not resolution) and `skip_silence` (ExoPlayer's
+silence skipping; mpv has no equivalent filter in our build).

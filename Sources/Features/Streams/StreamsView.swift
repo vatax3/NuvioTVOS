@@ -842,6 +842,19 @@ struct StreamsView: View {
 
     // MARK: Actions
 
+    /// Upstream's source and selection rules for auto-play, with the names this screen lists
+    /// streams under: an addon by its display name, a plugin by its scraper's.
+    private var autoPlayScope: StreamFilterEngine.AutoPlayScope {
+        StreamFilterEngine.AutoPlayScope(
+            source: settings.player.streamAutoPlaySource,
+            installedAddonNames: Set(addons.addons.map(\.displayName)),
+            selectedAddons: Set(settings.player.streamAutoPlaySelectedAddons),
+            selectedPlugins: Set(settings.player.streamAutoPlaySelectedPlugins),
+            pluginsEnabled: settings.player.pluginsEnabled,
+            debridFilter: settings.player.streamAutoPlayDebridFilter
+        )
+    }
+
     private func autoPlayIfConfigured() async {
         guard !didAutoPlay else { return }
 
@@ -888,7 +901,7 @@ struct StreamsView: View {
             from: model.orderedStreams,
             attributes: model.attributes,
             mode: settings.player.streamAutoPlayMode,
-            source: settings.player.streamAutoPlaySource,
+            scope: autoPlayScope,
             regex: settings.player.streamAutoPlayRegex,
             preferredQuality: settings.player.autoPlayPreferredQuality,
             cacheStates: model.cacheStates

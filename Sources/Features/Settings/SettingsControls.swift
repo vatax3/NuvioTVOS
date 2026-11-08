@@ -62,12 +62,63 @@ struct SettingsOptionRow<T: SettingsOption>: View {
 
 /// Multi-selection over an enum — powers the preferred/required/excluded lists.
 struct SettingsMultiSelectRow<T: SettingsOption>: View {
-    @Environment(\.nuvioColors) private var colors
-
     let title: String
     var subtitle: String?
     var options: [T] = Array(T.allCases)
     @Binding var selection: [T]
+
+    var body: some View {
+        SettingsChipSelectRow(
+            title: title,
+            subtitle: subtitle,
+            chips: options.map { ($0.rawValue, $0.displayName) },
+            isSelected: { raw in selection.contains { $0.rawValue == raw } },
+            toggle: { raw in
+                guard let option = options.first(where: { $0.rawValue == raw }) else { return }
+                if let index = selection.firstIndex(of: option) {
+                    selection.remove(at: index)
+                } else {
+                    selection.append(option)
+                }
+            }
+        )
+    }
+}
+
+/// The same row over plain names — installed addons, enabled plugins — where the choices are the
+/// viewer's own rather than an enum's.
+struct SettingsNameMultiSelectRow: View {
+    let title: String
+    var subtitle: String?
+    let names: [String]
+    @Binding var selection: [String]
+
+    var body: some View {
+        SettingsChipSelectRow(
+            title: title,
+            subtitle: subtitle,
+            chips: names.map { ($0, $0) },
+            isSelected: { selection.contains($0) },
+            toggle: { name in
+                if let index = selection.firstIndex(of: name) {
+                    selection.remove(at: index)
+                } else {
+                    selection.append(name)
+                }
+            }
+        )
+    }
+}
+
+/// A title over a horizontal run of toggling chips.
+private struct SettingsChipSelectRow: View {
+    @Environment(\.nuvioColors) private var colors
+
+    let title: String
+    var subtitle: String?
+    let chips: [(id: String, label: String)]
+    let isSelected: (String) -> Bool
+    let toggle: (String) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: NuvioTheme.spacing.sm) {
@@ -84,11 +135,11 @@ struct SettingsMultiSelectRow<T: SettingsOption>: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: NuvioTheme.spacing.sm) {
-                    ForEach(options) { option in
+                    ForEach(chips, id: \.id) { chip in
                         NuvioChip(
-                            label: option.displayName,
-                            isSelected: selection.contains(option),
-                            action: { toggle(option) }
+                            label: chip.label,
+                            isSelected: isSelected(chip.id),
+                            action: { toggle(chip.id) }
                         )
                     }
                 }
@@ -100,14 +151,6 @@ struct SettingsMultiSelectRow<T: SettingsOption>: View {
         .padding(.vertical, NuvioTheme.spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
         .focusSection()
-    }
-
-    private func toggle(_ option: T) {
-        if let index = selection.firstIndex(of: option) {
-            selection.remove(at: index)
-        } else {
-            selection.append(option)
-        }
     }
 }
 

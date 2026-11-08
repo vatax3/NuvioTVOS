@@ -1393,7 +1393,12 @@ struct SkipSegment: Hashable, Sendable {
     /// separate kinds rather than a reuse of `outro` because they mean different things to the
     /// viewer — and because the merge below keeps one segment per kind, so folding a film's
     /// credits into `outro` would have them compete with a series' ending.
-    enum Kind: String, Sendable { case intro, outro, recap, mixed, movieCredits, postCredits }
+    enum Kind: String, Sendable {
+        case intro, outro, recap, mixed, movieCredits, postCredits
+
+        /// The kinds the Android app can auto-skip (`AutoSkipSegmentType`).
+        static let allUpstreamNamed: [Kind] = [.intro, .recap, .outro, .movieCredits]
+    }
     var kind: Kind
     var start: Double
     var end: Double

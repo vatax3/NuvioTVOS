@@ -67,6 +67,10 @@ enum SettingsBlob {
         ],
         "layout": [
             "dismissed_next_up_keys": Location(feature: "trakt_settings", key: "dismissed_next_up_keys")
+        ],
+        "skipIntro": [
+            // Upstream keeps it with the player's settings (`PlayerSettingsDataStore`).
+            "auto_skip_segment_types": Location(feature: "player_settings", key: "auto_skip_segment_types")
         ]
     ]
 
