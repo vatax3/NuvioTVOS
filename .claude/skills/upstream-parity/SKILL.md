@@ -1,6 +1,6 @@
 ---
 name: upstream-parity
-description: "Reconcile this tvOS port against new releases of the Android TV app it is ported from (NuvioMedia/NuvioTV), then port what belongs here and ship it. Use when the user asks to check the official repo / upstream / le dépôt officiel / Android TV and update the app, or invokes /upstream-parity. Not for answering questions about parity — docs/PARITY-AUDIT.md answers those without a release."
+description: "Reconcile this tvOS port against new releases of the Android TV app it is ported from (NuvioMedia/NuvioTV), then port what belongs here and ship it. Use when the user asks to check the official repo / upstream / le dépôt officiel / Android TV and update the app, or invokes /upstream-parity. Not for answering questions about parity — docs/PARITY-AUDIT.md answers those without a release — nor for what earlier passes left open or declined: that is parity-backlog."
 ---
 
 # Bringing the port forward
@@ -149,6 +149,11 @@ a test can hold, because every other test you write is a conversation with yours
 
 Two documents answering one question is how a status goes stale, which has happened three times
 here. Keep the division above.
+
+What a pass leaves open or declines is picked up by
+[`parity-backlog`](../parity-backlog/SKILL.md), which reads it from these same documents rather
+than a list of its own. So the "Still open" line at the end of each section is not decoration:
+it is that skill's input, and it has to be complete.
 
 **And close a line in the audit in the same commit that closes it in the code.** The 1.1.0-beta.8
 pass found seven wrong verdicts and five were the same mechanism: a positive verdict gets written
