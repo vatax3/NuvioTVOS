@@ -40,6 +40,16 @@
       ],
       "versions": [
         {
+          "version": "1.0.60",
+          "buildVersion": "62",
+          "date": "2026-11-08",
+          "localizedDescription": "### Added\n- **Auto-play: choose addons and plugins** (Settings → Playback → Source auto-play). Auto-play can be limited to installed addons or to enabled plugins, and to a selection of either; with nothing selected, all are used.\n\n### Fixed\n- **Auto-play source synced with the Android app.** The setting now uses the Android app's values, so the choice made on one app is the one the other applies. The debrid-only and cached-only options are kept as a separate *Links* setting; an existing choice carries over.\n- **Auto-skip of intros, recaps, outros and film credits now syncs** with the Android app on the same profile. Existing choices carry over.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.60/Nuvio-1.0.60-tvOS-unsigned.ipa",
+          "size": 41202228,
+          "minOSVersion": "18.0",
+          "sha256": "08307e493fb4fd73b0e3eac8e3d3ec52dda41afd01c0a04f9a01cf4c39c25276"
+        },
+        {
           "version": "1.0.59",
           "buildVersion": "61",
           "date": "2026-11-07",
@@ -516,11 +526,11 @@
         ],
         "privacy": {}
       },
-      "version": "1.0.59",
-      "versionDate": "2026-11-07",
-      "versionDescription": "### Added\n- **Remembered audio and subtitles per title.** The audio track and subtitle picked for a title, including turning subtitles off, are restored on its next episode. The choice is stored with the profile in the Android app's format, so it carries over between the two apps on the same account. On the AVPlayer engine, addon subtitles and *Off* are restored; built-in tracks there follow the remembered audio language.\n- **Auto-scrolling hero descriptions** (Settings → Layout → Hero, off by default): a description too long for the hero scrolls slowly instead of being cut off.\n- **Skip marks for Kitsu episodes**, and Anime-Skip marks for MyAnimeList episodes, when a Simkl client id is set.\n\n### Fixed\n- **Anime-Skip:** a lone intro or recap mark no longer offers to skip the rest of the episode. When several community entries exist for one episode, the most complete one is used.\n- **Skip-mark sources** are combined in the Android app's order: IntroDB, then AniSkip, then Anime-Skip.\n- **Anime-Skip** no longer depends on the ARM id service when Simkl has already identified the show.",
-      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.59/Nuvio-1.0.59-tvOS-unsigned.ipa",
-      "size": 41194059,
+      "version": "1.0.60",
+      "versionDate": "2026-11-08",
+      "versionDescription": "### Added\n- **Auto-play: choose addons and plugins** (Settings → Playback → Source auto-play). Auto-play can be limited to installed addons or to enabled plugins, and to a selection of either; with nothing selected, all are used.\n\n### Fixed\n- **Auto-play source synced with the Android app.** The setting now uses the Android app's values, so the choice made on one app is the one the other applies. The debrid-only and cached-only options are kept as a separate *Links* setting; an existing choice carries over.\n- **Auto-skip of intros, recaps, outros and film credits now syncs** with the Android app on the same profile. Existing choices carry over.",
+      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.60/Nuvio-1.0.60-tvOS-unsigned.ipa",
+      "size": 41202228,
       "minOSVersion": "18.0"
     }
   ],
