@@ -24,6 +24,7 @@ enum EpisodeRemap {
         episode: Int,
         videoId: String? = nil,
         title: String? = nil,
+        preferSameNumber: Bool = false,
         from source: [Entry],
         to target: [Entry]
     ) -> Entry? {
@@ -39,6 +40,13 @@ enum EpisodeRemap {
         if isUsefulTitle(wanted) {
             let matches = orderedTarget.filter { normalisedTitle($0.title) == wanted }
             if matches.count == 1 { return matches[0] }
+        }
+
+        // Upstream 1.1.0-beta.13, for writes: the whole-show index shifts every later episode when
+        // any earlier season's count differs, so an episode the target also has keeps its number.
+        if preferSameNumber,
+           let same = orderedTarget.first(where: { $0.season == current.season && $0.episode == current.episode }) {
+            return same
         }
 
         guard let index = orderedSource.firstIndex(of: current), index < orderedTarget.count else {

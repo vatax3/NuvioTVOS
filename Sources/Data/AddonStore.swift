@@ -465,11 +465,20 @@ final class AddonStore {
         let existingKeys = Set(catalogOrder.map(\.id))
         let additions = available.filter { !existingKeys.contains($0.id) }
         let availableKeys = Set(available.map(\.id))
-        catalogOrder = catalogOrder.filter { entry in
+        let merged = catalogOrder.filter { entry in
             if entry.collectionId != nil, collectionIds == nil { return true }
             return availableKeys.contains(entry.id)
         } + additions
+        // A manifest can list one catalog twice. Kept once, the first time, as upstream's picker
+        // now does (1.1.0-beta.13): a repeated id in this list is a repeated row in the Catalog
+        // Order screen, whose rows SwiftUI tells apart by id. Also clears repeats already saved.
+        catalogOrder = Self.uniqued(merged)
         persistOrder()
+    }
+
+    nonisolated static func uniqued(_ entries: [CatalogOrderEntry]) -> [CatalogOrderEntry] {
+        var seen = Set<String>()
+        return entries.filter { seen.insert($0.id).inserted }
     }
 
     private func persistAddons() {

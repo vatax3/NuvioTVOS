@@ -183,6 +183,19 @@ enum CollectionSource: Hashable, Sendable, Identifiable {
         }
     }
 
+    /// Keys unique per position: the id, then `id#1`, `id#2` for repeats. Port of upstream's
+    /// `collectionSourceKeys` (1.1.0-beta.13). Ours never adds a source twice
+    /// (`CollectionStore.addSource`), but a collection synced from the Android app can hold one
+    /// twice, and two rows or tabs with one id are indistinguishable to SwiftUI.
+    static func occurrenceKeys(_ sources: [CollectionSource]) -> [String] {
+        var seen: [String: Int] = [:]
+        return sources.map { source in
+            let occurrence = seen[source.id, default: 0]
+            seen[source.id] = occurrence + 1
+            return occurrence == 0 ? source.id : "\(source.id)#\(occurrence)"
+        }
+    }
+
     /// What the tab or rail above this source is called.
     var title: String? {
         switch self {

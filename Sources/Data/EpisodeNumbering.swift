@@ -43,6 +43,7 @@ final class EpisodeNumbering {
         guard !trakt.isEmpty, !EpisodeRemap.hasSameSeasonStructure(addon, trakt),
               let mapped = EpisodeRemap.remap(
                   season: season, episode: episode, videoId: videoId, title: title,
+                  preferSameNumber: true,
                   from: addon, to: trakt
               )
         else { return (season, episode) }

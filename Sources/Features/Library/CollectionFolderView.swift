@@ -7,6 +7,8 @@ import Observation
 @MainActor
 final class CollectionFolderViewModel {
     struct Tab: Identifiable {
+        /// Unique even when the folder holds one source twice (`CollectionSource.occurrenceKeys`).
+        let id: String
         let source: CollectionSource
         var title: String
         var items: [MetaPreview] = []
@@ -14,8 +16,6 @@ final class CollectionFolderViewModel {
         var hasMore = true
         var unavailable: CollectionSourceResolver.Unavailable?
         var page = 0
-
-        var id: String { source.id }
     }
 
     private(set) var tabs: [Tab] = []
@@ -39,8 +39,9 @@ final class CollectionFolderViewModel {
     func load(folder: CollectionFolder, addons: AddonStore, settings: AppSettings) async {
         guard loadedFolderId != folder.id else { return }
         loadedFolderId = folder.id
+        let keys = CollectionSource.occurrenceKeys(folder.sources)
         tabs = folder.sources.enumerated().map { index, source in
-            Tab(source: source, title: source.title?.nilIfBlank ?? Self.fallbackTitle(source, index: index, addons: addons))
+            Tab(id: keys[index], source: source, title: source.title?.nilIfBlank ?? Self.fallbackTitle(source, index: index, addons: addons))
         }
         // First pages in parallel: a folder with four sources should not take four round trips
         // before it draws anything.

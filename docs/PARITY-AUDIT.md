@@ -1403,3 +1403,33 @@ settings blob was: both apps sync one row, and these keys did not agree.
 Still without a verdict from the sweep: `resolution_matching_enabled` (likely N/A: tvOS's display
 criteria carry dynamic range and frame rate, not resolution) and `skip_silence` (ExoPlayer's
 silence skipping; mpv has no equivalent filter in our build).
+
+## Upstream moved a tenth time: 1.1.0-beta.12 → 1.1.0-beta.13
+
+One tag (8 November), 29 commits, 26 files, sixteen engineering lines, mostly Android crash
+fixes, plus translations. Read over the network at the tag. Two of their fixes are defects of
+ours as well; one is a numbering rule to port. The key sweep (skill § 3), rerun at this tag, finds
+nothing new: 76 keys, all with verdicts.
+
+### Defects of ours, found by reading why they needed a change
+
+| Upstream | Ours |
+|---|---|
+| **Drop duplicate catalogs from the hero catalog picker** | **Same defect, wider.** The catalog order adds every available catalog not already listed, so a manifest that lists one catalog twice put the same id twice, and the Catalog Order screen, where the hero catalogs are chosen, tells its rows apart by id. Repeats are now kept once, the first, including any already saved (`AddonStore.swift:475`, `:479`). |
+| **Keep editor source keys unique for repeated sources** | **Same defect, reached through sync.** Ours never adds a source twice (`CollectionStore.swift:154`), but a collection made on the Android app can hold one twice, and our folder editor and folder tabs were keyed by the source's id. Now by upstream's occurrence keys, `id`, `id#1`… (`CollectionModel.swift:190`, used at `CollectionFolderView.swift:42` and `CollectionFolderEditorView.swift:70`). |
+
+### The rest of the window
+
+| Upstream | Ours |
+|---|---|
+| **Keep episode numbers on writes when Trakt has the episode** | **Ported in 1.0.61.** Writes to Trakt went by whole-show position once season structures differed, so one extra early episode on Trakt shifted every later scrobble and watched mark (their case: *The Block*, S2E15 sent as S2E13). Now an episode Trakt also has keeps its number, after a unique title match and before the position (`EpisodeRemap.swift:47`, writes only: `EpisodeNumbering.swift:46`). Reads and MDBList unchanged, as upstream. Their three test cases are ours. |
+| **Read a stored playback speed of any number type** | **Already true here.** We never read it; the blob takes any JSON number for `playback_speed\|…` and re-exports it typed float (`SettingsBlob.swift:153`). |
+| Updater corruption handler, installer fallbacks ×3 | **N/A.** Their APK updater; ours reads the sideloading feed. |
+| Job scheduler crashes, ProGuard for CloudStream, file export below Android 10, diagnostics report queue | **N/A.** Android platform. |
+| Accept a missing title on the stream and player routes | **N/A.** Compose navigation arguments; our routes are typed values. |
+| Subtitle width measuring when the cue list empties | **N/A.** Their Compose subtitle renderer. |
+| End parallel reads at a short chunk | **Declined**, with the parallel downloader (*Declined since 0.8.9*). |
+| AutoSync timeline waiters | **Declined**, with AutoSync. |
+| Vietnamese, Greek, French, Swedish, Polish, Hungarian | **Declined.** Translation work. |
+
+Regenerated: `UpstreamSettingsManifest.swift` at 1.1.0-beta.13 (265 keys, none new).

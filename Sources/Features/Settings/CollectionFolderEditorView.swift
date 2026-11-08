@@ -67,7 +67,8 @@ struct CollectionFolderEditorView: View {
                     title: L10n.text("settings.folder.sources", fallback: "Sources"),
                     footnote: L10n.text("settings.folder.sources_footnote", fallback: "Everything these return shows up in this folder.")
                 ) {
-                    ForEach(folder.sources) { source in
+                    let keys = CollectionSource.occurrenceKeys(folder.sources)
+                    ForEach(Array(zip(keys, folder.sources)), id: \.0) { _, source in
                         SettingsRow(
                             title: describe(source),
                             subtitle: providerName(source),
