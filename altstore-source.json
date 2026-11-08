@@ -40,6 +40,16 @@
       ],
       "versions": [
         {
+          "version": "1.0.62",
+          "buildVersion": "64",
+          "date": "2026-11-08",
+          "localizedDescription": "### Fixed\n- **Now Playing and remote control during playback.** On the AetherEngine and mpv engines, the system Now Playing card now shows the title, the episode and the poster, and the iPhone Remote, Control Center and Bluetooth controllers can play, pause, scrub, skip 10 seconds and go to the next episode. Previously the card was empty and these commands did nothing. Seeking is unavailable on live streams. The AVPlayer engine is unchanged.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.62/Nuvio-1.0.62-tvOS-unsigned.ipa",
+          "size": 41213951,
+          "minOSVersion": "18.0",
+          "sha256": "25b375d46c14167d2450cca2418f0a281be186c4039a33112e7a6664f76c1b80"
+        },
+        {
           "version": "1.0.61",
           "buildVersion": "63",
           "date": "2026-11-08",
@@ -536,11 +546,11 @@
         ],
         "privacy": {}
       },
-      "version": "1.0.61",
+      "version": "1.0.62",
       "versionDate": "2026-11-08",
-      "versionDescription": "### Fixed\n- **Trakt episode numbers:** scrobbles and watched marks keep the addon's episode number when Trakt has that episode. When Trakt listed a different number of episodes in an earlier season, every later episode was sent shifted.\n- **Catalog order:** a catalog an addon lists twice now appears once.\n- **Collections synced from the Android app** that contain the same source twice now show and edit each entry correctly.",
-      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.61/Nuvio-1.0.61-tvOS-unsigned.ipa",
-      "size": 41204843,
+      "versionDescription": "### Fixed\n- **Now Playing and remote control during playback.** On the AetherEngine and mpv engines, the system Now Playing card now shows the title, the episode and the poster, and the iPhone Remote, Control Center and Bluetooth controllers can play, pause, scrub, skip 10 seconds and go to the next episode. Previously the card was empty and these commands did nothing. Seeking is unavailable on live streams. The AVPlayer engine is unchanged.",
+      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.62/Nuvio-1.0.62-tvOS-unsigned.ipa",
+      "size": 41213951,
       "minOSVersion": "18.0"
     }
   ],
