@@ -40,6 +40,16 @@
       ],
       "versions": [
         {
+          "version": "1.0.61",
+          "buildVersion": "63",
+          "date": "2026-11-08",
+          "localizedDescription": "### Fixed\n- **Trakt episode numbers:** scrobbles and watched marks keep the addon's episode number when Trakt has that episode. When Trakt listed a different number of episodes in an earlier season, every later episode was sent shifted.\n- **Catalog order:** a catalog an addon lists twice now appears once.\n- **Collections synced from the Android app** that contain the same source twice now show and edit each entry correctly.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.61/Nuvio-1.0.61-tvOS-unsigned.ipa",
+          "size": 41204843,
+          "minOSVersion": "18.0",
+          "sha256": "04f3e61d2a08da1f11b149d28b0c9558bf6aa34404c75395a263c30a42a79614"
+        },
+        {
           "version": "1.0.60",
           "buildVersion": "62",
           "date": "2026-11-08",
@@ -526,11 +536,11 @@
         ],
         "privacy": {}
       },
-      "version": "1.0.60",
+      "version": "1.0.61",
       "versionDate": "2026-11-08",
-      "versionDescription": "### Added\n- **Auto-play: choose addons and plugins** (Settings → Playback → Source auto-play). Auto-play can be limited to installed addons or to enabled plugins, and to a selection of either; with nothing selected, all are used.\n\n### Fixed\n- **Auto-play source synced with the Android app.** The setting now uses the Android app's values, so the choice made on one app is the one the other applies. The debrid-only and cached-only options are kept as a separate *Links* setting; an existing choice carries over.\n- **Auto-skip of intros, recaps, outros and film credits now syncs** with the Android app on the same profile. Existing choices carry over.",
-      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.60/Nuvio-1.0.60-tvOS-unsigned.ipa",
-      "size": 41202228,
+      "versionDescription": "### Fixed\n- **Trakt episode numbers:** scrobbles and watched marks keep the addon's episode number when Trakt has that episode. When Trakt listed a different number of episodes in an earlier season, every later episode was sent shifted.\n- **Catalog order:** a catalog an addon lists twice now appears once.\n- **Collections synced from the Android app** that contain the same source twice now show and edit each entry correctly.",
+      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.61/Nuvio-1.0.61-tvOS-unsigned.ipa",
+      "size": 41204843,
       "minOSVersion": "18.0"
     }
   ],
