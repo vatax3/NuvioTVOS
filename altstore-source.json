@@ -40,6 +40,16 @@
       ],
       "versions": [
         {
+          "version": "1.0.63",
+          "buildVersion": "65",
+          "date": "2026-11-09",
+          "localizedDescription": "### Fixed\n- **Sources that only point to a YouTube video** (for example from news addons) now open in the YouTube app when selected, from the source list and from the in-player source list. Previously selecting one did nothing. They show as playable only when the YouTube app is installed.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.63/Nuvio-1.0.63-tvOS-unsigned.ipa",
+          "size": 41215482,
+          "minOSVersion": "18.0",
+          "sha256": "1893598287822f70b1f9a5d39a14a39be948a9b509df805d1ebacd3e5e580231"
+        },
+        {
           "version": "1.0.62",
           "buildVersion": "64",
           "date": "2026-11-08",
@@ -546,11 +556,11 @@
         ],
         "privacy": {}
       },
-      "version": "1.0.62",
-      "versionDate": "2026-11-08",
-      "versionDescription": "### Fixed\n- **Now Playing and remote control during playback.** On the AetherEngine and mpv engines, the system Now Playing card now shows the title, the episode and the poster, and the iPhone Remote, Control Center and Bluetooth controllers can play, pause, scrub, skip 10 seconds and go to the next episode. Previously the card was empty and these commands did nothing. Seeking is unavailable on live streams. The AVPlayer engine is unchanged.",
-      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.62/Nuvio-1.0.62-tvOS-unsigned.ipa",
-      "size": 41213951,
+      "version": "1.0.63",
+      "versionDate": "2026-11-09",
+      "versionDescription": "### Fixed\n- **Sources that only point to a YouTube video** (for example from news addons) now open in the YouTube app when selected, from the source list and from the in-player source list. Previously selecting one did nothing. They show as playable only when the YouTube app is installed.",
+      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.63/Nuvio-1.0.63-tvOS-unsigned.ipa",
+      "size": 41215482,
       "minOSVersion": "18.0"
     }
   ],
