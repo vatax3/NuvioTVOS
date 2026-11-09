@@ -600,6 +600,13 @@ struct Stream: Codable, Hashable, Identifiable, Sendable {
             .first { !$0.isMagnetLink && !$0.isTorrentScheme }
     }
 
+    /// The YouTube video a stream carries when it carries nothing else (upstream 1.1.0-beta.2,
+    /// 8e2bef36): no URL, no torrent, only `ytId`. Before, selecting one did nothing.
+    var youTubeOnlyId: String? {
+        guard streamURL() == nil, !isTorrent, let raw = ytId?.nilIfBlank else { return nil }
+        return TrailerLauncher.videoId(from: raw)
+    }
+
     func torrentMagnetURI() -> String? {
         [url, externalUrl].compactMap { $0 }.first { $0.isMagnetLink }
     }

@@ -572,6 +572,10 @@ struct InPlayerSourcesPanel: View {
     }
 
     private func select(_ stream: Stream) async {
+        if let youTubeId = stream.youTubeOnlyId {
+            TrailerLauncher.open(youTubeId: youTubeId)
+            return
+        }
         guard let sourceRequest, case .success(let url) = await model.playableURL(for: stream, settings: settings) else {
             return
         }

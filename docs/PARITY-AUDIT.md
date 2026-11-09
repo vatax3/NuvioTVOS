@@ -1452,3 +1452,29 @@ real Apple TV.
 Still open from earlier windows: the accessibility audit, image downsampling, media servers, night
 mode (needs an FFmpeg build with `acompressor`; AetherEngine's `AVSampleBufferAudioRenderer` path
 has no hook either, checked 2026-11-08).
+
+## Upstream moved an eleventh time: 1.1.0-beta.13 → 1.1.0 (stable)
+
+One tag (8 November), 8 commits, 4 files: two defaults and Hungarian translations. The release
+notes are a summary of the whole 1.1.0 cycle rather than of this window, so every line of them was
+also checked against this file; one had no verdict anywhere.
+
+| Upstream | Ours |
+|---|---|
+| **Forced subtitles on by default** | **Already true here.** `subtitle_use_forced_subtitles` defaults to true (`PlayerSettingsStore.swift:235`). |
+| **AutoSync on by default** | **N/A.** AutoSync is declined (*Declined since 0.8.9*). |
+| Hungarian translations | **Declined.** Translation work. |
+| **Streams that only have a YouTube id now play** (8e2bef36, 1.1.0-beta.2; auto-play in 3bc511aa, beta.3) | **Missed by the beta.2 and beta.3 passes; ported in 1.0.63.** A stream carrying only a `ytId` has no URL and is not a torrent, so selecting one did nothing, exactly their bug. Upstream resolves it with an in-app extractor; their builds without in-app YouTube playback open the watch page instead, which is our only path (`TrailerLauncher.swift:45`). So such a stream hands off to the YouTube app from the streams screen (`StreamsView.swift:956`) and the in-player list (`InPlayerPanel.swift:575`), and is drawn as playable only when that app is installed (`StreamsView.swift:1176`; detection at `Models.swift:605`). Auto-play does not pick it, as upstream's fix applies only to builds that play it in-app. |
+
+The rest of the notes is accounted for in earlier sections, with these confirmed by name: Jellyfin
+and Emby (open), MDBList lists (open), Nuvio Engine (N/A), ambient mode (open), background
+trailers and true-black letterbox (declined), night mode (blocked), AutoSync (declined), the
+subtitle lift (ported in 1.0.47 and 1.0.54), episodes rated 9.7+ (declined), long-press Back on
+post-play (N/A), audio delay per language (already true in effect), libmpv failure causes (ported
+in 1.0.45).
+
+Regenerated: `UpstreamSettingsManifest.swift` at 1.1.0 (265 keys, none new).
+
+Still open from earlier windows: the accessibility audit, image downsampling, media servers, night
+mode (needs an FFmpeg build with `acompressor`; AetherEngine's `AVSampleBufferAudioRenderer` path
+has no hook either, checked 2026-11-08).

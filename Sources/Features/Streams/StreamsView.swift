@@ -951,6 +951,12 @@ struct StreamsView: View {
     /// - Parameter sourceStableKey: the row a reused link was first chosen from, so the
     ///   player's Sources panel marks that row rather than the stand-in built for the link.
     private func play(_ stream: Stream, sourceStableKey: String? = nil) async {
+        // Upstream resolves such a stream in-app; their builds without in-app YouTube playback
+        // open the watch page instead, which is the only path tvOS has (see `TrailerLauncher`).
+        if let youTubeId = stream.youTubeOnlyId {
+            TrailerLauncher.open(youTubeId: youTubeId)
+            return
+        }
         let result = await model.playableURL(for: stream, settings: settings)
         guard case .success(let url) = result else { return }
 
@@ -1167,6 +1173,7 @@ private struct StreamRow: View {
     /// A torrent is actionable when debrid can resolve it, or when it already has an HTTP URL.
     private var isPlayable: Bool {
         if stream.streamURL() != nil { return true }
+        if stream.youTubeOnlyId != nil { return TrailerLauncher.isAvailable }
         return settings.debrid.canResolvePlayableLinks && stream.effectiveInfoHash != nil
     }
 
