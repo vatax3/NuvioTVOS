@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// One horizontal rail: header + poster run, matching `CatalogRowSection` / `ModernHomeRows`.
-/// `focusSection` keeps vertical D-pad travel landing on the nearest card of the next rail
-/// instead of jumping to whatever happens to be geometrically closest.
+/// `focusSection` keeps vertical D-pad travel inside the rail it lands on, and
+/// `railFocusMemory` decides where: the card this rail was last left on, or its first.
 struct CatalogRowView: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(\.posterMetrics) private var metrics
@@ -24,6 +24,9 @@ struct CatalogRowView: View {
     /// Lets the owning screen drive focus onto a specific card (used for launch focus).
     var cardFocus: FocusState<String?>.Binding?
 
+    @FocusState private var localFocus: String?
+    private var focus: FocusState<String?>.Binding { cardFocus ?? $localFocus }
+
     var body: some View {
         VStack(alignment: .leading, spacing: NuvioTheme.components.row.titleBottomSpacing) {
             header
@@ -36,6 +39,7 @@ struct CatalogRowView: View {
             }
         }
         .padding(.vertical, NuvioTheme.components.row.verticalPadding)
+        .railFocusMemory(focus, keys: items.map(\.rowKey))
         .focusSection()
     }
 
@@ -71,7 +75,7 @@ struct CatalogRowView: View {
                                 bringIntoView(focused.rowKey, using: scroller)
                                 if index >= items.count - 4 { onReachEnd?() }
                             },
-                            focusBinding: cardFocus,
+                            focusBinding: focus,
                             action: { onSelect(item) }
                         )
                         .id(item.rowKey)
@@ -154,6 +158,9 @@ struct ContinueWatchingRow: View {
     var onSelect: (ContinueWatchingEntry) -> Void
     var cardFocus: FocusState<String?>.Binding?
 
+    @FocusState private var localFocus: String?
+    private var focus: FocusState<String?>.Binding { cardFocus ?? $localFocus }
+
     var body: some View {
         VStack(alignment: .leading, spacing: NuvioTheme.components.row.titleBottomSpacing) {
             Text(L10n.text("library.continue_watching", fallback: "Continue Watching"))
@@ -170,7 +177,7 @@ struct ContinueWatchingRow: View {
                             usesEpisodeThumbnail: settings.layout.useEpisodeThumbnailsInContinueWatching,
                             blursNextUp: settings.layout.blurContinueWatchingNextUp,
                             onFocus: onFocusItem,
-                            focusBinding: cardFocus,
+                            focusBinding: focus,
                             action: { onSelect(entry) }
                         )
                     }
@@ -181,6 +188,7 @@ struct ContinueWatchingRow: View {
             .clippedHorizontalScroller()
         }
         .padding(.vertical, NuvioTheme.components.row.verticalPadding)
+        .railFocusMemory(focus, keys: entries.map(\.preview.rowKey))
         .focusSection()
     }
 }

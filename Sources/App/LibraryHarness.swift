@@ -24,6 +24,12 @@ enum LibraryHarness {
     /// library, so the dialog it opens offers removal from the rail rather than from the grid.
     static let resumeId = "harness-resume"
 
+    /// A resume point as account sync delivers one: a real IMDb id and no artwork cached here,
+    /// so Continue Watching can only show it once Home has fetched its preview from an addon
+    /// (#4). Seeded only with `syncedArgument`, since it needs the network.
+    static let syncedArgument = "-nuvioSyncedProgressHarness"
+    static let syncedId = "tt0111161"
+
     private static func preview(id: String, name: String) -> MetaPreview {
         MetaPreview(id: id, type: .movie, rawType: "movie", name: name)
     }
@@ -31,6 +37,9 @@ enum LibraryHarness {
     @MainActor
     static func seed(into library: LibraryStore) {
         guard isActive else { return }
+        // Artwork persists between launches; starting without it is what makes the synced row
+        // test the fetch rather than a cache left by an earlier run.
+        library.clearContinueWatchingCache()
 
         library.adoptSavedItem(SavedLibraryItem(
             preview: preview(id: savedId, name: "Harness Saved"),
@@ -51,6 +60,19 @@ enum LibraryHarness {
             durationSeconds: 6_000,
             updatedAt: Date()
         ))
+
+        if ProcessInfo.processInfo.arguments.contains(syncedArgument) {
+            library.adoptProgress(WatchProgress(
+                contentId: syncedId,
+                contentType: "movie",
+                videoId: syncedId,
+                season: nil,
+                episode: nil,
+                positionSeconds: 1_800,
+                durationSeconds: 8_500,
+                updatedAt: Date().addingTimeInterval(-60)
+            ))
+        }
     }
 }
 #endif

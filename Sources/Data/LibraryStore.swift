@@ -467,6 +467,40 @@ final class LibraryStore {
         previewCache["\(contentType)|\(contentId)"]
     }
 
+    /// Stores a preview under the key a progress row looks it up by. An addon may label a title
+    /// `tv` where the account's row says `series`; keyed on the preview's own type, the row
+    /// would still find nothing.
+    func cache(_ preview: MetaPreview, contentType: String, contentId: String) {
+        previewCache["\(contentType)|\(contentId)"] = preview
+        persistPreviews()
+    }
+
+    /// Titles Continue Watching would show if it had their artwork.
+    ///
+    /// The rail skips a row with no cached preview, and only this device ever cached one: a
+    /// title watched on a phone arrived through account sync with its resume point and nothing
+    /// to draw, so the rail stayed empty while the account was full (#4). Same filter as
+    /// `continueWatching`, newest first, one per title.
+    func progressMissingPreviews(
+        threshold: Double,
+        withinDays: Int = 0,
+        limit: Int = 20
+    ) -> [(contentType: String, contentId: String)] {
+        let cutoff = Self.cutoffDate(withinDays: withinDays)
+        var seen = Set<String>()
+        var missing: [(contentType: String, contentId: String)] = []
+        for item in progress.values
+            .filter({ $0.isInProgress(threshold: threshold) })
+            .filter({ item in cutoff.map { item.updatedAt >= $0 } ?? true })
+            .sorted(by: { $0.updatedAt > $1.updatedAt }) {
+            let key = "\(item.contentType)|\(item.contentId)"
+            guard seen.insert(key).inserted, previewCache[key] == nil else { continue }
+            missing.append((item.contentType, item.contentId))
+            if missing.count >= limit { break }
+        }
+        return missing
+    }
+
     // MARK: Sync adoption
 
     /// Applies a row that arrived from the account. Distinct from `record`/`toggleLibrary` so a

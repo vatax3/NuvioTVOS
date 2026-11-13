@@ -23,6 +23,9 @@ final class RemoteProgressService {
     /// do not both ask; capped rather than one-shot, because a single timeout used to cost the
     /// row its still until the profile was rebuilt. Upstream's bounded hydration retry.
     private var enrichmentAttempts: [String: Int] = [:]
+    /// Artwork lookups per title this session, bounded the same way: a title no installed addon
+    /// knows must not cost a round trip on every appearance of Home.
+    private var previewAttempts: [String: Int] = [:]
     private static let enrichmentAttemptLimit = 3
 
     private let client: StremioClient
@@ -68,7 +71,7 @@ final class RemoteProgressService {
                 }
                 if shouldAdopt(entry, into: library) { adopted.append(entry) }
                 if library.cachedPreview(contentType: entry.contentType, contentId: entry.contentId) == nil,
-                   let preview = await preview(for: item, addons: addons) {
+                   let preview = await preview(type: item.type.rawValue, id: item.imdbId, addons: addons) {
                     library.cache(preview)
                 }
             }
@@ -359,14 +362,48 @@ final class RemoteProgressService {
         contentId.hasPrefix("tt") ? String(contentId.split(separator: ":")[0]) : nil
     }
 
-    private func preview(for item: TraktClient.PlaybackItem, addons: AddonStore) async -> MetaPreview? {
-        let candidates = addons.addonsProviding(
-            resource: "meta", type: item.type.rawValue, id: item.imdbId
+    // MARK: Missing artwork
+
+    /// Fetches artwork for Continue Watching rows that have none, whatever supplied them.
+    ///
+    /// The rail cannot draw a row without a preview, and only this device ever cached one — on
+    /// playback or on opening a detail screen. Rows from account sync, or from MDBList, arrived
+    /// with a resume point and nothing to show, and were skipped (#4). Android hydrates every
+    /// entry's metadata the same way.
+    func hydrateMissingPreviews(settings: AppSettings, library: LibraryStore, addons: AddonStore) async {
+        let missing = library.progressMissingPreviews(
+            threshold: settings.watchedThreshold,
+            withinDays: settings.tracking.continueWatchingDaysCap
         )
-        for addon in candidates {
-            if let meta = try? await client.fetchMeta(
-                addon: addon, type: item.type.rawValue, id: item.imdbId
-            ) {
+        for row in missing {
+            let key = "\(row.contentType)|\(row.contentId)"
+            let attempts = previewAttempts[key, default: 0]
+            guard attempts < Self.enrichmentAttemptLimit else { continue }
+            previewAttempts[key] = attempts + 1
+            for type in Self.metaTypes(for: row.contentType) {
+                if let preview = await preview(type: type, id: row.contentId, addons: addons) {
+                    library.cache(preview, contentType: row.contentType, contentId: row.contentId)
+                    previewAttempts[key] = Self.enrichmentAttemptLimit
+                    break
+                }
+            }
+        }
+    }
+
+    /// The type to ask addons for. Other clients have written `tv` or `show` for a series; no
+    /// addon serves those.
+    nonisolated static func metaTypes(for contentType: String) -> [String] {
+        switch contentType.lowercased() {
+        case "movie": return ["movie"]
+        case "series": return ["series"]
+        case "tv", "show", "shows", "episode": return ["series"]
+        default: return [contentType, "series", "movie"]
+        }
+    }
+
+    private func preview(type: String, id: String, addons: AddonStore) async -> MetaPreview? {
+        for addon in addons.addonsProviding(resource: "meta", type: type, id: id) {
+            if let meta = try? await client.fetchMeta(addon: addon, type: type, id: id) {
                 return meta.preview()
             }
         }

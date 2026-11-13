@@ -99,6 +99,9 @@ struct CollectionRail: View {
     /// see `CollectionFolder.heroPreview(in:)` for what a folder puts there.
     var onFocusItem: ((MetaPreview) -> Void)?
 
+    @FocusState private var localFocus: String?
+    private var focus: FocusState<String?>.Binding { focusBinding ?? $localFocus }
+
     var body: some View {
         VStack(alignment: .leading, spacing: NuvioTheme.components.row.titleBottomSpacing) {
             HStack(spacing: NuvioTheme.spacing.md) {
@@ -117,7 +120,7 @@ struct CollectionRail: View {
                     ForEach(collection.folders) { folder in
                         CollectionFolderCard(
                             folder: folder,
-                            focusBinding: focusBinding,
+                            focusBinding: focus,
                             onFocus: onFocusItem.map { report in
                                 { report(folder.heroPreview(in: collection)) }
                             }
@@ -133,6 +136,7 @@ struct CollectionRail: View {
             }
             .clippedHorizontalScroller()
         }
+        .railFocusMemory(focus, keys: collection.folders.map(\.id))
         .focusSection()
     }
 }

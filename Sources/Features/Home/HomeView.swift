@@ -50,6 +50,12 @@ struct HomeView: View {
                 library: library
             )
         }
+        // Artwork for rows that arrived without any — account sync, MDBList. Keyed on what is
+        // missing, so a pull that brings new titles fetches theirs and nothing runs otherwise.
+        .task(id: missingPreviewSignature) {
+            guard !missingPreviewSignature.isEmpty else { return }
+            await remoteProgress.hydrateMissingPreviews(settings: settings, library: library, addons: addons)
+        }
         // The episode cache was only ever filled by opening a detail screen, which left Next Up
         // unable to project a series the viewer started from a rail and never opened. Bounded:
         // the ones that matter are at the front of the rail. See `SeriesEpisodeCatalogue`.
@@ -76,6 +82,15 @@ struct HomeView: View {
             router.contentHasFocusableViews = !spinning
         }
         .onDisappear { router.contentHasFocusableViews = true }
+    }
+
+    private var missingPreviewSignature: String {
+        library.progressMissingPreviews(
+            threshold: settings.watchedThreshold,
+            withinDays: settings.tracking.continueWatchingDaysCap
+        )
+        .map { "\($0.contentType)|\($0.contentId)" }
+        .joined(separator: ",")
     }
 
     /// Changes when the set of series in Continue Watching does, so the seed runs on a new one
@@ -116,6 +131,7 @@ struct HomeRailList: View {
 
     @FocusState private var focusedCardKey: String?
     @State private var didClaimInitialFocus = false
+    @State private var railFocusGeneration = 0
 
     private var continueWatching: [ContinueWatchingEntry] {
         // Gated here rather than at the row, so the rail is also absent from the focus order
@@ -141,6 +157,48 @@ struct HomeRailList: View {
                 case .collection(let collection): return collection.folders.first?.id
                 }
             }.first
+    }
+
+    /// The cards of the rail at the top of the screen, in the order `body` lays rails out.
+    private var firstRailKeys: Set<String> {
+        if !continueWatching.isEmpty { return Set(continueWatching.map(\.preview.rowKey)) }
+        if let collection = pinnedCollections.first { return Set(collection.folders.map(\.id)) }
+        for row in displayRows {
+            switch row {
+            case .catalog(let catalog) where !catalog.items.isEmpty:
+                return Set(catalog.items.map(\.rowKey))
+            case .collection(let collection):
+                return Set(collection.folders.map(\.id))
+            default:
+                continue
+            }
+        }
+        return []
+    }
+
+    /// Back from below the first rail returns there; from the first rail, or with focus out of
+    /// the rails, it is not handled and leaves the app. The convention of the Apple TV and
+    /// Netflix apps, and a press that never touches the sidebar (#6).
+    ///
+    /// The first rail is usually no longer in the tree by then — the stack is lazy — so the
+    /// screen scrolls back first and focus follows once the card exists, retried the same way as
+    /// the launch claim below. Every rail's memory is cleared too: back at the top is a fresh
+    /// start, and the first rail would otherwise pull focus on to the card it was last left on.
+    private func backToTop(using scroller: ScrollViewProxy) -> (() -> Void)? {
+        guard let focused = focusedCardKey, !firstRailKeys.contains(focused),
+              let first = firstCardKey
+        else { return nil }
+        return {
+            railFocusGeneration += 1
+            withAnimation { scroller.scrollTo(Self.topAnchor, anchor: .top) }
+            Task { @MainActor in
+                for delay in [50, 150, 250, 400, 600] {
+                    try? await Task.sleep(for: .milliseconds(delay))
+                    if let key = focusedCardKey, firstRailKeys.contains(key) { return }
+                    focusedCardKey = first
+                }
+            }
+        }
     }
 
     /// Pinned collections lead the screen, ahead of every catalogue; the rest follow them.
@@ -185,6 +243,16 @@ struct HomeRailList: View {
     }
 
     var body: some View {
+        ScrollViewReader { scroller in
+            rails
+                .id(Self.topAnchor)
+                .onExitCommand(perform: backToTop(using: scroller))
+        }
+    }
+
+    private static let topAnchor = "home.rails.top"
+
+    private var rails: some View {
         LazyVStack(alignment: .leading, spacing: NuvioTheme.spacing.rail.rowGap) {
             if !continueWatching.isEmpty {
                 ContinueWatchingRow(
@@ -242,6 +310,7 @@ struct HomeRailList: View {
         // The catalog rails. The two above override this for their own screens; an environment
         // value set closer to the leaf wins, so the order of these two modifiers is not a race.
         .customPosterScreen(.home, settings: settings)
+        .environment(\.railFocusGeneration, railFocusGeneration)
         // Claim focus for the content the moment there is a card to hold it. Without this the
         // sidebar pill — the only focusable view while the catalogs load — keeps focus and the
         // panel stays bloomed open, which is not how the app starts on Android.

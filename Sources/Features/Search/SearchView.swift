@@ -188,6 +188,8 @@ struct SearchView: View {
     @Environment(Router.self) private var router
 
     @State private var model = SearchViewModel()
+    @FocusState private var focusedTop: Top?
+    private enum Top: Hashable { case field }
 
     /// `discover_location == .searchTab` folds the Discover browser in below the search box,
     /// which is where it lives on Android when it has no sidebar entry of its own.
@@ -217,6 +219,7 @@ struct SearchView: View {
                     }
                     .frame(maxWidth: dp(560))
                     .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)
+                    .focused($focusedTop, equals: .field)
                     .onChange(of: model.query) { _, _ in
                         model.scheduleSearch(addonStore: addons)
                     }
@@ -232,6 +235,7 @@ struct SearchView: View {
         }
         .scrollClipDisabled()
         .background(colors.background)
+        .backReturnsToTop($focusedTop, landing: .field)
     }
 
     private var suggestions: some View {
@@ -270,7 +274,8 @@ struct SearchView: View {
             .frame(height: dp(320))
         } else if !model.hasSearched {
             if showsDiscover {
-                DiscoverBrowser()
+                // The search field is this screen's top, so Back goes there, not to Discover's chips.
+                DiscoverBrowser(handlesBack: false)
             } else {
                 EmptyStateView(
                     systemImage: "magnifyingglass",

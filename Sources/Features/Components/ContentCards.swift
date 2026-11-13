@@ -401,6 +401,7 @@ struct EpisodeCard: View {
     /// Absent where the card is drawn outside a detail screen — the in-player episode list has
     /// no room for a dialog and nothing to open one against.
     var onLongPress: (() -> Void)?
+    var focusBinding: FocusState<String?>.Binding?
 
     @State private var isFocused = false
     @State private var swallowsNextPress = false
@@ -456,6 +457,7 @@ struct EpisodeCard: View {
                 isFocused: isFocused && onLongPress != nil,
                 swallowsNextPress: $swallowsNextPress
             ) { onLongPress?() }
+            .focusedIfAvailable(focusBinding, equals: video.id)
             .onFocusChange { isFocused = $0 }
 
             VStack(alignment: .leading, spacing: NuvioTheme.spacing.xxs) {

@@ -61,7 +61,7 @@ platform refuses the upstream approach.
 | Discover | Parity for addon catalogs | Tail pagination, de-duplication, cancellation. |
 | Detail and metadata ✻ | Partial | Metadata, cast, companies, trailers, More like this, comments, parental guidance, and since 1.0.19 `videos[].rating` from addon metadata plus the rating-visibility rules including hide-until-watched. Since 1.0.27 the TMDB franchise-collection row and since 1.0.29 the episode-options overlay — which was the only route to marking a single episode watched without playing it, and there was none. Missing: the ratings tab's IMDb scores. |
 | Collections | Parity | Data shape, live folder sources, ordering, sync. `focusGifUrl`/`heroVideoUrl` retained but not rendered. |
-| Local library/progress ✻ | Parity | Save/remove, Continue Watching, watched threshold, per-profile persistence, account sync, removal from Continue Watching (1.0.18) and a sort control (1.0.19). **Until 1.0.36 neither a removal nor an un-marking survived an account sync** — see the 1.0.0 triage below. |
+| Local library/progress ✻ | Parity | Save/remove, Continue Watching, watched threshold, per-profile persistence, account sync, removal from Continue Watching (1.0.18) and a sort control (1.0.19). **Until 1.0.36 neither a removal nor an un-marking survived an account sync** — see the 1.0.0 triage below. **Through 1.0.63 a title watched on another device never reached Continue Watching** (#4): sync brought its resume point but no artwork, and the rail skips a row it cannot draw. Home now fetches the missing previews from the installed metadata addons, as upstream hydrates every entry ([RemoteProgressService.swift:373](../Sources/Data/RemoteProgressService.swift#L373)). |
 | Trakt | Parity | OAuth, progress, list reads, comments, related titles, scrobbling, `sync/watchlist` and `sync/history` writes. Upstream has no `sync/collection`; neither do we. |
 | MDBList | Parity for the viewer-visible surface | Was ratings only. Since 1.0.39 a third tracking account: device authorisation, watchlist and static lists in the Library, resume points, watched marks, watchlist writes and scrobbling — and the ratings now come from the account when no API key is set. Upstream's snapshot-and-journal delta engine is not ported; see below. |
 | Simkl | Parity | Five list states, remote resume points, scrobbling, `add-to-list`/`history` writes, the anime identity model since 1.0.22, and playback-session deletion since 1.0.26. Snapshot reconciliation does not apply here; see *Differences assumed*. |
@@ -139,11 +139,23 @@ path and AVFoundation refuses.
   priority controls and their DV7 stack — and it removes the need for the last of those.
 - **Supporter perks omitted.** Monetisation belongs to the official project.
 - **tvOS-native focus and geometry** rather than pixel-identical Compose.
-- **Back on a top-level screen leaves the app.** Upstream's root `BackHandler` opens the drawer;
-  every other Apple TV app treats that press as "go home", so the shell no longer handles it and
-  the menu is reached by moving left
+- **Back on a top-level screen goes to its top, then leaves the app.** Upstream's root
+  `BackHandler` opens the drawer; the Apple TV and Netflix apps instead return to the top of the
+  screen and leave on the next press, and that is what Home, Library, Search and Discover do
+  (#6): below the first rail or the filter chips, Back returns there; from there, it is
+  unhandled and the app leaves
+  ([HomeView.swift:187](../Sources/Features/Home/HomeView.swift#L187),
+  [FocusableCard.swift:419](../Sources/Features/Components/FocusableCard.swift#L419)). Back
+  never opens the menu, which is reached by moving left
   ([SidebarScaffold.swift:178](../Sources/Features/Shell/SidebarScaffold.swift#L178)). Pushed
-  screens and dialogs keep their own Back.
+  screens and dialogs keep their own Back. Upstream's drawer step is the one part not taken.
+- **Rails remember the card they were left on.** Upstream's `focusRestorer` on the home rows,
+  extended to the detail screen's rows: moving up or down lands on the card last focused in that
+  rail, or its first card (the episode in progress, for episodes). tvOS on its own picks the
+  geometrically nearest card. `defaultFocus(priority: .userInitiated)` is not honoured on entry
+  into a `focusSection`, so the rail redirects focus as it arrives
+  ([FocusableCard.swift:441](../Sources/Features/Components/FocusableCard.swift#L441)). Requested
+  in issue #6.
 - **`sidebar_collapsed_by_default` is not honoured.** Off, it left the panel open over disabled
   content with nothing focused — every screen, Settings included, out of reach — so the control
   is gone and a value synced from Android is ignored

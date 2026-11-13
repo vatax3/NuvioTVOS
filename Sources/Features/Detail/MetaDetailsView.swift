@@ -622,6 +622,8 @@ struct MetaDetailsView: View {
 // MARK: - Episodes (port of EpisodesSection)
 
 struct EpisodesSection: View {
+    /// The row's card focus, which `railFocusMemory` steers when D-pad travel enters it.
+    @FocusState private var focusedKey: String?
     @Environment(\.nuvioColors) private var colors
     @Environment(LibraryStore.self) private var library
     @Environment(AppSettings.self) private var settings
@@ -672,7 +674,8 @@ struct EpisodesSection: View {
                                     )
                                 ),
                                 action: { onPlay(episode) },
-                                onLongPress: { onLongPress(episode) }
+                                onLongPress: { onLongPress(episode) },
+                                focusBinding: $focusedKey
                             )
                             .id(episode.id)
                         }
@@ -692,6 +695,10 @@ struct EpisodesSection: View {
                 }
             }
         }
+        // A season not visited yet opens on the episode in progress, where the row is scrolled.
+        .railFocusMemory(
+            $focusedKey, keys: model.episodes.map(\.id), preferred: resumeEpisodeId
+        )
         .focusSection()
         // Cache the stills so the Continue Watching rail can show the episode the viewer
         // stopped on rather than the series backdrop.
@@ -745,6 +752,8 @@ struct TrailerItem: Identifiable, Hashable {
 /// through its own InnerTube extractor, which is the piece that would have to be ported for
 /// playback to happen on this screen.
 struct TrailerSection: View {
+    /// The row's card focus, which `railFocusMemory` steers when D-pad travel enters it.
+    @FocusState private var focusedKey: String?
     @Environment(\.nuvioColors) private var colors
     let trailers: [TrailerItem]
 
@@ -758,7 +767,7 @@ struct TrailerSection: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: NuvioTheme.spacing.lg) {
                     ForEach(trailers) { trailer in
-                        TrailerCard(trailer: trailer)
+                        TrailerCard(trailer: trailer, focusBinding: $focusedKey)
                     }
                 }
                 .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)
@@ -766,6 +775,7 @@ struct TrailerSection: View {
             }
             .scrollClipDisabled()
         }
+        .railFocusMemory($focusedKey, keys: trailers.map { "\($0.id)" })
         .focusSection()
     }
 }
@@ -773,6 +783,7 @@ struct TrailerSection: View {
 private struct TrailerCard: View {
     @Environment(\.nuvioColors) private var colors
     let trailer: TrailerItem
+    var focusBinding: FocusState<String?>.Binding?
 
     var body: some View {
         VStack(alignment: .leading, spacing: NuvioTheme.spacing.sm) {
@@ -790,6 +801,7 @@ private struct TrailerCard: View {
                 .clipped()
             }
             .buttonStyle(NuvioCardButtonStyle(cornerRadius: NuvioTheme.spacing.md))
+            .focusedIfAvailable(focusBinding, equals: "\(trailer.id)")
 
             Text(trailer.title)
                 .nuvioText(NuvioTextStyles.metadata)
@@ -809,6 +821,8 @@ private struct TrailerCard: View {
 // MARK: - Cast (port of CastSection)
 
 struct CastSection: View {
+    /// The row's card focus, which `railFocusMemory` steers when D-pad travel enters it.
+    @FocusState private var focusedKey: String?
     @Environment(\.nuvioColors) private var colors
     @Environment(Router.self) private var router
     let members: [MetaCastMember]
@@ -823,7 +837,7 @@ struct CastSection: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: NuvioTheme.spacing.lg) {
                     ForEach(members.prefix(24)) { member in
-                        CastMemberCard(member: member) {
+                        CastMemberCard(member: member, focusBinding: $focusedKey) {
                             // Only TMDB-sourced members carry an id, and the detail screen is
                             // entirely TMDB-backed — a plain addon credit has nowhere to go.
                             guard let tmdbId = member.tmdbId else { return }
@@ -838,6 +852,7 @@ struct CastSection: View {
             }
             .scrollClipDisabled()
         }
+        .railFocusMemory($focusedKey, keys: members.prefix(24).map { "\($0.id)" })
         .focusSection()
     }
 }
@@ -847,6 +862,7 @@ private struct CastMemberCard: View {
     @Environment(\.cardDepth) private var depth
 
     let member: MetaCastMember
+    var focusBinding: FocusState<String?>.Binding?
     let action: () -> Void
 
     @State private var isFocused = false
@@ -869,6 +885,7 @@ private struct CastMemberCard: View {
                 .cardDepth(.cast, cornerRadius: NuvioTheme.sizes.avatars.xl / 2)
             }
             .buttonStyle(NuvioCardButtonStyle(cornerRadius: NuvioTheme.sizes.avatars.xl / 2))
+            .focusedIfAvailable(focusBinding, equals: "\(member.id)")
             .onFocusChange { isFocused = $0 }
             // Credits keep their focus even with nowhere to go. Disabling them looks harmless
             // one card at a time, but an addon that supplies no TMDB ids — Cinemeta, for one —
@@ -897,6 +914,8 @@ private struct CastMemberCard: View {
 
 /// Logos from the TMDB enrichment, each opening that entity's catalogue.
 struct CompanySection: View {
+    /// The row's card focus, which `railFocusMemory` steers when D-pad travel enters it.
+    @FocusState private var focusedKey: String?
     @Environment(\.nuvioColors) private var colors
     @Environment(Router.self) private var router
 
@@ -916,7 +935,7 @@ struct CompanySection: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: NuvioTheme.spacing.lg) {
                     ForEach(companies) { company in
-                        CompanyCard(company: company) {
+                        CompanyCard(company: company, focusBinding: $focusedKey) {
                             guard let tmdbId = company.tmdbId else { return }
                             router.push(.tmdbBrowse(TMDBBrowseRequest(
                                 entity: isNetwork ? .network(tmdbId) : .company(tmdbId),
@@ -932,6 +951,10 @@ struct CompanySection: View {
             }
             .scrollClipDisabled()
         }
+        // Only the cards that can take focus: a company with no TMDB id is disabled.
+        .railFocusMemory(
+            $focusedKey, keys: companies.filter { $0.tmdbId != nil }.map { "\($0.id)" }
+        )
         .focusSection()
     }
 }
@@ -940,6 +963,7 @@ private struct CompanyCard: View {
     @Environment(\.nuvioColors) private var colors
 
     let company: MetaCompany
+    var focusBinding: FocusState<String?>.Binding?
     let action: () -> Void
 
     var body: some View {
@@ -962,6 +986,7 @@ private struct CompanyCard: View {
             .background(colors.backgroundCard)
         }
         .buttonStyle(NuvioCardButtonStyle(cornerRadius: NuvioTheme.radii.md))
+        .focusedIfAvailable(focusBinding, equals: "\(company.id)")
         .disabled(company.tmdbId == nil)
     }
 }

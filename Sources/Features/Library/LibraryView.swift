@@ -24,6 +24,7 @@ struct LibraryView: View {
     }
 
     @State private var filter: Filter = .all
+    @FocusState private var focusedFilter: Filter?
 
     private var columns: [GridItem] { metrics.gridColumns() }
 
@@ -73,6 +74,7 @@ struct LibraryView: View {
                             isSelected: filter == option,
                             action: { filter = option }
                         )
+                        .focused($focusedFilter, equals: option)
                     }
                 }
 
@@ -85,6 +87,7 @@ struct LibraryView: View {
         }
         .scrollClipDisabled()
         .background(colors.background)
+        .backReturnsToTop($focusedFilter, landing: filter)
         // The tab is restored rather than reset. `@State` cannot read the environment at
         // initialisation, so it is seeded here and written back on every change.
         .task { filter = Filter(rawValue: settings.layout.libraryFilter) ?? .all }

@@ -164,6 +164,9 @@ struct DiscoverBrowser: View {
     @Environment(Router.self) private var router
 
     @State private var model = DiscoverViewModel()
+    /// Off where another screen embeds the browser and owns its own top.
+    var handlesBack = true
+    @FocusState private var focusedType: ContentType?
 
     private var columns: [GridItem] { metrics.gridColumns() }
 
@@ -181,6 +184,7 @@ struct DiscoverBrowser: View {
             genreChips
             grid
         }
+        .backReturnsToTop($focusedType, landing: handlesBack ? model.selectedType : nil)
         .onAppear { model.ensureSelection(addons) }
         .onChange(of: model.selectedType) { _, _ in model.ensureSelection(addons) }
         .onChange(of: settings.catalogPresentation, initial: true) { _, presentation in
@@ -196,6 +200,7 @@ struct DiscoverBrowser: View {
                     isSelected: model.selectedType == type,
                     action: { model.selectedType = type }
                 )
+                .focused($focusedType, equals: type)
             }
         }
     }

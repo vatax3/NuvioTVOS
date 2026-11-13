@@ -410,3 +410,67 @@ struct RatingsStrip: View {
         value > 10 ? String(format: "%.0f", value) : String(format: "%.1f", value)
     }
 }
+
+extension View {
+    /// Back on a top-level screen (#6). From anywhere below the screen's top control it returns
+    /// there; on that control it is left unhandled, so the app leaves — the convention of the
+    /// Apple TV and Netflix apps. A `nil` landing opts out. Focus in the sidebar is outside this
+    /// subtree, so Back never reaches here from it and never touches the sidebar.
+    func backReturnsToTop<Value: Hashable>(
+        _ focus: FocusState<Value?>.Binding,
+        landing: Value?
+    ) -> some View {
+        onExitCommand(perform: focus.wrappedValue != nil ? nil : landing.map { value in
+            { focus.wrappedValue = value }
+        })
+    }
+}
+
+extension EnvironmentValues {
+    /// Bumped by a screen that sends focus back to its top, so every rail forgets where it was
+    /// left and the first one does not pull focus off its first card.
+    @Entry var railFocusGeneration = 0
+}
+
+extension View {
+    /// Where focus lands when the D-pad brings it into a rail from above or below: the card the
+    /// rail was last left on, or its first card. Port of Android's `focusRestorer` on the home
+    /// rows; tvOS on its own picks whichever card is geometrically nearest, which reads as random
+    /// from one press to the next (#6).
+    /// `preferred` replaces the first card for a rail not visited yet — the episode in progress.
+    func railFocusMemory(
+        _ focus: FocusState<String?>.Binding,
+        keys: [String],
+        preferred: String? = nil
+    ) -> some View {
+        modifier(RailFocusMemory(focus: focus, keys: keys, preferred: preferred))
+    }
+}
+
+/// `defaultFocus(priority: .userInitiated)` reads as the tool for this and is not honoured when
+/// focus crosses into a `focusSection` — checked in the simulator. So the rail watches focus
+/// arrive and, when it came from outside, moves it on to the card it should have landed on.
+private struct RailFocusMemory: ViewModifier {
+    @Environment(\.railFocusGeneration) private var generation
+    let focus: FocusState<String?>.Binding
+    let keys: [String]
+    let preferred: String?
+    @State private var remembered: String?
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: generation) { remembered = nil }
+            .onChange(of: focus.wrappedValue) { old, new in
+                guard let new, keys.contains(new) else { return }
+                let enteredFromOutside = old.map { !keys.contains($0) } ?? true
+                let target = [remembered, preferred].lazy
+                    .compactMap { $0 }.first(where: keys.contains) ?? keys.first
+                if enteredFromOutside, let target, target != new {
+                    focus.wrappedValue = target
+                    remembered = target
+                } else {
+                    remembered = new
+                }
+            }
+    }
+}
