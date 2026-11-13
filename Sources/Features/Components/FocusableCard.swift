@@ -426,6 +426,18 @@ extension View {
     }
 }
 
+/// The focus value of a card in a rail. Home's rails share one `@FocusState`, and a title often
+/// sits in two of them at once — started in Continue Watching and still in Popular. Keyed by the
+/// title alone, both cards answered to one value: focus sent to one could land on the other, and
+/// each rail's memory pulled it back, so focus stuck bouncing between the rails (#6). A scope per
+/// rail keeps the values apart; `nil` leaves the key as it was, for screens with one rail per
+/// binding.
+enum RailFocusKey {
+    static func make(_ scope: String?, _ key: String) -> String {
+        scope.map { "\($0)#\(key)" } ?? key
+    }
+}
+
 extension EnvironmentValues {
     /// Bumped by a screen that sends focus back to its top, so every rail forgets where it was
     /// left and the first one does not pull focus off its first card.

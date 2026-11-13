@@ -143,8 +143,9 @@ path and AVFoundation refuses.
   `BackHandler` opens the drawer; the Apple TV and Netflix apps instead return to the top of the
   screen and leave on the next press, and that is what Home, Library, Search and Discover do
   (#6): below the first rail or the filter chips, Back returns there; from there, it is
-  unhandled and the app leaves
-  ([HomeView.swift:187](../Sources/Features/Home/HomeView.swift#L187),
+  unhandled and the app leaves. On Home, Back inside a rail first returns to that rail's first
+  card, then to the top
+  ([HomeView.swift:179](../Sources/Features/Home/HomeView.swift#L179),
   [FocusableCard.swift:419](../Sources/Features/Components/FocusableCard.swift#L419)). Back
   never opens the menu, which is reached by moving left
   ([SidebarScaffold.swift:178](../Sources/Features/Shell/SidebarScaffold.swift#L178)). Pushed
@@ -154,8 +155,10 @@ path and AVFoundation refuses.
   rail, or its first card (the episode in progress, for episodes). tvOS on its own picks the
   geometrically nearest card. `defaultFocus(priority: .userInitiated)` is not honoured on entry
   into a `focusSection`, so the rail redirects focus as it arrives
-  ([FocusableCard.swift:441](../Sources/Features/Components/FocusableCard.swift#L441)). Requested
-  in issue #6.
+  ([FocusableCard.swift:453](../Sources/Features/Components/FocusableCard.swift#L453)). Requested
+  in issue #6. Home's rails share one focus binding, so each rail scopes its cards' focus values
+  (`RailFocusKey`): through 1.0.64 a title in both Continue Watching and a catalog gave two cards
+  one value, and focus bounced between the rails.
 - **`sidebar_collapsed_by_default` is not honoured.** Off, it left the panel open over disabled
   content with nothing focused — every screen, Settings included, out of reach — so the control
   is gone and a value synced from Android is ignored

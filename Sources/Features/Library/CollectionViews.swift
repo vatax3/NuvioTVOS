@@ -13,6 +13,8 @@ struct CollectionFolderCard: View {
 
     let folder: CollectionFolder
     var focusBinding: FocusState<String?>.Binding?
+    /// See `ContentCard.focusKey`.
+    var focusKey: String?
     /// Told when this card gains focus, so the screen around it can follow the cursor. Home
     /// uses it to drive the hero; the library grid has nothing above the rail and passes nil.
     var onFocus: (() -> Void)?
@@ -48,7 +50,7 @@ struct CollectionFolderCard: View {
             .clipped()
         }
         .buttonStyle(NuvioCardButtonStyle(cornerRadius: metrics.cornerRadius))
-        .modifier(OptionalCardFocus(binding: focusBinding, key: folder.id))
+        .modifier(OptionalCardFocus(binding: focusBinding, key: focusKey ?? folder.id))
         .onFocusChange { focused in
             guard focused else { return }
             onFocus?()
@@ -98,9 +100,13 @@ struct CollectionRail: View {
     /// Home's hero follows the cursor onto a folder card the same way it follows a poster —
     /// see `CollectionFolder.heroPreview(in:)` for what a folder puts there.
     var onFocusItem: ((MetaPreview) -> Void)?
+    /// Keeps this rail's focus values apart from other rails on one binding (`RailFocusKey`).
+    var focusScope: String?
 
     @FocusState private var localFocus: String?
     private var focus: FocusState<String?>.Binding { focusBinding ?? $localFocus }
+
+    private func key(_ folder: CollectionFolder) -> String { RailFocusKey.make(focusScope, folder.id) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: NuvioTheme.components.row.titleBottomSpacing) {
@@ -121,6 +127,7 @@ struct CollectionRail: View {
                         CollectionFolderCard(
                             folder: folder,
                             focusBinding: focus,
+                            focusKey: key(folder),
                             onFocus: onFocusItem.map { report in
                                 { report(folder.heroPreview(in: collection)) }
                             }
@@ -129,6 +136,7 @@ struct CollectionRail: View {
                                 CollectionFolderRequest(collectionId: collection.id, folderId: folder.id)
                             ))
                         }
+                        .id(key(folder))
                     }
                 }
                 .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)
@@ -136,7 +144,7 @@ struct CollectionRail: View {
             }
             .clippedHorizontalScroller()
         }
-        .railFocusMemory(focus, keys: collection.folders.map(\.id))
+        .railFocusMemory(focus, keys: collection.folders.map(key))
         .focusSection()
     }
 }

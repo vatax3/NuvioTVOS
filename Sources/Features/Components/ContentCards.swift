@@ -17,6 +17,9 @@ struct ContentCard: View {
     /// `.focused()` only has an effect on the focusable view itself, so callers hand the
     /// binding down to the card rather than wrapping it from outside.
     var focusBinding: FocusState<String?>.Binding?
+    /// The value this card answers to in `focusBinding`; the title's `rowKey` unless the rail
+    /// scopes it (see `RailFocusKey`).
+    var focusKey: String?
     var action: () -> Void
 
     @State private var isFocused = false
@@ -85,7 +88,7 @@ struct ContentCard: View {
                 router.posterOptions = .init(preview: item)
             }
             .accessibilityIdentifier("card.poster.\(item.id)")
-            .focusedIfAvailable(focusBinding, equals: item.rowKey)
+            .focusedIfAvailable(focusBinding, equals: focusKey ?? item.rowKey)
             .onFocusChange { focused in
                 guard focused != isFocused else { return }
                 isFocused = focused
@@ -265,6 +268,8 @@ struct ContinueWatchingCard: View {
     var blursNextUp: Bool = false
     var onFocus: ((MetaPreview) -> Void)?
     var focusBinding: FocusState<String?>.Binding?
+    /// See `ContentCard.focusKey`.
+    var focusKey: String?
     var action: () -> Void
 
     @State private var isFocused = false
@@ -360,7 +365,7 @@ struct ContinueWatchingCard: View {
                 )
             }
             .accessibilityIdentifier("card.continue.\(entry.preview.id)")
-            .focusedIfAvailable(focusBinding, equals: entry.preview.rowKey)
+            .focusedIfAvailable(focusBinding, equals: focusKey ?? entry.preview.rowKey)
             .onFocusChange { focused in
                 isFocused = focused
                 if focused { onFocus?(entry.preview) }

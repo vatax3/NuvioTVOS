@@ -4,8 +4,8 @@ import XCTest
 ///
 /// Reported: moving up or down landed "randomly" in the next rail — tvOS picks whichever card is
 /// geometrically nearest — and Back left the app from anywhere on the screen. A rail now returns
-/// to the card it was left on (its first, if never visited), as Android's `focusRestorer` does,
-/// and Back from below the first rail goes back to the top before a second press leaves.
+/// to the card it was left on (its first, if never visited), as Android's `focusRestorer` does.
+/// Back goes to the start of the rail, then to the top, and only then leaves.
 final class RailFocusUITests: XCTestCase {
     private var app: XCUIApplication!
 
@@ -64,15 +64,26 @@ final class RailFocusUITests: XCTestCase {
         )
     }
 
-    func testBackGoesToTheTopThenLeaves() {
+    func testBackGoesToTheRailStartThenTheTopThenLeaves() {
         reachFirstCatalogRail()
         press(.down)
+        let railStartX = focusedCard.frame.minX
+        press(.right, times: 3)
+        let deepX = focusedCard.frame.minX
+        let deepY = focusedCard.frame.midY
+
+        press(.menu)
+        XCTAssertEqual(app.state, .runningForeground, "Back inside a rail should stay in the app")
+        XCTAssertTrue(focusedCard.identifier.hasPrefix("card.poster."), "Back should stay in the rail")
+        XCTAssertEqual(focusedCard.frame.midY, deepY, accuracy: 40, "Back should stay in the rail")
+        XCTAssertLessThan(focusedCard.frame.minX, deepX, "Back should go to the start of the rail")
+        XCTAssertEqual(focusedCard.frame.minX, railStartX, accuracy: 40)
 
         press(.menu)
         XCTAssertEqual(app.state, .runningForeground, "Back below the top should stay in the app")
         XCTAssertTrue(
             app.buttons["card.continue.harness-resume"].hasFocus,
-            "Back below the top should return to the first card of the first rail"
+            "Back from the start of a rail should return to the first card of the first rail"
         )
 
         XCUIRemote.shared.press(.menu)
@@ -80,6 +91,88 @@ final class RailFocusUITests: XCTestCase {
             app.wait(for: .runningBackground, timeout: 10),
             "Back from the top should leave the app"
         )
+    }
+}
+
+/// Reported after 1.0.64: focus "gets stuck" between Continue Watching and the rail under it
+/// (#6). Both rails list the same title here, which is the ordinary case — a popular film
+/// started and still in the catalogue.
+final class SharedTitleRailFocusUITests: XCTestCase {
+    private func focusedCard(_ app: XCUIApplication) -> XCUIElement {
+        app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'card.' AND hasFocus == true")
+        ).firstMatch
+    }
+
+    /// Focus over `duration`, sampled; a settled move shows one identifier.
+    private func samples(_ app: XCUIApplication, over duration: TimeInterval = 2) -> [String] {
+        var seen: [String] = []
+        let end = Date().addingTimeInterval(duration)
+        while Date() < end {
+            let id = focusedCard(app).exists ? focusedCard(app).identifier : "-"
+            if seen.last != id { seen.append(id) }
+            usleep(150_000)
+        }
+        return seen
+    }
+
+    func testFocusSettlesBetweenRailsSharingATitle() {
+        let probe = XCUIApplication()
+        probe.launchArguments = ["-nuvioUITesting", "-startTab", "home", "-nuvioLibraryHarness"]
+        probe.launch()
+        XCTAssertTrue(probe.buttons["card.continue.harness-resume"].waitForExistence(timeout: 30))
+        XCTAssertTrue(probe.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'card.poster.'")
+        ).firstMatch.waitForExistence(timeout: 45), "the catalogs should load")
+        sleep(2)
+        var firstPoster: String?
+        for _ in 0..<6 {
+            XCUIRemote.shared.press(.down)
+            usleep(900_000)
+            let id = focusedCard(probe).identifier
+            if id.hasPrefix("card.poster.") { firstPoster = id; break }
+        }
+        guard let firstPoster else { return XCTFail("no catalog poster below Continue Watching") }
+        let shared = String(firstPoster.dropFirst("card.poster.".count))
+        probe.terminate()
+
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "-nuvioUITesting", "-startTab", "home", "-nuvioLibraryHarness",
+            "-nuvioHarnessResumeId", shared
+        ]
+        app.launch()
+        let sharedCard = app.buttons["card.continue.\(shared)"].waitForExistence(timeout: 45)
+        XCTAssertTrue(
+            sharedCard,
+            "the shared title should reach Continue Watching"
+        )
+        sleep(2)
+
+        var log: [(press: String, seen: [String])] = []
+        for step in 0..<4 {
+            let press: XCUIRemote.Button = step.isMultiple(of: 2) ? .down : .up
+            XCUIRemote.shared.press(press)
+            log.append((step.isMultiple(of: 2) ? "down" : "up", samples(app)))
+        }
+        print("SHARED-TITLE FOCUS LOG\n" + log.map { "\($0.press): \($0.seen)" }.joined(separator: "\n"))
+        for entry in log {
+            // The card left, then the card reached: anything more is focus bouncing.
+            XCTAssertLessThanOrEqual(
+                entry.seen.count, 2, "\(entry.press) should settle on one card: \(entry.seen)"
+            )
+            if entry.press == "down" {
+                XCTAssertTrue(
+                    entry.seen.last?.hasPrefix("card.poster.") == true,
+                    "down should end on the catalog: \(entry.seen)"
+                )
+            } else {
+                XCTAssertTrue(
+                    entry.seen.last?.hasPrefix("card.continue.") == true,
+                    "up should end on Continue Watching: \(entry.seen)"
+                )
+            }
+        }
     }
 }
 

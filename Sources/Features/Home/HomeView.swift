@@ -146,57 +146,69 @@ struct HomeRailList: View {
         )
     }
 
-    /// The card that should own focus when Home first has something to show — Continue
-    /// Watching wins when present, then whatever leads the rails.
-    private var firstCardKey: String? {
-        continueWatching.first?.preview.rowKey
-            ?? pinnedCollections.first?.folders.first?.id
-            ?? displayRows.compactMap { row -> String? in
-                switch row {
-                case .catalog(let catalog): return catalog.items.first?.rowKey
-                case .collection(let collection): return collection.folders.first?.id
-                }
-            }.first
-    }
+    private static let continueScope = "continue"
 
-    /// The cards of the rail at the top of the screen, in the order `body` lays rails out.
-    private var firstRailKeys: Set<String> {
-        if !continueWatching.isEmpty { return Set(continueWatching.map(\.preview.rowKey)) }
-        if let collection = pinnedCollections.first { return Set(collection.folders.map(\.id)) }
+    /// Every rail's focus keys, top to bottom, in the order `rails` lays them out — scoped per
+    /// rail, since one title can sit in several (`RailFocusKey`). Empty rails are left out.
+    private var railKeys: [[String]] {
+        var rails: [[String]] = [
+            continueWatching.map { RailFocusKey.make(Self.continueScope, $0.preview.rowKey) }
+        ]
+        for collection in pinnedCollections {
+            rails.append(collection.folders.map { RailFocusKey.make(collection.homeRowKey, $0.id) })
+        }
         for row in displayRows {
             switch row {
-            case .catalog(let catalog) where !catalog.items.isEmpty:
-                return Set(catalog.items.map(\.rowKey))
+            case .catalog(let catalog):
+                rails.append(catalog.items.map { RailFocusKey.make(catalog.id, $0.rowKey) })
             case .collection(let collection):
-                return Set(collection.folders.map(\.id))
-            default:
-                continue
+                rails.append(collection.folders.map { RailFocusKey.make(collection.homeRowKey, $0.id) })
             }
         }
-        return []
+        return rails.filter { !$0.isEmpty }
     }
 
-    /// Back from below the first rail returns there; from the first rail, or with focus out of
-    /// the rails, it is not handled and leaves the app. The convention of the Apple TV and
-    /// Netflix apps, and a press that never touches the sidebar (#6).
-    ///
-    /// The first rail is usually no longer in the tree by then — the stack is lazy — so the
-    /// screen scrolls back first and focus follows once the card exists, retried the same way as
-    /// the launch claim below. Every rail's memory is cleared too: back at the top is a fresh
-    /// start, and the first rail would otherwise pull focus on to the card it was last left on.
-    private func backToTop(using scroller: ScrollViewProxy) -> (() -> Void)? {
-        guard let focused = focusedCardKey, !firstRailKeys.contains(focused),
-              let first = firstCardKey
+    /// The card that should own focus when Home first has something to show — Continue
+    /// Watching wins when present, then whatever leads the rails.
+    private var firstCardKey: String? { railKeys.first?.first }
+
+    /// Back on Home, one step at a time (#6): to the start of the rail focus is in, then to the
+    /// first card of the top rail, then — from there, or with focus out of the rails — it is not
+    /// handled and the app leaves. Close to the Apple TV and Netflix apps, and a press that never
+    /// touches the sidebar.
+    private func backAction(using scroller: ScrollViewProxy) -> (() -> Void)? {
+        guard let focused = focusedCardKey else { return nil }
+        let rails = railKeys
+        guard let rail = rails.first(where: { $0.contains(focused) }),
+              let railStart = rail.first
         else { return nil }
+        if focused != railStart {
+            return { moveFocus(to: railStart, using: scroller, scrollingToTop: false) }
+        }
+        guard let top = rails.first?.first, !rails[0].contains(focused) else { return nil }
         return {
+            // Back at the top is a fresh start: every rail forgets where it was left, or the
+            // first would pull focus on to the card it was last left on.
             railFocusGeneration += 1
-            withAnimation { scroller.scrollTo(Self.topAnchor, anchor: .top) }
-            Task { @MainActor in
-                for delay in [50, 150, 250, 400, 600] {
-                    try? await Task.sleep(for: .milliseconds(delay))
-                    if let key = focusedCardKey, firstRailKeys.contains(key) { return }
-                    focusedCardKey = first
-                }
+            moveFocus(to: top, using: scroller, scrollingToTop: true)
+        }
+    }
+
+    /// The card may not be in the tree — rails and the stack around them are lazy — so the
+    /// screen scrolls to it first and focus follows once it exists, retried the same way as the
+    /// launch claim below.
+    private func moveFocus(to key: String, using scroller: ScrollViewProxy, scrollingToTop: Bool) {
+        withAnimation {
+            if scrollingToTop {
+                scroller.scrollTo(Self.topAnchor, anchor: .top)
+            }
+            scroller.scrollTo(key)
+        }
+        Task { @MainActor in
+            for delay in [50, 150, 250, 400, 600] {
+                try? await Task.sleep(for: .milliseconds(delay))
+                if focusedCardKey == key { return }
+                focusedCardKey = key
             }
         }
     }
@@ -246,7 +258,7 @@ struct HomeRailList: View {
         ScrollViewReader { scroller in
             rails
                 .id(Self.topAnchor)
-                .onExitCommand(perform: backToTop(using: scroller))
+                .onExitCommand(perform: backAction(using: scroller))
         }
     }
 
@@ -262,7 +274,8 @@ struct HomeRailList: View {
                     onSelect: { entry in
                         router.openDetail(entry.preview)
                     },
-                    cardFocus: $focusedCardKey
+                    cardFocus: $focusedCardKey,
+                    focusScope: Self.continueScope
                 )
                 // Continue Watching is gated separately from the catalog rows below it: it is
                 // the one rail a viewer sees on every launch, so it is also the one whose extra
@@ -274,7 +287,8 @@ struct HomeRailList: View {
                 CollectionRail(
                     collection: collection,
                     focusBinding: $focusedCardKey,
-                    onFocusItem: { model.focusedItem = $0 }
+                    onFocusItem: { model.focusedItem = $0 },
+                    focusScope: collection.homeRowKey
                 )
                 .customPosterScreen(.collections, settings: settings)
             }
@@ -295,14 +309,16 @@ struct HomeRailList: View {
                             onReachEnd: {
                                 Task { await model.loadMore(row) }
                             },
-                            cardFocus: $focusedCardKey
+                            cardFocus: $focusedCardKey,
+                            focusScope: row.id
                         )
                     }
                 case .collection(let collection):
                     CollectionRail(
                         collection: collection,
                         focusBinding: $focusedCardKey,
-                        onFocusItem: { model.focusedItem = $0 }
+                        onFocusItem: { model.focusedItem = $0 },
+                        focusScope: collection.homeRowKey
                     )
                 }
             }

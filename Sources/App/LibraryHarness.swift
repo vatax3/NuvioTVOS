@@ -30,6 +30,10 @@ enum LibraryHarness {
     static let syncedArgument = "-nuvioSyncedProgressHarness"
     static let syncedId = "tt0111161"
 
+    /// `-nuvioHarnessResumeId <id>`: a resume point on a title a catalog also lists, so the same
+    /// title sits in two rails at once (#6). Like the synced row, its artwork comes from an addon.
+    static let sharedResumeArgument = "-nuvioHarnessResumeId"
+
     private static func preview(id: String, name: String) -> MetaPreview {
         MetaPreview(id: id, type: .movie, rawType: "movie", name: name)
     }
@@ -71,6 +75,21 @@ enum LibraryHarness {
                 positionSeconds: 1_800,
                 durationSeconds: 8_500,
                 updatedAt: Date().addingTimeInterval(-60)
+            ))
+        }
+
+        let arguments = ProcessInfo.processInfo.arguments
+        if let flag = arguments.firstIndex(of: sharedResumeArgument), flag + 1 < arguments.count {
+            let id = arguments[flag + 1]
+            library.adoptProgress(WatchProgress(
+                contentId: id,
+                contentType: "movie",
+                videoId: id,
+                season: nil,
+                episode: nil,
+                positionSeconds: 1_800,
+                durationSeconds: 8_500,
+                updatedAt: Date().addingTimeInterval(60)
             ))
         }
     }

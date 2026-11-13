@@ -23,9 +23,13 @@ struct CatalogRowView: View {
     var onReachEnd: (() -> Void)?
     /// Lets the owning screen drive focus onto a specific card (used for launch focus).
     var cardFocus: FocusState<String?>.Binding?
+    /// Keeps this rail's focus values apart from other rails on one binding (`RailFocusKey`).
+    var focusScope: String?
 
     @FocusState private var localFocus: String?
     private var focus: FocusState<String?>.Binding { cardFocus ?? $localFocus }
+
+    private func key(_ item: MetaPreview) -> String { RailFocusKey.make(focusScope, item.rowKey) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: NuvioTheme.components.row.titleBottomSpacing) {
@@ -39,7 +43,7 @@ struct CatalogRowView: View {
             }
         }
         .padding(.vertical, NuvioTheme.components.row.verticalPadding)
-        .railFocusMemory(focus, keys: items.map(\.rowKey))
+        .railFocusMemory(focus, keys: items.map(key))
         .focusSection()
     }
 
@@ -72,13 +76,14 @@ struct CatalogRowView: View {
                             allowsBackdropExpand: backdropExpandEnabled,
                             onFocus: { focused in
                                 onFocusItem?(focused)
-                                bringIntoView(focused.rowKey, using: scroller)
+                                bringIntoView(key(focused), using: scroller)
                                 if index >= items.count - 4 { onReachEnd?() }
                             },
                             focusBinding: focus,
+                            focusKey: key(item),
                             action: { onSelect(item) }
                         )
-                        .id(item.rowKey)
+                        .id(key(item))
                     }
 
                     if showsSeeAll, let onSeeAll {
@@ -157,9 +162,15 @@ struct ContinueWatchingRow: View {
     var onFocusItem: ((MetaPreview) -> Void)?
     var onSelect: (ContinueWatchingEntry) -> Void
     var cardFocus: FocusState<String?>.Binding?
+    /// Keeps this rail's focus values apart from other rails on one binding (`RailFocusKey`).
+    var focusScope: String?
 
     @FocusState private var localFocus: String?
     private var focus: FocusState<String?>.Binding { cardFocus ?? $localFocus }
+
+    private func key(_ entry: ContinueWatchingEntry) -> String {
+        RailFocusKey.make(focusScope, entry.preview.rowKey)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: NuvioTheme.components.row.titleBottomSpacing) {
@@ -178,8 +189,10 @@ struct ContinueWatchingRow: View {
                             blursNextUp: settings.layout.blurContinueWatchingNextUp,
                             onFocus: onFocusItem,
                             focusBinding: focus,
+                            focusKey: key(entry),
                             action: { onSelect(entry) }
                         )
+                        .id(key(entry))
                     }
                 }
                 .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)
@@ -188,7 +201,7 @@ struct ContinueWatchingRow: View {
             .clippedHorizontalScroller()
         }
         .padding(.vertical, NuvioTheme.components.row.verticalPadding)
-        .railFocusMemory(focus, keys: entries.map(\.preview.rowKey))
+        .railFocusMemory(focus, keys: entries.map(key))
         .focusSection()
     }
 }
