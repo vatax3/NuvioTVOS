@@ -40,6 +40,16 @@
       ],
       "versions": [
         {
+          "version": "1.0.65",
+          "buildVersion": "67",
+          "date": "2026-11-13",
+          "localizedDescription": "### Changed\n- **Back on Home goes one step at a time.** Inside a rail, Back first returns to that rail's first card, then to the first card of the top rail (Continue Watching when it is shown), and only then leaves the app.\n\n### Fixed\n- **Focus no longer gets stuck between Continue Watching and the rail below it.** When the same title appeared in two rails at once, such as a film started in Continue Watching that is also listed in Popular, moving up or down could bounce focus between the two rails. Each rail now keeps its cards' focus separate.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.65/Nuvio-1.0.65-tvOS-unsigned.ipa",
+          "size": 41248673,
+          "minOSVersion": "18.0",
+          "sha256": "e78948085757699bcfd2742c0364fdb28169182356638d481465dc61b0e0ab0f"
+        },
+        {
           "version": "1.0.64",
           "buildVersion": "66",
           "date": "2026-11-13",
@@ -566,11 +576,11 @@
         ],
         "privacy": {}
       },
-      "version": "1.0.64",
+      "version": "1.0.65",
       "versionDate": "2026-11-13",
-      "versionDescription": "### Fixed\n- **Continue Watching shows titles watched on other devices.** Titles started on a phone or another TV arrived through account sync without artwork, and the rail skipped them, so it showed only what was played on this Apple TV. Their posters are now fetched from the installed addons. The same applies to resume points from MDBList.\n\n### Changed\n- **Rows remember where they were left.** Moving up or down returns to the last poster focused in that row, or to its first poster if the row has not been visited yet. This covers the Home rows, collections and the rows of a title's detail page; in the episode list, a season not visited yet opens on the episode in progress.\n- **Back returns to the top before leaving the app.** On Home, Library, Search and Discover, Back first moves to the top of the screen (the first row, the filters or the search field), and a second press leaves the app. Back never opens the sidebar.",
-      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.64/Nuvio-1.0.64-tvOS-unsigned.ipa",
-      "size": 41246697,
+      "versionDescription": "### Changed\n- **Back on Home goes one step at a time.** Inside a rail, Back first returns to that rail's first card, then to the first card of the top rail (Continue Watching when it is shown), and only then leaves the app.\n\n### Fixed\n- **Focus no longer gets stuck between Continue Watching and the rail below it.** When the same title appeared in two rails at once, such as a film started in Continue Watching that is also listed in Popular, moving up or down could bounce focus between the two rails. Each rail now keeps its cards' focus separate.",
+      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.65/Nuvio-1.0.65-tvOS-unsigned.ipa",
+      "size": 41248673,
       "minOSVersion": "18.0"
     }
   ],
