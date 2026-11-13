@@ -23,3 +23,7 @@ Packages/*/.build/
 # The pin file is the exception, and it is source: `Package.swift` pins only to a minor, so this
 # is what makes a release build reproducible rather than "whatever resolved that afternoon".
 !Packages/*/Package.resolved
+
+# Local agent tooling (skills, settings) — kept out of the repository
+.agents/
+.claude/
