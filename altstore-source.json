@@ -40,6 +40,16 @@
       ],
       "versions": [
         {
+          "version": "1.0.64",
+          "buildVersion": "66",
+          "date": "2026-11-13",
+          "localizedDescription": "### Fixed\n- **Continue Watching shows titles watched on other devices.** Titles started on a phone or another TV arrived through account sync without artwork, and the rail skipped them, so it showed only what was played on this Apple TV. Their posters are now fetched from the installed addons. The same applies to resume points from MDBList.\n\n### Changed\n- **Rows remember where they were left.** Moving up or down returns to the last poster focused in that row, or to its first poster if the row has not been visited yet. This covers the Home rows, collections and the rows of a title's detail page; in the episode list, a season not visited yet opens on the episode in progress.\n- **Back returns to the top before leaving the app.** On Home, Library, Search and Discover, Back first moves to the top of the screen (the first row, the filters or the search field), and a second press leaves the app. Back never opens the sidebar.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.64/Nuvio-1.0.64-tvOS-unsigned.ipa",
+          "size": 41246697,
+          "minOSVersion": "18.0",
+          "sha256": "1e367aae4514792fac657a02fa95d9f4eac0dc84fb6a22a8b7635fada63f9aae"
+        },
+        {
           "version": "1.0.63",
           "buildVersion": "65",
           "date": "2026-11-09",
@@ -556,11 +566,11 @@
         ],
         "privacy": {}
       },
-      "version": "1.0.63",
-      "versionDate": "2026-11-09",
-      "versionDescription": "### Fixed\n- **Sources that only point to a YouTube video** (for example from news addons) now open in the YouTube app when selected, from the source list and from the in-player source list. Previously selecting one did nothing. They show as playable only when the YouTube app is installed.",
-      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.63/Nuvio-1.0.63-tvOS-unsigned.ipa",
-      "size": 41215482,
+      "version": "1.0.64",
+      "versionDate": "2026-11-13",
+      "versionDescription": "### Fixed\n- **Continue Watching shows titles watched on other devices.** Titles started on a phone or another TV arrived through account sync without artwork, and the rail skipped them, so it showed only what was played on this Apple TV. Their posters are now fetched from the installed addons. The same applies to resume points from MDBList.\n\n### Changed\n- **Rows remember where they were left.** Moving up or down returns to the last poster focused in that row, or to its first poster if the row has not been visited yet. This covers the Home rows, collections and the rows of a title's detail page; in the episode list, a season not visited yet opens on the episode in progress.\n- **Back returns to the top before leaving the app.** On Home, Library, Search and Discover, Back first moves to the top of the screen (the first row, the filters or the search field), and a second press leaves the app. Back never opens the sidebar.",
+      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.64/Nuvio-1.0.64-tvOS-unsigned.ipa",
+      "size": 41246697,
       "minOSVersion": "18.0"
     }
   ],
