@@ -40,6 +40,16 @@
       ],
       "versions": [
         {
+          "version": "1.0.66",
+          "buildVersion": "68",
+          "date": "2026-11-15",
+          "localizedDescription": "### Changed\n- **The source list fills in as each addon answers.** Sources appear as soon as the first addon responds, instead of waiting for every addon to answer or time out, so one addon with nothing for a title no longer holds back all the others (#8). Plugin scrapers now search at the same time as addons rather than after them.\n- **Source sections follow the order of installed addons**, with plugin sections after them in the order they answer.\n- **Addon filter chips show each source's progress.** Every addon and plugin being searched has a chip from the start: it pulses while loading, becomes selectable once it has sources, and turns red and disappears if it finishes with none. The refresh button spins while any source is still searching.\n- **Automatic source selection shows a \"Finding stream source\" screen** while it waits, then starts playback or, if nothing suitable is found, shows the source list.\n- **Stream Selection Timeout** (Settings → Playback) is now counted from the start of the search and offers Instant, 1–10, 15, 20, 25 and 30 seconds, and Unlimited. Instant picks from the first answer; Unlimited keeps checking each answer until every source has responded, up to 60 seconds. The setting is shown whether or not automatic selection is on, since it also applies when continuing a series with the same release.\n- **Refreshing the source list** returns the filter to All and shows the loading state until the first source answers.\n- **Instant playback preparation** for debrid sources starts as soon as the first cached sources appear, instead of after the search finishes.\n\n### Fixed\n- **The loading spinner no longer appears over a video that is still playing** with the AetherEngine player. A brief reconnection to the source was shown as buffering, and could make the player reload a session that was playing normally.",
+          "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.66/Nuvio-1.0.66-tvOS-unsigned.ipa",
+          "size": 41281708,
+          "minOSVersion": "18.0",
+          "sha256": "819ca9ee3bad72c123af22d852559b3dbe32d41bd1131b6cd2118fb46ab7ccea"
+        },
+        {
           "version": "1.0.65",
           "buildVersion": "67",
           "date": "2026-11-13",
@@ -576,11 +586,11 @@
         ],
         "privacy": {}
       },
-      "version": "1.0.65",
-      "versionDate": "2026-11-13",
-      "versionDescription": "### Changed\n- **Back on Home goes one step at a time.** Inside a rail, Back first returns to that rail's first card, then to the first card of the top rail (Continue Watching when it is shown), and only then leaves the app.\n\n### Fixed\n- **Focus no longer gets stuck between Continue Watching and the rail below it.** When the same title appeared in two rails at once, such as a film started in Continue Watching that is also listed in Popular, moving up or down could bounce focus between the two rails. Each rail now keeps its cards' focus separate.",
-      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.65/Nuvio-1.0.65-tvOS-unsigned.ipa",
-      "size": 41248673,
+      "version": "1.0.66",
+      "versionDate": "2026-11-15",
+      "versionDescription": "### Changed\n- **The source list fills in as each addon answers.** Sources appear as soon as the first addon responds, instead of waiting for every addon to answer or time out, so one addon with nothing for a title no longer holds back all the others (#8). Plugin scrapers now search at the same time as addons rather than after them.\n- **Source sections follow the order of installed addons**, with plugin sections after them in the order they answer.\n- **Addon filter chips show each source's progress.** Every addon and plugin being searched has a chip from the start: it pulses while loading, becomes selectable once it has sources, and turns red and disappears if it finishes with none. The refresh button spins while any source is still searching.\n- **Automatic source selection shows a \"Finding stream source\" screen** while it waits, then starts playback or, if nothing suitable is found, shows the source list.\n- **Stream Selection Timeout** (Settings → Playback) is now counted from the start of the search and offers Instant, 1–10, 15, 20, 25 and 30 seconds, and Unlimited. Instant picks from the first answer; Unlimited keeps checking each answer until every source has responded, up to 60 seconds. The setting is shown whether or not automatic selection is on, since it also applies when continuing a series with the same release.\n- **Refreshing the source list** returns the filter to All and shows the loading state until the first source answers.\n- **Instant playback preparation** for debrid sources starts as soon as the first cached sources appear, instead of after the search finishes.\n\n### Fixed\n- **The loading spinner no longer appears over a video that is still playing** with the AetherEngine player. A brief reconnection to the source was shown as buffering, and could make the player reload a session that was playing normally.",
+      "downloadURL": "https://github.com/vatax3/NuvioTVOS/releases/download/v1.0.66/Nuvio-1.0.66-tvOS-unsigned.ipa",
+      "size": 41281708,
       "minOSVersion": "18.0"
     }
   ],
