@@ -167,6 +167,18 @@ final class AetherEngineAdapter {
             .receive(on: RunLoop.main)
             .sink { [weak self] phase in self?.absorb(phase) }
             .store(in: &sinks)
+        // The phase stays `.stalled` while the buffer ahead drains, so the moment it runs out
+        // arrives here and not as a phase change.
+        engine.$isBuffering
+            .receive(on: RunLoop.main)
+            .sink { [weak self] starved in
+                guard let self else { return }
+                isBuffering = AetherBufferingPolicy.showsBuffering(
+                    AetherBufferingPolicy.Phase(engine.playbackPhase),
+                    transportStarved: starved
+                )
+            }
+            .store(in: &sinks)
         engine.$duration
             .receive(on: RunLoop.main)
             .sink { [weak self] in self?.duration = $0 }
@@ -292,12 +304,10 @@ final class AetherEngineAdapter {
     }
 
     private func absorb(_ phase: PlaybackPhase) {
-        // `playbackPhase` is the one signal that tracks motion: `state` turns `.playing` the moment
-        // the engine called `play()`, which on a slow start is seconds before the picture moves.
-        switch phase {
-        case .loading, .rebuffering, .stalled: isBuffering = true
-        default: isBuffering = false
-        }
+        isBuffering = AetherBufferingPolicy.showsBuffering(
+            AetherBufferingPolicy.Phase(phase),
+            transportStarved: engine.isBuffering
+        )
     }
 
     private func publishPositionIfNeeded(_ value: Double) {
