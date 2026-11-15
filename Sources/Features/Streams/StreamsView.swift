@@ -40,28 +40,53 @@ final class StreamsViewModel {
 
     var totalCount: Int { groups.reduce(0) { $0 + $1.streams.count } }
 
-    /// Matches the viewer's imported rules against every stream in one pass.
-    ///
-    /// Compiling is the expensive half — a pack is up to a few hundred user-authored regular
-    /// expressions — so it happens once per load rather than once per row.
-    private func applyBadgeRules(
-        to streams: [Stream],
-        attributes: [String: ParsedStreamAttributes],
-        rules: StreamBadgeRules
-    ) {
-        let filters = StreamBadgeMatcher.compile(rules)
-        guard !filters.isEmpty else { return ruleBadges = [:] }
+    /// One chip per source asked, with upstream's loading / success / error status.
+    private(set) var sourceChips: [SourceChip] = []
+    /// Upstream's `isStillFetching`: what spins the refresh chip.
+    var isStillFetching: Bool { sourceChips.contains { $0.status == .loading } }
+    /// The bounded auto-play wait, counted from the start of the search, has run out. Instant
+    /// and unlimited waits are over from the start.
+    private(set) var autoPlayWindowElapsed = false
+    /// New hashes are out for a debrid cache check. A "nothing suitable" auto-play verdict waits
+    /// for the answer, as upstream waits for its `CHECKING` sources.
+    var isCheckingCache: Bool { cacheCheckTask != nil }
 
-        var matched: [String: [StreamBadge]] = [:]
-        for stream in streams {
-            let badges = StreamBadgeMatcher.badges(
-                for: stream, attributes: attributes[stream.stableKey], filters: filters
-            )
-            guard !badges.isEmpty else { continue }
-            matched[stream.stableKey] = badges
-        }
-        ruleBadges = matched
+    /// What every arrival of one load is processed with, fixed when the load starts.
+    private struct LoadContext {
+        var generation: Int
+        var languageTitle: String
+        var filterInput: StreamFilterEngine.Input
+        /// Compiling is the expensive half of the viewer's badge rules — a pack is up to a few
+        /// hundred user-authored regular expressions — so it happens once per load, not per row.
+        var badgeFilters: [CompiledStreamBadgeFilter]
+        var cacheCredentials: [DebridCredential]
+        var installedOrder: [String]
+        var settings: AppSettings
     }
+
+    private enum Arrival {
+        case addon(Addon, [Stream]?)
+        case tmdbId(String?)
+        case scraper(InstalledScraper, [LocalScraperResult])
+        case autoPlayWindow
+        case hardTimeout
+        case cancelled
+    }
+
+    @ObservationIgnored private var context: LoadContext?
+    @ObservationIgnored private var loadGeneration = 0
+    @ObservationIgnored private var onEvent: (StreamAutoPlayPolicy.Moment) -> Void = { _ in }
+    @ObservationIgnored private var removedBySection: [String: Int] = [:]
+    /// Plugin sections in the order they answered, which is the order they list in.
+    @ObservationIgnored private var pluginOrder: [String] = []
+    @ObservationIgnored private var pluginBuckets: [String: (logo: String?, streams: [Stream])] = [:]
+    @ObservationIgnored private var requestedCacheHashes: Set<String> = []
+    @ObservationIgnored private var cacheCheckDirty = false
+    /// Upstream's `debridPreparationLaunched`: preparation starts once per load, on the first
+    /// sources ready for it.
+    @ObservationIgnored private var preparationLaunched = false
+    @ObservationIgnored private var chipDismissTask: Task<Void, Never>?
+    private var cacheCheckTask: Task<Void, Never>?
 
     private func loadSubtitles(request: StreamRequest, addonStore: AddonStore) async {
         let providers = addonStore.addonsProviding(
@@ -88,32 +113,60 @@ final class StreamsViewModel {
     /// Flat list in display order — used for auto-play selection.
     var orderedStreams: [Stream] { groups.flatMap(\.streams) }
 
-    /// `retainingResults` keeps what is already on screen while a refresh runs.
+    /// Every source is published the moment it answers, as upstream's repository emits.
     ///
-    /// Blanking the list first is the obvious way to write this and it is the wrong one: a
-    /// refresh is asked for *because* the viewer is comparing sources, and emptying the list
-    /// throws away both the comparison and whatever the remote had focused. The new set replaces
-    /// the old one when it arrives, in a single assignment. A first load has nothing to keep.
+    /// The list used to be held until the slowest addon had answered — or given up, which is
+    /// the request's 45-second ceiling — so one addon with nothing for this title kept every
+    /// other addon's sources off screen. Scrapers waited for the addons on top of that.
+    ///
+    /// A refresh starts from an empty list, as upstream's `OnRefresh` does: the list shows the
+    /// loading state again until the first source answers. `onEvent` reports each arrival and
+    /// each auto-play deadline; `stopsAtHardTimeout` says whether the hard limit should end the
+    /// search, which upstream does only while its auto-play overlay is still waiting.
     func load(
         request: StreamRequest,
         addonStore: AddonStore,
         settings: AppSettings,
-        retainingResults: Bool = false
+        forceRefresh: Bool = false,
+        autoPlayWindow: Duration? = nil,
+        hardTimeout: Duration? = nil,
+        stopsAtHardTimeout: @escaping () -> Bool = { false },
+        onEvent: @escaping (StreamAutoPlayPolicy.Moment) -> Void = { _ in }
     ) async {
+        loadGeneration += 1
+        let generation = loadGeneration
         isLoading = true
-        if !retainingResults {
-            groups = []
-            cacheStates = [:]
-            attributes = [:]
-            ruleBadges = [:]
-        }
-        // These are appended to as the load runs, so they are cleared either way — otherwise a
-        // refresh reports every failure twice.
+        autoPlayWindowElapsed = autoPlayWindow == nil
+        self.onEvent = onEvent
+        groups = []
+        cacheStates = [:]
+        attributes = [:]
+        ruleBadges = [:]
         failedAddons = []
         skippedForIdPrefix = []
         filteredOutCount = 0
         queriedAddonCount = 0
-        defer { isLoading = false }
+        removedBySection = [:]
+        pluginOrder = []
+        pluginBuckets = [:]
+        requestedCacheHashes = []
+        preparationLaunched = false
+        chipDismissTask?.cancel()
+        let badgeFilters = StreamBadgeMatcher.compile(settings.streamBadges.rules)
+        context = LoadContext(
+            generation: generation,
+            // The show's name rather than the episode's: it is what a release name starts with.
+            languageTitle: request.contentName?.nilIfBlank ?? request.title,
+            filterInput: settings.streamFilterInput,
+            badgeFilters: badgeFilters,
+            cacheCredentials: settings.debrid.cacheCheckCredentials,
+            installedOrder: addonStore.enabledAddons.map(\.displayName),
+            settings: settings
+        )
+        defer {
+            // A newer load owns this now.
+            if generation == loadGeneration { isLoading = false }
+        }
 
         // Subtitles come from a different resource and different addons, so they load in
         // parallel with the streams rather than delaying the list.
@@ -136,91 +189,196 @@ final class StreamsViewModel {
             }
         }
         queriedAddonCount = providers.count
-        guard !providers.isEmpty || !pluginScrapers.isEmpty else { return }
+        let scrapers = pluginScrapers.filter { $0.supports(type: request.contentType) }
+        // `updateSourceChipsForFetchStart`: addons, then plugin sections under the name they
+        // will list with.
+        sourceChips = SourceChips.fetchStart(
+            names: providers.map(\.addon.displayName) + scrapers.map(pluginLabel(for:))
+        )
+        guard !providers.isEmpty || !scrapers.isEmpty else { return }
 
-        var collected: [(Addon, [Stream])] = []
-        await withTaskGroup(of: (Addon, [Stream]?).self) { group in
+        let allowingCache = !forceRefresh
+        let mediaType = ContentType.from(request.contentType) == .series ? "tv" : "movie"
+        let tmdbApiKey = settings.tmdb.apiKey
+        var answered = 0
+        let expected = providers.count + (scrapers.isEmpty ? 0 : 1)
+        var scrapersOutstanding = 0
+
+        await withTaskGroup(of: Arrival.self) { group in
             for (addon, videoId) in providers {
                 group.addTask { [client] in
-                    // A refresh bypasses the cache: someone who asked for the list again is
-                    // asking for *this* list again, and answering from memory is the one
-                    // response that cannot be what they meant.
-                    guard let streams = try? await client.fetchStreams(
-                        addon: addon, type: request.contentType, videoId: videoId,
-                        allowingCache: !retainingResults
-                    ) else { return (addon, nil) }
-                    // An empty answer is not necessarily a miss: some addons publish their links
-                    // inline on the meta entry instead of implementing `/stream`.
-                    //
-                    // Only worth a second request when the addon actually serves meta. Firing it
-                    // blindly means every addon that legitimately has nothing costs a second
-                    // round trip — and a full series meta is a large document — which is what
-                    // made the source list sit and spin.
-                    guard streams.isEmpty,
-                          addon.supports(resource: "meta", type: request.contentType)
-                    else { return (addon, streams) }
-                    let inline = try? await client.fetchInlineStreams(
-                        addon: addon, type: request.contentType, videoId: videoId
-                    )
-                    return (addon, inline ?? [])
+                    .addon(addon, await Self.fetchStreams(
+                        client: client, addon: addon, request: request, videoId: videoId,
+                        allowingCache: allowingCache
+                    ))
                 }
             }
-            for await (addon, streams) in group {
-                guard let streams else {
-                    failedAddons.append(addon.displayName)
+            // Scrapers are keyed on TMDB ids, not IMDb, so the id has to be translated first.
+            if !scrapers.isEmpty {
+                group.addTask { .tmdbId(await self.resolveTmdbId(request: request, settings: settings)) }
+            }
+            if let autoPlayWindow {
+                group.addTask { await Self.sleep(autoPlayWindow, then: .autoPlayWindow) }
+            }
+            if let hardTimeout {
+                group.addTask { await Self.sleep(hardTimeout, then: .hardTimeout) }
+            }
+
+            for await arrival in group {
+                // Superseded, or the screen is gone: what drains from here must not reach
+                // auto-play, or leaving mid-search could still start playback.
+                guard generation == loadGeneration, !Task.isCancelled else {
+                    group.cancelAll()
                     continue
                 }
-                guard !streams.isEmpty else { continue }
-                collected.append((addon, streams))
+                switch arrival {
+                case .addon(let addon, let streams):
+                    answered += 1
+                    if let streams {
+                        absorb(section: addon.displayName, logo: addon.logo, streams: streams)
+                    } else {
+                        failedAddons.append(addon.displayName)
+                    }
+                    onEvent(.arrival)
+                case .tmdbId(nil):
+                    answered += 1
+                    failedAddons.append("Plugins (no TMDB id)")
+                    onEvent(.arrival)
+                case .tmdbId(let tmdbId?):
+                    pluginTmdbId = tmdbId
+                    scrapersOutstanding = scrapers.count
+                    for scraper in scrapers {
+                        group.addTask {
+                            .scraper(scraper, await PluginRuntime.shared.execute(
+                                code: scraper.code,
+                                tmdbId: tmdbId,
+                                mediaType: mediaType,
+                                season: request.season,
+                                episode: request.episode,
+                                scraperId: scraper.id,
+                                tmdbApiKey: tmdbApiKey,
+                                allowingCache: allowingCache
+                            ))
+                        }
+                    }
+                case .scraper(let scraper, let results):
+                    scrapersOutstanding -= 1
+                    if scrapersOutstanding == 0 { answered += 1 }
+                    absorbPlugin(scraper, results: results)
+                    onEvent(.arrival)
+                case .autoPlayWindow:
+                    autoPlayWindowElapsed = true
+                    onEvent(.windowElapsed)
+                case .hardTimeout:
+                    // Asked before the event, which is what ends auto-play. Upstream cancels the
+                    // search here, and leaves the rest marked failed.
+                    if stopsAtHardTimeout() { group.cancelAll() }
+                    onEvent(.hardTimeout)
+                case .cancelled:
+                    break
+                }
+                // Nothing left but the timers, which have no reason to outlive the search.
+                if answered == expected { group.cancelAll() }
             }
         }
 
-        var pluginGroups = await runPluginScrapers(
-            request: request, settings: settings, allowingCache: !retainingResults
-        )
-
-        // Parse once; both filtering and the row chips read from this. The show's name rather
-        // than the episode's: it is what a release name starts with.
-        let languageTitle = request.contentName?.nilIfBlank ?? request.title
-        var parsed: [String: ParsedStreamAttributes] = [:]
-        for (_, streams) in collected {
-            for stream in streams { parsed[stream.stableKey] = StreamAttributeParser.parse(stream, title: languageTitle) }
+        guard generation == loadGeneration else { return }
+        // The cache check outlives this call; with the screen gone it has no one to tell.
+        guard !Task.isCancelled else {
+            self.onEvent = { _ in }
+            return
         }
-        for group in pluginGroups {
-            for stream in group.streams { parsed[stream.stableKey] = StreamAttributeParser.parse(stream, title: languageTitle) }
+        requestCacheCheck()
+        await cacheCheckTask?.value
+        sourceChips = SourceChips.markingRemainingAsError(sourceChips)
+        scheduleErrorChipRemoval()
+    }
+
+    nonisolated private static func sleep(_ duration: Duration, then arrival: Arrival) async -> Arrival {
+        do {
+            try await Task.sleep(for: duration)
+            return arrival
+        } catch {
+            return .cancelled
+        }
+    }
+
+    /// `scheduleErrorChipRemoval`.
+    private func scheduleErrorChipRemoval() {
+        guard sourceChips.contains(where: { $0.status == .error }) else { return }
+        chipDismissTask?.cancel()
+        chipDismissTask = Task { [weak self] in
+            try? await Task.sleep(for: SourceChips.errorDismissDelay)
+            guard !Task.isCancelled, let self else { return }
+            sourceChips = SourceChips.removingErrors(sourceChips)
+        }
+    }
+
+    /// One addon's answer, or nil when the request failed.
+    nonisolated private static func fetchStreams(
+        client: StremioClient,
+        addon: Addon,
+        request: StreamRequest,
+        videoId: String,
+        allowingCache: Bool
+    ) async -> [Stream]? {
+        // A refresh bypasses the cache: someone who asked for the list again is asking for
+        // *this* list again, and answering from memory is the one response that cannot be what
+        // they meant.
+        guard let streams = try? await client.fetchStreams(
+            addon: addon, type: request.contentType, videoId: videoId,
+            allowingCache: allowingCache
+        ) else { return nil }
+        // An empty answer is not necessarily a miss: some addons publish their links inline on
+        // the meta entry instead of implementing `/stream`.
+        //
+        // Only worth a second request when the addon actually serves meta. Firing it blindly
+        // means every addon that legitimately has nothing costs a second round trip — and a full
+        // series meta is a large document — which is what made the source list sit and spin.
+        guard streams.isEmpty,
+              addon.supports(resource: "meta", type: request.contentType)
+        else { return streams }
+        let inline = try? await client.fetchInlineStreams(
+            addon: addon, type: request.contentType, videoId: videoId
+        )
+        return inline ?? []
+    }
+
+    /// Parses, badges and filters one section, then puts it in its place in the list.
+    private func absorb(section name: String, logo: String?, streams: [Stream]) {
+        guard let context else { return }
+        var parsed = attributes
+        for stream in streams {
+            parsed[stream.stableKey] = StreamAttributeParser.parse(stream, title: context.languageTitle)
         }
         attributes = parsed
-        applyBadgeRules(
-            to: collected.flatMap(\.1) + pluginGroups.flatMap(\.streams),
-            attributes: parsed,
-            rules: settings.streamBadges.rules
+
+        if !context.badgeFilters.isEmpty {
+            var matched = ruleBadges
+            for stream in streams {
+                let badges = StreamBadgeMatcher.badges(
+                    for: stream, attributes: parsed[stream.stableKey], filters: context.badgeFilters
+                )
+                matched[stream.stableKey] = badges.isEmpty ? nil : badges
+            }
+            ruleBadges = matched
+        }
+
+        let kept = StreamFilterEngine.apply(to: streams, attributes: parsed, input: context.filterInput)
+        removedBySection[name] = streams.count - kept.count
+        filteredOutCount = removedBySection.values.reduce(0, +)
+        groups = StreamGroupOrdering.merging(
+            AddonStreams(addonName: name, addonLogo: logo, streams: kept),
+            into: groups,
+            installedOrder: context.installedOrder,
+            pluginOrder: pluginOrder
         )
-
-        let filterInput = settings.streamFilterInput
-        var rendered: [AddonStreams] = []
-        var removed = 0
-        for (addon, streams) in collected {
-            let kept = StreamFilterEngine.apply(to: streams, attributes: parsed, input: filterInput)
-            removed += streams.count - kept.count
-            guard !kept.isEmpty else { continue }
-            rendered.append(AddonStreams(
-                addonName: addon.displayName, addonLogo: addon.logo, streams: kept
-            ))
+        // Only a source with something on screen succeeds; an empty one stays loading until
+        // the search ends, as upstream's never reaches `mergeSourceChipStatuses`.
+        if !kept.isEmpty {
+            sourceChips = SourceChips.marking(succeeded: [name], in: sourceChips)
         }
-        // Plugin results go through the same filters as addon streams.
-        for index in pluginGroups.indices {
-            let kept = StreamFilterEngine.apply(
-                to: pluginGroups[index].streams, attributes: parsed, input: filterInput
-            )
-            removed += pluginGroups[index].streams.count - kept.count
-            pluginGroups[index].streams = kept
-        }
-        filteredOutCount = removed
-        groups = rendered.sorted {
-            $0.addonName.localizedCaseInsensitiveCompare($1.addonName) == .orderedAscending
-        } + pluginGroups.filter { !$0.streams.isEmpty }
-
-        await refreshCacheStates(settings: settings)
+        requestCacheCheck()
     }
 
     // MARK: Plugins
@@ -235,72 +393,31 @@ final class StreamsViewModel {
     /// Scrapers are keyed on TMDB ids, not IMDb, so the id has to be translated first.
     private(set) var pluginTmdbId: String?
 
-    private func runPluginScrapers(
-        request: StreamRequest,
-        settings: AppSettings,
-        allowingCache: Bool
-    ) async -> [AddonStreams] {
-        guard !pluginScrapers.isEmpty else { return [] }
+    private func pluginLabel(for scraper: InstalledScraper) -> String {
+        groupPluginsByRepository
+            ? (pluginRepositoryNames[scraper.repositoryId]?.nilIfBlank ?? scraper.name)
+            : scraper.name
+    }
 
-        let mediaType = ContentType.from(request.contentType) == .series ? "tv" : "movie"
-        let eligible = pluginScrapers.filter { $0.supports(type: request.contentType) }
-        guard !eligible.isEmpty else { return [] }
-
-        guard let tmdbId = await resolveTmdbId(request: request, settings: settings) else {
-            failedAddons.append("Plugins (no TMDB id)")
-            return []
+    /// One section per scraper, or one per repository when the viewer asked for that — in which
+    /// case the section grows as its scrapers answer.
+    private func absorbPlugin(_ scraper: InstalledScraper, results: [LocalScraperResult]) {
+        guard !results.isEmpty else { return }
+        let label = pluginLabel(for: scraper)
+        var bucket = pluginBuckets[label] ?? (scraper.logo, [])
+        for (index, result) in results.enumerated() {
+            bucket.streams.append(result.asStream(
+                sourceName: label,
+                scraperId: scraper.id,
+                // Named only when the section is a repository, for the heading over its rows.
+                scraperName: label == scraper.name ? nil : scraper.name,
+                occurrence: index
+            ))
         }
-        pluginTmdbId = tmdbId
-
-        var byScraper: [(InstalledScraper, [LocalScraperResult])] = []
-        await withTaskGroup(of: (InstalledScraper, [LocalScraperResult]).self) { group in
-            for scraper in eligible {
-                group.addTask {
-                    let results = await PluginRuntime.shared.execute(
-                        code: scraper.code,
-                        tmdbId: tmdbId,
-                        mediaType: mediaType,
-                        season: request.season,
-                        episode: request.episode,
-                        scraperId: scraper.id,
-                        tmdbApiKey: settings.tmdb.apiKey,
-                        allowingCache: allowingCache
-                    )
-                    return (scraper, results)
-                }
-            }
-            for await entry in group where !entry.1.isEmpty {
-                byScraper.append(entry)
-            }
-        }
-
-        // One section per scraper, or one per repository when the viewer asked for that.
-        var sections: [String: (logo: String?, streams: [Stream])] = [:]
-        for (scraper, results) in byScraper {
-            let label = groupPluginsByRepository
-                ? (pluginRepositoryNames[scraper.repositoryId] ?? scraper.name)
-                : scraper.name
-            var bucket = sections[label] ?? (scraper.logo, [])
-            for (index, result) in results.enumerated() {
-                bucket.streams.append(result.asStream(
-                    sourceName: label,
-                    scraperId: scraper.id,
-                    // Named only when the section is a repository, for the heading over its rows.
-                    scraperName: label == scraper.name ? nil : scraper.name,
-                    occurrence: index
-                ))
-            }
-            sections[label] = bucket
-        }
-
-        return sections
-            .sorted { $0.key.localizedCaseInsensitiveCompare($1.key) == .orderedAscending }
-            .map {
-                AddonStreams(
-                    addonName: $0.key, addonLogo: $0.value.logo,
-                    streams: PluginProviderHeading.grouped($0.value.streams)
-                )
-            }
+        pluginBuckets[label] = bucket
+        if !pluginOrder.contains(label) { pluginOrder.append(label) }
+        // Plugin results go through the same filters as addon streams.
+        absorb(section: label, logo: bucket.logo, streams: PluginProviderHeading.grouped(bucket.streams))
     }
 
     /// The request carries an IMDb id; TMDB's `find` endpoint converts it.
@@ -323,17 +440,46 @@ final class StreamsViewModel {
         return enrichment?.tmdbId.map(String.init)
     }
 
-    /// Batch instant-availability lookup for the torrent sources on screen.
-    private func refreshCacheStates(settings: AppSettings) async {
-        let credentials = settings.debrid.cacheCheckCredentials
-        guard !credentials.isEmpty else { return }
+    /// Instant availability for the torrent sources on screen, asked as they arrive.
+    ///
+    /// Arrivals come in bursts, so a request already out is not doubled: it goes round again
+    /// for whatever arrived meanwhile, and only hashes not yet asked are sent.
+    private func requestCacheCheck() {
+        guard let credentials = context?.cacheCredentials, !credentials.isEmpty else { return }
+        cacheCheckDirty = true
+        guard cacheCheckTask == nil else { return }
+        cacheCheckTask = Task { [weak self] in
+            while let self, self.cacheCheckDirty {
+                self.cacheCheckDirty = false
+                await self.checkNewHashes(credentials: credentials)
+            }
+            self?.cacheCheckTask = nil
+            self?.launchPreparationIfReady()
+            self?.onEvent(.arrival)
+        }
+    }
 
-        let hashes = Array(Set(orderedStreams.compactMap { $0.effectiveInfoHash?.lowercased() }))
+    private func checkNewHashes(credentials: [DebridCredential]) async {
+        let hashes = Set(orderedStreams.compactMap { $0.effectiveInfoHash?.lowercased() })
+            .subtracting(requestedCacheHashes)
         guard !hashes.isEmpty else { return }
-
-        cacheStates = await DebridClient.shared.checkCache(
-            infoHashes: hashes, credentials: credentials
+        requestedCacheHashes.formUnion(hashes)
+        let results = await DebridClient.shared.checkCache(
+            infoHashes: Array(hashes), credentials: credentials
         )
+        cacheStates.merge(results) { _, new in new }
+    }
+
+    /// Upstream's `launchDirectDebridPreparationIfNeeded`: the first time sources ready for it
+    /// are on screen — a cached torrent, here — preparation starts, once, alongside the search.
+    private func launchPreparationIfReady() {
+        guard !preparationLaunched, let settings = context?.settings else { return }
+        let ready = orderedStreams.contains {
+            $0.streamURL() == nil && $0.isTorrent && cacheState(for: $0)?.state == .cached
+        }
+        guard ready else { return }
+        preparationLaunched = true
+        Task { await prepareInstantPlayback(settings: settings) }
     }
 
     func cacheState(for stream: Stream) -> DebridCacheResult? {
@@ -433,7 +579,15 @@ struct StreamsView: View {
     let request: StreamRequest
 
     @State private var model = StreamsViewModel()
+    /// Set by any start of playback, the viewer's own included: a source picked by hand while
+    /// the search runs must not be followed by auto-play's pick.
     @State private var didAutoPlay = false
+    @State private var autoPlayRelease: NextEpisodeSourceMatch.Release?
+    /// Upstream's direct auto-play flow: while auto-play may still pick, the screen shows its
+    /// loading cover instead of the list, and the list appears only when auto-play gives up.
+    @State private var autoPlayFlowActive = false
+    /// `directAutoPlayModeInitializedForSession`: the flow is decided once per screen.
+    @State private var autoPlayFlowDecided = false
     /// The reference apps keep the provider filter local to the source picker.  Keeping it in
     /// the view (rather than mutating the resolver's results) makes changing filters instant
     /// and preserves the complete list for auto-play.
@@ -449,16 +603,27 @@ struct StreamsView: View {
     var body: some View {
         ZStack {
             sourceBackdrop
-            GeometryReader { proxy in
-                HStack(spacing: 0) {
-                    sourceContext
-                        .frame(width: proxy.size.width * 0.40)
+            if autoPlayFlowActive {
+                PlayerLoadingOverlay(
+                    title: request.title,
+                    backdrop: request.backdrop ?? request.poster,
+                    detail: settings.player.showPlayerLoadingStatus
+                        ? L10n.text("streams.finding_source", fallback: "Finding stream source")
+                        : nil
+                )
+                .transition(.opacity)
+            } else {
+                GeometryReader { proxy in
+                    HStack(spacing: 0) {
+                        sourceContext
+                            .frame(width: proxy.size.width * 0.40)
 
-                    sourcePicker
-                        .frame(width: proxy.size.width * 0.60)
-                        .padding(.top, NuvioTheme.layout.tvSafeVertical)
-                        .padding(.trailing, NuvioTheme.layout.tvSafeHorizontal)
-                        .padding(.bottom, NuvioTheme.layout.tvSafeVertical)
+                        sourcePicker
+                            .frame(width: proxy.size.width * 0.60)
+                            .padding(.top, NuvioTheme.layout.tvSafeVertical)
+                            .padding(.trailing, NuvioTheme.layout.tvSafeHorizontal)
+                            .padding(.bottom, NuvioTheme.layout.tvSafeVertical)
+                    }
                 }
             }
         }
@@ -480,11 +645,14 @@ struct StreamsView: View {
                     uniquingKeysWith: { first, _ in first }
                 )
             }
-            await model.load(request: request, addonStore: addons, settings: settings)
-            await autoPlayIfConfigured()
-            // Auto-play gets first refusal; whatever it did not take is prepared behind the
-            // list, so the source the viewer picks by hand is likely to start immediately too.
-            await model.prepareInstantPlayback(settings: settings)
+            // Read once — it is consumed on read, and every auto-play pass needs to know whether
+            // the screen was reached by auto-advance.
+            autoPlayRelease = PlaybackSessionStore.shared.consumeRelease(for: request.videoId)
+            decideAutoPlayFlow()
+            // The last link needs no list, so it does not wait for one. The search still runs:
+            // it is what the viewer comes back to.
+            playReusedLinkIfAvailable()
+            await search(forceRefresh: false)
         }
     }
 
@@ -651,8 +819,10 @@ struct StreamsView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: NuvioTheme.spacing.sm) {
                 Button { Task { await reload() } } label: {
+                    // Upstream's `RefreshFilterChip` spins while any source is still loading.
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: NuvioTheme.sizes.icons.sm, weight: .semibold))
+                        .symbolEffect(.rotate, options: .repeat(.continuous), isActive: model.isStillFetching)
                         .frame(width: dp(38), height: dp(38))
                 }
                 .buttonStyle(NuvioPillButtonStyle(emphasis: .ghost))
@@ -661,9 +831,19 @@ struct StreamsView: View {
                 sourceFilter("All", isSelected: selectedAddon == nil) {
                     selectedAddon = nil
                 }
-                ForEach(model.groups) { group in
-                    sourceFilter(group.addonName, isSelected: selectedAddon == group.addonName) {
-                        selectedAddon = group.addonName
+                // Every source asked has a chip from the start, in upstream's order: the ones
+                // on screen in list order, then the ones still loading. Only a chip with
+                // sources behind it filters.
+                let available = model.groups.map(\.addonName)
+                ForEach(SourceChips.displayOrder(available: available, chips: model.sourceChips), id: \.self) { name in
+                    let status = model.sourceChips.first { $0.name == name }?.status ?? .success
+                    let selectable = available.contains(name) && status == .success
+                    SourceStatusChip(
+                        title: name,
+                        status: status,
+                        isSelected: selectedAddon == name
+                    ) {
+                        if selectable { selectedAddon = name }
                     }
                 }
             }
@@ -769,6 +949,7 @@ struct StreamsView: View {
     /// Opens the host's link directly. Already resolved by the device that shared it, so it does
     /// not go back through the debrid round the list's own rows take.
     private func play(shared: PartyStream) {
+        didAutoPlay = true
         router.play(
             PlaybackRequest(
                 streamURL: shared.url,
@@ -855,31 +1036,66 @@ struct StreamsView: View {
         )
     }
 
-    private func autoPlayIfConfigured() async {
-        guard !didAutoPlay else { return }
+    /// `stream_reuse_last_link_enabled`: the link this title last played from, within the
+    /// window, goes first — before any ranking, as upstream orders it, and before the search.
+    private func playReusedLinkIfAvailable() {
+        guard !didAutoPlay, settings.player.reuseLastLinkEnabled,
+              let cached = LastStreamLinkStore.valid(
+                  contentType: request.contentType,
+                  videoId: request.videoId,
+                  maxAgeHours: settings.player.reuseLastLinkCacheHours
+              ) else { return }
+        didAutoPlay = true
+        Task { await play(Self.stream(reusing: cached), sourceStableKey: cached.sourceStableKey) }
+    }
 
-        // Read once — it is consumed on read, and both branches below need to know whether the
-        // screen was reached by auto-advance.
-        let release = PlaybackSessionStore.shared.consumeRelease(for: request.videoId)
-
-        // `stream_reuse_last_link_enabled`: the link this title last played from, within the
-        // window, goes first — before any ranking, as upstream orders it.
-        if settings.player.reuseLastLinkEnabled,
-           let cached = LastStreamLinkStore.valid(
-               contentType: request.contentType,
-               videoId: request.videoId,
-               maxAgeHours: settings.player.reuseLastLinkCacheHours
-           ) {
-            didAutoPlay = true
-            await play(Self.stream(reusing: cached), sourceStableKey: cached.sourceStableKey)
-            return
+    /// `shouldUseDirectAutoPlayFlow`, decided once: any auto-play mode, or — with auto-play off —
+    /// a release to continue from the previous episode. Regex auto-play without a usable pattern
+    /// turns the whole session's auto-play off, as upstream does.
+    private func decideAutoPlayFlow() {
+        guard !autoPlayFlowDecided else { return }
+        autoPlayFlowDecided = true
+        var active = settings.player.streamAutoPlayMode != .off
+        if !active, settings.player.reuseBingeGroup, autoPlayRelease != nil {
+            active = true
         }
+        if settings.player.streamAutoPlayMode == .matchRegex,
+           !StreamAutoPlayPolicy.isRegexSelectionConfigured(settings.player.streamAutoPlayRegex) {
+            active = false
+            didAutoPlay = true
+        }
+        autoPlayFlowActive = active
+    }
+
+    /// Runs the search and lets auto-play look at each answer as it lands, on upstream's clock:
+    /// the bounded wait and the hard limit both count from the start of the search.
+    private func search(forceRefresh: Bool) async {
+        let timeout = settings.player.streamAutoPlayTimeoutSeconds
+        let bounded = StreamAutoPlayPolicy.isBounded(timeout)
+        let window: Duration = bounded ? .seconds(timeout) : .zero
+        await model.load(
+            request: request,
+            addonStore: addons,
+            settings: settings,
+            forceRefresh: forceRefresh,
+            autoPlayWindow: bounded ? window : nil,
+            hardTimeout: autoPlayFlowActive ? window + StreamAutoPlayPolicy.hardTimeout : nil,
+            stopsAtHardTimeout: { autoPlayFlowActive && !didAutoPlay },
+            onEvent: { considerAutoPlay(at: $0) }
+        )
+        guard !Task.isCancelled else { return }
+        considerAutoPlay(at: .allAnswered)
+    }
+
+    private func considerAutoPlay(at moment: StreamAutoPlayPolicy.Moment) {
+        guard !didAutoPlay else { return }
 
         // Arrived here by auto-advance: the release that was playing is almost always the right
         // one for the next episode — same encode, same audio, same subtitle timing. Trying it
         // first is what `stream_auto_play_prefer_bingegroup_next_episode` asks for, and it
-        // applies even when general auto-play is off, which is the point of the pair.
-        if settings.player.reuseBingeGroup, let release,
+        // applies even when general auto-play is off, which is the point of the pair. An exact
+        // match needs no waiting, so it is tried on every answer.
+        if settings.player.reuseBingeGroup, let release = autoPlayRelease,
            let match = NextEpisodeSourceMatch.find(
                in: model.orderedStreams,
                release: release,
@@ -887,17 +1103,37 @@ struct StreamsView: View {
                episode: request.episode
            ) {
             didAutoPlay = true
-            await play(match.stream)
+            Task { await play(match.stream) }
             return
         }
 
-        guard settings.player.streamAutoPlayMode != .off else { return }
+        let step = StreamAutoPlayPolicy.step(
+            at: moment,
+            timeout: settings.player.streamAutoPlayTimeoutSeconds,
+            windowElapsed: model.autoPlayWindowElapsed,
+            hasStreams: model.totalCount > 0,
+            cacheCheckPending: model.isCheckingCache,
+            directFlow: autoPlayFlowActive
+        )
+        if step.select, let candidate = autoPlayCandidate() {
+            didAutoPlay = true
+            Task { await play(candidate) }
+            return
+        }
+        if step.giveUpIfNoMatch {
+            // Nothing suitable: auto-play is over for this screen, and the list is shown.
+            didAutoPlay = true
+            withAnimation(NuvioMotion.quickTween) { autoPlayFlowActive = false }
+        }
+    }
+
+    private func autoPlayCandidate() -> Stream? {
+        guard settings.player.streamAutoPlayMode != .off else { return nil }
         // The chain reached an episode that release does not cover. Falling back to the ordinary
         // auto-play choice is a preference, because the alternative — stopping on the picker —
         // is what some viewers want rather than a different encode mid-season.
-        guard release == nil || settings.player.autoPlayNextEpisodeFallbackEnabled else { return }
-
-        guard let candidate = StreamFilterEngine.autoPlayCandidate(
+        guard autoPlayRelease == nil || settings.player.autoPlayNextEpisodeFallbackEnabled else { return nil }
+        return StreamFilterEngine.autoPlayCandidate(
             from: model.orderedStreams,
             attributes: model.attributes,
             mode: settings.player.streamAutoPlayMode,
@@ -905,31 +1141,13 @@ struct StreamsView: View {
             regex: settings.player.streamAutoPlayRegex,
             preferredQuality: settings.player.autoPlayPreferredQuality,
             cacheStates: model.cacheStates
-        ) else { return }
-
-        // `stream_auto_play_timeout_seconds`: the grace period between the list appearing and a
-        // source being chosen for you. Upstream spends it waiting for slower addons to answer;
-        // ours have all answered by now, so here it is what it looks like from the sofa either
-        // way — a moment to see the list and press something else.
-        let grace = settings.player.streamAutoPlayTimeoutSeconds
-        if grace > 0 {
-            try? await Task.sleep(for: .seconds(min(grace, 30)))
-            guard !Task.isCancelled, !didAutoPlay else { return }
-        }
-        didAutoPlay = true
-        await play(candidate)
+        )
     }
 
+    /// Upstream's `OnRefresh`: back to "All", the loading state, and every chip loading again.
     private func reload() async {
-        let previousAddon = selectedAddon
-        await model.load(
-            request: request, addonStore: addons, settings: settings, retainingResults: true
-        )
-        // The chosen addon tab survives the refresh, unless that addon returned nothing this
-        // time — a tab with no results behind it would show an empty list and look like a
-        // failure rather than a filter.
-        selectedAddon = model.groups.contains { $0.addonName == previousAddon } ? previousAddon : nil
-        await autoPlayIfConfigured()
+        selectedAddon = nil
+        await search(forceRefresh: true)
     }
 
     /// The follow-on episode, rebuilt from the current request so the player can chain.
@@ -951,6 +1169,9 @@ struct StreamsView: View {
     /// - Parameter sourceStableKey: the row a reused link was first chosen from, so the
     ///   player's Sources panel marks that row rather than the stand-in built for the link.
     private func play(_ stream: Stream, sourceStableKey: String? = nil) async {
+        didAutoPlay = true
+        // `OnAutoPlayConsumed`: whatever happens next, coming back here finds the list.
+        defer { autoPlayFlowActive = false }
         // Upstream resolves such a stream in-app; their builds without in-app YouTube playback
         // open the watch page instead, which is the only path tvOS has (see `TrailerLauncher`).
         if let youTubeId = stream.youTubeOnlyId {

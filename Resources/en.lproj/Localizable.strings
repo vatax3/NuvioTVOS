@@ -167,6 +167,9 @@
 /* Streams, detail and search */
 "streams.searching" = "Searching your addons for sources…";
 "streams.none_found" = "No sources found";
+"streams.source_failed" = "No sources";
+"streams.source_loading" = "Loading";
+"streams.finding_source" = "Finding stream source";
 "streams.not_cached" = "Not cached";
 "streams.play_with" = "Play with";
 "streams.this_device" = "This device";
@@ -519,9 +522,10 @@
 "settings.playback.match_pattern_sub" = "Regular expression tested against the source name";
 "settings.playback.preferred_quality" = "Preferred quality";
 "settings.playback.quality_hint" = "e.g. 2160p, 1080p, 720p";
-"settings.playback.wait_before_starting" = "Wait before starting";
-"settings.playback.wait_before_starting_sub" = "Your chance to pick a different source before one is chosen";
-"settings.playback.immediately" = "Immediately";
+"settings.playback.wait_before_starting" = "Stream Selection Timeout";
+"settings.playback.wait_before_starting_sub" = "Wait time for addons before selecting.";
+"settings.playback.timeout_unlimited" = "Unlimited";
+"settings.playback.immediately" = "Instant";
 "settings.playback.next_episode" = "Next episode";
 "settings.playback.autoplay_next" = "Auto-play next episode";
 "settings.playback.trigger_on" = "Trigger on";

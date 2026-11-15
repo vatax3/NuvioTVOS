@@ -167,6 +167,9 @@
 /* Streams, detail and search */
 "streams.searching" = "Recherche de sources dans vos addons…";
 "streams.none_found" = "Aucune source trouvée";
+"streams.source_failed" = "Aucune source";
+"streams.source_loading" = "Chargement";
+"streams.finding_source" = "Recherche de la source du flux";
 "streams.not_cached" = "Non mis en cache";
 "streams.play_with" = "Lire avec";
 "streams.this_device" = "Cet appareil";
@@ -519,9 +522,10 @@
 "settings.playback.match_pattern_sub" = "Expression régulière testée sur le nom de la source";
 "settings.playback.preferred_quality" = "Qualité préférée";
 "settings.playback.quality_hint" = "p. ex. 2160p, 1080p, 720p";
-"settings.playback.wait_before_starting" = "Attendre avant de démarrer";
-"settings.playback.wait_before_starting_sub" = "Votre occasion de choisir une autre source avant qu’une soit retenue";
-"settings.playback.immediately" = "Immédiatement";
+"settings.playback.wait_before_starting" = "Délai de sélection du flux";
+"settings.playback.wait_before_starting_sub" = "Temps d’attente des addons avant la sélection.";
+"settings.playback.timeout_unlimited" = "Illimité";
+"settings.playback.immediately" = "Instantané";
 "settings.playback.next_episode" = "Épisode suivant";
 "settings.playback.autoplay_next" = "Lire automatiquement l’épisode suivant";
 "settings.playback.trigger_on" = "Déclencher sur";

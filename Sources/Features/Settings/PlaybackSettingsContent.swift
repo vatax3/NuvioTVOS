@@ -552,15 +552,23 @@ struct PlaybackSettingsContent: View {
                         text: $player.autoPlayPreferredQuality
                     )
                 }
-                if player.streamAutoPlayMode != .off {
-                    SettingsStepperRow(
-                        title: L10n.text("settings.playback.wait_before_starting", fallback: "Wait before starting"),
-                        subtitle: L10n.text("settings.playback.wait_before_starting_sub", fallback: "Your chance to pick a different source before one is chosen"),
-                        value: $player.streamAutoPlayTimeoutSeconds,
-                        range: 0...30,
-                        format: { $0 == 0 ? L10n.text("settings.playback.immediately", fallback: "Immediately") : "\($0)s" }
-                    )
-                }
+                // Shown whatever the mode, as upstream's slider is: it also times the release
+                // match that continues a series with auto-play off.
+                SettingsStepperRow(
+                    title: L10n.text("settings.playback.wait_before_starting", fallback: "Stream Selection Timeout"),
+                    subtitle: L10n.text("settings.playback.wait_before_starting_sub", fallback: "Wait time for addons before selecting."),
+                    value: $player.streamAutoPlayTimeoutSeconds,
+                    range: 0...StreamAutoPlayPolicy.unlimitedTimeout,
+                    format: { seconds in
+                        switch seconds {
+                        case 0: return L10n.text("settings.playback.immediately", fallback: "Instant")
+                        case StreamAutoPlayPolicy.unlimitedTimeout:
+                            return L10n.text("settings.playback.timeout_unlimited", fallback: "Unlimited")
+                        default: return "\(seconds)s"
+                        }
+                    },
+                    values: StreamAutoPlayPolicy.timeoutValues
+                )
             }
 
             SettingsCard(

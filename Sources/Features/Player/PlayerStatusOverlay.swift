@@ -2,16 +2,34 @@ import SwiftUI
 
 /// Nuvio-branded status layers above the system transport. They deliberately do not replace
 /// `AVPlayerViewController`: Siri Remote scrubbing and the native track menus stay intact.
+///
+/// The source screen uses the same cover while auto-play is still choosing, as upstream's
+/// `LoadingOverlay` serves both.
 struct PlayerLoadingOverlay: View {
     @Environment(\.nuvioColors) private var colors
 
-    let request: PlaybackRequest
-    let showsDetail: Bool
+    let title: String
+    let backdrop: String?
+    let detail: String?
+
+    init(title: String, backdrop: String?, detail: String?) {
+        self.title = title
+        self.backdrop = backdrop
+        self.detail = detail
+    }
+
+    init(request: PlaybackRequest, showsDetail: Bool) {
+        self.init(
+            title: request.title,
+            backdrop: request.backdrop ?? request.poster,
+            detail: showsDetail ? L10n.text("player.preparing_stream") : nil
+        )
+    }
 
     var body: some View {
         ZStack {
             Color.black
-            if let backdrop = request.backdrop ?? request.poster, let url = URL(string: backdrop) {
+            if let backdrop, let url = URL(string: backdrop) {
                 AsyncImage(url: url) { image in
                     image.resizable().scaledToFill()
                 } placeholder: {
@@ -30,13 +48,13 @@ struct PlayerLoadingOverlay: View {
                 ProgressView()
                     .controlSize(.large)
                     .tint(colors.secondary)
-                Text(request.title)
+                Text(title)
                     .nuvioText(NuvioTextStyles.sectionTitle)
                     .foregroundStyle(.white)
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
-                if showsDetail {
-                    Text(L10n.text("player.preparing_stream"))
+                if let detail {
+                    Text(detail)
                         .nuvioText(NuvioTextStyles.metadata)
                         .foregroundStyle(.white.opacity(0.72))
                 }
@@ -45,7 +63,7 @@ struct PlayerLoadingOverlay: View {
         }
         .ignoresSafeArea()
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Loading \(request.title)")
+        .accessibilityLabel("Loading \(title)")
     }
 }
 

@@ -62,7 +62,7 @@ home:
 | `resizeMode` | The aspect the picture starts in. The player's Display button already cycled seven modes; the viewer's *default* went nowhere. |
 | `externalPlayerForwardSubtitles` | Infuse and VLC accept a sidecar `sub=` on their callback. Without it a hand-off silently drops the subtitle track the viewer had chosen. nPlayer and Outplayer take a bare URL, and the row says so. |
 | `reuseBingeGroup`, `preferBingeGroupNextEpisode`, `autoPlayNextEpisodeFallbackEnabled` | The next episode now plays from the release you were already watching — same encode, same audio, same subtitle timing — instead of reopening the choice. |
-| `streamAutoPlayTimeoutSeconds` | The grace period between the source list appearing and one being chosen for you. |
+| `streamAutoPlayTimeoutSeconds` | How long auto-play waits for sources, counted from the start of the search, before choosing among those already in — upstream's meaning, with its Instant and Unlimited ends (1.0.64). |
 
 **Deleting the other 52 does not touch account sync**, and that is not an assumption:
 `PreferenceStore` syncs its **raw storage**, not its declared properties, so a key arriving from

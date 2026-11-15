@@ -1493,3 +1493,26 @@ Regenerated: `UpstreamSettingsManifest.swift` at 1.1.0 (265 keys, none new).
 Still open from earlier windows: the accessibility audit, image downsampling, media servers, night
 mode (needs an FFmpeg build with `acompressor`; AetherEngine's `AVSampleBufferAudioRenderer` path
 has no hook either, checked 2026-11-08).
+
+## Issue #8: the source list, as upstream loads it (1.0.64)
+
+No upstream window: a fix for [issue #8](https://github.com/vatax3/NuvioTVOS/issues/8) — one
+addon with nothing for a title held every other addon's sources off screen until its request gave
+up. Read against `StreamScreenViewModel.kt`, `StreamRepositoryImpl.getStreamsFromAllAddons`,
+`SourceStatusFilterChip.kt` and `AddonFilterChips` at the 1.1.0 tag. A first version shipped seven
+differences from upstream without saying so; every one is now a verdict below.
+
+| Upstream | Ours |
+|---|---|
+| Each source is emitted as it answers; scrapers run alongside addons | **Ported.** `StreamsViewModel.load` publishes per arrival, addons and scrapers in one fan-out. Ours had collected every addon, then started the scrapers. |
+| Sections in installed-addon order, plugins after them in arrival order (`orderAddonStreams`) | **Ported** (`StreamGroupOrdering`). Ours was alphabetical. Upstream's direct-debrid and native-server sources, which it lists first, do not exist here. |
+| Status chips: loading for every source asked, success once it has streams, error for whatever is still loading when the search ends, removed after 1.6 s; the refresh chip spins while any is loading | **Ported** (`SourceChips`, `SourceStatusChip`). An addon that answers with nothing stays loading until the end, as upstream's never reaches `mergeSourceChipStatuses`. Shimmer and the two-shake error are SwiftUI animations of the same timings. |
+| Direct auto-play flow: a loading cover ("Finding stream source") instead of the list while auto-play may pick; instant, bounded and unlimited waits; 60 s hard limit that also cancels the search | **Ported** (`StreamAutoPlayPolicy`, `StreamsView.considerAutoPlay`). The cover is `PlayerLoadingOverlay`, which upstream's `LoadingOverlay` also serves for. Regex auto-play without a usable pattern turns auto-play off for the screen. |
+| Timeout slider: 0–10, 15, 20, 25, 30 s and Unlimited, shown whatever the mode; old values move to the nearest | **Ported** (`StreamAutoPlayPolicy.timeoutValues`, `SettingsStepperRow(values:)`). Ours was a 0–30 stepper shown only with auto-play on. |
+| Instant-playback preparation starts on the first sources ready for it, once per load | **Ported** (`launchPreparationIfReady`). Ours waited for the end of the search and auto-play. |
+| Refresh resets the filter to All and shows the loading state until the first source answers | **Ported.** Ours kept the old list and the chosen tab — a behaviour of our own, not upstream's, despite the 0.8.5 row in UPSTREAM-PARITY.md. |
+| A first page of 100 streams, extended near the end of the list | **N/A.** Compose list paging; `LazyVStack` builds rows on demand already. |
+| Focus follows the first result as earlier sources arrive | **N/A.** Compose focus restoration; the tvOS focus engine keeps focus on the row it was on. |
+
+Not part of this pass, noticed while reading: upstream's chip row selects a filter as focus moves
+along it; ours selects on press.

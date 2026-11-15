@@ -365,8 +365,10 @@ final class PlayerSettingsStore: PreferenceStore {
         set { setString("stream_auto_play_regex", newValue) }
     }
 
+    /// One of `StreamAutoPlayPolicy.timeoutValues`; `unlimitedTimeout` is "Unlimited". A stored
+    /// value the slider cannot show reads as the nearest one, as upstream migrates it.
     var streamAutoPlayTimeoutSeconds: Int {
-        get { int("stream_auto_play_timeout_seconds", default: 10) }
+        get { StreamAutoPlayPolicy.normalizedTimeout(int("stream_auto_play_timeout_seconds", default: 10)) }
         set { setInt("stream_auto_play_timeout_seconds", newValue) }
     }
 

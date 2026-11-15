@@ -248,6 +248,9 @@ struct SettingsStepperRow: View {
     var range: ClosedRange<Int>
     var step: Int = 1
     var format: (Int) -> String = { "\($0)" }
+    /// Steps through these values instead of `range` — upstream's `SliderSettingsItem(values:)`,
+    /// for a scale that is not evenly spaced.
+    var values: [Int]? = nil
 
     var body: some View {
         SettingsRowContent(
@@ -256,21 +259,39 @@ struct SettingsStepperRow: View {
             systemImage: systemImage,
             trailing: {
                 HStack(spacing: NuvioTheme.spacing.sm) {
-                    stepButton("minus", enabled: value > range.lowerBound) {
-                        value = max(range.lowerBound, value - step)
+                    stepButton("minus", enabled: canStep(by: -1)) {
+                        stepValue(by: -1)
                     }
                     Text(format(value))
                         .nuvioText(NuvioTextStyles.cardTitle)
                         .foregroundStyle(colors.textPrimary)
                         .frame(minWidth: dp(96))
                         .accessibilityIdentifier("settings.stepper.value.\(title)")
-                    stepButton("plus", enabled: value < range.upperBound) {
-                        value = min(range.upperBound, value + step)
+                    stepButton("plus", enabled: canStep(by: 1)) {
+                        stepValue(by: 1)
                     }
                 }
             }
         )
         .focusSection()
+    }
+
+    private func canStep(by direction: Int) -> Bool {
+        if let values, let index = values.firstIndex(of: value) {
+            return values.indices.contains(index + direction)
+        }
+        return direction < 0 ? value > range.lowerBound : value < range.upperBound
+    }
+
+    private func stepValue(by direction: Int) {
+        if let values, let index = values.firstIndex(of: value) {
+            guard values.indices.contains(index + direction) else { return }
+            value = values[index + direction]
+            return
+        }
+        value = direction < 0
+            ? max(range.lowerBound, value - step)
+            : min(range.upperBound, value + step)
     }
 
     private func stepButton(_ symbol: String, enabled: Bool, action: @escaping () -> Void) -> some View {
