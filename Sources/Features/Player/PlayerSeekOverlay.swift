@@ -81,6 +81,8 @@ struct PlayerSeekReadout: View {
 
     let model: Model
     let duration: Double
+    /// The chapter the seek lands in, as upstream's seek overlay names it ("Show Chapter Title").
+    var chapterTitle: String? = nil
 
     private var target: Double { model.target }
     private var origin: Double { model.origin }
@@ -88,6 +90,12 @@ struct PlayerSeekReadout: View {
 
     var body: some View {
         VStack(spacing: NuvioTheme.spacing.sm) {
+            if let chapterTitle {
+                Text(chapterTitle)
+                    .nuvioText(NuvioTypography.bodyMedium)
+                    .foregroundStyle(.white.opacity(0.9))
+                    .lineLimit(1)
+            }
             HStack(spacing: NuvioTheme.spacing.sm) {
                 Image(systemName: forward ? "forward.fill" : "backward.fill")
                     .font(.system(size: sp(13), weight: .semibold))

@@ -60,6 +60,28 @@ final class MovieCreditsTests: XCTestCase {
         )
     }
 
+    /// An "End Credits" chapter arrives as an outro; in the second half it is the end credits.
+    func testAnEndCreditsChapterFiresTheCardWhereItBegins() {
+        let segments = [segment(.outro, 5520, 7190)]
+        XCTAssertEqual(
+            PostPlayRecommendation.triggerPositionSeconds(
+                durationSeconds: 7200, thresholdPercent: 90, segments: segments, tailWindowSeconds: 216
+            ),
+            5520
+        )
+    }
+
+    /// An opening "Credits" chapter is not the end of the film.
+    func testAnOutroInTheFirstHalfIsNotTheEndCredits() {
+        let segments = [segment(.outro, 30, 120)]
+        XCTAssertEqual(
+            PostPlayRecommendation.triggerPositionSeconds(
+                durationSeconds: 7200, thresholdPercent: 90, segments: segments, tailWindowSeconds: 216
+            ),
+            6480
+        )
+    }
+
     /// A scene is the one part of the credits nobody wants covered by a carousel, so the card
     /// waits for its end rather than its start.
     func testAMarkedSceneHoldsTheCardUntilItHasPlayed() {

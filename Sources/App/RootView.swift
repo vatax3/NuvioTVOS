@@ -210,6 +210,8 @@ struct RootView: View {
             CustomPosterView()
         case .customTheme:
             CustomThemeView()
+        case .subtitleAppearance:
+            SubtitleAppearanceEditorView()
         case .catalogOrder:
             CatalogOrderView()
         case .themeSettings:

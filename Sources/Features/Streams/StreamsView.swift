@@ -1026,14 +1026,7 @@ struct StreamsView: View {
     /// Upstream's source and selection rules for auto-play, with the names this screen lists
     /// streams under: an addon by its display name, a plugin by its scraper's.
     private var autoPlayScope: StreamFilterEngine.AutoPlayScope {
-        StreamFilterEngine.AutoPlayScope(
-            source: settings.player.streamAutoPlaySource,
-            installedAddonNames: Set(addons.addons.map(\.displayName)),
-            selectedAddons: Set(settings.player.streamAutoPlaySelectedAddons),
-            selectedPlugins: Set(settings.player.streamAutoPlaySelectedPlugins),
-            pluginsEnabled: settings.player.pluginsEnabled,
-            debridFilter: settings.player.streamAutoPlayDebridFilter
-        )
+        .current(settings: settings, addons: addons)
     }
 
     /// `stream_reuse_last_link_enabled`: the link this title last played from, within the
@@ -1046,7 +1039,12 @@ struct StreamsView: View {
                   maxAgeHours: settings.player.reuseLastLinkCacheHours
               ) else { return }
         didAutoPlay = true
-        Task { await play(Self.stream(reusing: cached), sourceStableKey: cached.sourceStableKey) }
+        Task {
+            await play(
+                Self.stream(reusing: cached), sourceStableKey: cached.sourceStableKey,
+                autoSelected: true, fromLinkCache: true
+            )
+        }
     }
 
     /// `shouldUseDirectAutoPlayFlow`, decided once: any auto-play mode, or — with auto-play off —
@@ -1103,7 +1101,7 @@ struct StreamsView: View {
                episode: request.episode
            ) {
             didAutoPlay = true
-            Task { await play(match.stream) }
+            Task { await play(match.stream, autoSelected: true) }
             return
         }
 
@@ -1117,7 +1115,7 @@ struct StreamsView: View {
         )
         if step.select, let candidate = autoPlayCandidate() {
             didAutoPlay = true
-            Task { await play(candidate) }
+            Task { await play(candidate, autoSelected: true) }
             return
         }
         if step.giveUpIfNoMatch {
@@ -1166,9 +1164,18 @@ struct StreamsView: View {
         return next
     }
 
-    /// - Parameter sourceStableKey: the row a reused link was first chosen from, so the
-    ///   player's Sources panel marks that row rather than the stand-in built for the link.
-    private func play(_ stream: Stream, sourceStableKey: String? = nil) async {
+    /// - Parameters:
+    ///   - sourceStableKey: the row a reused link was first chosen from, so the player's Sources
+    ///     panel marks that row rather than the stand-in built for the link.
+    ///   - autoSelected: started by the screen itself rather than picked by the viewer, which is
+    ///     what lets the player fall back to the next match when this source fails.
+    ///   - fromLinkCache: the reused last link, which a failed fallback chain forgets.
+    private func play(
+        _ stream: Stream,
+        sourceStableKey: String? = nil,
+        autoSelected: Bool = false,
+        fromLinkCache: Bool = false
+    ) async {
         didAutoPlay = true
         // `OnAutoPlayConsumed`: whatever happens next, coming back here finds the list.
         defer { autoPlayFlowActive = false }
@@ -1183,6 +1190,13 @@ struct StreamsView: View {
 
         var playback = makePlaybackRequest(stream: stream, url: url)
         if let sourceStableKey { playback.sourceStableKey = sourceStableKey }
+        if autoSelected {
+            playback.autoSelection = SourceFallbackState(
+                triedKeys: [SourceFallback.key(for: stream)],
+                fromLinkCache: fromLinkCache,
+                currentInfoHash: stream.effectiveInfoHash
+            )
+        }
         let installed = ExternalPlayerLauncher.installed
 
         // Where the stream opens: internally, in a chosen external app, or ask each time.

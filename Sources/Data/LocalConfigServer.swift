@@ -29,6 +29,15 @@ final class LocalConfigServer {
     @ObservationIgnored private var connections: [ObjectIdentifier: NWConnection] = [:]
     @ObservationIgnored private var page: () -> String = { "" }
     @ObservationIgnored private var handler: ([String: String]) async -> Void = { _ in }
+    /// The one raw upload a page may post — the subtitle font page's file — and its ceiling.
+    @ObservationIgnored private var upload: Upload?
+
+    struct Upload {
+        var path: String
+        var maxBytes: Int
+        /// The decoded file name and the bytes; true when the file was accepted.
+        var handler: (String, Data) async -> Bool
+    }
     @ObservationIgnored private let log = Logger(subsystem: "com.nuvio.tvos", category: "ConfigServer")
 
     /// Starts serving, replacing anything already running.
@@ -39,10 +48,15 @@ final class LocalConfigServer {
     ///   - onSubmit: the decoded form fields. Awaited before the redirect goes out, so a
     ///     submission that has to reach the network — importing a badge pack from a URL — sends
     ///     the phone back to a page that already reflects what it did.
-    func start(page: @escaping () -> String, onSubmit: @escaping ([String: String]) async -> Void) {
+    func start(
+        page: @escaping () -> String,
+        onSubmit: @escaping ([String: String]) async -> Void = { _ in },
+        upload: Upload? = nil
+    ) {
         stop()
         self.page = page
         self.handler = onSubmit
+        self.upload = upload
 
         do {
             // Port 0 lets the system pick a free one, so a stale listener from a previous screen
@@ -108,6 +122,12 @@ final class LocalConfigServer {
 
                 var buffer = buffer
                 if let data { buffer.append(data) }
+                // Forms — a pasted badge pack included — stay well under 2 MB, and an upload has
+                // its own ceiling; anything larger is refused before it is held in memory.
+                let ceiling = max(self.upload?.maxBytes ?? 0, 2 * 1024 * 1024) + 64 * 1024
+                if buffer.count > ceiling {
+                    return self.send(status: "413 Payload Too Large", headers: [:], body: "", on: connection)
+                }
 
                 guard let request = HTTPRequest(buffer) else {
                     if isComplete { self.close(connection) } else { self.receive(connection, buffer: buffer) }
@@ -119,7 +139,26 @@ final class LocalConfigServer {
     }
 
     private func respond(to request: HTTPRequest, on connection: NWConnection) async {
-        if request.method == "POST" {
+        if request.method == "POST", let upload, request.path == upload.path {
+            // Upstream's `/api/font`: the file as the body, its name in `X-File-Name`.
+            let name = request.headers["x-file-name"]
+                .flatMap { $0.removingPercentEncoding }
+                .map { ($0 as NSString).lastPathComponent }?
+                .nilIfBlank
+            let accepted: Bool
+            if let name, !request.body.isEmpty, request.body.count <= upload.maxBytes {
+                accepted = await upload.handler(name, request.body)
+            } else {
+                accepted = false
+            }
+            if accepted { revision += 1 }
+            send(
+                status: accepted ? "200 OK" : "400 Bad Request",
+                headers: ["Content-Type": "application/json; charset=utf-8"],
+                body: accepted ? #"{"status":"added"}"# : #"{"error":"invalid"}"#,
+                on: connection
+            )
+        } else if request.method == "POST" {
             await handler(FormDecoder.decode(request.body))
             revision += 1
             // 303 rather than echoing the page: it turns the browser's reload into a GET, so a
@@ -152,6 +191,8 @@ final class LocalConfigServer {
 struct HTTPRequest {
     var method: String
     var path: String
+    /// Header names lowercased.
+    var headers: [String: String] = [:]
     var body: Data
 
     /// Returns `nil` while the request is still arriving, so the caller keeps reading.
@@ -168,6 +209,11 @@ struct HTTPRequest {
         guard parts.count >= 2 else { return nil }
         method = String(parts[0])
         path = String(parts[1])
+        for line in lines {
+            guard let colon = line.firstIndex(of: ":") else { continue }
+            let name = line[..<colon].trimmingCharacters(in: .whitespaces).lowercased()
+            headers[name] = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+        }
 
         let declared = lines
             .first { $0.lowercased().hasPrefix("content-length:") }

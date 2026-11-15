@@ -18,6 +18,7 @@ struct PlayerView: View {
     @Environment(AppSettings.self) private var settings
     @Environment(Router.self) private var router
     @Environment(AddonStore.self) private var addons
+    @Environment(PluginStore.self) private var plugins
 
     /// End-of-film recommendations. Fetched once, a few percent before they are due, and
     /// dismissed for the rest of the session once the viewer sends them away.
@@ -174,6 +175,16 @@ struct PlayerView: View {
     @State private var engineOverride: InternalPlayerEngine?
     /// An engine's refusal, once there is nowhere left to hand the stream to.
     @State private var playbackError: String?
+    /// The search for the next matching source after this one failed (`SourceFallback`).
+    @State private var sourceFallbackTask: Task<Void, Never>?
+    /// The search for a fresh link to the same source (`ExpiredLinkRefresh`), and the link it
+    /// was started for: each failed link is refreshed at most once.
+    @State private var linkRefreshTask: Task<Void, Never>?
+    @State private var linkRefreshAttemptedURL: String?
+
+    /// Another source, or a fresh link to this one, is being fetched: the cover stays up and the
+    /// engine's error stays off screen.
+    private var isRecoveringSource: Bool { sourceFallbackTask != nil || linkRefreshTask != nil }
     /// Recreating only the engine's subtree gives a failed demuxer/decoder one clean retry while
     /// the full-screen player, its source request and its navigation context remain mounted.
     @State private var engineSessionGeneration = 0
@@ -244,6 +255,11 @@ struct PlayerView: View {
             try? await Task.sleep(for: .seconds(SkipSegmentVisibility.autoHideTimeout))
             guard !Task.isCancelled else { return }
             skipAutoHidden = true
+        }
+        .task(id: "\(request.id)|\(hasStartedPlayback)") { await watchSourceStartup() }
+        .onDisappear {
+            sourceFallbackTask?.cancel()
+            linkRefreshTask?.cancel()
         }
         .task(id: recoveryWatchdogKey) {
             let state = recoveryState
@@ -360,7 +376,9 @@ struct PlayerView: View {
                     scrobbleStop(progressPercent: 100)
                     advanceToNextEpisode()
                     dismiss()
-                }
+                },
+                onPlaybackError: { message in _ = recoverSource(after: message) },
+                holdsPlaybackError: isRecoveringSource
             )
             .id(engineSessionGeneration)
 
@@ -456,7 +474,9 @@ struct PlayerView: View {
                     scrobbleStop(progressPercent: 100)
                     advanceToNextEpisode()
                     dismiss()
-                }
+                },
+                onPlaybackError: { message in _ = recoverSource(after: message) },
+                holdsPlaybackError: isRecoveringSource
             )
             .id(engineSessionGeneration)
 
@@ -570,8 +590,12 @@ struct PlayerView: View {
     /// - Parameter invitesAnotherEngine: false for a failure no engine would survive — an origin
     ///   answering 401/403, a rate-limited one, a certificate the host declined. Only the engine
     ///   that reads the origin's status can tell; the others say `true` and mean "I cannot know".
+    /// Upstream's order: a link that has likely expired is fetched again before anything else
+    /// is tried on it, then the next matching source, then another engine.
     private func handleEngineFailure(_ reason: String?, invitesAnotherEngine: Bool = true) {
         guard playbackError == nil else { return }
+        let message = reason?.nilIfBlank ?? L10n.text("player.error_playback_failed")
+        if recoverSource(after: message) { return }
         let failed = resolvedEngine
         if PlayerEngineRouting.fallback(
             after: failed,
@@ -582,7 +606,187 @@ struct PlayerView: View {
             refusedEngines.insert(failed)
             return
         }
-        playbackError = reason?.nilIfBlank ?? L10n.text("player.error_playback_failed")
+        playbackError = message
+    }
+
+    /// True when a fresh link or another source is being fetched instead of showing the error.
+    private func recoverSource(after message: String) -> Bool {
+        tryRefreshExpiredLink(after: message) || tryFallbackToNextSource(after: message)
+    }
+
+    /// Shown once nothing else is being tried: mpv and AetherEngine draw their own error card
+    /// when the hold is released; the AVFoundation path has only this one.
+    private func showRecoveryFailure(_ message: String) {
+        if resolvedEngine == .exoplayer { playbackError = message }
+    }
+
+    // MARK: Expired links
+
+    private func tryRefreshExpiredLink(after message: String) -> Bool {
+        if linkRefreshTask != nil { return true }
+        let failedURL = request.streamURL
+        guard !failedURL.isEmpty, let sourceRequest = request.sourceRequest else { return false }
+        let fromLinkCache = request.autoSelection?.fromLinkCache == true
+        guard fromLinkCache || ExpiredLinkRefresh.hasLikelyExpiringCredentials(failedURL),
+              linkRefreshAttemptedURL != failedURL
+        else { return false }
+        linkRefreshAttemptedURL = failedURL
+        let expected = ExpiredLinkRefresh.Identity(
+            addonName: request.sourceAddonName,
+            streamName: request.streamName,
+            infoHash: request.autoSelection?.currentInfoHash,
+            filename: request.filename,
+            bingeGroup: request.sourceBingeGroup
+        )
+        linkRefreshTask = Task {
+            await runLinkRefresh(sourceRequest: sourceRequest, failedURL: failedURL, expected: expected, message: message)
+        }
+        return true
+    }
+
+    /// Fetches the playing source again from its addon, resolving debrid anew, and continues
+    /// from the saved position.
+    private func runLinkRefresh(
+        sourceRequest: StreamRequest, failedURL: String, expected: ExpiredLinkRefresh.Identity, message: String
+    ) async {
+        LastStreamLinkStore.remove(contentType: request.contentType, videoId: request.videoId)
+        let model = StreamsViewModel()
+        // Asked anew, past the addon cache: the cached answer is where the stale link came from.
+        let search = Task {
+            await model.load(request: sourceRequest, addonStore: addons, settings: settings, forceRefresh: true)
+        }
+        defer { search.cancel() }
+
+        var candidate: Stream?
+        var polls = 0
+        while polls < ExpiredLinkRefresh.pollCount, !Task.isCancelled {
+            candidate = ExpiredLinkRefresh.candidate(in: model.orderedStreams, failedURL: failedURL, expected: expected)
+            if candidate != nil || (!model.isLoading && !model.groups.isEmpty) { break }
+            try? await Task.sleep(for: ExpiredLinkRefresh.pollInterval)
+            polls += 1
+        }
+        guard !Task.isCancelled else { return }
+
+        if let candidate,
+           case .success(let url) = await model.playableURL(for: candidate, settings: settings),
+           url != failedURL {
+            var playback = request.replacingSource(with: candidate, url: url)
+            if var state = playback.autoSelection {
+                state.triedKeys.insert(SourceFallback.urlKey(url))
+                state.fromLinkCache = false
+                state.currentInfoHash = candidate.effectiveInfoHash
+                playback.autoSelection = state
+            }
+            router.play(playback)
+            return
+        }
+        linkRefreshTask = nil
+        if !tryFallbackToNextSource(after: message) { showRecoveryFailure(message) }
+    }
+
+    // MARK: Source fallback
+
+    /// Upstream's `tryFallbackToNextSourceAfterError` (1.2.0-beta.1): when the auto-selected
+    /// source fails before its first frame, quietly plays the next source auto-play would pick,
+    /// up to "Sources to try on failure". Never a source the viewer picked, and never alongside
+    /// the engine switch on error.
+    ///
+    /// Returns true when a fallback is running and the error must not be shown yet.
+    private func tryFallbackToNextSource(after message: String) -> Bool {
+        if sourceFallbackTask != nil { return true }
+        guard settings.player.streamAutoPlayFallbackActive, !hasStartedPlayback,
+              var state = request.autoSelection, let sourceRequest = request.sourceRequest
+        else { return false }
+        guard state.attempts < settings.player.streamAutoPlayFallbackMaxSources else {
+            // The last source tried may have been saved for reuse when it started; it failed.
+            LastStreamLinkStore.remove(contentType: request.contentType, videoId: request.videoId)
+            return false
+        }
+        state.triedKeys.insert(SourceFallback.urlKey(request.streamURL))
+        sourceFallbackTask = Task { await runSourceFallback(state: state, sourceRequest: sourceRequest, message: message) }
+        return true
+    }
+
+    private func runSourceFallback(state: SourceFallbackState, sourceRequest: StreamRequest, message: String) async {
+        var state = state
+        let maxSources = settings.player.streamAutoPlayFallbackMaxSources
+        let model = StreamsViewModel()
+        if settings.player.pluginsEnabled {
+            model.pluginScrapers = plugins.enabledScrapers
+            model.groupPluginsByRepository = settings.player.groupPluginStreamsByRepository
+            model.pluginRepositoryNames = Dictionary(
+                plugins.repositories.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first }
+            )
+        }
+        // A fresh search that answers from the addon cache, so what the source screen already
+        // found is reused rather than asked for again.
+        let search = Task { await model.load(request: sourceRequest, addonStore: addons, settings: settings) }
+        defer { search.cancel() }
+        let scope = StreamFilterEngine.AutoPlayScope.current(settings: settings, addons: addons)
+
+        var polls = 0
+        while state.attempts < maxSources, !Task.isCancelled {
+            let next = SourceFallback.nextCandidate(
+                from: model.orderedStreams,
+                triedKeys: state.triedKeys,
+                failedAddonName: request.sourceAddonName,
+                failedInfoHash: state.currentInfoHash
+            ) { untried in
+                StreamFilterEngine.autoPlayCandidate(
+                    from: untried,
+                    attributes: model.attributes,
+                    mode: settings.player.streamAutoPlayMode,
+                    scope: scope,
+                    regex: settings.player.streamAutoPlayRegex,
+                    preferredQuality: settings.player.autoPlayPreferredQuality,
+                    cacheStates: model.cacheStates
+                )
+            }
+            guard let next else {
+                if !model.isLoading || polls >= SourceFallback.pollCount { break }
+                try? await Task.sleep(for: SourceFallback.pollInterval)
+                polls += 1
+                continue
+            }
+            state.triedKeys.insert(SourceFallback.key(for: next))
+            state.attempts += 1
+            guard case .success(let url) = await model.playableURL(for: next, settings: settings),
+                  url != request.streamURL
+            else { continue }
+
+            var playback = request.replacingSource(with: next, url: url)
+            state.triedKeys.insert(SourceFallback.urlKey(url))
+            state.currentInfoHash = next.effectiveInfoHash
+            state.fromLinkCache = false
+            playback.autoSelection = state
+            router.play(playback)
+            return
+        }
+        guard !Task.isCancelled else { return }
+
+        // The last source that failed may have been saved for reuse.
+        LastStreamLinkStore.remove(contentType: request.contentType, videoId: request.videoId)
+        sourceFallbackTask = nil
+        showRecoveryFailure(message)
+    }
+
+    /// `scheduleSourceStartupTimeout`: a source that shows no first frame within "Time for a
+    /// source to start" counts as failed. The last source allowed keeps loading, as it would
+    /// without the fallback.
+    private func watchSourceStartup() async {
+        guard settings.player.streamAutoPlayFallbackActive, let state = request.autoSelection,
+              !hasStartedPlayback
+        else { return }
+        let seconds = settings.player.streamAutoPlayFallbackStartupTimeoutSeconds
+        guard (try? await Task.sleep(for: .seconds(seconds))) != nil else { return }
+        guard !hasStartedPlayback, playbackError == nil, scenePhase == .active,
+              state.attempts < settings.player.streamAutoPlayFallbackMaxSources
+        else { return }
+        _ = tryFallbackToNextSource(after: L10n.format(
+            "player.error_source_startup_timeout",
+            fallback: "The source did not start within %@ seconds.",
+            "\(seconds)"
+        ))
     }
 
     /// The retry on an error card: hand the source to whichever engine has not had it yet.
@@ -835,7 +1039,9 @@ struct PlayerView: View {
 
     @ViewBuilder
     private var playerStatusOverlay: some View {
-        if isLoading, !hasStartedPlayback, settings.player.loadingOverlayEnabled,
+        // `showRecoveryOverlay`: the next source is being looked for, so the cover stays up even
+        // though the failed engine has stopped loading.
+        if isLoading || isRecoveringSource, !hasStartedPlayback, settings.player.loadingOverlayEnabled,
            !stagesHarnessOverlays {
             PlayerLoadingOverlay(request: request, showsDetail: settings.player.showPlayerLoadingStatus)
                 .transition(.opacity)

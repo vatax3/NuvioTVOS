@@ -1516,3 +1516,52 @@ differences from upstream without saying so; every one is now a verdict below.
 
 Not part of this pass, noticed while reading: upstream's chip row selects a filter as focus moves
 along it; ours selects on press.
+
+## Upstream moved a twelfth time: 1.1.0 → 1.2.0-beta.1
+
+One tag (13 November), 99 commits, 153 files, about thirty engineering lines plus translations.
+Read from a worktree at the tag. The two indexes agreed on the weight: eleven new preference keys —
+three for falling back to the next source, five for the subtitle style, `chapter_title_enabled`,
+`continue_watching_click_action`, and the pending provider marks — and the largest new files are the
+subtitle appearance editor, the font import and the source fallback. `UpstreamSettingsManifest.swift`
+was regenerated at the tag (275 keys).
+
+### Defects of ours, found by reading why they needed a change
+
+| Upstream | Ours |
+|---|---|
+| **Key Continue Watching cards by show** (`4eb7dda70`, not in the notes) | **Same defect.** The row iterated entries by their episode id, so a card moving on to the next episode was a new item and focus fell to its neighbour. Keyed by show (`CatalogRowView.swift:187`). |
+| **Use End Credits chapters for movie recommendation timing** | **Same defect.** "End Credits" chapters arrive as outros (`ChapterSkipSegments.swift:70`) and the film trigger only read `movieCredits`, so it fell back to the percentage. An outro in the second half now counts (`PostPlayRecommendation.swift:149`). |
+| **Let poster menus mark YouTube and other add-on videos watched** | **Same defect.** "Mark as watched" was offered to films only, so a single video of any other type had none. Every type but series, tv and anime is now one item (`Models.swift:353`, `PosterOptions.swift:89`); tracking writes stay films-only, since the writers file anything else under shows. |
+| **Choose what selecting a Continue Watching item opens** | **An undocumented divergence.** Ours always opened the details page; upstream's default opens the stream. Ported with their default (`SettingsModels.swift:524`, `LibraryStore.swift:297`). |
+| **Fallback to the next source, blocked by the engine switch on error** | **An undocumented divergence.** Our engine switch on error defaulted on since the first settings pass (d6fdb15); theirs is off. Now off (`PlayerSettingsStore.swift:53`), so the fallback is usable by default as upstream's is. |
+
+### The rest of the window
+
+| Upstream | Ours |
+|---|---|
+| **Fall back to the next matching source on failure**, with a start-up time limit and a number of sources | **Ported.** The three keys and their ranges (`PlayerSettingsStore.swift`, rows at `PlaybackSettingsContent.swift:501`); an auto-selected playback carries `SourceFallbackState` across the in-place switch (`Router.swift`, `PlaybackRequest.autoSelection`); the next candidate is upstream's selection minus tried keys and other copies of the failed torrent (`SourceFallback.swift:49`); started from any engine error or the start-up watchdog (`PlayerView.swift:695`, `:776`). A failed chain forgets the reused last link. |
+| **Refresh expired saved and tokenised links** | **Ported.** Upstream's credential-key heuristics (`ExpiredLinkRefresh.swift:24`) and candidate scoring; the same addon is asked again past the cache and the link re-resolved (`PlayerView.swift:625`). Order as theirs: refresh, then fallback, then engine switch (`PlayerView.swift:595`). mpv and AetherEngine now report errors to the host before drawing their card (`PlayerChrome.onPlaybackError`). |
+| **Chapters setting for both engines and a chapter title toggle**, moved to Player Interface | **Ported, with the title it toggles.** `exo_chapters_enabled` now hides the chapter button, marks and title on every engine, off by default as theirs (`PlayerSettingsStore.swift:550`, `PlayerChrome.swift:1244`); skip intro still reads chapters. The current chapter's title above the bar and in the seek readout had never been ported; it is now (`PlayerChrome.swift:1250`). Both keys local-only, as upstream excludes them (`SettingsBlob.swift:92`). |
+| **Subtitle font, background roundness and drop shadow**; style rail cards; appearance editor with live preview; import fonts from a phone; stale font flash; colour row focus | **Ported.** Five synced keys clamped as theirs; built-in default/serif/monospace and imported fonts (`SubtitleFonts.swift:68`, validation verbatim at `:26`), registered with CoreText. The overlay draws font, roundness and shadow with their scaling (`SubtitleOverlay.swift:200`). On mpv, upstream's way: a text track in a non-default style is hidden in mpv and its `sub-text/ass` drawn by the overlay (`MPVEngine.swift:827`, parser `MpvSubtitleText.swift:16`). Font, Background and Drop Shadow sections in the player panel (`PlayerChrome.swift:1621`), the editor with preview (`SubtitleAppearanceEditorView.swift:7`), and `/api/font` on the local server (`LocalConfigServer.swift:142`). The flash and focus fixes are Compose. |
+| **Keep a series in Continue Watching while its next-up is rebuilt**, stable metadata, keep the series title on the next episode | **N/A.** Our rail is a synchronous projection of progress and cached episodes (`LibraryStore.continueWatching`), with no asynchronous rebuild, snapshot or enrichment overlay; the title is the series preview's. |
+| **Refresh Continue Watching when an upcoming episode airs** | **Ported.** The next release of a watched series' episode is found (`LibraryStore.swift:287`) and the rail re-run just after it, waiting in 15-minute steps, and on returning to Home (`HomeView.swift:274`). |
+| **Pull watch state early on startup and after in-app navigation** | **Already true here.** Progress is pulled second, after the library (`NuvioSyncService.swift:116`), and a sync runs when the player closes (`RootView.swift:127`) and on every return to the foreground. |
+| **Keep single-item marks while a tracking provider is the source** (`bd09e354f`) | **Already true here.** Provider progress is adopted into local progress, never replaces it (`RemoteProgressService.swift:72`), so a mark the provider does not report stays. |
+| **Focus the playing stream when the source panel opens** (`f4e4d64b3`) | **Ported.** The playing source takes focus when it arrives after other results, unless the viewer has moved, any direction counting (`InPlayerPanel.swift:473`). |
+| **Slow the hero description auto-scroll to a reading pace** | **Ported.** 2.5 s a line, measured in lines (`AutoScrollingText.swift:25`). |
+| **Check mark for saved lists in the list picker** | **Already true here** (`TraktListPicker.swift:112`). |
+| **Log Trakt token refresh failures, skip progress polling while signed out** | **Already true here.** Every remote progress pull returns without a token (`RemoteProgressService.swift:59`). |
+| **Hero description scroll and landscape backdrop setting in folders following home** | **N/A.** Our folders following the home layout render rails, not the Modern hero. |
+| **Use the audio clock when mpv video time drops to 0** | **Declined, doubt written down.** An `h264_mediacodec` artefact on PTS-less HLS packets; our mpv decodes with VideoToolbox or FFmpeg, and no report shows the symptom here. Port it the day one does. |
+| **SPS/PPS init segment for HLS**, **HDR10+ OBUs from AV1**, **DASH MIME hints**, **pinned audio capabilities for forced AC-3**, **letterbox bars above the libass overlay**, **thermal headroom polling** | **N/A.** ExoPlayer's data sources, extractors and audio sink, their libass overlay, and an Android thermal API. |
+| **Restore the episode being watched after process death** | **N/A.** Android's back-stack restoration; tvOS relaunches at Home. Their other half — saving progress when mpv pauses, so a paused player killed later resumes there — is covered differently: progress is written whenever the app leaves the foreground (`PlayerChrome.swift:301`), which is when tvOS can end it. |
+| **Cloudstream stub MainActivity** | **N/A.** No Cloudstream plugins. |
+| **Search refresh on field focus, focus back to the last input, Library grid reflow, recomposition detection** | **N/A.** Compose recomposition and focus. |
+| Lithuanian, Dutch, Greek, Spanish, French, Hebrew, Japanese, Polish, Portuguese, Turkish, Vietnamese, Indonesian, es-419 | **Declined.** Translation work. |
+
+Open after this window: card watched badges are never drawn — `CatalogRowView.watchedIds`
+(`CatalogRowView.swift:14`) is declared and never passed, so upstream's badges on Home and in
+collections, which this window's single-item marks extend, have no counterpart. Found while porting
+that line; not a regression. Still open from earlier windows: the accessibility audit, image
+downsampling, media servers, night mode.

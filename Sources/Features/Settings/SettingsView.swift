@@ -748,6 +748,12 @@ struct LayoutSettingsContent: View {
                     isOn: $layout.continueWatchingEnabled
                 )
                 SettingsOptionRow(title: L10n.text("settings.layout.card_style", fallback: "Card style"), selection: $layout.continueWatchingCardStyle)
+                // Upstream's "On Select", above "Sort Order".
+                SettingsOptionRow(
+                    title: L10n.text("settings.layout.cw_click_action", fallback: "On Select"),
+                    subtitle: L10n.text("settings.layout.cw_click_action_sub", fallback: "What opens when you select a Continue Watching item"),
+                    selection: $layout.continueWatchingClickAction
+                )
                 SettingsOptionRow(title: L10n.text("settings.section.sort", fallback: "Sort"), selection: $layout.continueWatchingSortMode)
                 SettingsToggle(title: L10n.text("settings.layout.use_episode_thumbnails", fallback: "Use episode thumbnails"), isOn: $layout.useEpisodeThumbnailsInContinueWatching)
                 SettingsToggle(title: L10n.text("settings.layout.blur_next_up", fallback: "Blur next-up artwork"), subtitle: L10n.text("settings.layout.blur_next_up_subtitle", fallback: "Avoid spoilers in the rail"), isOn: $layout.blurContinueWatchingNextUp)

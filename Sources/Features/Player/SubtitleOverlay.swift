@@ -142,48 +142,84 @@ final class SubtitleTrackController {
 
 /// Draws the active cue with the viewer's styling. Sits above the player but below the
 /// transport bar, and never takes focus.
+///
+/// Font, background roundness and drop shadow follow upstream's `StyledSubtitleText`
+/// (1.2.0-beta.1): padding 10 × 5 and every size scaled by the text size against a 24-point
+/// reference, the background a rounded box behind the whole block, the shadow black at the
+/// viewer's opacity, offset and blurred by the shadow size.
 struct SubtitleOverlay: View {
     let cues: [SubtitleCue]
     let style: SubtitleStyle
     /// What is covering the bottom of the picture. The host knows; this view is drawn over both
     /// engines and cannot see either one's chrome.
     var obstructions = SubtitlePlacement.Obstructions()
+    /// mpv's current event, when the overlay draws a text track in mpv's place
+    /// (`MPVEngine.styledSubtitleText`). Its top-aligned events go to the top of the picture.
+    var mpvText: MpvStyledSubtitleText? = nil
 
     var body: some View {
         GeometryReader { proxy in
-            if !cues.isEmpty {
-                // Overlapping cues stack rather than replace one another, and each keeps its own
-                // background box so two speakers stay readable as two lines rather than one run.
-                VStack(spacing: NuvioTheme.spacing.xxs) {
-                    ForEach(cues) { cue in
-                        Text(cue.text)
-                            .font(.system(size: style.fontSize, weight: style.bold ? .bold : .regular))
-                            .foregroundStyle(style.textColor)
-                            .multilineTextAlignment(.center)
-                            .lineSpacing(style.fontSize * 0.18)
-                            .shadow(color: outlineShadow, radius: outlineRadius)
-                            .padding(.horizontal, NuvioTheme.spacing.md)
-                            .padding(.vertical, NuvioTheme.spacing.xs)
-                            .background {
-                                if style.backgroundColor.alphaComponent > 0.01 {
-                                    RoundedRectangle(cornerRadius: NuvioTheme.radii.xs, style: .continuous)
-                                        .fill(style.backgroundColor)
-                                }
-                            }
-                    }
+            ZStack {
+                if let top = mpvText?.top, !top.characters.isEmpty {
+                    block(top)
+                        .frame(maxWidth: proxy.size.width * 0.8)
+                        .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
+                        .padding(.top, dp(48))
                 }
-                .frame(maxWidth: proxy.size.width * 0.8)
-                .frame(width: proxy.size.width, height: proxy.size.height, alignment: .bottom)
-                // Lifted clear of the transport only while the transport is there. Reserving
-                // the room permanently is what put every line a tenth of the picture too high.
-                .padding(.bottom, dp(CGFloat(SubtitlePlacement.inset(
-                    offset: style.verticalOffset, obstructions: obstructions
-                ))))
+                if hasBottom {
+                    // Overlapping cues stack rather than replace one another, and each keeps its
+                    // own background box so two speakers stay readable as two lines.
+                    VStack(spacing: NuvioTheme.spacing.xxs) {
+                        if let bottom = mpvText?.bottom, !bottom.characters.isEmpty {
+                            block(bottom)
+                        }
+                        ForEach(cues) { cue in
+                            block(AttributedString(cue.text))
+                        }
+                    }
+                    .frame(maxWidth: proxy.size.width * 0.8)
+                    .frame(width: proxy.size.width, height: proxy.size.height, alignment: .bottom)
+                    // Lifted clear of the transport only while the transport is there. Reserving
+                    // the room permanently is what put every line a tenth of the picture too high.
+                    .padding(.bottom, dp(CGFloat(SubtitlePlacement.inset(
+                        offset: style.verticalOffset, obstructions: obstructions
+                    ))))
+                }
             }
         }
         .allowsHitTesting(false)
     }
 
+    private var hasBottom: Bool {
+        !cues.isEmpty || (mpvText.map { !$0.bottom.characters.isEmpty } ?? false)
+    }
+
+    /// Upstream's 24 sp reference size, against which padding, radius and shadow are scaled.
+    private var unit: CGFloat { style.fontSize / sp(24) }
+
+    private func block(_ text: AttributedString) -> some View {
+        Text(text)
+            .font(SubtitleFonts.font(for: style.fontId, size: style.fontSize, weight: style.bold ? .bold : .regular))
+            .foregroundStyle(style.textColor)
+            .multilineTextAlignment(.center)
+            .lineSpacing(style.fontSize * 0.18)
+            .shadow(color: outlineShadow, radius: outlineRadius)
+            .shadow(
+                color: style.shadowEnabled
+                    ? .black.opacity(style.shadowOpacity / 100 * style.textColor.alphaComponent) : .clear,
+                radius: style.shadowEnabled ? style.shadowSize * unit : 0,
+                x: style.shadowEnabled ? style.shadowSize * unit : 0,
+                y: style.shadowEnabled ? style.shadowSize * unit : 0
+            )
+            .padding(.horizontal, 10 * unit)
+            .padding(.vertical, 5 * unit)
+            .background {
+                if style.backgroundColor.alphaComponent > 0.01 {
+                    RoundedRectangle(cornerRadius: style.backgroundRadius * unit, style: .continuous)
+                        .fill(style.backgroundColor)
+                }
+            }
+    }
 
     /// SwiftUI has no text stroke, so the outline is approximated with a tight dark shadow —
     /// visually equivalent at TV viewing distance and far cheaper than four offset copies.

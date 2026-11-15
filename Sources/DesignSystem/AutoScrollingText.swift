@@ -4,7 +4,9 @@ import SwiftUI
 /// upward instead of ending in an ellipsis, then pauses and returns to the top.
 ///
 /// Port of upstream's `AutoScrollingText` (1.1.0-beta.12), with their timings: 3 s before it
-/// moves, 12 pt a second, 3 s at the end, 0.6 s back, at most three passes so an idle Home screen
+/// moves, 2.5 s a line (1.2.0-beta.1: measured in lines, so the reading pace — about 240 words a
+/// minute — is the same at any text size; it was 12 pt a second), 3 s at the end, 0.6 s back, at
+/// most three passes so an idle Home screen
 /// does not animate for ever, and a fade at whichever edge has hidden text. Reduce Motion takes
 /// the place of their "animations off" check. A new text restarts it from the top.
 struct AutoScrollingText: View {
@@ -20,6 +22,7 @@ struct AutoScrollingText: View {
     static let startDelay: Duration = .seconds(3)
     static let endPause: Duration = .seconds(3)
     static let returnDuration = 0.6
+    static let secondsPerLine = 2.5
     static let maxCycles = 3
     static let fadeFraction: CGFloat = 0.18
 
@@ -79,7 +82,8 @@ struct AutoScrollingText: View {
         offset = 0
         guard scrolls else { return }
         let distance = overflow
-        let scrollSeconds = Double(distance / dp(12))
+        let lineHeight = viewportHeight / CGFloat(max(1, lineLimit))
+        let scrollSeconds = max(0.001, Double(distance / lineHeight) * Self.secondsPerLine)
         for _ in 0..<Self.maxCycles {
             guard (try? await Task.sleep(for: Self.startDelay)) != nil else { return }
             withAnimation(.linear(duration: scrollSeconds)) { offset = distance }

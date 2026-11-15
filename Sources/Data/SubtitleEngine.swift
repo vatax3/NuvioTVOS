@@ -118,8 +118,28 @@ struct SubtitleStyle: Equatable {
     var hdrTextColor: Color = .white
     /// 0–100. See `hdrBrightnessFactor`.
     var hdrBrightness: Double = SubtitleStyle.hdrBrightnessDefault
+    /// `SubtitleFonts` id. See `SubtitleFontStore`.
+    var fontId: String = SubtitleFonts.defaultId
+    /// Background corner radius, 0–24, at the 24 pt reference size.
+    var backgroundRadius: Double = 0
+    var shadowEnabled: Bool = false
+    /// 0–100 %.
+    var shadowOpacity: Double = Double(SubtitleStyle.shadowOpacityDefault)
+    /// 1–8, at the 24 pt reference size.
+    var shadowSize: Double = Double(SubtitleStyle.shadowSizeDefault)
 
     static let `default` = SubtitleStyle()
+
+    static let backgroundRadiusMax = 24
+    static let shadowOpacityDefault = 75
+    static let shadowSizeRange = 1...8
+    static let shadowSizeDefault = 2
+
+    /// Upstream's `usesStyledRenderer`: a font, a background or a shadow that mpv's own renderer
+    /// cannot draw the way the overlay does, so mpv's text subtitles are drawn by the overlay.
+    var usesStyledRenderer: Bool {
+        fontId != SubtitleFonts.defaultId || backgroundColor.alphaComponent > 0.01 || shadowEnabled
+    }
 
     static let hdrBrightnessMin: Double = 0
     static let hdrBrightnessMax: Double = 100

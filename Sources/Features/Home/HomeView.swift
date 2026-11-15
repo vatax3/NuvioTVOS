@@ -132,12 +132,15 @@ struct HomeRailList: View {
     @FocusState private var focusedCardKey: String?
     @State private var didClaimInitialFocus = false
     @State private var railFocusGeneration = 0
+    /// Bumped when an episode airs, so the rail is worked out again against the new time.
+    @State private var releaseTick = 0
 
     private var continueWatching: [ContinueWatchingEntry] {
         // Gated here rather than at the row, so the rail is also absent from the focus order
         // and from `firstCardKey` — a hidden row that still takes the first press is worse than
         // no setting at all.
         guard settings.layout.continueWatchingEnabled else { return [] }
+        _ = releaseTick
         return library.continueWatching(
             threshold: settings.watchedThreshold,
             sort: settings.layout.continueWatchingSortMode,
@@ -260,9 +263,34 @@ struct HomeRailList: View {
                 .id(Self.topAnchor)
                 .onExitCommand(perform: backAction(using: scroller))
         }
+        // Returning to Home covers a release passed while it was not on screen.
+        .onAppear { releaseTick += 1 }
+        .task(id: library.nextContinueWatchingRelease()) { await waitForNextRelease() }
+    }
+
+    /// Upstream's `observeContinueWatchingReleases` (1.2.0-beta.1): runs the rail again just
+    /// after the next episode airs. The wait is taken in steps of at most 15 minutes, because a
+    /// sleeping device stops the clock a single long sleep is counting on.
+    private func waitForNextRelease() async {
+        while let release = library.nextContinueWatchingRelease() {
+            let wait = release.timeIntervalSinceNow + 1
+            guard (try? await Task.sleep(for: .seconds(min(max(wait, 0), 15 * 60)))) != nil else { return }
+            if Date() >= release { releaseTick += 1 }
+        }
     }
 
     private static let topAnchor = "home.rails.top"
+
+    /// Upstream's "On Select": the source list by default, the details page when the viewer
+    /// chose it — for every card, or only for an episode that has not aired.
+    private func openContinueWatching(_ entry: ContinueWatchingEntry) {
+        switch library.selectionTarget(for: entry, action: settings.layout.continueWatchingClickAction) {
+        case .details(let preview): router.openDetail(preview)
+        case .streams(let request):
+            library.cache(entry.preview)
+            router.openStreams(request)
+        }
+    }
 
     private var rails: some View {
         LazyVStack(alignment: .leading, spacing: NuvioTheme.spacing.rail.rowGap) {
@@ -272,7 +300,7 @@ struct HomeRailList: View {
                     style: settings.layout.continueWatchingCardStyle,
                     onFocusItem: { model.focusedItem = $0 },
                     onSelect: { entry in
-                        router.openDetail(entry.preview)
+                        openContinueWatching(entry)
                     },
                     cardFocus: $focusedCardKey,
                     focusScope: Self.continueScope

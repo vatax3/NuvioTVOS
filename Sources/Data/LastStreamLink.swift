@@ -49,6 +49,13 @@ enum LastStreamLinkStore {
         file.save(all)
     }
 
+    /// Forgets the link: it was reused and failed, so offering it again would fail again.
+    static func remove(contentType: String, videoId: String) {
+        guard var all = file.load() else { return }
+        guard all.removeValue(forKey: key(contentType: contentType, videoId: videoId)) != nil else { return }
+        file.save(all)
+    }
+
     static func valid(
         contentType: String, videoId: String, maxAgeHours: Int, now: Date = Date()
     ) -> LastStreamLink? {

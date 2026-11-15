@@ -73,6 +73,11 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
     let onPlaybackFailure: (String) -> Void
     let onProgress: (Double, Double, Bool) -> Void
     let onFinished: () -> Void
+    /// Told the moment the engine reports an error, before any card is drawn — upstream's
+    /// `showErrorUnlessSourceFallback`. The host may answer by trying the next source.
+    var onPlaybackError: (String) -> Void = { _ in }
+    /// The host is trying another source; the engine's error stays off screen meanwhile.
+    var holdsPlaybackError = false
 
     /// Owned by the per-engine view above this one, which also starts playback. Read here, and
     /// never constructed here, because an engine's construction is where the engines differ most.
@@ -332,6 +337,7 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
             // never opens sat behind a spinner that could not end. Reporting the stall as
             // finished is what lets mpv's own account of the failure be read.
             if message != nil { onPlaybackState(engine.isPaused, false) }
+            if let message { onPlaybackError(message) }
         }
         // Browsing the row is use, not idleness: restart the countdown as focus walks it.
         .onChange(of: controlFocus) { _, _ in
@@ -821,6 +827,12 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
                 playbackBadges
             }
 
+            if let chapter = chapterTitle(at: displayPosition) {
+                Text(chapter)
+                    .nuvioText(NuvioTypography.bodyMedium)
+                    .foregroundStyle(.white.opacity(0.9))
+                    .lineLimit(1)
+            }
             progressBar
 
             HStack(alignment: .center, spacing: 0) {
@@ -876,7 +888,7 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
         }
         // Only when the file has them, which `chapters` already decides — a list of one is
         // published as none, so this button never opens a panel with nothing to jump to.
-        if !engine.chapters.isEmpty {
+        if !shownChapters.isEmpty {
             controlButton("list.bullet.indent", label: L10n.text("player.chapters"), focus: .control("chapters")) {
                 picker = .chapters
             }
@@ -1227,6 +1239,20 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
         }
     }
 
+    /// The chapters the viewer sees: none while "Show Chapters" is off. Skip intro still reads
+    /// the engine's own list through `chromeState`, as upstream's does with the setting off.
+    private var shownChapters: [PlayerChapter] {
+        settings.player.chaptersEnabled ? engine.chapters : []
+    }
+
+    /// Upstream's `ChapterTitle`: the chapter playing at `position`, when chapters and their title
+    /// are both on.
+    private func chapterTitle(at position: Double) -> String? {
+        guard settings.player.chapterTitleEnabled,
+              let index = PlayerChapters.index(in: shownChapters, at: position) else { return nil }
+        return shownChapters[index].displayName(number: index + 1)
+    }
+
     /// Hairlines on the bar where the chapters begin, drawn over both the played and unplayed
     /// parts so a boundary is visible on either side of the playhead.
     ///
@@ -1236,7 +1262,7 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
     private func chapterMarks(width: CGFloat) -> some View {
         let duration = engine.duration
         if duration > 0 {
-            ForEach(engine.chapters) { chapter in
+            ForEach(shownChapters) { chapter in
                 if chapter.start > 0, chapter.start < duration {
                     Rectangle()
                         .fill(.white.opacity(0.55))
@@ -1249,10 +1275,10 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
 
     /// The chapter list, opening on the chapter playing so the viewer starts where they are.
     private var chaptersOverlay: some View {
-        let current = PlayerChapters.index(in: engine.chapters, at: engine.position)
+        let current = PlayerChapters.index(in: shownChapters, at: engine.position)
         return PlayerRailOverlay(title: L10n.text("player.chapters"), onDismiss: closePicker) {
             PlayerRailColumn(width: dp(520)) {
-                ForEach(Array(engine.chapters.enumerated()), id: \.element.id) { index, chapter in
+                ForEach(Array(shownChapters.enumerated()), id: \.element.id) { index, chapter in
                     PlayerRailCard(
                         title: chapter.displayName(number: index + 1),
                         subtitle: timecode(chapter.start),
@@ -1514,22 +1540,23 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
                 ) { player.subtitleOutlineEnabled.toggle() }
             }
             InPlayerPanelSection(title: L10n.text("player.text_color")) {
-                ForEach(subtitleColorChoices, id: \.hex) { choice in
+                ForEach(SubtitleColors.text, id: \.rgb) { choice in
                     InPlayerPanelRow(
                         title: choice.title, systemImage: "circle.fill",
-                        isSelected: subtitleRGB(player.subtitleTextColor) == choice.hex,
-                        requestsInitialFocus: subtitleRGB(player.subtitleTextColor) == choice.hex
-                    ) { player.subtitleTextColor = subtitleColor(choice.hex, preservingAlphaFrom: player.subtitleTextColor) }
+                        isSelected: SubtitleColors.rgb(player.subtitleTextColor) == choice.rgb,
+                        requestsInitialFocus: SubtitleColors.rgb(player.subtitleTextColor) == choice.rgb
+                    ) { player.subtitleTextColor = SubtitleColors.color(choice.rgb, preservingAlphaFrom: player.subtitleTextColor) }
                 }
             }
             InPlayerPanelSection(title: L10n.text("player.text_opacity")) {
                 ForEach([50, 75, 100], id: \.self) { percent in
                     InPlayerPanelRow(
                         title: "\(percent)%", systemImage: "circle.lefthalf.filled",
-                        isSelected: subtitleAlphaPercent(player.subtitleTextColor) == percent
-                    ) { player.subtitleTextColor = subtitleColor(player.subtitleTextColor, alphaPercent: percent) }
+                        isSelected: SubtitleColors.alphaPercent(player.subtitleTextColor) == percent
+                    ) { player.subtitleTextColor = SubtitleColors.color(player.subtitleTextColor, alphaPercent: percent) }
                 }
             }
+            subtitleStyleSections
             // Three presets, replaced by the number they were standing in for. They were
             // reported as changing "almost nothing", which was true twice over: the steps were
             // small, and on this engine the stored value was worth about half what it was worth
@@ -1549,14 +1576,7 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
             }
             InPlayerPanelSection(title: nil) {
                 InPlayerPanelRow(title: L10n.text("player.reset_subtitle_style"), systemImage: "arrow.counterclockwise") {
-                    player.subtitleSize = SubtitleStyle.default.sizeScale
-                    player.subtitleBold = SubtitleStyle.default.bold
-                    player.subtitleTextColor = "#FFFFFFFF"
-                    player.subtitleBackgroundColor = "#00000000"
-                    player.subtitleOutlineEnabled = SubtitleStyle.default.outlineEnabled
-                    player.subtitleOutlineColor = "#FF000000"
-                    player.subtitleOutlineWidth = SubtitleStyle.default.outlineWidth
-                    player.subtitleVerticalOffset = SubtitleStyle.default.verticalOffset
+                    player.resetSubtitleAppearance()
                 }
             }
         }
@@ -1596,35 +1616,63 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
         }
     }
 
-    private var subtitleColorChoices: [(title: String, hex: String)] {
-        [
-            (L10n.text("player.color_white"), "FFFFFF"),
-            (L10n.text("player.color_yellow"), "FFD700"),
-            (L10n.text("player.color_cyan"), "00E5FF"),
-            (L10n.text("player.color_green"), "00FF88")
-        ]
+    /// Upstream's subtitle style rail cards (1.2.0-beta.1): Font, Background and Drop Shadow.
+    @ViewBuilder
+    private var subtitleStyleSections: some View {
+        @Bindable var player = settings.player
+        InPlayerPanelSection(title: L10n.text("player.sub_font", fallback: "Font")) {
+            ForEach(SubtitleFontOptions.ids(imported: SubtitleFontStore.shared.fonts), id: \.self) { id in
+                InPlayerPanelRow(
+                    title: SubtitleFontOptions.label(for: id, imported: SubtitleFontStore.shared.fonts),
+                    systemImage: "textformat",
+                    isSelected: player.subtitleFontId == id
+                ) { player.subtitleFontId = id }
+            }
+        }
+        InPlayerPanelSection(title: L10n.text("player.sub_background", fallback: "Background")) {
+            ForEach(SubtitleColors.background, id: \.rgb) { choice in
+                InPlayerPanelRow(
+                    title: choice.title, systemImage: "rectangle.fill",
+                    isSelected: SubtitleColors.selectedBackground(player.subtitleBackgroundColor) == choice.rgb
+                ) { player.subtitleBackgroundColor = SubtitleColors.background(choice.rgb, current: player.subtitleBackgroundColor) }
+            }
+            stepRows(
+                label: L10n.text("player.sub_opacity", fallback: "Opacity"),
+                value: "\(SubtitleColors.alphaPercent(player.subtitleBackgroundColor))%"
+            ) { delta in
+                let next = SubtitleColors.alphaPercent(player.subtitleBackgroundColor) + delta * 10
+                player.subtitleBackgroundColor = SubtitleColors.color(player.subtitleBackgroundColor, alphaPercent: next)
+            }
+            stepRows(
+                label: L10n.text("player.sub_bg_roundness", fallback: "Corner Roundness"),
+                value: "\(player.subtitleBackgroundRadius)"
+            ) { delta in player.subtitleBackgroundRadius += delta * 2 }
+        }
+        InPlayerPanelSection(title: L10n.text("player.sub_shadow", fallback: "Drop Shadow")) {
+            InPlayerPanelRow(
+                title: player.subtitleShadowEnabled
+                    ? L10n.text("player.style_on", fallback: "On") : L10n.text("player.style_off", fallback: "Off"),
+                systemImage: "shadow",
+                isSelected: player.subtitleShadowEnabled
+            ) { player.subtitleShadowEnabled.toggle() }
+            if player.subtitleShadowEnabled {
+                stepRows(
+                    label: L10n.text("player.sub_opacity", fallback: "Opacity"),
+                    value: "\(player.subtitleShadowOpacity)%"
+                ) { delta in player.subtitleShadowOpacity += delta * 10 }
+                stepRows(
+                    label: L10n.text("player.sub_size", fallback: "Size"),
+                    value: "\(player.subtitleShadowSize)"
+                ) { delta in player.subtitleShadowSize += delta }
+            }
+        }
     }
 
-    private func subtitleRGB(_ value: String) -> String {
-        let cleaned = value.replacingOccurrences(of: "#", with: "").uppercased()
-        return cleaned.count == 8 ? String(cleaned.suffix(6)) : cleaned
-    }
-
-    private func subtitleAlphaPercent(_ value: String) -> Int {
-        let cleaned = value.replacingOccurrences(of: "#", with: "")
-        guard cleaned.count == 8, let alpha = Int(cleaned.prefix(2), radix: 16) else { return 100 }
-        return Int((Double(alpha) / 255 * 100).rounded())
-    }
-
-    private func subtitleColor(_ rgb: String, preservingAlphaFrom current: String) -> String {
-        let cleaned = current.replacingOccurrences(of: "#", with: "")
-        let alpha = cleaned.count == 8 ? String(cleaned.prefix(2)) : "FF"
-        return "#\(alpha)\(subtitleRGB(rgb))"
-    }
-
-    private func subtitleColor(_ current: String, alphaPercent: Int) -> String {
-        let alpha = String(format: "%02X", Int((Double(alphaPercent) / 100 * 255).rounded()))
-        return "#\(alpha)\(subtitleRGB(current))"
+    /// A stepper as two rows, the way the position section raises and lowers: −1 and +1.
+    @ViewBuilder
+    private func stepRows(label: String, value: String, step: @escaping (Int) -> Void) -> some View {
+        InPlayerPanelRow(title: "\(label) −", subtitle: value, systemImage: "minus") { step(-1) }
+        InPlayerPanelRow(title: "\(label) +", subtitle: value, systemImage: "plus") { step(1) }
     }
 
     private func delayLabel(_ delay: Double) -> String {
@@ -1789,7 +1837,7 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
                 audioDiagnostic
             }
 
-            if let error = engine.errorMessage {
+            if let error = engine.errorMessage, !holdsPlaybackError {
                 ErrorStateView(message: error) { onPlaybackFailure(error) }
                     .background(.black.opacity(0.75))
             }
@@ -1817,7 +1865,11 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
             aspectFlashPill
 
             if let seekReadout {
-                PlayerSeekReadout(model: seekReadout, duration: engine.duration)
+                PlayerSeekReadout(
+                    model: seekReadout,
+                    duration: engine.duration,
+                    chapterTitle: chapterTitle(at: seekReadout.target)
+                )
             }
 
             if showsStats && !statsSampler.readings.isEmpty {

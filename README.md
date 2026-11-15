@@ -104,7 +104,7 @@ independent on purpose.
 | Cast | Person photo, biography and filmography (TMDB) |
 | Browse | Paged TMDB listings for a network or studio |
 | Streams | Grouped per addon and per scraper, quality/HDR/codec/size/seeder chips, debrid cache state, resume progress for what you are part-way through |
-| Player | Resume, progress persistence, per-stream proxy headers, the Now Playing card and remote commands (iPhone Remote, Bluetooth controllers) on every engine, external subtitles, auto-play chaining, and badges for what is actually playing when a badge pack is installed |
+| Player | Resume, progress persistence, per-stream proxy headers, the Now Playing card and remote commands (iPhone Remote, Bluetooth controllers) on every engine, external subtitles, auto-play chaining, falling back to the next matching source when an auto-selected one fails, refreshing expired links, chapters on request, and badges for what is actually playing when a badge pack is installed |
 | Comments | Trakt comments and reviews, spoilers hidden until revealed |
 | Search | Debounced fan-out across every search-capable catalog |
 | Discover | Browse any catalog by type and genre, standalone or folded into Search |
@@ -139,7 +139,8 @@ metadata) and the marquee-on-focus card titles.
   rating-overlay service such as RatingPosterDB, with a per-screen switch and a fall back to the
   addon's own poster for any title the pattern cannot address.
 - **Subtitles** — external SubRip/WebVTT tracks from every `subtitles` addon, language-ordered and
-  auto-selected, drawn with the configured size, weight, colours, outline and offset. The audio
+  auto-selected, drawn with the configured font (including fonts imported from a phone), size,
+  weight, colours, outline, rounded background, drop shadow and offset. The audio
   and subtitle picked for a title are remembered and restored on its next episode, under the
   Android app's keys, so the choice follows the profile between the two apps.
 - **Plugins** — local JS scrapers in JavaScriptCore, matching the Android runtime's `getStreams`

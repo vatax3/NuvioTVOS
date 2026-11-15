@@ -109,7 +109,12 @@ struct LibraryView: View {
                 ContinueWatchingRow(
                     entries: continueWatching,
                     style: settings.layout.continueWatchingCardStyle,
-                    onSelect: { router.openDetail($0.preview) }
+                    onSelect: { entry in
+                        switch library.selectionTarget(for: entry, action: settings.layout.continueWatchingClickAction) {
+                        case .details(let preview): router.openDetail(preview)
+                        case .streams(let request): router.openStreams(request)
+                        }
+                    }
                 )
             }
         } else if settings.effectiveLibrarySourceMode == .trakt {

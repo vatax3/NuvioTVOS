@@ -467,6 +467,11 @@ struct InPlayerSourcesPanel: View {
     /// row — or the playing source arriving late in a slower addon — used to take focus again
     /// from wherever the viewer had got to. Upstream's "source navigation during scraping".
     @State private var initialFocusPlaced = false
+    /// Upstream 1.2.0-beta.1: the playing source takes focus when it arrives after other results
+    /// — after a fallback it can be far down the list — unless the viewer has moved already.
+    /// Any direction counts, Up included, since the list can now open in the middle.
+    @State private var focusedOnCurrent = false
+    @State private var userMovedFocus = false
 
     private var sourceRequest: StreamRequest? { request.sourceRequest }
     private var displayedGroups: [AddonStreams] {
@@ -531,9 +536,12 @@ struct InPlayerSourcesPanel: View {
                                 cache: model.cacheState(for: stream),
                                 isCurrent: isCurrent(stream),
                                 isLoading: model.resolvingKey == stream.stableKey,
-                                requestsInitialFocus: !initialFocusPlaced && (isCurrent(stream)
-                                    || (!hasCurrentSource && groupIndex == 0 && streamIndex == 0)),
-                                onClaimedInitialFocus: { initialFocusPlaced = true }
+                                requestsInitialFocus: !userMovedFocus && !focusedOnCurrent && (isCurrent(stream)
+                                    || (!initialFocusPlaced && !hasCurrentSource && groupIndex == 0 && streamIndex == 0)),
+                                onClaimedInitialFocus: {
+                                    initialFocusPlaced = true
+                                    if isCurrent(stream) { focusedOnCurrent = true }
+                                }
                             ) {
                                 Task { await select(stream) }
                             }
@@ -542,6 +550,8 @@ struct InPlayerSourcesPanel: View {
                 }
             }
         }
+        // Observed, not consumed: the focus engine still moves.
+        .onMoveCommand { _ in userMovedFocus = true }
         .task { await load() }
     }
 

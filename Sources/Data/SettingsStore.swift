@@ -230,7 +230,12 @@ final class AppSettings {
             stripsSDH: player.subtitleStripSDH,
             hdrStyleEnabled: player.subtitleHDRStyleEnabled,
             hdrTextColor: Color(argbHex: player.subtitleHDRTextColor),
-            hdrBrightness: player.subtitleHDRBrightness
+            hdrBrightness: player.subtitleHDRBrightness,
+            fontId: player.subtitleFontId,
+            backgroundRadius: Double(player.subtitleBackgroundRadius),
+            shadowEnabled: player.subtitleShadowEnabled,
+            shadowOpacity: Double(player.subtitleShadowOpacity),
+            shadowSize: Double(player.subtitleShadowSize)
         )
     }
 

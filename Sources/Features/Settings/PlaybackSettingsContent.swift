@@ -10,6 +10,7 @@ struct PlaybackSettingsContent: View {
     @Environment(AppSettings.self) private var settings
     @Environment(AddonStore.self) private var addonStore
     @Environment(PluginStore.self) private var pluginStore
+    @Environment(Router.self) private var router
 
     /// Names as the streams screen lists them, which is what the selections are matched against.
     private var autoPlayAddonNames: [String] {
@@ -149,6 +150,21 @@ struct PlaybackSettingsContent: View {
                     systemImage: "clock",
                     isOn: $player.osdClockEnabled
                 )
+                // Upstream's Player Interface section, since 1.2.0-beta.1.
+                SettingsToggle(
+                    title: L10n.text("settings.playback.show_chapters", fallback: "Show Chapters"),
+                    subtitle: L10n.text("settings.playback.show_chapters_sub", fallback: "Read the chapters of MKV files to mark them on the progress bar and skip between them."),
+                    systemImage: "list.bullet.indent",
+                    isOn: $player.chaptersEnabled
+                )
+                if player.chaptersEnabled {
+                    SettingsToggle(
+                        title: L10n.text("settings.playback.show_chapter_title", fallback: "Show Chapter Title"),
+                        subtitle: L10n.text("settings.playback.show_chapter_title_sub", fallback: "Show the name of the current chapter above the progress bar."),
+                        systemImage: "text.badge.checkmark",
+                        isOn: $player.chapterTitleEnabled
+                    )
+                }
                 SettingsToggle(
                     title: L10n.text("settings.playback.parental_guide", fallback: "Parental guide"),
                     subtitle: L10n.text("settings.playback.parental_guide_subtitle", fallback: "Show content warnings shortly after playback starts"),
@@ -399,12 +415,13 @@ struct PlaybackSettingsContent: View {
             }
 
             SettingsCard(title: L10n.text("settings.playback.appearance", fallback: "Appearance")) {
-                SettingsDecimalStepperRow(
-                    title: L10n.text("settings.playback.text_size", fallback: "Text size"),
-                    value: $player.subtitleSize,
-                    range: 0.5...3.0,
-                    step: 0.1,
-                    format: { String(format: "%.0f%%", $0 * 100) }
+                // Upstream's appearance editor, with its live preview (1.2.0-beta.1).
+                SettingsRow(
+                    title: L10n.text("settings.sub_appearance", fallback: "Subtitle Appearance"),
+                    subtitle: L10n.text("settings.sub_appearance_entry_sub", fallback: "Font, colours, background, outline and shadow, with a preview"),
+                    systemImage: "captions.bubble",
+                    trailing: { Image(systemName: "chevron.right").foregroundStyle(.secondary) },
+                    action: { router.push(.subtitleAppearance) }
                 )
                 SettingsOptionRow(
                     title: L10n.text("settings.playback.apply_styled", fallback: "Apply to styled subtitles"),
@@ -412,26 +429,7 @@ struct PlaybackSettingsContent: View {
                     systemImage: "textformat",
                     selection: $player.subtitleStyleOverride
                 )
-                SettingsToggle(title: L10n.text("settings.playback.bold_text", fallback: "Bold text"), isOn: $player.subtitleBold)
-                SettingsTextFieldRow(
-                    title: L10n.text("settings.playback.text_colour", fallback: "Text colour"),
-                    subtitle: L10n.text("settings.playback.hex_hint", fallback: "Hex, e.g. #FFFFFFFF"),
-                    placeholder: "#FFFFFFFF",
-                    text: $player.subtitleTextColor
-                )
-                SettingsTextFieldRow(
-                    title: L10n.text("settings.playback.background_colour", fallback: "Background colour"),
-                    subtitle: L10n.text("settings.playback.background_none_hint", fallback: "Use #00000000 for none"),
-                    placeholder: "#00000000",
-                    text: $player.subtitleBackgroundColor
-                )
-                SettingsToggle(title: L10n.text("settings.playback.outline", fallback: "Outline"), isOn: $player.subtitleOutlineEnabled)
                 if player.subtitleOutlineEnabled {
-                    SettingsTextFieldRow(
-                        title: L10n.text("settings.playback.outline_colour", fallback: "Outline colour"),
-                        placeholder: "#FF000000",
-                        text: $player.subtitleOutlineColor
-                    )
                     SettingsDecimalStepperRow(
                         title: L10n.text("settings.playback.outline_width", fallback: "Outline width"),
                         value: $player.subtitleOutlineWidth,
@@ -474,19 +472,6 @@ struct PlaybackSettingsContent: View {
                         isOn: $player.subtitleHDRDimPlayerControls
                     )
                 }
-                SettingsDecimalStepperRow(
-                    title: L10n.text("settings.playback.vertical_offset", fallback: "Vertical offset"),
-                    subtitle: L10n.text(
-                        "settings.playback.vertical_offset_sub",
-                        fallback: "Zero is where every other player puts them. Positive lifts."
-                    ),
-                    value: $player.subtitleVerticalOffset,
-                    // The same bounds the policy clamps to, so the stepper cannot offer a value
-                    // the renderers will quietly refuse.
-                    range: SubtitlePlacement.offsetRange,
-                    step: 5,
-                    format: { String(format: "%+.0f", $0) }
-                )
             }
 
         }
@@ -507,6 +492,36 @@ struct PlaybackSettingsContent: View {
                     selection: $player.streamAutoPlayMode
                 )
                 if player.streamAutoPlayMode != .off {
+                    // Upstream's order: the fallback first in the block. It excludes the engine
+                    // switch on error, since both react to the same failure; only the switch that
+                    // is off is locked, so both stay reachable if both ended up on.
+                    let blockedByEngineSwitch = player.autoSwitchInternalPlayerOnError
+                        && !player.streamAutoPlayFallbackOnFailure
+                    SettingsToggle(
+                        title: L10n.text("settings.playback.fallback_next_source", fallback: "Fallback to next matching source on failure"),
+                        subtitle: blockedByEngineSwitch
+                            ? L10n.text("settings.playback.fallback_next_source_blocked", fallback: "Turn off “Fall back on playback error” to use this.")
+                            : L10n.text("settings.playback.fallback_next_source_sub", fallback: "If the auto-selected source fails or does not start in time, quietly try the next matching sources."),
+                        systemImage: "arrow.uturn.forward",
+                        isOn: $player.streamAutoPlayFallbackOnFailure
+                    )
+                    .disabled(blockedByEngineSwitch)
+                    if player.streamAutoPlayFallbackOnFailure, !blockedByEngineSwitch {
+                        SettingsStepperRow(
+                            title: L10n.text("settings.playback.fallback_max_sources", fallback: "Sources to try on failure"),
+                            subtitle: L10n.text("settings.playback.fallback_max_sources_sub", fallback: "How many more matching sources to try before showing the error."),
+                            value: $player.streamAutoPlayFallbackMaxSources,
+                            range: SourceFallback.maxSourcesRange
+                        )
+                        SettingsStepperRow(
+                            title: L10n.text("settings.playback.fallback_startup_timeout", fallback: "Time for a source to start"),
+                            subtitle: L10n.text("settings.playback.fallback_startup_timeout_sub", fallback: "How long to wait for a source to start before trying the next one."),
+                            value: $player.streamAutoPlayFallbackStartupTimeoutSeconds,
+                            range: SourceFallback.startupTimeoutRange,
+                            step: SourceFallback.startupTimeoutStep,
+                            format: { "\($0)s" }
+                        )
+                    }
                     SettingsOptionRow(
                         title: L10n.text("settings.playback.only_consider", fallback: "Only consider"),
                         options: player.pluginsEnabled

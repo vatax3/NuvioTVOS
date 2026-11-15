@@ -55,6 +55,11 @@ struct SavedLibraryItem: Codable, Hashable, Identifiable {
     var id: String { preview.rowKey }
 }
 
+enum ContinueWatchingSelection: Equatable {
+    case details(MetaPreview)
+    case streams(StreamRequest)
+}
+
 /// A resolved Continue Watching row entry — a saved position plus the artwork to draw it.
 struct ContinueWatchingEntry: Identifiable, Hashable {
     var progress: WatchProgress
@@ -69,6 +74,34 @@ struct ContinueWatchingEntry: Identifiable, Hashable {
     /// may be marked watched: an episode that has not aired cannot have been seen.
     var episodeReleased: Date?
     var id: String { progress.videoId }
+
+    /// A next-up episode that has not aired yet — what "Details for Upcoming Only" sends to the
+    /// details page.
+    var isUpcoming: Bool {
+        episodeReleased.map { $0 > Date() } ?? false
+    }
+
+    /// The source list for this card's episode, or the film — what selecting a card opens by
+    /// default, to pick a source or resume.
+    func streamRequest(nextUpVideoId: String?) -> StreamRequest {
+        StreamRequest(
+            videoId: progress.videoId,
+            contentType: progress.contentType,
+            title: preview.name,
+            contentId: progress.contentId,
+            contentName: preview.name,
+            poster: preview.poster,
+            backdrop: episodeThumbnail ?? preview.backdropUrl,
+            logo: preview.logo,
+            season: progress.season,
+            episode: progress.episode,
+            episodeName: nil,
+            year: preview.releaseInfo,
+            runtime: nil,
+            imdbId: preview.imdbId,
+            nextUpVideoId: nextUpVideoId
+        )
+    }
 
     /// The episode a long press on this card marks watched, or nil for a film.
     var markableEpisode: PosterOptionsRequest.Episode? {
@@ -246,6 +279,36 @@ final class LibraryStore {
 
     func isWatched(videoId: String, threshold: Double) -> Bool {
         progress[videoId]?.isFinished(threshold: threshold) ?? false
+    }
+
+    /// The next moment Continue Watching changes on its own: the soonest release, after `now`,
+    /// of an episode of a series the viewer has watched. An unaired next episode is either shown
+    /// as upcoming or left out, and its airing changes the rail with nothing else changing.
+    func nextContinueWatchingRelease(after now: Date = Date()) -> Date? {
+        let seriesIds = Set(progress.values.filter { $0.season != nil }.map(\.contentId))
+        return seriesIds
+            .flatMap { seriesEpisodes[$0] ?? [] }
+            .compactMap(\.released)
+            .filter { $0 > now }
+            .min()
+    }
+
+    /// What selecting a Continue Watching card opens, per the viewer's "On Select".
+    func selectionTarget(
+        for entry: ContinueWatchingEntry,
+        action: ContinueWatchingClickAction
+    ) -> ContinueWatchingSelection {
+        if action.opensDetails(isUpcoming: entry.isUpcoming) { return .details(entry.preview) }
+        // The episode after this one, so the player can chain into it as from the details page.
+        let nextUp = entry.progress.season.flatMap { season in
+            entry.progress.episode.flatMap { episode in
+                (seriesEpisodes[entry.progress.contentId] ?? [])
+                    .sorted { $0.order < $1.order }
+                    .first { $0.order > season * 10_000 + episode }?
+                    .videoId
+            }
+        }
+        return .streams(entry.streamRequest(nextUpVideoId: nextUp))
     }
 
     /// Continue Watching rail contents: in-flight items, finished ones dropped, ordered by the

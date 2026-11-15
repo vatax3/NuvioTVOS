@@ -46,6 +46,8 @@ struct AetherPlayerView: View {
     let onPlaybackFailure: (String, Bool) -> Void
     let onProgress: (Double, Double, Bool) -> Void
     let onFinished: () -> Void
+    var onPlaybackError: (String) -> Void = { _ in }
+    var holdsPlaybackError = false
 
     @State private var adapter = AetherEngineAdapter()
 
@@ -80,6 +82,8 @@ struct AetherPlayerView: View {
                 },
                 onProgress: onProgress,
                 onFinished: onFinished,
+                onPlaybackError: onPlaybackError,
+                holdsPlaybackError: holdsPlaybackError,
                 engine: adapter
             ) { context in
                 surface(adapter, context: context)

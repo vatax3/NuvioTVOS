@@ -50,6 +50,10 @@ final class MPVEngine {
     private(set) var chapters: [PlayerChapter] = []
     /// mpv's `sub-text`: the line it is drawing right now, whoever authored it.
     private(set) var currentCueText: String?
+    /// The text track the overlay draws in mpv's place, when it does (`syncStyledSubtitles`).
+    private(set) var styledSubtitleText: MpvStyledSubtitleText?
+    /// Whether the viewer's style needs the overlay: a font, a background or a shadow.
+    @ObservationIgnored private var styledRendererWanted = false
 
     /// From mpv's own `video-params/gamma`, which is the transfer function it decoded with.
     /// `pq` covers HDR10, HDR10+ and the Dolby Vision profiles mpv tone-maps from.
@@ -247,12 +251,12 @@ final class MPVEngine {
         // `makeUIViewController`, which SwiftUI happens to do but does not promise.
         setAspectMode(initialAspectMode)
 
-        for property in ["time-pos", "duration", "demuxer-cache-time", "pause", "eof-reached", "core-idle", "track-list", "chapter-list", "current-tracks/sub/lang", "sub-text"] {
+        for property in ["time-pos", "duration", "demuxer-cache-time", "pause", "eof-reached", "core-idle", "track-list", "chapter-list", "current-tracks/sub/lang", "sub-text", "sid"] {
             let format: mpv_format = {
                 switch property {
                 case "time-pos", "duration", "demuxer-cache-time": return MPV_FORMAT_DOUBLE
                 case "pause", "eof-reached", "core-idle": return MPV_FORMAT_FLAG
-                case "current-tracks/sub/lang", "sub-text": return MPV_FORMAT_STRING
+                case "current-tracks/sub/lang", "sub-text", "sid": return MPV_FORMAT_STRING
                 default: return MPV_FORMAT_NODE
                 }
             }()
@@ -434,6 +438,9 @@ final class MPVEngine {
         asOption: Bool,
         obstructions: SubtitlePlacement.Obstructions = .init()
     ) {
+        styledRendererWanted = style.usesStyledRenderer
+        // Before the file loads there is no track to hide; the first cue syncs it then.
+        defer { if !asOption { syncStyledSubtitles() } }
         let set: (String, String) -> Void = { name, value in
             if asOption { self.setOption(name, value) }
             else { self.command(["set", name, value]) }
@@ -631,6 +638,9 @@ final class MPVEngine {
             if let family = subtitleFontResolver.familyForText(property.stringValue) {
                 applySubtitleFont(family)
             }
+            syncStyledSubtitles()
+        case "sid":
+            syncStyledSubtitles()
         default:
             break
         }
@@ -802,6 +812,28 @@ final class MPVEngine {
             return nil
         }
         return value
+    }
+
+    /// Text tracks whose cues the overlay can draw from `sub-text/ass`. Upstream's list; ASS
+    /// keeps libass, and image tracks have no text.
+    static let styledSubtitleCodecs: Set<String> = [
+        "subrip", "srt", "webvtt", "text", "mov_text", "microdvd", "mpl2", "subviewer", "subviewer1",
+        "sami", "realtext"
+    ]
+
+    /// Upstream's `syncStyledSubtitles` (1.2.0-beta.1): with a font, a background or a shadow
+    /// that libass cannot draw the overlay's way, a text track is hidden in mpv and its current
+    /// event handed to the overlay. Run on every cue, track change and style change.
+    private func syncStyledSubtitles() {
+        guard handle != nil else { return }
+        let codec = propertyString("current-tracks/sub/codec")?.lowercased()
+        let styled = styledRendererWanted && codec.map(Self.styledSubtitleCodecs.contains) == true
+        if let sid = propertyString("sid"), sid != "no", sid != "false" {
+            command(["set", "sub-visibility", styled ? "no" : "yes"])
+        }
+        let text = styled ? (propertyString("sub-text/ass") ?? currentCueText) : nil
+        let parsed = text.map(MpvStyledSubtitleText.parse)
+        if parsed != styledSubtitleText { styledSubtitleText = parsed }
     }
 
     private func propertyString(_ name: String) -> String? {

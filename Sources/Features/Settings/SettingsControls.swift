@@ -111,7 +111,7 @@ struct SettingsNameMultiSelectRow: View {
 }
 
 /// A title over a horizontal run of toggling chips.
-private struct SettingsChipSelectRow: View {
+struct SettingsChipSelectRow: View {
     @Environment(\.nuvioColors) private var colors
 
     let title: String

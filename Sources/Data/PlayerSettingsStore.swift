@@ -48,8 +48,10 @@ final class PlayerSettingsStore: PreferenceStore {
         set { setOption("mpv_hardware_decode_mode", newValue) }
     }
 
+    /// Off by default, as upstream's is. It was on here from the first settings pass with no
+    /// reason recorded, and upstream's source fallback (1.2.0-beta.1) is unavailable while it is on.
     var autoSwitchInternalPlayerOnError: Bool {
-        get { bool("auto_switch_internal_player_on_error", default: true) }
+        get { bool("auto_switch_internal_player_on_error", default: false) }
         set { setBool("auto_switch_internal_player_on_error", newValue) }
     }
 
@@ -315,6 +317,66 @@ final class PlayerSettingsStore: PreferenceStore {
         set { setDouble("subtitle_vertical_offset", newValue) }
     }
 
+    // Upstream 1.2.0-beta.1: font, background roundness and drop shadow, clamped on read as
+    // theirs are, since a synced value may come from either app.
+
+    /// `SubtitleFonts.default`, `.serif`, `.mono`, or an imported font's `custom-<uuid>`.
+    var subtitleFontId: String {
+        get { string("subtitle_font_id", default: SubtitleFonts.defaultId) }
+        set { setString("subtitle_font_id", newValue) }
+    }
+
+    var subtitleBackgroundRadius: Int {
+        get { min(SubtitleStyle.backgroundRadiusMax, max(0, int("subtitle_background_radius", default: 0))) }
+        set { setInt("subtitle_background_radius", min(SubtitleStyle.backgroundRadiusMax, max(0, newValue))) }
+    }
+
+    var subtitleShadowEnabled: Bool {
+        get { bool("subtitle_shadow_enabled", default: false) }
+        set { setBool("subtitle_shadow_enabled", newValue) }
+    }
+
+    /// 0–100 %.
+    var subtitleShadowOpacity: Int {
+        get { min(100, max(0, int("subtitle_shadow_opacity", default: SubtitleStyle.shadowOpacityDefault))) }
+        set { setInt("subtitle_shadow_opacity", min(100, max(0, newValue))) }
+    }
+
+    var subtitleShadowSize: Int {
+        get {
+            min(SubtitleStyle.shadowSizeRange.upperBound, max(SubtitleStyle.shadowSizeRange.lowerBound,
+                int("subtitle_shadow_size", default: SubtitleStyle.shadowSizeDefault)))
+        }
+        set {
+            setInt("subtitle_shadow_size", min(SubtitleStyle.shadowSizeRange.upperBound,
+                max(SubtitleStyle.shadowSizeRange.lowerBound, newValue)))
+        }
+    }
+
+    /// Upstream's `resetSubtitleAppearance`: the look, not the languages. The HDR colour and
+    /// brightness are reset in place of the text colour when `hdrText` is set — the editor opened
+    /// from an HDR picture edits those.
+    func resetSubtitleAppearance(hdrText: Bool = false) {
+        subtitleSize = 1.0
+        subtitleVerticalOffset = 0
+        subtitleBold = false
+        if hdrText {
+            subtitleHDRTextColor = "#FFFFFFFF"
+            subtitleHDRBrightness = SubtitleStyle.hdrBrightnessDefault
+        } else {
+            subtitleTextColor = "#FFFFFFFF"
+        }
+        subtitleBackgroundColor = "#00000000"
+        subtitleOutlineEnabled = true
+        subtitleOutlineColor = "#FF000000"
+        subtitleOutlineWidth = 2
+        subtitleFontId = SubtitleFonts.defaultId
+        subtitleBackgroundRadius = 0
+        subtitleShadowEnabled = false
+        subtitleShadowOpacity = SubtitleStyle.shadowOpacityDefault
+        subtitleShadowSize = SubtitleStyle.shadowSizeDefault
+    }
+
     // MARK: - Plugins
 
     var pluginsEnabled: Bool {
@@ -333,6 +395,40 @@ final class PlayerSettingsStore: PreferenceStore {
     }
 
     // MARK: - Auto-play & next episode
+
+    /// "Fallback to next matching source on failure" — see `SourceFallback`.
+    var streamAutoPlayFallbackOnFailure: Bool {
+        get { bool("stream_auto_play_fallback_on_failure", default: false) }
+        set { setBool("stream_auto_play_fallback_on_failure", newValue) }
+    }
+
+    /// "Sources to try on failure": further sources after the auto-selected one, 1–10.
+    var streamAutoPlayFallbackMaxSources: Int {
+        get {
+            let range = SourceFallback.maxSourcesRange
+            return min(range.upperBound, max(range.lowerBound,
+                int("stream_auto_play_fallback_max_sources", default: SourceFallback.defaultMaxSources)))
+        }
+        set { setInt("stream_auto_play_fallback_max_sources", newValue) }
+    }
+
+    /// "Time for a source to start": 5–45 s in steps of 5.
+    var streamAutoPlayFallbackStartupTimeoutSeconds: Int {
+        get {
+            let range = SourceFallback.startupTimeoutRange
+            return min(range.upperBound, max(range.lowerBound,
+                int("stream_auto_play_fallback_startup_timeout_seconds", default: SourceFallback.defaultStartupTimeoutSeconds)))
+        }
+        set { setInt("stream_auto_play_fallback_startup_timeout_seconds", newValue) }
+    }
+
+    var streamAutoPlayFallbackActive: Bool {
+        SourceFallback.isActive(
+            enabled: streamAutoPlayFallbackOnFailure,
+            mode: streamAutoPlayMode,
+            engineSwitchOnError: autoSwitchInternalPlayerOnError
+        )
+    }
 
     var streamAutoPlayMode: StreamAutoPlayMode {
         get { option("stream_auto_play_mode", default: .off) }
@@ -446,6 +542,21 @@ final class PlayerSettingsStore: PreferenceStore {
     var loadingOverlayEnabled: Bool {
         get { bool("loading_overlay_enabled", default: true) }
         set { setBool("loading_overlay_enabled", newValue) }
+    }
+
+    /// "Show Chapters" (`exo_chapters_enabled`, off by default): the chapter button, the marks on
+    /// the progress bar and the chapter title, on every engine — upstream 1.2.0-beta.1, where it
+    /// stopped being an ExoPlayer-only switch. Chapters are still read for skip intro when off.
+    var chaptersEnabled: Bool {
+        get { bool("exo_chapters_enabled", default: false) }
+        set { setBool("exo_chapters_enabled", newValue) }
+    }
+
+    /// "Show Chapter Title": the current chapter's name above the progress bar and in the seek
+    /// readout. On by default; only meaningful while chapters are shown.
+    var chapterTitleEnabled: Bool {
+        get { bool("chapter_title_enabled", default: true) }
+        set { setBool("chapter_title_enabled", newValue) }
     }
 
     var showPlayerLoadingStatus: Bool {

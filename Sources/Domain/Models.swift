@@ -346,6 +346,13 @@ struct MetaPreview: Codable, Hashable, Identifiable, Sendable {
 
     /// Identity used by lists — the same title can legitimately appear in several catalogs.
     var rowKey: String { "\(apiType)|\(id)" }
+
+    /// Upstream's `isWatchedAsOneItem` (1.2.0-beta.1): every type that is not a show — series,
+    /// tv, anime — is watched as one item, as a film is. A YouTube add-on's "youtube" items had
+    /// no "Mark as watched" at all, since only films were offered it.
+    var isWatchedAsOneItem: Bool {
+        !["series", "tv", "anime"].contains(apiType.lowercased())
+    }
 }
 
 struct Video: Codable, Hashable, Identifiable, Sendable {

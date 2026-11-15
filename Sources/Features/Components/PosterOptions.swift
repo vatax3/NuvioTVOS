@@ -51,6 +51,8 @@ enum PosterOptionsPolicy {
 
     struct Context: Equatable {
         var type: ContentType
+        /// Not a show: marked watched as one item, as a film is (`MetaPreview.isWatchedAsOneItem`).
+        var isWatchedAsOneItem: Bool = false
         var isInLibrary: Bool
         var isWatched: Bool
         /// Whether the title has a resume point — which is what makes it removable.
@@ -84,7 +86,7 @@ enum PosterOptionsPolicy {
             // upstream's card does since 1.1.0-beta.10. The series-wide row here marked every
             // episode of a show the viewer is in the middle of, one press from the rail.
             if aired { actions.append(.markEpisodeWatched) }
-        } else if context.type == .movie || context.canWalkEpisodes {
+        } else if context.isWatchedAsOneItem || context.canWalkEpisodes {
             actions.append(context.isWatched ? .markUnwatched : .markWatched)
         }
         if context.hasTraktLists {
@@ -147,6 +149,7 @@ struct PosterOptionsDialog: View {
     private var context: PosterOptionsPolicy.Context {
         .init(
             type: preview.type,
+            isWatchedAsOneItem: preview.isWatchedAsOneItem,
             isInLibrary: library.isInLibrary(preview),
             isWatched: isWatched,
             hasProgress: hasProgress,
@@ -162,13 +165,13 @@ struct PosterOptionsDialog: View {
     /// addon, and a row that appears a second after the dialog did is worse than one that does
     /// not appear — the viewer has already started moving down the list.
     private var cachedEpisodes: [SeriesEpisodeRef] {
-        preview.type == .series ? (library.seriesEpisodes[preview.id] ?? []) : []
+        preview.isWatchedAsOneItem ? [] : (library.seriesEpisodes[preview.id] ?? [])
     }
 
     /// For a film, whether it was watched. For a series, whether every aired episode was — which
     /// is what decides between offering "mark watched" and "mark unwatched".
     private var isWatched: Bool {
-        guard preview.type == .series else {
+        guard !preview.isWatchedAsOneItem else {
             return library.isWatched(videoId: preview.id, threshold: settings.watchedThreshold)
         }
         let aired = SeriesWatchedWalk.episodesToMark(in: cachedEpisodes)
@@ -181,7 +184,7 @@ struct PosterOptionsDialog: View {
     /// A series is in Continue Watching through whichever episode is in flight, so the removal
     /// has to look at the whole title rather than a single video id.
     private var hasProgress: Bool {
-        preview.type == .movie
+        preview.isWatchedAsOneItem
             ? library.progress(forVideoId: preview.id) != nil
             : library.continueWatching(threshold: settings.watchedThreshold)
                 .contains { $0.preview.id == preview.id }
@@ -310,7 +313,7 @@ struct PosterOptionsDialog: View {
 
         case .markWatched, .markUnwatched:
             let watched = action == .markWatched
-            if preview.type == .series {
+            if !preview.isWatchedAsOneItem {
                 Task { await markSeries(watched: watched) }
             } else {
                 markMovie(watched: watched)
@@ -449,7 +452,9 @@ struct PosterOptionsDialog: View {
             library.clearProgress(videoId: preview.id)
         }
 
-        guard let imdb = preview.imdbId?.nilIfBlank else { return }
+        // Only a film has somewhere to go on a tracking account: the writers file anything else
+        // under shows, and an add-on's single video is neither.
+        guard preview.type == .movie, let imdb = preview.imdbId?.nilIfBlank else { return }
         Task {
             await tracking.watched(
                 imdbId: imdb,

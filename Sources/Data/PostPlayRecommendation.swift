@@ -118,7 +118,7 @@ enum PostPlayRecommendation {
                 && $0.start >= 0 && $0.end > $0.start && $0.start < durationSeconds
         }
         let credits = valid.filter {
-            $0.kind == .movieCredits && $0.end <= durationSeconds + endOfVideoEpsilon
+            isEndCredits($0, durationSeconds: durationSeconds) && $0.end <= durationSeconds + endOfVideoEpsilon
         }
         let firstCreditsStart = credits.map(\.start).min()
         let scenes = valid.filter { segment in
@@ -139,6 +139,19 @@ enum PostPlayRecommendation {
         let tail = durationSeconds - creditsEnd
         guard tail > tailWindowSeconds else { return creditsStart }
         return max(durationSeconds - tailWindowSeconds, creditsEnd)
+    }
+
+    /// IntroDB reports film credits as `movieCredits`. Container chapters such as "End Credits"
+    /// arrive as outros (`ChapterSkipSegments`), and those only count in the second half, so an
+    /// opening "Credits" chapter is not taken for the end credits — upstream's `isMovieEndCredits`
+    /// (1.2.0-beta.1). Without it a film whose only credits mark was a chapter fell back to the
+    /// percentage.
+    static func isEndCredits(_ segment: SkipSegment, durationSeconds: Double) -> Bool {
+        switch segment.kind {
+        case .movieCredits: return true
+        case .outro: return segment.start >= durationSeconds / 2
+        default: return false
+        }
     }
 
     // MARK: - The carousel

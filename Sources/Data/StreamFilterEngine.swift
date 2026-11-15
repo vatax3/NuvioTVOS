@@ -559,3 +559,18 @@ enum StreamFilterEngine {
         }
     }
 }
+
+extension StreamFilterEngine.AutoPlayScope {
+    /// The viewer's scope, as the source screen and the player's source fallback both read it.
+    @MainActor
+    static func current(settings: AppSettings, addons: AddonStore) -> Self {
+        Self(
+            source: settings.player.streamAutoPlaySource,
+            installedAddonNames: Set(addons.addons.map(\.displayName)),
+            selectedAddons: Set(settings.player.streamAutoPlaySelectedAddons),
+            selectedPlugins: Set(settings.player.streamAutoPlaySelectedPlugins),
+            pluginsEnabled: settings.player.pluginsEnabled,
+            debridFilter: settings.player.streamAutoPlayDebridFilter
+        )
+    }
+}

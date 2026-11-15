@@ -13,10 +13,27 @@ final class PosterOptionsPolicyTests: XCTestCase {
         traktLists: Bool = false
     ) -> PosterOptionsPolicy.Context {
         .init(
-            type: type, isInLibrary: inLibrary, isWatched: watched,
+            type: type, isWatchedAsOneItem: type != .series && type != .tv,
+            isInLibrary: inLibrary, isWatched: watched,
             hasProgress: progress, isNextUpSuggestion: suggestion,
             canWalkEpisodes: knownEpisodes, hasTraktLists: traktLists
         )
+    }
+
+    /// A YouTube add-on's "youtube" item is one video, as a film is (upstream 1.2.0-beta.1).
+    func testASingleVideoOfAnotherTypeCanBeMarkedWatched() {
+        XCTAssertTrue(PosterOptionsPolicy.actions(for: context(type: .unknown)).contains(.markWatched))
+    }
+
+    func testOnlyShowsAreNotWatchedAsOneItem() {
+        func preview(_ rawType: String) -> MetaPreview {
+            MetaPreview(id: "x", type: ContentType.from(rawType), rawType: rawType, name: "X")
+        }
+        XCTAssertTrue(preview("movie").isWatchedAsOneItem)
+        XCTAssertTrue(preview("youtube").isWatchedAsOneItem)
+        XCTAssertFalse(preview("series").isWatchedAsOneItem)
+        XCTAssertFalse(preview("tv").isWatchedAsOneItem)
+        XCTAssertFalse(preview("anime").isWatchedAsOneItem)
     }
 
     func testALibraryRowIsAlwaysOffered() {

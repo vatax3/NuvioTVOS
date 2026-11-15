@@ -89,7 +89,7 @@ enum SettingsBlob {
         "audio_amplification_db", "center_mix_level_db", "night_mode", "persist_audio_amplification",
         "remember_audio_delay_per_device", "experimental_dv5_to_dv81_enabled",
         "experimental_dv7_to_dv81_preserve_mapping_enabled", "dv7_handling_mode", "map_dv7_to_hevc",
-        "dv7_libdovi_mode_override", "strip_hdr10plus_sei", "exo_chapters_enabled",
+        "dv7_libdovi_mode_override", "strip_hdr10plus_sei", "exo_chapters_enabled", "chapter_title_enabled",
         "mpv_hardware_decode_mode", "frame_rate_matching", "frame_rate_matching_mode",
         "resolution_matching_enabled", "external_player_forward_subtitles",
         "external_player_send_skip_segments", "vod_cache_enabled", "vod_cache_size_mode",

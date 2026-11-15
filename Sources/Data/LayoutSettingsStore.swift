@@ -296,6 +296,11 @@ final class LayoutSettingsStore: PreferenceStore {
         set { setOption("continue_watching_card_style", newValue) }
     }
 
+    var continueWatchingClickAction: ContinueWatchingClickAction {
+        get { option("continue_watching_click_action", default: .stream) }
+        set { setOption("continue_watching_click_action", newValue) }
+    }
+
     var continueWatchingSortMode: ContinueWatchingSortMode {
         get { option("continue_watching_sort_mode", default: .recentlyWatched) }
         set { setOption("continue_watching_sort_mode", newValue) }

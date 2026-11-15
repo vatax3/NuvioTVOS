@@ -181,7 +181,10 @@ struct ContinueWatchingRow: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: NuvioTheme.components.row.itemSpacing) {
-                    ForEach(entries) { entry in
+                    // Keyed by show, as upstream's cards are since 1.2.0-beta.1. Keyed by episode,
+                    // a card moving on to the next episode was a new item: the focused card left
+                    // the row and focus fell to its neighbour.
+                    ForEach(entries, id: \.preview.rowKey) { entry in
                         ContinueWatchingCard(
                             entry: entry,
                             style: style,

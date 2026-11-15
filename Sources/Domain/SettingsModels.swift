@@ -518,6 +518,31 @@ enum DiscoverLocation: String, SettingsOption {
     }
 }
 
+/// What selecting a Continue Watching card opens — upstream's `ContinueWatchingClickAction`
+/// (`continue_watching_click_action`, 1.2.0-beta.1). Start from beginning and the poster menu's
+/// details row are unaffected.
+enum ContinueWatchingClickAction: String, SettingsOption {
+    case stream = "STREAM"
+    case details = "DETAILS"
+    case detailsForUpcoming = "DETAILS_FOR_UPCOMING"
+    var displayName: String {
+        switch self {
+        case .stream: return L10n.text("option.cw_click_stream", fallback: "Open Stream")
+        case .details: return L10n.text("option.cw_click_details", fallback: "Open Details")
+        case .detailsForUpcoming: return L10n.text("option.cw_click_details_upcoming", fallback: "Details for Upcoming Only")
+        }
+    }
+
+    /// `opensDetails`: upcoming means a next-up episode that has not aired.
+    func opensDetails(isUpcoming: Bool) -> Bool {
+        switch self {
+        case .stream: return false
+        case .details: return true
+        case .detailsForUpcoming: return isUpcoming
+        }
+    }
+}
+
 enum ContinueWatchingSortMode: String, SettingsOption {
     case recentlyWatched = "RECENT"
     case recentlyAdded = "ADDED"

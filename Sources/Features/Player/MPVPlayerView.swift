@@ -91,6 +91,8 @@ struct MPVPlayerView: View {
     let onPlaybackFailure: (String) -> Void
     let onProgress: (Double, Double, Bool) -> Void
     let onFinished: () -> Void
+    var onPlaybackError: (String) -> Void = { _ in }
+    var holdsPlaybackError = false
 
     @State private var engine = MPVEngine()
 
@@ -122,8 +124,25 @@ struct MPVPlayerView: View {
             onPlaybackFailure: onPlaybackFailure,
             onProgress: onProgress,
             onFinished: onFinished,
+            onPlaybackError: onPlaybackError,
+            holdsPlaybackError: holdsPlaybackError,
             engine: engine
         ) { context in
+            ZStack {
+                mpvSurface(context: context)
+                // A text track in a font, background or shadow libass cannot draw the overlay's
+                // way: mpv hides it and the overlay draws its current event (upstream 1.2.0-beta.1).
+                if let text = engine.styledSubtitleText {
+                    SubtitleOverlay(
+                        cues: [], style: subtitleStyle,
+                        obstructions: context.subtitleObstructions, mpvText: text
+                    )
+                }
+            }
+        }
+    }
+
+    private func mpvSurface(context: PlayerSurfaceContext) -> some View {
             MPVMetalSurface(
                 engine: engine, request: request, resumeAt: resumeAt,
                 verboseLogging: verboseLogging, hardwareDecoding: hardwareDecoding,
@@ -137,7 +156,6 @@ struct MPVPlayerView: View {
                 playbackSpeed: context.playbackSpeed,
                 initialAspectMode: initialAspectMode
             )
-        }
     }
 }
 

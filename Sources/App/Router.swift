@@ -148,6 +148,10 @@ struct PlaybackRequest: Hashable, Identifiable {
     /// instead of starting the choice over.
     var sourceBingeGroup: String? = nil
 
+    /// Set when the source screen started this playback itself — auto-play's pick, the release
+    /// continued from the previous episode, or a reused last link. Only such a source falls back
+    /// to the next match when it fails (`SourceFallback`).
+    var autoSelection: SourceFallbackState? = nil
     var id: String { "\(videoId)|\(streamURL)" }
 }
 
@@ -224,6 +228,7 @@ enum Route: Hashable {
     case repositoryConfig
     case customPoster
     case customTheme
+    case subtitleAppearance
     case themeSettings
     case layoutSettings
     case playbackSettings
