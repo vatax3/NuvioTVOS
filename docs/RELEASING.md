@@ -95,6 +95,30 @@ the work. Four rules, and they are not negotiable per release:
 Technical detail is welcome where it explains a user-visible consequence. Detail that only explains
 the implementation belongs in the commit message.
 
+### The upstream line
+
+Every release's notes open with one line naming the Android TV release the port is reconciled
+through, before the first heading:
+
+```markdown
+Reconciled with the Android TV app through [NuvioTV 1.2.0-beta.1](https://github.com/NuvioMedia/NuvioTV/releases/tag/1.2.0-beta.1).
+```
+
+Upstream tags carry no `v` prefix. The version is the one that is true **once this release is
+out**, which is not always what [UPSTREAM-PARITY.md](UPSTREAM-PARITY.md) says at the time of
+writing, because the marker moves after the release ships:
+
+- **A release that finishes an upstream pass** (`upstream-parity`): the newest upstream release
+  that pass read — the version the marker is about to move to.
+- **A pass shipped over several releases**: only the last one claims the new version. The earlier
+  ones keep the old marker, because until the lot is out the window is not reconciled.
+- **Any other release** (backlog item, own fix or feature): the marker as it stands. It does not
+  move, so neither does the line.
+
+The line states the same narrow claim as the marker — every upstream release up to and including
+that one has been read and each change ported, judged not applicable, or declined — and nothing
+more. Never phrase it as feature equality with that version ("same features as", "matches").
+
 > Through 1.0.51 the notes were written in French as a first-person account of the session. They
 > read as a diary to anyone who was not in it, and a sideloading client showed that diary as the
 > version's description.
