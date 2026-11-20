@@ -6,7 +6,18 @@ import Observation
 @Observable
 @MainActor
 final class LayoutSettingsStore: PreferenceStore {
-    init() { super.init(namespace: "layout") }
+    init(defaults: UserDefaults = .standard) {
+        super.init(namespace: "layout", defaults: defaults)
+        migrateContinueWatchingSortMode()
+    }
+
+    /// Our old sort values (`RECENT`, `ADDED`, `ALPHA`) are not upstream's, and one left stored
+    /// would keep being pushed to a blob the Android app reads. Cleared, which is `DEFAULT`.
+    private func migrateContinueWatchingSortMode() {
+        guard let raw = storedValue("continue_watching_sort_mode") as? String,
+              ContinueWatchingSortMode(rawValue: raw) == nil else { return }
+        migrating { remove("continue_watching_sort_mode") }
+    }
 
     // MARK: - Layout choice
 
@@ -253,7 +264,9 @@ final class LayoutSettingsStore: PreferenceStore {
     }
 
     var followAddonsOrder: Bool {
-        get { bool("follow_addons_order", default: true) }
+        // Off, as upstream's has always been. On here since the first settings pass (d6fdb15),
+        // which made a fresh install ignore every catalogue moved on the Catalog Order screen.
+        get { bool("follow_addons_order", default: false) }
         set { setBool("follow_addons_order", newValue) }
     }
 
@@ -302,7 +315,7 @@ final class LayoutSettingsStore: PreferenceStore {
     }
 
     var continueWatchingSortMode: ContinueWatchingSortMode {
-        get { option("continue_watching_sort_mode", default: .recentlyWatched) }
+        get { option("continue_watching_sort_mode", default: .default) }
         set { setOption("continue_watching_sort_mode", newValue) }
     }
 

@@ -103,11 +103,18 @@ final class CollectionStore {
         persist()
     }
 
+    /// Moves a collection past its neighbour in the order the manager lists them (`ordered`),
+    /// within its own group: pinned ones stay above unpinned ones, as upstream locks them.
+    ///
+    /// Swapping in the stored array instead, as this did until 1.0.68, could swap an unpinned
+    /// collection with a pinned one listed elsewhere, so the press changed nothing visible.
     func move(_ collectionId: String, by offset: Int) {
-        guard let index = index(of: collectionId) else { return }
+        var list = ordered
+        guard let index = list.firstIndex(where: { $0.id == collectionId }) else { return }
         let target = index + offset
-        guard collections.indices.contains(target) else { return }
-        collections.swapAt(index, target)
+        guard list.indices.contains(target), list[target].pinToTop == list[index].pinToTop else { return }
+        list.swapAt(index, target)
+        collections = list
         persist()
     }
 

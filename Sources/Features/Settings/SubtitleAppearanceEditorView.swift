@@ -180,6 +180,11 @@ struct SubtitleAppearanceEditorView: View {
                     isSelected: { SubtitleColors.rgb(player.subtitleOutlineColor) == $0 },
                     toggle: { player.subtitleOutlineColor = SubtitleColors.color($0, preservingAlphaFrom: player.subtitleOutlineColor) }
                 )
+                SettingsStepperRow(
+                    title: L10n.text("settings.sub_outline_width", fallback: "Outline Width"),
+                    value: $player.subtitleOutlineWidth,
+                    range: SubtitleStyle.outlineWidthRange
+                )
             }
             SettingsToggle(
                 title: L10n.text("player.sub_shadow", fallback: "Drop Shadow"),

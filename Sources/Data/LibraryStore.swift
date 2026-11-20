@@ -77,8 +77,21 @@ struct ContinueWatchingEntry: Identifiable, Hashable {
 
     /// A next-up episode that has not aired yet — what "Details for Upcoming Only" sends to the
     /// details page.
-    var isUpcoming: Bool {
-        episodeReleased.map { $0 > Date() } ?? false
+    var isUpcoming: Bool { isUpcoming(now: Date()) }
+
+    func isUpcoming(now: Date) -> Bool {
+        episodeReleased.map { $0 > now } ?? false
+    }
+
+    /// Upstream's `sortTimestamp`: when the row was last watched — except a next-up episode that
+    /// aired after that and within the last 60 days (their `isReleaseAlert`), which sorts by its
+    /// release, so a new episode of a show set aside brings the show forward.
+    func sortTimestamp(now: Date) -> Date {
+        let lastWatched = progress.updatedAt
+        guard let released = episodeReleased, released <= now, released > lastWatched,
+              now.timeIntervalSince(released) < 60 * 86_400
+        else { return lastWatched }
+        return released
     }
 
     /// The source list for this card's episode, or the film — what selecting a card opens by
@@ -319,7 +332,7 @@ final class LibraryStore {
     /// watching off the end of the rail. Zero or less means no cap.
     func continueWatching(
         threshold: Double,
-        sort: ContinueWatchingSortMode = .recentlyWatched,
+        sort: ContinueWatchingSortMode = .default,
         withinDays: Int = 0,
         nextUp: NextUpOptions = NextUpOptions()
     ) -> [ContinueWatchingEntry] {
@@ -449,23 +462,74 @@ final class LibraryStore {
         _ entries: [ContinueWatchingEntry],
         by mode: ContinueWatchingSortMode
     ) -> [ContinueWatchingEntry] {
+        Self.sortContinueWatching(entries, by: mode)
+    }
+
+    /// Port of upstream's `sortContinueWatchingItems`.
+    ///
+    /// `DEFAULT` and `SPLIT_UPCOMING` order everything by `sortTimestamp`, newest first.
+    /// `STREAMING_STYLE` puts released items first in that order, then episodes that have not
+    /// aired, soonest first. Stable, as Kotlin's sorts are: equal keys keep the rail's order.
+    nonisolated static func sortContinueWatching(
+        _ entries: [ContinueWatchingEntry],
+        by mode: ContinueWatchingSortMode,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> [ContinueWatchingEntry] {
+        func byRecency(_ items: [ContinueWatchingEntry]) -> [ContinueWatchingEntry] {
+            stableSorted(items) { $0.sortTimestamp(now: now) > $1.sortTimestamp(now: now) }
+        }
         switch mode {
-        case .recentlyWatched:
-            return entries  // already newest-first
-        case .recentlyAdded:
-            let addedAt = Dictionary(
-                library.map { ($0.id, $0.addedAt) },
-                uniquingKeysWith: { first, _ in first }
-            )
-            return entries.sorted {
-                (addedAt[$0.preview.rowKey] ?? .distantPast)
-                    > (addedAt[$1.preview.rowKey] ?? .distantPast)
-            }
-        case .alphabetical:
-            return entries.sorted {
-                $0.preview.name.localizedCaseInsensitiveCompare($1.preview.name) == .orderedAscending
+        case .default, .splitUpcoming:
+            return byRecency(entries)
+        case .streamingStyle:
+            let released = entries.filter { !$0.isUpcoming(now: now) }
+            let unreleased = entries.filter { $0.isUpcoming(now: now) }
+            return byRecency(released) + upcomingOrder(unreleased, calendar: calendar)
+        }
+    }
+
+    /// Port of upstream's `splitUpcomingItems`: for `SPLIT_UPCOMING`, next-up episodes that have
+    /// not aired leave the rail for a row of their own, soonest first. Other modes keep one rail.
+    nonisolated static func splitUpcoming(
+        _ entries: [ContinueWatchingEntry],
+        mode: ContinueWatchingSortMode,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> (main: [ContinueWatchingEntry], upcoming: [ContinueWatchingEntry]) {
+        guard mode == .splitUpcoming else { return (entries, []) }
+        let upcoming = entries.filter { $0.isUpcoming(now: now) }
+        return (entries.filter { !$0.isUpcoming(now: now) }, upcomingOrder(upcoming, calendar: calendar))
+    }
+
+    /// Upstream's `upcomingReleaseComparator`: by release day, then by release time, unknown
+    /// dates last. Adaptation: the episode cache keeps a `Date`, not the string the addon sent,
+    /// so a date-only release is not told apart from one at midnight UTC, which upstream sorts
+    /// after a timed release on the same day.
+    nonisolated private static func upcomingOrder(
+        _ entries: [ContinueWatchingEntry],
+        calendar: Calendar
+    ) -> [ContinueWatchingEntry] {
+        stableSorted(entries) { lhs, rhs in
+            switch (lhs.episodeReleased, rhs.episodeReleased) {
+            case (nil, _): return false
+            case (_, nil): return true
+            case let (left?, right?):
+                let leftDay = calendar.startOfDay(for: left)
+                let rightDay = calendar.startOfDay(for: right)
+                return leftDay != rightDay ? leftDay < rightDay : left < right
             }
         }
+    }
+
+    nonisolated private static func stableSorted<T>(
+        _ items: [T], by areInIncreasingOrder: (T, T) -> Bool
+    ) -> [T] {
+        items.enumerated().sorted { lhs, rhs in
+            if areInIncreasingOrder(lhs.element, rhs.element) { return true }
+            if areInIncreasingOrder(rhs.element, lhs.element) { return false }
+            return lhs.offset < rhs.offset
+        }.map(\.element)
     }
 
     /// Remembers a series' episode list, written whenever a detail screen resolves one.

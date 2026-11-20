@@ -297,15 +297,26 @@ struct CatalogOrderView: View {
         CollectionStore.homePlacement(collections.collections).trailing.map(\.id)
     }
 
-    private var rows: [CatalogOrderEntry] { addons.catalogOrder }
+    @Environment(AppSettings.self) private var settings
+
+    private var rows: [CatalogOrderEntry] { addons.catalogOrderShown(collectionIds: orderableCollectionIds) }
 
     var body: some View {
+        @Bindable var layout = settings.layout
         NuvioScreenBackground {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: NuvioTheme.components.settings.rowGap) {
                     Text(L10n.text("settings.addons.catalog_order", fallback: "Catalog Order"))
                         .nuvioText(NuvioTextStyles.display)
                         .foregroundStyle(colors.textPrimary)
+
+                    // Upstream keeps this switch at the head of the same screen, since it decides
+                    // whether the list below can be rearranged at all.
+                    SettingsToggle(
+                        title: L10n.text("settings.layout.follow_addon_order", fallback: "Follow addon order"),
+                        subtitle: L10n.text("settings.layout.follow_addon_order_subtitle", fallback: "Order rails by the addon list rather than manually"),
+                        isOn: $layout.followAddonsOrder
+                    )
 
                     SettingsCard(
                         title: L10n.text("settings.addons.home_rows", fallback: "Home rows"),
@@ -329,6 +340,7 @@ struct CatalogOrderView: View {
                                     label: label(for: entry),
                                     isFirst: index == 0,
                                     isLast: index == entries.count - 1,
+                                    isMovable: !addons.followsAddonOrder || entry.collectionId != nil,
                                     collectionIds: orderableCollectionIds
                                 )
                             }
@@ -370,6 +382,8 @@ private struct CatalogOrderRow: View {
     let label: (title: String, subtitle: String)
     let isFirst: Bool
     let isLast: Bool
+    /// False for a catalogue while catalogues follow the addon order: its place is the manifest's.
+    var isMovable = true
     let collectionIds: [String]
 
     @State private var isRenaming = false
@@ -431,16 +445,18 @@ private struct CatalogOrderRow: View {
                     tint: entry.enabled ? colors.success : colors.textTertiary,
                     action: { addons.setRowEnabled(!entry.enabled, key: entry.rowKey) }
                 )
-                IconAction(systemImage: "arrow.up", tint: colors.textSecondary, action: {
-                    addons.moveRow(entry.rowKey, by: -1, collectionIds: collectionIds)
-                })
-                .disabled(isFirst)
-                .opacity(isFirst ? NuvioTheme.effects.disabledAlpha : 1)
-                IconAction(systemImage: "arrow.down", tint: colors.textSecondary, action: {
-                    addons.moveRow(entry.rowKey, by: 1, collectionIds: collectionIds)
-                })
-                .disabled(isLast)
-                .opacity(isLast ? NuvioTheme.effects.disabledAlpha : 1)
+                if isMovable {
+                    IconAction(systemImage: "arrow.up", tint: colors.textSecondary, action: {
+                        addons.moveRow(entry.rowKey, by: -1, collectionIds: collectionIds)
+                    })
+                    .disabled(isFirst)
+                    .opacity(isFirst ? NuvioTheme.effects.disabledAlpha : 1)
+                    IconAction(systemImage: "arrow.down", tint: colors.textSecondary, action: {
+                        addons.moveRow(entry.rowKey, by: 1, collectionIds: collectionIds)
+                    })
+                    .disabled(isLast)
+                    .opacity(isLast ? NuvioTheme.effects.disabledAlpha : 1)
+                }
             }
         }
         .padding(.horizontal, NuvioTheme.spacing.lg)

@@ -135,27 +135,39 @@ struct HomeRailList: View {
     /// Bumped when an episode airs, so the rail is worked out again against the new time.
     @State private var releaseTick = 0
 
-    private var continueWatching: [ContinueWatchingEntry] {
+    /// The Continue Watching rail and, with "Separate Upcoming Row", the row of episodes that have
+    /// not aired.
+    private var continueWatchingRows: (main: [ContinueWatchingEntry], upcoming: [ContinueWatchingEntry]) {
         // Gated here rather than at the row, so the rail is also absent from the focus order
         // and from `firstCardKey` — a hidden row that still takes the first press is worse than
         // no setting at all.
-        guard settings.layout.continueWatchingEnabled else { return [] }
+        guard settings.layout.continueWatchingEnabled else { return ([], []) }
         _ = releaseTick
-        return library.continueWatching(
-            threshold: settings.watchedThreshold,
-            sort: settings.layout.continueWatchingSortMode,
-            withinDays: settings.tracking.continueWatchingDaysCap,
-            nextUp: settings.nextUpOptions
+        let mode = settings.layout.continueWatchingSortMode
+        return LibraryStore.splitUpcoming(
+            library.continueWatching(
+                threshold: settings.watchedThreshold,
+                sort: mode,
+                withinDays: settings.tracking.continueWatchingDaysCap,
+                nextUp: settings.nextUpOptions
+            ),
+            mode: mode
         )
     }
 
+    private var continueWatching: [ContinueWatchingEntry] { continueWatchingRows.main }
+    private var upcomingContinueWatching: [ContinueWatchingEntry] { continueWatchingRows.upcoming }
+
     private static let continueScope = "continue"
+    private static let upcomingScope = "upcoming"
 
     /// Every rail's focus keys, top to bottom, in the order `rails` lays them out — scoped per
     /// rail, since one title can sit in several (`RailFocusKey`). Empty rails are left out.
     private var railKeys: [[String]] {
+        let continueRows = continueWatchingRows
         var rails: [[String]] = [
-            continueWatching.map { RailFocusKey.make(Self.continueScope, $0.preview.rowKey) }
+            continueRows.main.map { RailFocusKey.make(Self.continueScope, $0.preview.rowKey) },
+            continueRows.upcoming.map { RailFocusKey.make(Self.upcomingScope, $0.preview.rowKey) }
         ]
         for collection in pinnedCollections {
             rails.append(collection.folders.map { RailFocusKey.make(collection.homeRowKey, $0.id) })
@@ -308,6 +320,21 @@ struct HomeRailList: View {
                 // Continue Watching is gated separately from the catalog rows below it: it is
                 // the one rail a viewer sees on every launch, so it is also the one whose extra
                 // requests to a rate-limited service are hardest to justify.
+                .customPosterScreen(.continueWatching, settings: settings)
+            }
+
+            if !upcomingContinueWatching.isEmpty {
+                ContinueWatchingRow(
+                    title: L10n.text("library.upcoming", fallback: "Upcoming"),
+                    entries: upcomingContinueWatching,
+                    style: settings.layout.continueWatchingCardStyle,
+                    onFocusItem: { model.focusedItem = $0 },
+                    onSelect: { entry in
+                        openContinueWatching(entry)
+                    },
+                    cardFocus: $focusedCardKey,
+                    focusScope: Self.upcomingScope
+                )
                 .customPosterScreen(.continueWatching, settings: settings)
             }
 

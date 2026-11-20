@@ -421,7 +421,8 @@
 "settings.section.catalogs" = "Catalogs";
 "settings.section.navigation" = "Navigation";
 "settings.section.content" = "Content";
-"settings.section.sort" = "Sort";
+"settings.layout.cw_sort_mode" = "Sort Order";
+"library.upcoming" = "Upcoming";
 "settings.section.width" = "Width";
 "settings.section.height" = "Height";
 "settings.experience_mode" = "Experience mode";
@@ -1268,7 +1269,12 @@
 "option.hidden" = "Hidden";
 "option.sidebar_icons" = "Icons";
 "option.sidebar_hidden" = "Hidden";
-"option.recently_watched" = "Recently watched";
+"option.cw_sort.default" = "Default";
+"option.cw_sort.default_desc" = "Sort all items by recency";
+"option.cw_sort.streaming" = "Streaming Style";
+"option.cw_sort.streaming_desc" = "Released items first, upcoming at the end";
+"option.cw_sort.split_upcoming" = "Separate Upcoming Row";
+"option.cw_sort.split_upcoming_desc" = "Move unaired episodes to a separate Upcoming row";
 "option.this_device" = "This device";
 "option.trakt_collection" = "Trakt collection";
 "option.simkl_list" = "Simkl list";
@@ -1446,6 +1452,7 @@
 "settings.sub_outline" = "Outline";
 "settings.sub_outline_sub" = "Add outline around subtitle text for better visibility";
 "settings.sub_outline_color" = "Outline Color";
+"settings.sub_outline_width" = "Outline Width";
 "settings.sub_shadow_desc" = "Separate the text from bright scenes";
 "settings.sub_shadow_opacity" = "Shadow Opacity";
 "settings.sub_shadow_size" = "Shadow Size";

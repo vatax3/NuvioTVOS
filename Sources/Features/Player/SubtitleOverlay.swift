@@ -227,7 +227,9 @@ struct SubtitleOverlay: View {
         style.outlineEnabled ? style.outlineColor : .clear
     }
 
+    /// Upstream's outline half-width, `outlineWidth × unit / 2` since 1.2.0-beta.2 (half its old
+    /// value per step, so width 2 matches the native renderer).
     private var outlineRadius: CGFloat {
-        style.outlineEnabled ? max(1, dp(CGFloat(style.outlineWidth)) * 0.6) : 0
+        style.outlineEnabled ? max(0.5, CGFloat(style.outlineWidth) * unit / 2) : 0
     }
 }

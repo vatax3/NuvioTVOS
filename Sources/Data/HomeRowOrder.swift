@@ -164,6 +164,30 @@ enum HomeRowOrder {
         return result
     }
 
+    /// Port of `reorderCollectionInDraft` (`CatalogOrderViewModel.kt`): a collection moved while
+    /// catalogues follow the addon order steps past any collections beside it and then past the
+    /// neighbouring addon's whole run of catalogues — the only positions that mode allows.
+    /// `nil` when the collection cannot move that way, or the key is a catalogue.
+    static func movingCollection(
+        _ key: HomeRowKey, by direction: Int, in order: [HomeRowKey], owners: [String: String]
+    ) -> [HomeRowKey]? {
+        guard key.isCollection, direction != 0, let current = order.firstIndex(of: key) else { return nil }
+        func owner(_ index: Int) -> String? { order[index].catalogKey.flatMap { owners[$0] } }
+        let step = direction < 0 ? -1 : 1
+        var scan = current + step
+        while order.indices.contains(scan), order[scan].isCollection { scan += step }
+        guard order.indices.contains(scan), let target = owner(scan) else { return nil }
+        while order.indices.contains(scan + step), !order[scan + step].isCollection,
+              owner(scan + step) == target {
+            scan += step
+        }
+        guard scan != current else { return nil }
+        var result = order
+        result.remove(at: current)
+        result.insert(key, at: scan)
+        return result
+    }
+
     private static func owner(
         in order: [HomeRowKey], before index: Int, owners: [String: String]
     ) -> String? {

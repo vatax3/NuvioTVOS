@@ -543,15 +543,39 @@ enum ContinueWatchingClickAction: String, SettingsOption {
     }
 }
 
+/// `continue_watching_sort_mode`, with upstream's values — the key is in the settings blob both
+/// apps write, and each reads a value it does not know as its own default.
+///
+/// Until 1.0.68 ours were `RECENT`, `ADDED` and `ALPHA`, none of which upstream knows, so
+/// neither app ever saw the other's choice. `RECENT` was upstream's `DEFAULT`; the other two had
+/// no counterpart and were dropped. `LayoutSettingsStore` clears the old values.
 enum ContinueWatchingSortMode: String, SettingsOption {
-    case recentlyWatched = "RECENT"
-    case recentlyAdded = "ADDED"
-    case alphabetical = "ALPHA"
+    /// Everything by recency: last watched, or the release of a next-up episode that aired since.
+    case `default` = "DEFAULT"
+    /// Released items by recency, then episodes that have not aired, soonest first.
+    case streamingStyle = "STREAMING_STYLE"
+    /// As `default`, with episodes that have not aired moved to a separate Upcoming row.
+    case splitUpcoming = "SPLIT_UPCOMING"
+
     var displayName: String {
         switch self {
-        case .recentlyWatched: return L10n.text("option.recently_watched", fallback: "Recently watched")
-        case .recentlyAdded: return L10n.text("option.recently_added", fallback: "Recently added")
-        case .alphabetical: return "A–Z"
+        case .default: return L10n.text("option.cw_sort.default", fallback: "Default")
+        case .streamingStyle: return L10n.text("option.cw_sort.streaming", fallback: "Streaming Style")
+        case .splitUpcoming: return L10n.text("option.cw_sort.split_upcoming", fallback: "Separate Upcoming Row")
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .default:
+            return L10n.text("option.cw_sort.default_desc", fallback: "Sort all items by recency")
+        case .streamingStyle:
+            return L10n.text("option.cw_sort.streaming_desc", fallback: "Released items first, upcoming at the end")
+        case .splitUpcoming:
+            return L10n.text(
+                "option.cw_sort.split_upcoming_desc",
+                fallback: "Move unaired episodes to a separate Upcoming row"
+            )
         }
     }
 }

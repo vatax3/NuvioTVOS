@@ -421,7 +421,8 @@
 "settings.section.catalogs" = "Catalogues";
 "settings.section.navigation" = "Navigation";
 "settings.section.content" = "Contenu";
-"settings.section.sort" = "Tri";
+"settings.layout.cw_sort_mode" = "Ordre de tri";
+"library.upcoming" = "À venir";
 "settings.section.width" = "Largeur";
 "settings.section.height" = "Hauteur";
 "settings.experience_mode" = "Mode d’expérience";
@@ -1268,7 +1269,12 @@
 "option.hidden" = "Masqué";
 "option.sidebar_icons" = "Icônes";
 "option.sidebar_hidden" = "Masquée";
-"option.recently_watched" = "Vus récemment";
+"option.cw_sort.default" = "Par défaut";
+"option.cw_sort.default_desc" = "Tout trier par activité récente";
+"option.cw_sort.streaming" = "Style streaming";
+"option.cw_sort.streaming_desc" = "Les épisodes sortis d’abord, ceux à venir à la fin";
+"option.cw_sort.split_upcoming" = "Rangée « À venir » séparée";
+"option.cw_sort.split_upcoming_desc" = "Déplacer les épisodes pas encore sortis dans une rangée « À venir »";
 "option.this_device" = "Cet appareil";
 "option.trakt_collection" = "Collection Trakt";
 "option.simkl_list" = "Liste Simkl";
@@ -1446,6 +1452,7 @@
 "settings.sub_outline" = "Contour";
 "settings.sub_outline_sub" = "Ajouter un contour autour du texte des sous-titres pour une meilleure lisibilité";
 "settings.sub_outline_color" = "Couleur du contour";
+"settings.sub_outline_width" = "Épaisseur du contour";
 "settings.sub_shadow_desc" = "Détacher le texte des scènes lumineuses";
 "settings.sub_shadow_opacity" = "Opacité de l’ombre";
 "settings.sub_shadow_size" = "Taille de l’ombre";

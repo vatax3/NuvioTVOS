@@ -754,7 +754,11 @@ struct LayoutSettingsContent: View {
                     subtitle: L10n.text("settings.layout.cw_click_action_sub", fallback: "What opens when you select a Continue Watching item"),
                     selection: $layout.continueWatchingClickAction
                 )
-                SettingsOptionRow(title: L10n.text("settings.section.sort", fallback: "Sort"), selection: $layout.continueWatchingSortMode)
+                SettingsOptionRow(
+                    title: L10n.text("settings.layout.cw_sort_mode", fallback: "Sort Order"),
+                    subtitle: layout.continueWatchingSortMode.detail,
+                    selection: $layout.continueWatchingSortMode
+                )
                 SettingsToggle(title: L10n.text("settings.layout.use_episode_thumbnails", fallback: "Use episode thumbnails"), isOn: $layout.useEpisodeThumbnailsInContinueWatching)
                 SettingsToggle(title: L10n.text("settings.layout.blur_next_up", fallback: "Blur next-up artwork"), subtitle: L10n.text("settings.layout.blur_next_up_subtitle", fallback: "Avoid spoilers in the rail"), isOn: $layout.blurContinueWatchingNextUp)
                 SettingsToggle(title: L10n.text("settings.layout.blur_unwatched", fallback: "Blur unwatched episode stills"), isOn: $layout.blurUnwatchedEpisodes)

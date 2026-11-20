@@ -104,7 +104,7 @@ struct SubtitleStyle: Equatable {
     var backgroundColor: Color = .clear
     var outlineEnabled: Bool = true
     var outlineColor: Color = .black
-    var outlineWidth: Double = 2
+    var outlineWidth: Double = Double(SubtitleStyle.outlineWidthDefault)
     var verticalOffset: Double = 0
     /// How far these settings reach into subtitles that carry their own styling. Only the MPV
     /// engine can act on it: AVFoundation has no ASS renderer to override in the first place.
@@ -131,14 +131,22 @@ struct SubtitleStyle: Equatable {
     static let `default` = SubtitleStyle()
 
     static let backgroundRadiusMax = 24
+    static let outlineWidthRange = 1...5
+    static let outlineWidthDefault = 2
+
+    static func clampedOutlineWidth(_ width: Int) -> Int {
+        min(max(width, outlineWidthRange.lowerBound), outlineWidthRange.upperBound)
+    }
     static let shadowOpacityDefault = 75
     static let shadowSizeRange = 1...8
     static let shadowSizeDefault = 2
 
-    /// Upstream's `usesStyledRenderer`: a font, a background or a shadow that mpv's own renderer
-    /// cannot draw the way the overlay does, so mpv's text subtitles are drawn by the overlay.
+    /// Upstream's `usesStyledRenderer`: a font, a background, a shadow or an outline width that
+    /// mpv's own renderer cannot draw the way the overlay does, so mpv's text subtitles are drawn
+    /// by the overlay. The outline width joined in 1.2.0-beta.2.
     var usesStyledRenderer: Bool {
         fontId != SubtitleFonts.defaultId || backgroundColor.alphaComponent > 0.01 || shadowEnabled
+            || (outlineEnabled && Int(outlineWidth.rounded()) != Self.outlineWidthDefault)
     }
 
     static let hdrBrightnessMin: Double = 0

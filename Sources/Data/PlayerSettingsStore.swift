@@ -307,9 +307,15 @@ final class PlayerSettingsStore: PreferenceStore {
         set { setString("subtitle_outline_color", newValue) }
     }
 
-    var subtitleOutlineWidth: Double {
-        get { double("subtitle_outline_width", default: 2) }
-        set { setDouble("subtitle_outline_width", newValue) }
+    /// `subtitle_outline_width`: a whole number from 1 to 5, clamped on read and write as
+    /// upstream's is (1.2.0-beta.2). Ours took 0 to 6 in halves until 1.0.68; the key is an `Int`
+    /// in the blob both apps write, so a half was never pushed and a 6 or 0 was out of their range.
+    var subtitleOutlineWidth: Int {
+        get {
+            let stored = (storedValue("subtitle_outline_width") as? NSNumber)?.doubleValue
+            return SubtitleStyle.clampedOutlineWidth(stored.map { Int($0.rounded()) } ?? SubtitleStyle.outlineWidthDefault)
+        }
+        set { setInt("subtitle_outline_width", SubtitleStyle.clampedOutlineWidth(newValue)) }
     }
 
     var subtitleVerticalOffset: Double {

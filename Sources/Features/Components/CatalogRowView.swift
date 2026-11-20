@@ -157,6 +157,7 @@ struct ContinueWatchingRow: View {
     @Environment(\.nuvioColors) private var colors
     @Environment(AppSettings.self) private var settings
 
+    var title = L10n.text("library.continue_watching", fallback: "Continue Watching")
     let entries: [ContinueWatchingEntry]
     var style: ContinueWatchingCardStyle = .landscape
     var onFocusItem: ((MetaPreview) -> Void)?
@@ -174,7 +175,7 @@ struct ContinueWatchingRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: NuvioTheme.components.row.titleBottomSpacing) {
-            Text(L10n.text("library.continue_watching", fallback: "Continue Watching"))
+            Text(title)
                 .nuvioText(NuvioTextStyles.sectionTitle)
                 .foregroundStyle(colors.textPrimary)
                 .padding(.horizontal, NuvioTheme.components.row.horizontalPadding)

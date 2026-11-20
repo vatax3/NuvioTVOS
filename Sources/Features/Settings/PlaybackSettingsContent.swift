@@ -430,11 +430,10 @@ struct PlaybackSettingsContent: View {
                     selection: $player.subtitleStyleOverride
                 )
                 if player.subtitleOutlineEnabled {
-                    SettingsDecimalStepperRow(
+                    SettingsStepperRow(
                         title: L10n.text("settings.playback.outline_width", fallback: "Outline width"),
                         value: $player.subtitleOutlineWidth,
-                        range: 0...6,
-                        step: 0.5
+                        range: SubtitleStyle.outlineWidthRange
                     )
                 }
                 SettingsToggle(

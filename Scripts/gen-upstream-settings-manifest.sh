@@ -32,7 +32,7 @@ work, tag, out = sys.argv[1:4]
 synced = {"theme_settings", "layout_settings", "experience_settings", "player_settings",
           "stream_badge_settings", "plugin_settings", "trailer_settings", "tmdb_settings",
           "mdblist_settings", "trakt_settings", "debrid_settings", "animeskip_settings",
-          "track_preference"}
+          "track_preference", "ambient_mode_settings"}
 types = {"boolean": "boolean", "int": "int", "long": "long", "float": "float",
          "double": "double", "string": "string", "stringSet": "stringSet"}
 key_re = re.compile(r'\b(boolean|int|long|float|double|string|stringSet)PreferencesKey\(\s*"([^"$]+)"\s*\)')

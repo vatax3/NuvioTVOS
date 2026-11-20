@@ -389,11 +389,48 @@ final class AddonStore {
     /// unknown the first time a catalogue moved.
     func moveRow(_ key: HomeRowKey, by offset: Int, collectionIds: [String]) {
         syncCatalogOrder(collectionIds: collectionIds)
+        if followsAddonOrder {
+            // Catalogues are fixed in manifest order; a collection jumps a whole addon's run.
+            let shown = catalogOrderShown(collectionIds: collectionIds)
+            let owners = Dictionary(
+                allCatalogs.map { ("\($0.addon.baseUrl)#\($0.catalog.descriptorKey)", $0.addon.baseUrl) },
+                uniquingKeysWith: { first, _ in first }
+            )
+            guard let moved = HomeRowOrder.movingCollection(
+                key, by: offset, in: shown.map(\.rowKey), owners: owners
+            ) else { return }
+            let byKey = Dictionary(shown.map { ($0.rowKey, $0) }, uniquingKeysWith: { first, _ in first })
+            catalogOrder = moved.compactMap { byKey[$0] }
+            persistOrder()
+            return
+        }
         guard let index = catalogOrder.firstIndex(where: { $0.rowKey == key }) else { return }
         let target = index + offset
         guard catalogOrder.indices.contains(target) else { return }
         catalogOrder.swapAt(index, target)
         persistOrder()
+    }
+
+    /// What the Catalog Order screen lists: the saved order, or — while catalogues follow the
+    /// addon order — the order Home actually uses, every catalogue in manifest order and the
+    /// collections where they fall between them (upstream b6ce5a389).
+    ///
+    /// Until 1.0.68 the screen always listed the saved order and offered to move catalogues,
+    /// while Home, with following on by default, ignored those moves.
+    func catalogOrderShown(collectionIds: [String]) -> [CatalogOrderEntry] {
+        guard followsAddonOrder else { return catalogOrder }
+        let enabled = Dictionary(catalogOrder.map { ($0.rowKey, $0.enabled) }, uniquingKeysWith: { first, _ in first })
+        var seen = Set<String>()
+        let catalogs = allCatalogs
+            .map { HomeRowOrder.Catalog(key: "\($0.addon.baseUrl)#\($0.catalog.descriptorKey)", owner: $0.addon.baseUrl) }
+            .filter { seen.insert($0.key).inserted }
+        let order = HomeRowOrder.merge(
+            saved: catalogOrder.map(\.rowKey),
+            catalogs: catalogs,
+            collections: collectionIds,
+            followsAddonOrder: true
+        )
+        return order.map { entry(for: $0, enabled: enabled[$0] ?? true) }
     }
 
     func isRowEnabled(_ key: HomeRowKey) -> Bool {
