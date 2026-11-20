@@ -96,7 +96,8 @@ navigation · the three home layouts and the hero · search and its history · d
 pagination · collections and live folder sources · Trakt end to end including list writes ·
 stream filtering and the ranking matrix · the player transport and its seven display modes ·
 player failure recovery · external player hand-off · Top Shelf · parental guidance ·
-AniSkip · addon catalog ordering.
+AniSkip · addon catalog ordering (true only since 1.0.68: before it, following the addon order
+was on by default and the screen's moves did not reach Home).
 
 Two areas where we are ahead, both consequences of the engine: **Dolby Vision profile 7**
 needs no workaround stack, and **AV1** decodes through dav1d where the A15 has no hardware
@@ -1565,3 +1566,75 @@ Open after this window: card watched badges are never drawn — `CatalogRowView.
 collections, which this window's single-item marks extend, have no counterpart. Found while porting
 that line; not a regression. Still open from earlier windows: the accessibility audit, image
 downsampling, media servers, night mode.
+
+## Upstream moved a thirteenth time: 1.2.0-beta.1 → 1.2.0-beta.3
+
+Two tags (16 and 20 November), 276 commits, 365 files, about forty-five engineering lines plus
+translations. Read over the network. The compare API stops at 300 files, which this window
+exceeded in its second half, so the file list was taken from a diff of the two tags' git trees.
+The indexes: six new preference keys (`hardware_bitmaps_enabled`,
+`focused_poster_trailer_continue_in_details`, `detail_season_posters_enabled`,
+`tmdb_use_season_posters`, `trailer_subtitles_enabled`, `rating_source`). The weight is in the
+largest files: Compose drag reordering, Plex and Silo media servers, tracking addons, an
+audio-based subtitle sync and viewer ratings. `UpstreamSettingsManifest.swift` was regenerated at the
+tag (283 keys). The generator's list of synced features now includes `ambient_mode_settings`
+(`gen-upstream-settings-manifest.sh:32`), which upstream added to its blob in 96d42a4d7. Our
+export already carried a feature it does not know (`SettingsBlob.swift:285`), so the Android app's
+ambient settings were never at risk.
+
+The findings that matter are three settings both apps write to the same blob that did not agree,
+and two of them are older than the window. No changelog line mentions either of those two.
+
+### Defects of ours, found by reading why they needed a change
+
+| Upstream | Ours |
+|---|---|
+| **Order same-day upcoming episodes by release time** (b37084be7) | **The setting it sorts under never interoperated.** `continue_watching_sort_mode` took `RECENT`, `ADDED` and `ALPHA` here and `DEFAULT`, `STREAMING_STYLE` and `SPLIT_UPCOMING` there (since July). Each app read the other's value as its own default. Upstream's three modes are now ported exactly (`SettingsModels.swift:552`): `sortTimestamp` brings forward a next-up episode that aired since the show was last watched, within 60 days (`LibraryStore.swift:89`); Streaming Style puts unaired episodes last, soonest first (`:473`); the Separate Upcoming Row splits them out (`:494`, row at `HomeView.swift:326`); same-day episodes are ordered by time (`:509`). Old values are cleared at launch (`LayoutSettingsStore.swift:16`). Recently added and A–Z had no upstream counterpart and are removed. Adaptation: the episode cache keeps a `Date`, so a date-only release is not told apart from midnight UTC. |
+| **Restore Follow addons order so the catalog list reorders by addon manifest** (b6ce5a389) | **Catalogue moves did nothing on Home by default.** `follow_addons_order` defaulted on here since d6fdb15 and off upstream at every tag checked. The Catalog Order screen showed the saved order and moved catalogues; Home, following the manifest, ignored them. The default is now off (`LayoutSettingsStore.swift:269`). With following on, the screen lists Home's real order and only collections move (`AddonStore.swift:420`). A collection then steps past a whole addon's run of catalogues, as upstream's `reorderCollectionInDraft` does (`HomeRowOrder.swift:171`, used at `AddonStore.swift:392`). The switch is on the screen itself, as theirs is (`AddonManagerView.swift:330`). The *Implemented* list's "addon catalog ordering" was not true before this. A further quirk: collections were swapped in storage order while being listed pinned first, so a move could change nothing on screen. They now move within the list as shown (`CollectionStore.swift:111`). |
+| **Outline width control** (2491dccef) | **Ours was out of their range.** `subtitle_outline_width` took 0–6 in halves here; upstream clamps a whole number to 1–5, and the blob types it `Int`. Clamped on read and write (`PlayerSettingsStore.swift:313`), with the control in the appearance editor too (`SubtitleAppearanceEditorView.swift:184`). A width other than 2 sends mpv text subtitles to the overlay (`SubtitleEngine.swift:150`), and the overlay's outline follows their halved scale (`SubtitleOverlay.swift:239`). |
+| **Fall back past an auto-selected source whose debrid result can't be played** (d020e4af7) | **Same defect.** A debrid result that failed to resolve on the source screen ended auto-play there, because the player's fallback only starts once something plays. Now resolved through upstream's loop (`SourceFallback.swift:75`, used at `StreamsView.swift:1191`). The keys tried and the count go to the player, whose fallback continues from them. |
+| **Match TorBox alternative-hash cache answers** (89989cf2b) | **Same defect.** TorBox answers an alias hit under the canonical hash; we read it as not cached, so cached-only filtering and auto-play dropped the stream. Their resolution, verbatim (`DebridClient.swift:197`). |
+| **Match external episode ratings to the addon's episode order** (e2ecb1c5f) | **Same defect, wider.** TMDB's season N was merged into the addon's season N by episode number. For anime split differently on each side, that filled one episode with another's title, overview, still, air date and rating, not only the rating. Their alignment is ported verbatim (`EpisodeAlignment.swift:32`) and pairs every field (`MetaDetailsViewModel.swift:255`). That reach is wider than upstream's, which aligns ratings only. |
+| **Hide talk show guest appearances from filmography** (51ebccc1c) | **Same defect, worse.** Sorted newest first, late-night guest spots led the rail. Their rule: genre 10767 unless the character names a host (`IntegrationClients.swift:686`, applied at `:414`). |
+| **Give hero descriptions more time before and after auto-scroll** (87b344693) | **Same values copied in 1.0.67.** 6 s and 4 s now (`AutoScrollingText.swift:24`). |
+| **Add confirmation dialog before deleting a plugin repository** (2f58e48e5) | **Same defect** (`PluginsSettingsContent.swift:132`). It also showed that **removing an addon** never asked here, though upstream always has. Now it asks (`AddonManagerView.swift:52`). |
+| **Readable empty state title** (05addea18, 9981725ab) | **Same defect.** "Your library is empty" showed when a type filter hid what was saved. Upstream's wording now (`LibraryView.swift:131`). |
+| **Keep the playback position when switching source** (520fb67cc) | **Mostly true already, with a gap.** A switch resumed from the saved progress, which can be 5 s old and does not follow a seek back. The live position is now passed (`InPlayerPanel.swift:626`, `Router.swift:158`, read at `PlayerView.swift:2169`). |
+
+### The rest of the window
+
+| Upstream | Ours |
+|---|---|
+| **Show the Stremio subtitle label** (a15263778, 12c125ef9) | **Ported.** `label` decoded (`StremioClient.swift:385`) and used as the title (`Models.swift:385`, `PlayerChrome.swift:452`), the language staying beneath it. |
+| **Keep subtitle colors and positions in the styled overlay** (2c5398e85, eacad43c0) | **Ported.** `\c` / `\1c` colours, reset by `\r`, and all nine `\an` positions (`MpvSubtitleText.swift:55`). Colours are scaled by the HDR dimming and the text opacity (`:80`, `SubtitleEngine.swift:189`) and placed per position (`SubtitleOverlay.swift:164`). The outline is a shadow of the outline colour, so file colours never tint it, as theirs draws it uncoloured. |
+| **Movies / Series filter to filmography** (e13bf2275) | **Ported** (`CastDetailView.swift:301`, tabs at `:42`), offered only when both kinds exist. |
+| **Keep merged dialogue centered next to side cues** (1768224fb) | **N/A.** ExoPlayer's cue merging; we stack cues rather than merge them. |
+| **Draw styled subtitles at the ExoPlayer size on mpv** (eea656fd1) | **Already true here.** One overlay sizes text on every engine (`SubtitleEngine.swift:194`). |
+| **Stop resolving every subtitle language on each menu build** (d1b9ba4ce) | **Already true here.** No regex, no sort (`MediaLanguage.swift:106`). |
+| **Keep the selected subtitle marked after browsing another language** (baa51c062) | **N/A.** Their language rail; ours is one list. |
+| **Let the next episode's auto-selected source fall back too** (b10a11d70) | **Already true here.** The next episode opens the source screen, whose fallback now covers it. |
+| **Loading screen during in-player episode search** (ec3863cea) | **N/A.** Our episode panel opens the source screen rather than searching in the player. |
+| **Retry once over HTTP/2 after a 403 for streams with proxyHeaders** (2cba17e43) | **Declined, doubt written down.** AVPlayer and AetherEngine negotiate HTTP/2 themselves. mpv's FFmpeg HTTP is 1.1 only (`MPVEngine.swift:233`) and would need a local proxy. Port it the day a report names an mpv 403. |
+| **Audio-based subtitle sync fallback** (2defc5246 and ~27 more) | **Declined**, with automatic subtitle sync. ~9,000 lines, an ONNX runtime, a 74 MB speech model and a PCM tap on each engine. |
+| **Title and episode ratings and a rating source** (761d18801, 6f9754b46, 6055873d4, c4b07d284, 62888d688) | **Open.** The viewer's own 1–10 rating through Simkl or MDBList, off by default upstream; ~800 lines. `rating_source` is in the manifest. |
+| **Season posters in the season tabs** (0a35557e0) | **Open.** Opt-in upstream, both keys off by default; ~250 lines. |
+| **Stremio player and library tracking addons** (868e6a4f0, 9c86bb0e0, d1215e03e) | **Open.** Events to addons declaring `player` or `library`, with install consent. Nothing syncs; a tracking addon pulled from the account simply receives nothing here. ~500 lines. |
+| **Plex Media Server, Silo, Jellyfin and Emby sign-ins per profile, media-server subtitles** | **Open, with media servers.** Plex ~3,000 and Silo ~3,800 lines on top of Jellyfin/Emby. Their sync goes through `sync_push_media_servers`, not the settings blob. |
+| **Decode posters at card size** (0845ea3b7) | **Open, as image downsampling.** Same class: every image is decoded at full size (`RemoteImage.swift:45`). |
+| **Hardware image decoding setting** (1ffb58f37) | **N/A.** An Android 11 graphics-memory workaround. |
+| **Home trailers** ×6 (continue on details, hero location, expanded posters, hidden hero details, hand-off state, pause under cast) and **subtitles on trailers** ×7 | **N/A.** Trailers hand off to the YouTube app (`TrailerLauncher.swift:6`). |
+| **Keep focus on a Continue Watching card that moves to the front** (0042e28e7) | **Already true here.** Cards are keyed by show (`CatalogRowView.swift:185`). |
+| **Keep focus in the open sidebar while Home loads** (520a0568f) | **Already true here.** The content is disabled while the sidebar is open (`SidebarScaffold.swift:163`). |
+| **Collection editor unsaved-changes dialog** (e5ec2c26c) | **Already true here.** Every edit is written at once (`CollectionManagerView.swift:160`). |
+| **Pinned collections locked at the top** (2e384e558), **hide the addon URL on its card** (193e94ef1) | **Already true here.** Pinned collections sit above the catalogues and outside the order; the URL shows only until the manifest loads (`AddonManagerView.swift:275`). |
+| **TvReorderList** across catalogs, addons, collections, folders, sources and MDBList providers, with its persistence hardening | **N/A.** Compose drag-and-drop; we move with buttons and write each move synchronously. |
+| **Label stream tests by connection count** (9ad4f4f5b) | **N/A.** Strings of the parallel tester, declined with the downloader. |
+| **ExoPlayer back buffer and DV7 overrides** (2cd82e788, 362b91140), **mpv-android-lib 0.2.1** | **N/A.** |
+| **Updater**: optimized-install warning, stop asking after a cancel | **N/A.** Our update check is a passive line on About. |
+| **Hide the keyboard when ambient mode starts** (c91ecb4ff), **ambient settings in the blob** | **N/A while ambient mode is open.** |
+| Compose focus and RTL: add-on focus after QR, profile editor, avatar picker, collection GIF toggle, collection import, Classic hero gradient | **N/A.** |
+| Arabic, Slovak, Portuguese (Portugal), Turkish, Polish, Hebrew, French server strings | **Declined.** Translation work. |
+
+Still open: tracking addons, viewer ratings, season posters, media servers (now Jellyfin, Emby,
+Plex and Silo), image downsampling, the accessibility audit, night mode, ambient mode, and the
+card watched badges found in 1.2.0-beta.1.
