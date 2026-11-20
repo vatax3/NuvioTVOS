@@ -381,6 +381,8 @@ struct SubtitleDTO: Decodable {
     var id: String?
     var url: String?
     var lang: String?
+    /// Stremio's optional display name for the track, e.g. "English (SDH) · OpenSubtitles".
+    var label: String?
 }
 
 struct SubtitleResponseDTO: Decodable {
@@ -612,7 +614,8 @@ actor StremioClient {
                 id: item.id ?? url,
                 url: url,
                 lang: item.lang ?? "unknown",
-                addonName: addon.displayName
+                addonName: addon.displayName,
+                label: item.label?.nilIfBlank
             )
         }
     }

@@ -256,3 +256,23 @@ final class EpisodeAlignmentTests: XCTestCase {
         XCTAssertNil(pairs?[N(season: 1, episode: 6)])
     }
 }
+
+/// Filmography tabs (e13bf2275) and Stremio subtitle labels (a15263778).
+final class FilmographyAndSubtitleLabelTests: XCTestCase {
+    private let film = MetaPreview(id: "tmdb:1", type: .movie, rawType: "movie", name: "Film")
+    private let show = MetaPreview(id: "tmdb:2", type: .series, rawType: "series", name: "Show")
+
+    func testTabsAreOfferedOnlyForBothKinds() {
+        XCTAssertTrue(FilmographyFilter.isOffered(for: [film, show]))
+        XCTAssertFalse(FilmographyFilter.isOffered(for: [film]))
+        XCTAssertEqual(FilmographyFilter.movies.credits(in: [film, show]).map(\.id), ["tmdb:1"])
+        XCTAssertEqual(FilmographyFilter.series.credits(in: [film]).map(\.id), ["tmdb:1"], "no tabs, no filtering")
+    }
+
+    func testTheAddonsLabelIsTheTitle() throws {
+        let decoded = try JSONDecoder().decode(SubtitleDTO.self, from: Data(#"{"id":"1","url":"u","lang":"eng","label":"English SDH"}"#.utf8))
+        XCTAssertEqual(decoded.label, "English SDH")
+        XCTAssertEqual(Subtitle(id: "1", url: "u", lang: "eng", label: "English SDH").displayTitle, "English SDH")
+        XCTAssertEqual(Subtitle(id: "1", url: "u", lang: "eng").displayTitle, Subtitle(id: "1", url: "u", lang: "eng").displayLanguage)
+    }
+}

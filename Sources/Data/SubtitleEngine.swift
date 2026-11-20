@@ -105,6 +105,9 @@ struct SubtitleStyle: Equatable {
     var outlineEnabled: Bool = true
     var outlineColor: Color = .black
     var outlineWidth: Double = Double(SubtitleStyle.outlineWidthDefault)
+    /// How bright the subtitle file's own colours are drawn: the HDR style's dimming, 1 otherwise
+    /// (upstream's `fileColorBrightness`).
+    var fileColorBrightness: Double = 1
     var verticalOffset: Double = 0
     /// How far these settings reach into subtitles that carry their own styling. Only the MPV
     /// engine can act on it: AVFoundation has no ASS renderer to override in the first place.
@@ -183,6 +186,7 @@ struct SubtitleStyle: Equatable {
         dimmed.textColor = hdrTextColor.scalingBrightness(by: factor)
         dimmed.backgroundColor = backgroundColor.scalingBrightness(by: factor)
         dimmed.outlineColor = outlineColor.scalingBrightness(by: factor)
+        dimmed.fileColorBrightness = factor
         return dimmed
     }
 

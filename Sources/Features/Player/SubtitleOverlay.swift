@@ -160,17 +160,20 @@ struct SubtitleOverlay: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack {
-                if let top = mpvText?.top, !top.characters.isEmpty {
-                    block(top)
+                // Every position but bottom centre, as the file's `\an` placed it.
+                ForEach(Array((mpvText?.placed ?? []).enumerated()), id: \.offset) { _, placed in
+                    block(placed.text)
                         .frame(maxWidth: proxy.size.width * 0.8)
-                        .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
-                        .padding(.top, dp(48))
+                        .padding(.horizontal, proxy.size.width * 0.05)
+                        .frame(width: proxy.size.width, height: proxy.size.height, alignment: placed.alignment)
+                        .padding(.top, placed.vertical == .top ? dp(48) : 0)
+                        .padding(.bottom, placed.vertical == .bottom ? bottomInset : 0)
                 }
                 if hasBottom {
                     // Overlapping cues stack rather than replace one another, and each keeps its
                     // own background box so two speakers stay readable as two lines.
                     VStack(spacing: NuvioTheme.spacing.xxs) {
-                        if let bottom = mpvText?.bottom, !bottom.characters.isEmpty {
+                        if let bottom = mpvText?.bottomCenter, !bottom.characters.isEmpty {
                             block(bottom)
                         }
                         ForEach(cues) { cue in
@@ -179,11 +182,7 @@ struct SubtitleOverlay: View {
                     }
                     .frame(maxWidth: proxy.size.width * 0.8)
                     .frame(width: proxy.size.width, height: proxy.size.height, alignment: .bottom)
-                    // Lifted clear of the transport only while the transport is there. Reserving
-                    // the room permanently is what put every line a tenth of the picture too high.
-                    .padding(.bottom, dp(CGFloat(SubtitlePlacement.inset(
-                        offset: style.verticalOffset, obstructions: obstructions
-                    ))))
+                    .padding(.bottom, bottomInset)
                 }
             }
         }
@@ -191,14 +190,22 @@ struct SubtitleOverlay: View {
     }
 
     private var hasBottom: Bool {
-        !cues.isEmpty || (mpvText.map { !$0.bottom.characters.isEmpty } ?? false)
+        !cues.isEmpty || (mpvText?.bottomCenter.map { !$0.characters.isEmpty } ?? false)
+    }
+
+    /// Lifted clear of the transport only while the transport is there. Reserving the room
+    /// permanently is what put every line a tenth of the picture too high.
+    private var bottomInset: CGFloat {
+        dp(CGFloat(SubtitlePlacement.inset(offset: style.verticalOffset, obstructions: obstructions)))
     }
 
     /// Upstream's 24 sp reference size, against which padding, radius and shadow are scaled.
     private var unit: CGFloat { style.fontSize / sp(24) }
 
     private func block(_ text: AttributedString) -> some View {
-        Text(text)
+        Text(MpvStyledSubtitleText.applyingFileColors(
+            text, brightness: style.fileColorBrightness, textAlpha: style.textColor.alphaComponent
+        ))
             .font(SubtitleFonts.font(for: style.fontId, size: style.fontSize, weight: style.bold ? .bold : .regular))
             .foregroundStyle(style.textColor)
             .multilineTextAlignment(.center)

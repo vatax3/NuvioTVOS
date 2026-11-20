@@ -449,7 +449,7 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
         // file is loaded, so the first frame already has it. Addon subtitles stay here instead:
         // they attach to the file being played, so they have nothing to attach to any earlier.
         for subtitle in request.subtitles.prefix(8) {
-            engine.addSubtitle(url: subtitle.url, title: subtitle.displayLanguage)
+            engine.addSubtitle(url: subtitle.url, title: subtitle.displayTitle)
         }
         let memory = settings.trackPreference.memory(forContentId: request.contentId)
         pendingAudio = memory?.audio

@@ -2350,7 +2350,7 @@ private struct AVPlayerContainer: UIViewControllerRepresentable {
         let children: [UIMenuElement] = groups.map { group in
             let actions = group.items.map { subtitle in
                 UIAction(
-                    title: subtitle.addonName ?? subtitle.displayLanguage,
+                    title: subtitle.label ?? subtitle.addonName ?? subtitle.displayLanguage,
                     state: subtitle.id == selectedSubtitle?.id ? .on : .off
                 ) { _ in
                     onSelectSubtitle(subtitle)

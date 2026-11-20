@@ -670,6 +670,12 @@ struct Subtitle: Codable, Hashable, Identifiable, Sendable {
     var url: String
     var lang: String
     var addonName: String?
+    /// The addon's own name for the track (Stremio `label`), shown as its title when given, as
+    /// upstream does since 1.2.0-beta.3 (a15263778). Without it the title is the language.
+    var label: String? = nil
+
+    /// What the track is called in a subtitle list.
+    var displayTitle: String { label ?? displayLanguage }
 
     /// Through `MediaLanguage`, which normalises the code first. Asking Foundation directly — as
     /// this did — prints `SPA` for a Spanish track, because `localizedString(forLanguageCode:)`

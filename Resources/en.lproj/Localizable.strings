@@ -8,6 +8,11 @@
 "navigation.discover" = "Discover";
 "navigation.search" = "Search";
 "navigation.library" = "Library";
+"cast.filmography" = "Filmography";
+"cast.filmography_filter" = "Show";
+"cast.filter.all" = "All";
+"cast.filter.movies" = "Movies";
+"cast.filter.series" = "Series";
 "navigation.settings" = "Settings";
 
 /* Player */

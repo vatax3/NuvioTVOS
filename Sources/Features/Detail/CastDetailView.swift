@@ -11,6 +11,9 @@ struct CastDetailView: View {
     let request: CastRequest
 
     @State private var model = CastDetailViewModel()
+    /// Kept while a title opened from the rail is on screen, so coming back finds the same tab,
+    /// as upstream's `rememberSaveable` does.
+    @State private var filmographyFilter: FilmographyFilter = .all
 
     var body: some View {
     // A person's credits are part of the detail surface, which is the screen key they share.
@@ -35,13 +38,28 @@ struct CastDetailView: View {
                         biography(profile)
 
                         if !profile.credits.isEmpty {
+                            let credits = filmographyFilter.credits(in: profile.credits)
+                            if FilmographyFilter.isOffered(for: profile.credits) {
+                                ChipRow(title: L10n.text("cast.filmography_filter", fallback: "Show")) {
+                                    ForEach(FilmographyFilter.allCases) { option in
+                                        NuvioChip(
+                                            label: option.title,
+                                            isSelected: filmographyFilter == option,
+                                            action: { filmographyFilter = option }
+                                        )
+                                    }
+                                }
+                                .padding(.horizontal, -NuvioTheme.components.row.horizontalPadding)
+                            }
                             CatalogRowView(
-                                title: "Filmography",
-                                subtitle: "\(profile.credits.count) titles",
-                                items: profile.credits,
+                                title: L10n.text("cast.filmography", fallback: "Filmography"),
+                                subtitle: "\(credits.count) titles",
+                                items: credits,
                                 showsSeeAll: false,
                                 onSelect: { router.openDetail($0) }
                             )
+                            // Rebuilt per tab so it starts at the beginning, as upstream's row is.
+                            .id(filmographyFilter)
                             // The rail draws its own horizontal inset; the screen already has one.
                             .padding(.horizontal, -NuvioTheme.components.row.horizontalPadding)
                         }
@@ -274,6 +292,35 @@ private extension TMDBBrowseRequest.Entity {
         case .network(let id): return .network(id)
         case .company(let id): return .company(id)
         case .genre(let id): return .genre(id)
+        }
+    }
+}
+
+/// Upstream's filmography tabs (e13bf2275): All, Movies, Series — offered only when the person
+/// has credits of both kinds, since one tab of each would be a choice with nothing behind it.
+enum FilmographyFilter: String, CaseIterable, Identifiable {
+    case all, movies, series
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all: return L10n.text("cast.filter.all", fallback: "All")
+        case .movies: return L10n.text("cast.filter.movies", fallback: "Movies")
+        case .series: return L10n.text("cast.filter.series", fallback: "Series")
+        }
+    }
+
+    static func isOffered(for credits: [MetaPreview]) -> Bool {
+        credits.contains { $0.type == .movie } && credits.contains { $0.type == .series }
+    }
+
+    func credits(in credits: [MetaPreview]) -> [MetaPreview] {
+        guard Self.isOffered(for: credits) else { return credits }
+        switch self {
+        case .all: return credits
+        case .movies: return credits.filter { $0.type == .movie }
+        case .series: return credits.filter { $0.type == .series }
         }
     }
 }

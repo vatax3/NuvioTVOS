@@ -165,7 +165,7 @@ struct AetherPlayerView: View {
     private var externalSubtitles: [ExternalSubtitleTrack] {
         request.subtitles.prefix(8).compactMap { subtitle in
             URL(string: subtitle.url).map {
-                ExternalSubtitleTrack(url: $0, name: subtitle.displayLanguage, language: subtitle.lang)
+                ExternalSubtitleTrack(url: $0, name: subtitle.displayTitle, language: subtitle.lang)
             }
         }
     }
