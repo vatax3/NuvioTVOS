@@ -1207,7 +1207,10 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
     private func playerPanel(_ which: TrackPicker) -> some View {
         switch which {
         case .sources:
-            InPlayerSourcesPanel(request: request, onDismiss: closePicker, handlesExit: false)
+            InPlayerSourcesPanel(
+                request: request, onDismiss: closePicker, handlesExit: false,
+                currentPosition: { engine.position }
+            )
         case .episodes:
             if let onChooseEpisode {
                 InPlayerEpisodesView(request: request, onDismiss: closePicker, onSelect: { episode in

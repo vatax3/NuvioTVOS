@@ -71,6 +71,8 @@
 /* Vocabulaire partagé */
 "common.back" = "Retour";
 "common.unavailable" = "Indisponible";
+"common.yes" = "Oui";
+"common.no" = "Non";
 "player.episodes" = "Épisodes";
 "player.season_format" = "Saison %@";
 "player.loading_episodes" = "Chargement des épisodes…";
@@ -212,8 +214,8 @@
 "library.continue_watching" = "Reprendre";
 "library.nothing_in_progress" = "Rien en cours";
 "library.nothing_in_progress_body" = "Les titres que vous commencez apparaissent ici.";
-"library.empty_title" = "Votre bibliothèque est vide";
-"library.empty_body" = "Ouvrez un titre et appuyez sur Ajouter à la bibliothèque pour le garder ici.";
+"library.empty_title" = "Aucun élément à afficher";
+"library.empty_body" = "Modifiez vos filtres ou enregistrez vos favoris pour les retrouver ici";
 "library.no_collections" = "Aucune collection";
 "library.open_collections" = "Ouvrir les collections";
 "library.empty_catalog" = "Catalogue vide";
@@ -923,6 +925,8 @@
 "settings.plugins.refresh_sub" = "Relire le manifeste et retélécharger les scrapers";
 "settings.plugins.remove" = "Retirer";
 "settings.plugins.remove_sub" = "Supprimer ce dépôt et ses scrapers";
+"settings.plugins.remove_confirm_title" = "Supprimer le dépôt ?";
+"settings.confirm_delete_message" = "Voulez-vous vraiment le supprimer ?";
 "settings.plugins.disabled_by_repo" = "Désactivé par le dépôt";
 
 /* CollectionManagerView.swift */
@@ -1045,6 +1049,7 @@
 "settings.addons.publicdomain_sub" = "Classiques sous licence libre";
 "settings.addons.kitsu_sub" = "Catalogue et métadonnées d’animes";
 "settings.addons.title" = "Gestion des extensions";
+"settings.addons.remove_confirm_title" = "Supprimer l’extension ?";
 "settings.addons.install_from_url" = "Installer depuis une URL";
 "settings.addons.install_footnote" = "Collez une URL de manifeste Stremio. Le /manifest.json final est facultatif.";
 "settings.addons.installing" = "Installation…";

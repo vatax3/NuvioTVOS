@@ -191,6 +191,28 @@ actor DebridClient {
         return results
     }
 
+    /// Upstream's `resolveTorboxAliasMatches`: exact answers are kept as they are; with one hash
+    /// asked, whatever came back is its match; in a batch, only the hashes missing from the
+    /// answer are asked again, one at a time, and each single answer is theirs.
+    nonisolated static func resolvingTorboxAliases<Item>(
+        _ cached: [String: Item],
+        requested: [String],
+        fetch: (String) async -> [String: Item]?
+    ) async -> [String: Item] {
+        let requestedSet = Set(requested.map { $0.lowercased() })
+        if cached.keys.allSatisfy({ requestedSet.contains($0.lowercased()) }) { return cached }
+        if requested.count == 1 {
+            guard let item = cached.values.first else { return cached }
+            return [requested[0]: item]
+        }
+        var resolved = cached
+        let answered = Set(cached.keys.map { $0.lowercased() })
+        for hash in requested where !answered.contains(hash.lowercased()) {
+            if let item = await fetch(hash)?.values.first { resolved[hash] = item }
+        }
+        return resolved
+    }
+
     private func torboxCacheCheck(_ hashes: [String], apiKey: String) async -> [String: DebridCacheResult] {
         let payload = ["hashes": hashes]
         guard let body = try? JSONEncoder().encode(payload),
@@ -205,9 +227,24 @@ actor DebridClient {
                   TorboxEnvelope<[String: TorboxCachedItem]>.self, from: data
               ) else { return [:] }
 
+        // TorBox matches through its alternative-hash index and answers under the canonical hash,
+        // so an alias hit read as a miss here: cached-only filtering and auto-play dropped the
+        // stream. Upstream's `resolveTorboxAliasMatches` (89989cf2b).
+        let cached = await Self.resolvingTorboxAliases(decoded.data ?? [:], requested: hashes) { hash in
+            guard let body = try? JSONEncoder().encode(["hashes": [hash]]),
+                  let data = try? await self.request(
+                      "https://api.torbox.app/v1/api/torrents/checkcached?format=object",
+                      method: "POST",
+                      headers: ["Authorization": "Bearer \(apiKey)"],
+                      body: body,
+                      contentType: "application/json"
+                  ) else { return nil }
+            return try? JSONDecoder().decode(TorboxEnvelope<[String: TorboxCachedItem]>.self, from: data).data
+        }
+
         var results: [String: DebridCacheResult] = [:]
         for hash in hashes {
-            let entry = decoded.data?[hash] ?? decoded.data?[hash.lowercased()]
+            let entry = cached[hash] ?? cached[hash.lowercased()]
             results[hash.lowercased()] = DebridCacheResult(
                 provider: .torbox,
                 state: entry != nil ? .cached : .notCached,

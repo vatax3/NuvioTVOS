@@ -128,8 +128,8 @@ struct LibraryView: View {
         } else if savedItems.isEmpty {
             emptyState(
                 icon: "bookmark",
-                title: L10n.text("library.empty_title", fallback: "Your library is empty"),
-                message: L10n.text("library.empty_body", fallback: "Open any title and press Add to Library to keep it here.")
+                title: L10n.text("library.empty_title", fallback: "No items to display"),
+                message: L10n.text("library.empty_body", fallback: "Change your filters or start saving your favorites to see them here")
             )
         } else {
             LazyVGrid(columns: columns, alignment: .leading, spacing: NuvioTheme.spacing.xl) {

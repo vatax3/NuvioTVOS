@@ -411,6 +411,7 @@ actor TMDBClient {
         var seen = Set<Int>()
         profile.credits = (details.combined_credits?.cast ?? [])
             .filter { ($0.media_type == "movie" || $0.media_type == "tv") }
+            .filter { !$0.isTalkShowGuestAppearance }
             .filter { $0.id.map { seen.insert($0).inserted } ?? false }
             .sorted { ($0.sortDate ?? "") > ($1.sortDate ?? "") }
             .compactMap { $0.preview }
@@ -682,6 +683,18 @@ private struct TMDBReleaseDates: Decodable { let results: [TMDBReleaseDateCountr
 
 private struct TMDBExternalIds: Decodable { let imdb_id: String? }
 
+enum TalkShowCredit {
+    static let talkGenreId = 10767
+
+    static func isGuestAppearance(genreIds: [Int]?, character: String?) -> Bool {
+        guard genreIds?.contains(talkGenreId) == true else { return false }
+        guard let character else { return true }
+        return character.range(
+            of: #"\b(co-?)?host(s|ess)?\b"#, options: [.regularExpression, .caseInsensitive]
+        ) == nil
+    }
+}
+
 /// One row of `combined_credits` or `discover`. `media_type` is absent on discover results,
 /// where the endpoint already fixed the type.
 private struct TMDBMediaItem: Decodable {
@@ -696,8 +709,16 @@ private struct TMDBMediaItem: Decodable {
     let first_air_date: String?
     let vote_average: Double?
     let character: String?
+    var genre_ids: [Int]?
 
     var sortDate: String? { release_date?.nilIfBlank ?? first_air_date?.nilIfBlank }
+
+    /// Upstream's `isTalkShowGuestAppearance` (51ebccc1c): a credit on a talk show (TMDB genre
+    /// 10767) that is not as its host. A late-night guest spot is not part of someone's work,
+    /// and sorted newest first, a run of them led the filmography rail.
+    var isTalkShowGuestAppearance: Bool {
+        TalkShowCredit.isGuestAppearance(genreIds: genre_ids, character: character)
+    }
 
     var preview: MetaPreview? {
         preview(type: media_type == "tv" ? .series : .movie)

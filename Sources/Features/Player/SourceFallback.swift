@@ -63,6 +63,35 @@ enum SourceFallback {
         }
         return select(untried)
     }
+
+    /// Upstream's `resolveWithSourceFallback` (d020e4af7): resolves `first` and, while a stream
+    /// cannot be resolved, the one `next` picks among those not tried, up to `maxSources` further
+    /// ones. Before it, a debrid result that failed to resolve on the source screen — an expired
+    /// one, say — ended auto-play there, since the player's own fallback only starts once a
+    /// stream is playing.
+    ///
+    /// Returns the stream that resolved and its link, or `nil`, with every key tried and the count
+    /// of further streams, which the player takes over so its fallback goes on from them.
+    static func resolve<Link>(
+        first: Stream,
+        maxSources: Int,
+        resolve: (Stream) async -> Link?,
+        next: (_ failed: Stream, _ triedKeys: Set<String>) -> Stream?
+    ) async -> (resolved: (stream: Stream, link: Link)?, triedKeys: Set<String>, attempts: Int) {
+        var triedKeys = Set<String>()
+        var attempts = 0
+        var candidate = first
+        while true {
+            let link = await resolve(candidate)
+            triedKeys.insert(key(for: candidate))
+            if let link { return ((candidate, link), triedKeys, attempts) }
+            guard attempts < maxSources, let following = next(candidate, triedKeys) else {
+                return (nil, triedKeys, attempts)
+            }
+            attempts += 1
+            candidate = following
+        }
+    }
 }
 
 extension PlaybackRequest {

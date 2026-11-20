@@ -460,6 +460,9 @@ struct InPlayerSourcesPanel: View {
     let request: PlaybackRequest
     let onDismiss: () -> Void
     var handlesExit = true
+    /// The position playing now, so the new source starts there rather than at the saved
+    /// progress. `nil` where nothing is playing yet.
+    var currentPosition: (() -> Double)? = nil
 
     @State private var model = StreamsViewModel()
     @State private var selectedAddon: String?
@@ -619,7 +622,8 @@ struct InPlayerSourcesPanel: View {
                 sourceAddonLogo: stream.addonLogo,
                 sourceDescription: stream.displayDescription,
                 sourceHints: stream.sources ?? [],
-                sourceStableKey: stream.stableKey
+                sourceStableKey: stream.stableKey,
+                resumeAt: currentPosition?()
             )
         )
         onDismiss()

@@ -152,6 +152,10 @@ struct PlaybackRequest: Hashable, Identifiable {
     /// continued from the previous episode, or a reused last link. Only such a source falls back
     /// to the next match when it fails (`SourceFallback`).
     var autoSelection: SourceFallbackState? = nil
+    /// Where to start, when the player knows better than the saved progress: switching source
+    /// passes the position playing at that moment (upstream 520fb67cc). The saved progress can
+    /// be five seconds behind and does not follow a seek back.
+    var resumeAt: Double? = nil
     var id: String { "\(videoId)|\(streamURL)" }
 }
 

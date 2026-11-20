@@ -120,3 +120,139 @@ final class FollowAddonsOrderTests: XCTestCase {
         XCTAssertNil(HomeRowOrder.movingCollection(a2, by: -1, in: [a1, a2, b1], owners: owners))
     }
 }
+
+/// Upstream's `resolveWithSourceFallback` cases (d020e4af7): the source screen falls back past
+/// a stream it cannot resolve, and hands what it tried to the player.
+final class PrePlaybackFallbackTests: XCTestCase {
+    private func torrent(_ addon: String, hash: String) -> Nuvio.Stream {
+        var stream = Nuvio.Stream(title: hash, addonName: addon)
+        stream.infoHash = hash
+        return stream
+    }
+
+    func testTheNextCandidateIsResolvedWhenTheFirstCannotBe() async {
+        let expired = torrent("Torrentio", hash: "aaa")
+        let good = torrent("Torrentio", hash: "bbb")
+        let run = await SourceFallback.resolve(
+            first: expired, maxSources: 3,
+            resolve: { $0.infoHash == "bbb" ? "https://cdn/b.mkv" : nil },
+            next: { _, tried in [expired, good].first { !tried.contains(SourceFallback.key(for: $0)) } }
+        )
+        XCTAssertEqual(run.resolved?.link, "https://cdn/b.mkv")
+        XCTAssertEqual(run.attempts, 1)
+        XCTAssertEqual(run.triedKeys, [SourceFallback.key(for: expired), SourceFallback.key(for: good)])
+    }
+
+    func testNoFurtherSourceIsTriedPastTheLimit() async {
+        let streams = (0..<5).map { torrent("A", hash: "h\($0)") }
+        var asked = 0
+        let run = await SourceFallback.resolve(
+            first: streams[0], maxSources: 2,
+            resolve: { _ -> String? in asked += 1; return nil },
+            next: { _, tried in streams.first { !tried.contains(SourceFallback.key(for: $0)) } }
+        )
+        XCTAssertNil(run.resolved)
+        XCTAssertEqual(asked, 3)
+        XCTAssertEqual(run.attempts, 2)
+    }
+
+    /// The fallback off is a limit of zero: one stream, as before.
+    func testALimitOfZeroTriesOnlyTheFirst() async {
+        let run = await SourceFallback.resolve(
+            first: torrent("A", hash: "x"), maxSources: 0,
+            resolve: { _ -> String? in nil },
+            next: { _, _ in XCTFail("no second stream"); return nil }
+        )
+        XCTAssertNil(run.resolved)
+    }
+}
+
+/// Upstream's `LocalDebridServiceTest` (89989cf2b).
+final class TorboxAliasTests: XCTestCase {
+    private let canonical = "7db44b3713094e622246b715de410bb9b6d91230"
+    private let requested = "b72ca5570c56c2387526b6aab184f0cf0075cff0"
+
+    func testExactMatchesStayWithoutExtraRequests() async {
+        let resolved = await DebridClient.resolvingTorboxAliases(["abc123": "exact"], requested: ["abc123"]) { _ in
+            XCTFail("no extra request expected"); return nil
+        }
+        XCTAssertEqual(resolved, ["abc123": "exact"])
+    }
+
+    func testASingleAliasedAnswerMapsBackToTheRequestedHash() async {
+        let resolved = await DebridClient.resolvingTorboxAliases([canonical: "aliased"], requested: [requested]) { _ in
+            XCTFail("no extra request expected"); return nil
+        }
+        XCTAssertEqual(resolved, [requested: "aliased"])
+    }
+
+    func testOnlyTheHashesMissingFromABatchAreAskedAgain() async {
+        var asked: [String] = []
+        let resolved = await DebridClient.resolvingTorboxAliases(
+            ["abc123": "exact", canonical: "aliased"], requested: ["abc123", requested]
+        ) { hash in
+            asked.append(hash)
+            return [self.canonical: "aliased"]
+        }
+        XCTAssertEqual(asked, [requested])
+        XCTAssertEqual(resolved["abc123"], "exact")
+        XCTAssertEqual(resolved[requested], "aliased")
+    }
+}
+
+/// Upstream's talk-show filter (51ebccc1c).
+final class TalkShowCreditTests: XCTestCase {
+    func testAGuestSpotOnATalkShowIsHidden() {
+        XCTAssertTrue(TalkShowCredit.isGuestAppearance(genreIds: [10767], character: "Self - Guest"))
+        XCTAssertTrue(TalkShowCredit.isGuestAppearance(genreIds: [10767, 35], character: nil))
+    }
+
+    func testTheHostAndOtherShowsStay() {
+        XCTAssertFalse(TalkShowCredit.isGuestAppearance(genreIds: [10767], character: "Self - Host"))
+        XCTAssertFalse(TalkShowCredit.isGuestAppearance(genreIds: [10767], character: "Co-Host"))
+        XCTAssertFalse(TalkShowCredit.isGuestAppearance(genreIds: [18], character: "Walter White"))
+        XCTAssertFalse(TalkShowCredit.isGuestAppearance(genreIds: nil, character: "Guest"))
+    }
+}
+
+/// Upstream's `EpisodeRatingsAlignmentTest` cases (e2ecb1c5f), against `EpisodeAlignment`.
+final class EpisodeAlignmentTests: XCTestCase {
+    private typealias N = EpisodeAlignment.Number
+    private let today = Date(timeIntervalSince1970: 1_800_000_000)
+
+    private func show(_ counts: [Int], start: String = "2020-01-01") -> [EpisodeAlignment.Episode] {
+        var day = EpisodeAlignment.airDay(start)!
+        var result: [EpisodeAlignment.Episode] = []
+        for (index, count) in counts.enumerated() {
+            for episode in 1...count {
+                let date = Date(timeIntervalSince1970: Double(day) * 86_400)
+                let formatter = ISO8601DateFormatter()
+                formatter.formatOptions = [.withFullDate]
+                result.append(.init(number: N(season: index + 1, episode: episode), airDate: formatter.string(from: date)))
+                day += 7
+            }
+        }
+        return result
+    }
+
+    func testTheSameSeasonsKeepTheirNumbers() {
+        XCTAssertNil(EpisodeAlignment.pairs(addon: show([10, 10]), external: show([12, 8]), today: today))
+    }
+
+    /// Black Clover: the addon's 2 seasons against the provider's 5, same episodes overall.
+    func testSplitSeasonsPairInAiringOrder() {
+        let pairs = EpisodeAlignment.pairs(addon: show([51, 119]), external: show([51, 51, 52, 16, 0].filter { $0 > 0 }), today: today)
+        XCTAssertEqual(pairs?[N(season: 2, episode: 1)], N(season: 2, episode: 1))
+        XCTAssertEqual(pairs?[N(season: 2, episode: 52)], N(season: 3, episode: 1))
+        XCTAssertEqual(pairs?[N(season: 2, episode: 119)], N(season: 4, episode: 16))
+    }
+
+    /// Different totals: only episodes airing on the same day (a day either side) are paired.
+    func testDifferentTotalsPairByAirDate() {
+        var external = show([3, 3])
+        external.removeLast()
+        let pairs = EpisodeAlignment.pairs(addon: show([6]), external: external, today: today)
+        XCTAssertEqual(pairs?[N(season: 1, episode: 4)], N(season: 2, episode: 1))
+        XCTAssertNil(pairs?[N(season: 1, episode: 6)])
+    }
+}

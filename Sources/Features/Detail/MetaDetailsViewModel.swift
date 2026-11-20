@@ -19,6 +19,10 @@ final class MetaDetailsViewModel {
 
     /// Seasons already filled in from TMDB, so switching back and forth does not refetch.
     private var episodeEnrichedSeasons: Set<Int> = []
+    /// TMDB's seasons and episode counts, asked once per page.
+    private var tmdbSeasonCounts: [Int: Int]?
+    /// Every TMDB season, fetched once, only when the addon numbers seasons differently.
+    private var allSeasonDetails: [TMDBClient.EpisodeDetail]?
 
     private let client: StremioClient
 
@@ -229,6 +233,37 @@ final class MetaDetailsViewModel {
         else { return }
         episodeEnrichedSeasons.insert(season)
 
+        // When the addon numbers seasons differently from TMDB, TMDB's season N is not the
+        // addon's season N: every season is fetched once and episodes are paired by
+        // `EpisodeAlignment` instead of by number.
+        if tmdbSeasonCounts == nil {
+            tmdbSeasonCounts = await TMDBClient.shared.seasonCounts(tmdbId: tmdbId, apiKey: settings.tmdb.apiKey)
+        }
+        let addonSeasons = Set(current.videos.compactMap(\.season).filter { $0 > 0 })
+        if let counts = tmdbSeasonCounts, !counts.isEmpty, Set(counts.keys) != addonSeasons {
+            if allSeasonDetails == nil {
+                var all: [TMDBClient.EpisodeDetail] = []
+                for tmdbSeason in counts.keys.sorted() {
+                    all += await TMDBClient.shared.seasonEpisodes(
+                        tmdbId: tmdbId, season: tmdbSeason,
+                        apiKey: settings.tmdb.apiKey, language: settings.tmdb.language
+                    )
+                }
+                allSeasonDetails = all
+            }
+            guard let all = allSeasonDetails, !all.isEmpty, var updated = meta else { return }
+            let pairs = EpisodeAlignment.pairs(
+                addon: updated.videos.compactMap { video in
+                    guard let season = video.season, let episode = video.episode else { return nil }
+                    return .init(number: .init(season: season, episode: episode), airDate: video.released)
+                },
+                external: all.map { .init(number: .init(season: $0.season, episode: $0.episode), airDate: $0.airDate) }
+            )
+            updated.videos = Self.merging(all, into: updated.videos, season: season, pairs: pairs)
+            meta = updated
+            return
+        }
+
         let details = await TMDBClient.shared.seasonEpisodes(
             tmdbId: tmdbId,
             season: season,
@@ -241,19 +276,26 @@ final class MetaDetailsViewModel {
     }
 
     /// Pure so the merge rule — fill blanks, never overwrite — is testable on its own.
+    ///
+    /// - Parameter pairs: addon episode → TMDB episode from `EpisodeAlignment`, when the two
+    ///   number seasons differently. `nil` matches the addon's season and episode numbers.
     nonisolated static func merging(
         _ details: [TMDBClient.EpisodeDetail],
         into videos: [Video],
-        season: Int
+        season: Int,
+        pairs: [EpisodeAlignment.Number: EpisodeAlignment.Number]? = nil
     ) -> [Video] {
         let byNumber = Dictionary(
-            details.map { ($0.episode, $0) }, uniquingKeysWith: { first, _ in first }
+            details.map { (EpisodeAlignment.Number(season: $0.season, episode: $0.episode), $0) },
+            uniquingKeysWith: { first, _ in first }
         )
         return videos.map { video in
             guard video.season == season,
-                  let number = video.episode,
-                  let detail = byNumber[number]
+                  let number = video.episode
             else { return video }
+            let own = EpisodeAlignment.Number(season: season, episode: number)
+            let target = pairs.map { $0[own] } ?? own
+            guard let target, let detail = byNumber[target] else { return video }
             var merged = video
             if merged.name?.nilIfBlank == nil, merged.title?.nilIfBlank == nil { merged.name = detail.name }
             if merged.overview?.nilIfBlank == nil, merged.description?.nilIfBlank == nil {

@@ -82,6 +82,10 @@ private struct RepositoryCard: View {
 
     let repository: PluginRepository
 
+    /// Upstream asks before a repository goes (2f58e48e5): one press removed it and every
+    /// scraper it had downloaded.
+    @State private var isConfirmingRemoval = false
+
     private var scrapers: [InstalledScraper] {
         plugins.scrapers(inRepository: repository.id)
     }
@@ -122,8 +126,14 @@ private struct RepositoryCard: View {
                 title: L10n.text("settings.plugins.remove", fallback: "Remove"),
                 subtitle: L10n.text("settings.plugins.remove_sub", fallback: "Delete this repository and its scrapers"),
                 systemImage: "trash",
-                action: { plugins.remove(repository) }
+                action: { isConfirmingRemoval = true }
             )
+        }
+        .alert(L10n.text("settings.plugins.remove_confirm_title", fallback: "Delete repository?"), isPresented: $isConfirmingRemoval) {
+            Button(L10n.text("common.yes", fallback: "Yes"), role: .destructive) { plugins.remove(repository) }
+            Button(L10n.text("common.no", fallback: "No"), role: .cancel) {}
+        } message: {
+            Text(L10n.text("settings.confirm_delete_message", fallback: "Are you sure you want to delete it?"))
         }
     }
 

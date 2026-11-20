@@ -71,6 +71,8 @@
 /* Shared player vocabulary */
 "common.back" = "Back";
 "common.unavailable" = "Unavailable";
+"common.yes" = "Yes";
+"common.no" = "No";
 "player.episodes" = "Episodes";
 "player.season_format" = "Season %@";
 "player.loading_episodes" = "Loading episodes…";
@@ -212,8 +214,8 @@
 "library.continue_watching" = "Continue Watching";
 "library.nothing_in_progress" = "Nothing in progress";
 "library.nothing_in_progress_body" = "Titles you start watching show up here.";
-"library.empty_title" = "Your library is empty";
-"library.empty_body" = "Open any title and press Add to Library to keep it here.";
+"library.empty_title" = "No items to display";
+"library.empty_body" = "Change your filters or start saving your favorites to see them here";
 "library.no_collections" = "No collections yet";
 "library.open_collections" = "Open Collections";
 "library.empty_catalog" = "Empty catalog";
@@ -923,6 +925,8 @@
 "settings.plugins.refresh_sub" = "Re-read the manifest and re-download scrapers";
 "settings.plugins.remove" = "Remove";
 "settings.plugins.remove_sub" = "Delete this repository and its scrapers";
+"settings.plugins.remove_confirm_title" = "Delete repository?";
+"settings.confirm_delete_message" = "Are you sure you want to delete it?";
 "settings.plugins.disabled_by_repo" = "Disabled by the repository";
 
 /* CollectionManagerView.swift */
@@ -1045,6 +1049,7 @@
 "settings.addons.publicdomain_sub" = "Freely licensed classics";
 "settings.addons.kitsu_sub" = "Anime catalog and metadata";
 "settings.addons.title" = "Addon Manager";
+"settings.addons.remove_confirm_title" = "Delete addon?";
 "settings.addons.install_from_url" = "Install from URL";
 "settings.addons.install_footnote" = "Paste a Stremio manifest URL. The trailing /manifest.json is optional.";
 "settings.addons.installing" = "Installing…";

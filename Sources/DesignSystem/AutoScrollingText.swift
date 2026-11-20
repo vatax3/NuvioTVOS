@@ -19,8 +19,10 @@ struct AutoScrollingText: View {
     @State private var fullHeight: CGFloat = 0
     @State private var offset: CGFloat = 0
 
-    static let startDelay: Duration = .seconds(3)
-    static let endPause: Duration = .seconds(3)
+    // Upstream's since 1.2.0-beta.3 (87b344693): three seconds was not long enough to read the
+    // first lines before they moved.
+    static let startDelay: Duration = .seconds(6)
+    static let endPause: Duration = .seconds(4)
     static let returnDuration = 0.6
     static let secondsPerLine = 2.5
     static let maxCycles = 3

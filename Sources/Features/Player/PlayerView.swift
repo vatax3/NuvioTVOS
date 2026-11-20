@@ -2166,6 +2166,7 @@ struct PlayerView: View {
     }
 
     private var resumePosition: Double {
+        if let resumeAt = request.resumeAt, resumeAt > 0 { return resumeAt }
         guard !request.startFromBeginning,
               let progress = library.progress(forVideoId: request.videoId),
               !progress.isFinished(threshold: settings.watchedThreshold)

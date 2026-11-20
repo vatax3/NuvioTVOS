@@ -1185,14 +1185,46 @@ struct StreamsView: View {
             TrailerLauncher.open(youTubeId: youTubeId)
             return
         }
-        let result = await model.playableURL(for: stream, settings: settings)
-        guard case .success(let url) = result else { return }
+        // An auto-selected stream whose debrid result cannot be resolved falls back to the next
+        // match here, before the player exists. Each failure replaces the last one shown, so only
+        // the last is left if none resolves.
+        let fallsBack = autoSelected && settings.player.streamAutoPlayFallbackActive
+        let run = await SourceFallback.resolve(
+            first: stream,
+            maxSources: fallsBack ? settings.player.streamAutoPlayFallbackMaxSources : 0,
+            resolve: { candidate -> String? in
+                guard case .success(let url) = await model.playableURL(for: candidate, settings: settings) else { return nil }
+                return url
+            },
+            next: { failed, triedKeys in
+                SourceFallback.nextCandidate(
+                    from: model.orderedStreams,
+                    triedKeys: triedKeys,
+                    failedAddonName: failed.addonName,
+                    failedInfoHash: failed.effectiveInfoHash
+                ) { untried in
+                    StreamFilterEngine.autoPlayCandidate(
+                        from: untried,
+                        attributes: model.attributes,
+                        mode: settings.player.streamAutoPlayMode,
+                        scope: autoPlayScope,
+                        regex: settings.player.streamAutoPlayRegex,
+                        preferredQuality: settings.player.autoPlayPreferredQuality,
+                        cacheStates: model.cacheStates
+                    )
+                }
+            }
+        )
+        guard let resolved = run.resolved else { return }
+        let stream = resolved.stream
+        let url = resolved.link
 
         var playback = makePlaybackRequest(stream: stream, url: url)
-        if let sourceStableKey { playback.sourceStableKey = sourceStableKey }
+        if let sourceStableKey, run.attempts == 0 { playback.sourceStableKey = sourceStableKey }
         if autoSelected {
             playback.autoSelection = SourceFallbackState(
-                triedKeys: [SourceFallback.key(for: stream)],
+                attempts: run.attempts,
+                triedKeys: run.triedKeys,
                 fromLinkCache: fromLinkCache,
                 currentInfoHash: stream.effectiveInfoHash
             )

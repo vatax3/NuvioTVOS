@@ -10,6 +10,9 @@ struct AddonManagerView: View {
     @State private var message: String?
     @State private var messageIsError = false
     @State private var configuring: Addon?
+    /// The addon a trash press asked to remove, waiting for the viewer to confirm. Upstream has
+    /// always asked; one press here removed the addon and its catalogues straight away.
+    @State private var pendingRemoval: InstalledAddon?
 
     /// Well-known community addons, offered as one-press installs because typing a URL on a
     /// remote is painful. Same list the Android onboarding suggests.
@@ -45,6 +48,18 @@ struct AddonManagerView: View {
         .task { await addons.refreshAll() }
         .sheet(item: $configuring) { addon in
             AddonConfiguratorView(addon: addon)
+        }
+        .alert(
+            L10n.text("settings.addons.remove_confirm_title", fallback: "Delete addon?"),
+            isPresented: Binding(get: { pendingRemoval != nil }, set: { if !$0 { pendingRemoval = nil } }),
+            presenting: pendingRemoval
+        ) { record in
+            Button(L10n.text("common.yes", fallback: "Yes"), role: .destructive) {
+                addons.uninstall(baseUrl: record.baseUrl)
+            }
+            Button(L10n.text("common.no", fallback: "No"), role: .cancel) {}
+        } message: { _ in
+            Text(L10n.text("settings.confirm_delete_message", fallback: "Are you sure you want to delete it?"))
         }
     }
 
@@ -98,7 +113,7 @@ struct AddonManagerView: View {
                         onToggle: { addons.setEnabled(!record.enabled, baseUrl: record.baseUrl) },
                         onMoveUp: { addons.moveAddon(baseUrl: record.baseUrl, by: -1) },
                         onMoveDown: { addons.moveAddon(baseUrl: record.baseUrl, by: 1) },
-                        onRemove: { addons.uninstall(baseUrl: record.baseUrl) },
+                        onRemove: { pendingRemoval = record },
                         onConfigure: { configuring = record.manifest },
                         onRename: { addons.rename(baseUrl: record.baseUrl, to: $0) }
                     )
