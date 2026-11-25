@@ -2623,6 +2623,7 @@ actor SimklClient {
         season: Int?,
         episode: Int?,
         progressPercent: Double,
+        minProgress: Int,
         clientId: String,
         token: String
     ) async {
@@ -2630,8 +2631,9 @@ actor SimklClient {
         let ids = Self.trackingIds(imdbId: imdbId, contentId: contentId)
         guard !ids.isEmpty else { return }
         do {
+            // `min_progress` only works in the query; Simkl ignores it in the body.
             _ = try await IntegrationHTTP.post(
-                "\(base)/scrobble/\(action.rawValue)",
+                "\(base)/scrobble/\(action.rawValue)?min_progress=\(minProgress)",
                 headers: headers(clientId: clientId, token: token),
                 json: ScrobbleBody(
                     ids: ids,

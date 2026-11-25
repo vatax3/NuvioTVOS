@@ -1477,3 +1477,5 @@
 "player.disc_titles" = "Disc titles";
 "player.disc_title_feature" = "Feature · %@ min";
 "player.disc_title_extra" = "Extra · %@ min";
+"settings.integrations.simkl_threshold" = "Watched threshold";
+"settings.integrations.simkl_threshold_sub" = "Playback percentage required to mark a title as watched. End-credits markers take priority when available.";

@@ -114,6 +114,17 @@ struct TrackingSettingsContent: View {
                         systemImage: "dot.radiowaves.up.forward",
                         isOn: $tracking.simklScrobbleEnabled
                     )
+                    SettingsStepperRow(
+                        title: L10n.text("settings.integrations.simkl_threshold", fallback: "Watched threshold"),
+                        subtitle: L10n.text(
+                            "settings.integrations.simkl_threshold_sub",
+                            fallback: "Playback percentage required to mark a title as watched. End-credits markers take priority when available."
+                        ),
+                        systemImage: "checkmark.circle",
+                        value: $tracking.simklWatchedThresholdPercent,
+                        range: SimklCompletion.thresholdRange,
+                        format: { "\($0)%" }
+                    )
                     SettingsRow(
                         title: L10n.text("settings.integrations.sign_out", fallback: "Sign out"),
                         subtitle: L10n.text("settings.integrations.sign_out_sub", fallback: "Remove the token from this device"),

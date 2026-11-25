@@ -158,7 +158,15 @@ final class AppSettings {
     let trackPreference = TrackPreferenceStore()
 
     /// Fraction of a video that counts as watched — used by Continue Watching and episode ticks.
-    var watchedThreshold: Double { player.watchedThresholdFraction }
+    /// While Simkl is the progress source, raised to where Simkl counts a watch, so the account and
+    /// this device agree on what is finished (upstream's `localCompletionThresholdFor`). The credits
+    /// marker is per playback and is left to the player.
+    var watchedThreshold: Double {
+        SimklCompletion.localThreshold(
+            base: player.watchedThresholdFraction,
+            simklPercent: effectiveWatchProgressSource == .simkl ? Double(tracking.simklWatchedThresholdPercent) : nil
+        )
+    }
 
     // MARK: Tracking sources
 

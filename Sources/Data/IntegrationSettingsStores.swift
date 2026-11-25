@@ -255,6 +255,13 @@ final class TrackingSettingsStore: PreferenceStore {
         set { setBool("simkl_scrobble_enabled", newValue) }
     }
 
+    /// Upstream's `simkl_watched_threshold_percent` (1.2.0-beta.4): where Simkl counts a playback
+    /// as watched, 80–100. Sent as `min_progress`; see `SimklCompletion`.
+    var simklWatchedThresholdPercent: Int {
+        get { SimklCompletion.coercedThreshold(int("simkl_watched_threshold_percent", default: SimklCompletion.defaultThresholdPercent)) }
+        set { setInt("simkl_watched_threshold_percent", SimklCompletion.coercedThreshold(newValue)) }
+    }
+
     var isSimklAuthenticated: Bool { !simklAccessToken.isEmpty }
     /// `simkl_anime_id_preference`: whether the seasons of an anime franchise are one title or
     /// several. See `SimklAnimeIdPreference`.

@@ -1477,3 +1477,5 @@
 "player.disc_titles" = "Titres du disque";
 "player.disc_title_feature" = "Film · %@ min";
 "player.disc_title_extra" = "Bonus · %@ min";
+"settings.integrations.simkl_threshold" = "Seuil de visionnage";
+"settings.integrations.simkl_threshold_sub" = "Pourcentage de lecture requis pour marquer un titre comme vu. Les marqueurs de générique de fin priment lorsqu'ils existent.";

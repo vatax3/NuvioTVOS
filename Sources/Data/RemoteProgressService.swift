@@ -110,7 +110,7 @@ final class RemoteProgressService {
                 library.cache(previews)
             }
             for item in items {
-                guard let entry = Self.progress(from: item) else { continue }
+                guard let entry = Self.progress(from: item, threshold: settings.watchedThreshold) else { continue }
                 if shouldAdopt(entry, into: library) { adopted.append(entry) }
                 if library.cachedPreview(contentType: entry.contentType, contentId: entry.contentId) == nil {
                     previews.append(MetaPreview(
@@ -287,7 +287,12 @@ final class RemoteProgressService {
         )
     }
 
-    nonisolated static func progress(from item: SimklClient.PlaybackItem) -> WatchProgress? {
+    /// - Parameter threshold: the watched threshold the row is read with. A Simkl playback row is a
+    ///   position the account keeps open, not a watch it recorded — a recorded watch arrives as
+    ///   history — so it is held just under the threshold and stays resumable. Upstream's
+    ///   `isProviderPlaybackPosition` (c52e203d2): a stop under Simkl's bar is reported as a pause,
+    ///   and the row it leaves at 90% of an 85% bar dropped out of Continue Watching as watched.
+    nonisolated static func progress(from item: SimklClient.PlaybackItem, threshold: Double? = nil) -> WatchProgress? {
         guard item.progress > 0 else { return nil }
         let videoId: String
         if item.type == .series, let episode = item.episode {
@@ -302,7 +307,7 @@ final class RemoteProgressService {
             videoId: videoId,
             season: item.season,
             episode: item.episode,
-            positionSeconds: duration * item.progress / 100,
+            positionSeconds: min(duration * item.progress / 100, threshold.map { duration * ($0 - 0.001) } ?? .infinity),
             durationSeconds: duration,
             updatedAt: item.pausedAt ?? Date()
         )

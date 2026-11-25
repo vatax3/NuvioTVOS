@@ -1769,6 +1769,7 @@ struct PlayerView: View {
                     type: ContentType.from(request.contentType),
                     season: request.season, episode: request.episode,
                     progressPercent: percent,
+                    minProgress: simklMinProgress,
                     clientId: credentials.clientId, token: credentials.token
                 )
             }
@@ -1789,6 +1790,15 @@ struct PlayerView: View {
         return (tracking.simklClientId, tracking.simklAccessToken)
     }
 
+    /// Where Simkl counts this playback as watched, sent on every call as `min_progress`: the
+    /// viewer's threshold, or the credits marker when IntroDB has one.
+    private var simklMinProgress: Int {
+        Int(SimklCompletion.thresholdPercent(
+            userThreshold: settings.tracking.simklWatchedThresholdPercent,
+            contentEnd: SimklCompletion.contentEndPercent(segments: apiSkipSegments, duration: playbackDuration)
+        ))
+    }
+
     private func simklScrobble(position: Double, duration: Double) {
         guard !didSendTrackingStop, !simklSessionActive, !isLivePlayback, duration > 0,
               let credentials = simklCredentials,
@@ -1805,6 +1815,7 @@ struct PlayerView: View {
                 type: ContentType.from(request.contentType),
                 season: request.season, episode: request.episode,
                 progressPercent: percent,
+                minProgress: simklMinProgress,
                 clientId: credentials.clientId, token: credentials.token
             )
         }
@@ -1822,6 +1833,7 @@ struct PlayerView: View {
                 type: ContentType.from(request.contentType),
                 season: request.season, episode: request.episode,
                 progressPercent: percent,
+                minProgress: simklMinProgress,
                 clientId: credentials.clientId, token: credentials.token
             )
         }
