@@ -81,6 +81,8 @@ final class StreamsViewModel {
     @ObservationIgnored private var pluginOrder: [String] = []
     @ObservationIgnored private var pluginBuckets: [String: (logo: String?, streams: [Stream])] = [:]
     @ObservationIgnored private var requestedCacheHashes: Set<String> = []
+    /// The episode being searched for, which picks the file out of a debrid season pack.
+    @ObservationIgnored private var episodeHint: (season: Int?, episode: Int?) = (nil, nil)
     @ObservationIgnored private var cacheCheckDirty = false
     /// Upstream's `debridPreparationLaunched`: preparation starts once per load, on the first
     /// sources ready for it.
@@ -135,6 +137,7 @@ final class StreamsViewModel {
     ) async {
         loadGeneration += 1
         let generation = loadGeneration
+        episodeHint = (request.season, request.episode)
         isLoading = true
         autoPlayWindowElapsed = autoPlayWindow == nil
         self.onEvent = onEvent
@@ -514,12 +517,15 @@ final class StreamsViewModel {
                 let magnet = stream.torrentMagnetURI()
                 let fileIndex = stream.fileIdx
                 let filename = stream.behaviorHints?.filename
+                let hint = episodeHint
                 group.addTask {
                     let url = try? await DebridClient.shared.resolvePlayableLink(
                         infoHash: infoHash,
                         magnetURI: magnet,
                         fileIndex: fileIndex,
                         preferredFileName: filename,
+                        season: hint.season,
+                        episode: hint.episode,
                         credential: credential
                     )
                     return (key, url)
@@ -557,6 +563,8 @@ final class StreamsViewModel {
                 magnetURI: stream.torrentMagnetURI(),
                 fileIndex: stream.fileIdx,
                 preferredFileName: stream.behaviorHints?.filename,
+                season: episodeHint.season,
+                episode: episodeHint.episode,
                 credential: credential
             )
             return .success(url)

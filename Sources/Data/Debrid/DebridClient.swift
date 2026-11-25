@@ -42,11 +42,6 @@ actor DebridClient {
     private let session: URLSession
     private let log = Logger(subsystem: "com.nuvio.tvos", category: "Debrid")
 
-    /// Video extensions used to pick the right file out of a multi-file torrent.
-    private static let videoExtensions: Set<String> = [
-        "mkv", "mp4", "avi", "m4v", "mov", "ts", "m2ts", "wmv", "flv", "webm", "mpg", "mpeg"
-    ]
-
     init(session: URLSession? = nil) {
         if let session {
             self.session = session
@@ -257,35 +252,32 @@ actor DebridClient {
 
     // MARK: - Link resolution
 
-    /// Turns a magnet/infoHash into a direct HTTP URL, picking the file that best matches
-    /// `preferredFileName` (or the largest video when there is no hint).
+    /// Turns a magnet/infoHash into a direct HTTP URL, picking the file through
+    /// `DebridFileSelection`: the addon's filename, then the episode, then its index or the
+    /// largest video when it gave neither.
     func resolvePlayableLink(
         infoHash: String,
         magnetURI: String?,
         fileIndex: Int?,
         preferredFileName: String?,
+        season: Int? = nil,
+        episode: Int? = nil,
         credential: DebridCredential
     ) async throws -> String {
         let magnet = magnetURI ?? "magnet:?xt=urn:btih:\(infoHash)"
+        let hints = FileHints(fileIndex: fileIndex, filename: preferredFileName, season: season, episode: episode)
         switch credential.provider {
         case .realDebrid:
-            return try await resolveRealDebrid(
-                magnet: magnet, fileIndex: fileIndex,
-                preferredFileName: preferredFileName, apiKey: credential.apiKey
-            )
+            return try await resolveRealDebrid(magnet: magnet, hints: hints, apiKey: credential.apiKey)
         case .premiumize:
-            return try await resolvePremiumize(
-                magnet: magnet, preferredFileName: preferredFileName, apiKey: credential.apiKey
-            )
+            return try await resolvePremiumize(magnet: magnet, hints: hints, apiKey: credential.apiKey)
         case .torbox:
-            return try await resolveTorbox(
-                magnet: magnet, preferredFileName: preferredFileName, apiKey: credential.apiKey
-            )
+            return try await resolveTorbox(magnet: magnet, hints: hints, apiKey: credential.apiKey)
         }
     }
 
     private func resolveRealDebrid(
-        magnet: String, fileIndex: Int?, preferredFileName: String?, apiKey: String
+        magnet: String, hints: FileHints, apiKey: String
     ) async throws -> String {
         let auth = ["Authorization": "Bearer \(apiKey)"]
         let base = "https://api.real-debrid.com/rest/1.0"
@@ -303,8 +295,7 @@ actor DebridClient {
         let selection = pickFile(
             names: info.files?.map(\.path) ?? [],
             sizes: info.files?.map(\.bytes) ?? [],
-            fileIndex: fileIndex,
-            preferredFileName: preferredFileName
+            hints: hints
         )
         guard let selection, let files = info.files else {
             _ = try? await request("\(base)/torrents/delete/\(torrentId)", method: "DELETE", headers: auth)
@@ -343,7 +334,7 @@ actor DebridClient {
     }
 
     private func resolvePremiumize(
-        magnet: String, preferredFileName: String?, apiKey: String
+        magnet: String, hints: FileHints, apiKey: String
     ) async throws -> String {
         let data = try await request(
             "https://www.premiumize.me/api/transfer/directdl?apikey=\(apiKey)",
@@ -358,15 +349,18 @@ actor DebridClient {
         let selection = pickFile(
             names: content.map { $0.path ?? "" },
             sizes: content.map { $0.size ?? 0 },
-            fileIndex: nil,
-            preferredFileName: preferredFileName
+            isPlayable: { index in
+                content[index].link?.nilIfBlank != nil
+                    && DebridFileSelection.hasVideoExtension(content[index].path ?? "")
+            },
+            hints: hints
         )
         guard let selection, let link = content[selection].link else { throw DebridError.noPlayableFile }
         return link
     }
 
     private func resolveTorbox(
-        magnet: String, preferredFileName: String?, apiKey: String
+        magnet: String, hints: FileHints, apiKey: String
     ) async throws -> String {
         let auth = ["Authorization": "Bearer \(apiKey)"]
         let boundary = "nuvio-\(UUID().uuidString)"
@@ -395,10 +389,16 @@ actor DebridClient {
         guard let files = torrent.data?.files, !files.isEmpty else { throw DebridError.noPlayableFile }
 
         let selection = pickFile(
-            names: files.map { $0.short_name ?? $0.name ?? "" },
+            names: files.map { file in
+                [file.name, file.absolute_path, file.short_name].compactMap { $0?.nilIfBlank }.first ?? ""
+            },
             sizes: files.map { $0.size ?? 0 },
-            fileIndex: nil,
-            preferredFileName: preferredFileName
+            isPlayable: { index in
+                let file = files[index]
+                return file.mimetype?.lowercased().hasPrefix("video/") == true
+                    || DebridFileSelection.hasVideoExtension(file.short_name ?? file.name ?? "")
+            },
+            hints: hints
         )
         guard let selection, let fileId = files[selection].id else { throw DebridError.noPlayableFile }
 
@@ -413,34 +413,29 @@ actor DebridClient {
 
     // MARK: - File selection
 
-    /// Picks the index of the file to play: an explicit index when the addon gave one, else the
-    /// closest filename match, else the largest video file.
+    /// What the addon said about the file to play, for `DebridFileSelection`.
+    struct FileHints {
+        var fileIndex: Int?
+        var filename: String?
+        var season: Int?
+        var episode: Int?
+    }
+
     private func pickFile(
         names: [String],
         sizes: [Int64],
-        fileIndex: Int?,
-        preferredFileName: String?
+        isPlayable: ((Int) -> Bool)? = nil,
+        hints: FileHints
     ) -> Int? {
-        guard !names.isEmpty else { return nil }
-
-        let videoIndices = names.indices.filter { index in
-            let ext = (names[index] as NSString).pathExtension.lowercased()
-            return Self.videoExtensions.contains(ext)
-        }
-        let candidates = videoIndices.isEmpty ? Array(names.indices) : videoIndices
-
-        if let fileIndex, candidates.contains(fileIndex) { return fileIndex }
-
-        if let preferredFileName, !preferredFileName.isEmpty {
-            let needle = (preferredFileName as NSString).lastPathComponent.lowercased()
-            if let exact = candidates.first(where: {
-                (names[$0] as NSString).lastPathComponent.lowercased() == needle
-            }) { return exact }
-        }
-
-        return candidates.max { lhs, rhs in
-            (sizes.indices.contains(lhs) ? sizes[lhs] : 0) < (sizes.indices.contains(rhs) ? sizes[rhs] : 0)
-        }
+        DebridFileSelection.select(
+            paths: names,
+            sizes: sizes,
+            isPlayable: isPlayable ?? { DebridFileSelection.hasVideoExtension(names[$0]) },
+            fileIndex: hints.fileIndex,
+            filenames: [hints.filename],
+            season: hints.season,
+            episode: hints.episode
+        )
     }
 }
 
@@ -518,6 +513,8 @@ private struct TorboxTorrentFile: Decodable {
     let id: Int?
     let name: String?
     let short_name: String?
+    let absolute_path: String?
+    let mimetype: String?
     let size: Int64?
 }
 
