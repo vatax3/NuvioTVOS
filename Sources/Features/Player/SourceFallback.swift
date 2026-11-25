@@ -94,6 +94,28 @@ enum SourceFallback {
     }
 }
 
+/// Whether an engine's "no longer loading" report means its source started.
+///
+/// mpv and AetherEngine report a failure by stopping their loading state as well, so that the
+/// cover lifts and their error card can be read. Taken as a start, that report saved the dead link
+/// for reuse and closed the fallback and the startup timeout, both of which only act on a source
+/// that has not started — so neither ever ran on those engines. Upstream needed the same guard
+/// for decoders failing after the first report (44549e9a0, 1.2.0-beta.4).
+///
+/// Keyed by engine session, because switching engine keeps the player and opens the same source
+/// again: the new engine's start is a real one.
+struct PlaybackStartLedger: Equatable {
+    private var failedSession: String?
+
+    mutating func engineFailed(session: String) {
+        failedSession = session
+    }
+
+    func reportStartsPlayback(loading: Bool, session: String) -> Bool {
+        !loading && session != failedSession
+    }
+}
+
 extension PlaybackRequest {
     /// The same playback from another source: the stream's own fields replaced, everything about
     /// the title and the session kept. What a fallback or a refreshed link switches to in place.

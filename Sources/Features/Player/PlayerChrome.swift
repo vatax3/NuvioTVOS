@@ -336,8 +336,10 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
             // The host's L10n.text("player.preparing", fallback: "Preparing stream") cover is drawn above this view, so a source that
             // never opens sat behind a spinner that could not end. Reporting the stall as
             // finished is what lets mpv's own account of the failure be read.
-            if message != nil { onPlaybackState(engine.isPaused, false) }
+            // The error goes first: recovery decides on a source that has not started, and the
+            // state report below is what the host would otherwise take for a start.
             if let message { onPlaybackError(message) }
+            if message != nil { onPlaybackState(engine.isPaused, false) }
         }
         // Browsing the row is use, not idleness: restart the countdown as focus walks it.
         .onChange(of: controlFocus) { _, _ in

@@ -65,4 +65,25 @@ final class SourceFallbackTests: XCTestCase {
             failedAddonName: nil, failedInfoHash: nil, select: { $0.first }
         ))
     }
+
+    // MARK: PlaybackStartLedger
+
+    func testAFailingEnginesLastReportIsNotAStart() {
+        var ledger = PlaybackStartLedger()
+        XCTAssertFalse(ledger.reportStartsPlayback(loading: true, session: "mpv|0"))
+        ledger.engineFailed(session: "mpv|0")
+        // mpv lifts its loading state when it fails; that must leave the fallback open.
+        XCTAssertFalse(ledger.reportStartsPlayback(loading: false, session: "mpv|0"))
+    }
+
+    func testANewEngineSessionStartsAfresh() {
+        var ledger = PlaybackStartLedger()
+        ledger.engineFailed(session: "mpv|0")
+        XCTAssertTrue(ledger.reportStartsPlayback(loading: false, session: "aether|0"))
+        XCTAssertTrue(ledger.reportStartsPlayback(loading: false, session: "mpv|1"))
+    }
+
+    func testAnEngineThatNeverFailedStartsOnItsFirstReport() {
+        XCTAssertTrue(PlaybackStartLedger().reportStartsPlayback(loading: false, session: "mpv|0"))
+    }
 }

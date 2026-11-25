@@ -75,6 +75,8 @@ struct PlayerView: View {
     /// briefly idle while it re-reads the stream; showing L10n.text("player.preparing", fallback: "Preparing stream") over that reads
     /// as the player having thrown the film away and started again.
     @State private var hasStartedPlayback = false
+    /// Keeps a failing engine's last report from counting as a start. See `PlaybackStartLedger`.
+    @State private var startLedger = PlaybackStartLedger()
     /// The pause card is not simply "paused is true". Android raises it a few seconds after a
     /// deliberate pause and hides the transport underneath it, because the two draw the same
     /// title in almost the same place — shown together they read as one title rendered twice,
@@ -377,7 +379,10 @@ struct PlayerView: View {
                     advanceToNextEpisode()
                     dismiss()
                 },
-                onPlaybackError: { message in _ = recoverSource(after: message) },
+                onPlaybackError: { message in
+                    startLedger.engineFailed(session: engineSessionKey)
+                    _ = recoverSource(after: message)
+                },
                 holdsPlaybackError: isRecoveringSource
             )
             .id(engineSessionGeneration)
@@ -475,7 +480,10 @@ struct PlayerView: View {
                     advanceToNextEpisode()
                     dismiss()
                 },
-                onPlaybackError: { message in _ = recoverSource(after: message) },
+                onPlaybackError: { message in
+                    startLedger.engineFailed(session: engineSessionKey)
+                    _ = recoverSource(after: message)
+                },
                 holdsPlaybackError: isRecoveringSource
             )
             .id(engineSessionGeneration)
@@ -822,6 +830,11 @@ struct PlayerView: View {
         )
     }
 
+    /// One engine's attempt at this source: a switch of engine, or a reload, is another.
+    private var engineSessionKey: String {
+        "\(resolvedEngine.rawValue)|\(engineSessionGeneration)"
+    }
+
     private var recoveryWatchdogKey: String {
         [
             resolvedEngine.rawValue,
@@ -1125,7 +1138,7 @@ struct PlayerView: View {
         let wasPaused = isPaused
         isPaused = paused
         isLoading = loading
-        if !loading {
+        if startLedger.reportStartsPlayback(loading: loading, session: engineSessionKey) {
             if !hasStartedPlayback { rememberLinkForReuse() }
             hasStartedPlayback = true
             showParentalGuideIfReady()
