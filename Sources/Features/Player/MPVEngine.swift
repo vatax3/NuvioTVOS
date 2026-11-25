@@ -54,6 +54,12 @@ final class MPVEngine {
     private(set) var styledSubtitleText: MpvStyledSubtitleText?
     /// Whether the viewer's style needs the overlay: a font, a background or a shadow.
     @ObservationIgnored private var styledRendererWanted = false
+    /// What was last asked of `applySubtitleStyle`, re-applied when the selected track moves
+    /// between an ASS track and a text one.
+    @ObservationIgnored private var lastSubtitleStyle: SubtitleStyle?
+    @ObservationIgnored private var lastSubtitleObstructions = SubtitlePlacement.Obstructions()
+    @ObservationIgnored private var appliedStyleIsAss = false
+    @ObservationIgnored private var appliedAssBold: Bool?
 
     /// From mpv's own `video-params/gamma`, which is the transfer function it decoded with.
     /// `pq` covers HDR10, HDR10+ and the Dolby Vision profiles mpv tone-maps from.
@@ -434,10 +440,17 @@ final class MPVEngine {
     }
 
     private func applySubtitleStyle(
-        _ style: SubtitleStyle,
+        _ requested: SubtitleStyle,
         asOption: Bool,
         obstructions: SubtitlePlacement.Obstructions = .init()
     ) {
+        lastSubtitleStyle = requested
+        lastSubtitleObstructions = obstructions
+        // Upstream's `applySubtitleStyleForCodec`: an ASS or SSA track takes the ASS style. Before
+        // the file loads there is no track, so the text style goes in as the options.
+        let isAss = !asOption && selectedSubtitleIsAss()
+        appliedStyleIsAss = isAss
+        let style = isAss ? requested.applyingASS() : requested
         styledRendererWanted = style.usesStyledRenderer
         // Before the file loads there is no track to hide; the first cue syncs it then.
         defer { if !asOption { syncStyledSubtitles() } }
@@ -445,9 +458,25 @@ final class MPVEngine {
             if asOption { self.setOption(name, value) }
             else { self.command(["set", name, value]) }
         }
-        set("sub-ass-override", style.assOverride)
+        // `applyAssSubtitleOverride`: a styled track keeps its script unless its size differs from
+        // 100% (`scale`, which reads `sub-scale` — the font size below never reached one) or the
+        // viewer customises it (`force`).
+        let override = requested.ass.mpvOverride(isAss: isAss)
+        set("sub-ass-override", override)
+        set("sub-scale", override == "scale" ? String(format: "%.2f", requested.ass.sizeScale) : "1")
         set("sub-font-size", String(format: "%.0f", min(96, max(18, 55 * style.sizeScale))))
         set("sub-bold", style.bold ? "yes" : "no")
+        if !asOption {
+            let bold = requested.ass.mpvBoldOverride(isAss: isAss)
+            if bold != appliedAssBold {
+                if let bold {
+                    command(["change-list", "sub-ass-style-overrides", "set", bold ? "Bold=1" : "Bold=0"])
+                } else {
+                    command(["change-list", "sub-ass-style-overrides", "clr", ""])
+                }
+                appliedAssBold = bold
+            }
+        }
         set("sub-color", mpvColor(style.textColor))
         set("sub-back-color", mpvColor(style.backgroundColor))
         set("sub-outline-color", mpvColor(style.outlineColor))
@@ -460,14 +489,21 @@ final class MPVEngine {
         // which is the only way the two renderers can agree: `sub-pos` is a percentage of the
         // frame and the overlay works in points, so mixing them double-counted the gap and made
         // the stored offset worth about half as much here as there. See `SubtitlePlacement`.
+        // A scaled styled track keeps its own placement, as upstream's does: no margin.
         set("sub-pos", "100")
         set("sub-use-margins", "yes")
         set(
             "sub-margin-y",
-            String(format: "%.0f", SubtitlePlacement.mpvMarginY(
+            override == "scale" ? "0" : String(format: "%.0f", SubtitlePlacement.mpvMarginY(
                 offset: style.verticalOffset, obstructions: obstructions
             ))
         )
+    }
+
+    /// `isAssSubtitleCodec`: the selected track's codec, ASS or SSA.
+    private func selectedSubtitleIsAss() -> Bool {
+        guard let codec = propertyString("current-tracks/sub/codec")?.lowercased() else { return false }
+        return codec == "ass" || codec == "ssa"
     }
 
     private func mpvColor(_ color: Color) -> String {
@@ -826,6 +862,11 @@ final class MPVEngine {
     /// event handed to the overlay. Run on every cue, track change and style change.
     private func syncStyledSubtitles() {
         guard handle != nil else { return }
+        if let lastSubtitleStyle, selectedSubtitleIsAss() != appliedStyleIsAss {
+            // Upstream re-applies on the same check. The call ends by syncing again, now level.
+            applySubtitleStyle(lastSubtitleStyle, asOption: false, obstructions: lastSubtitleObstructions)
+            return
+        }
         let codec = propertyString("current-tracks/sub/codec")?.lowercased()
         let styled = styledRendererWanted && codec.map(Self.styledSubtitleCodecs.contains) == true
         if let sid = propertyString("sid"), sid != "no", sid != "false" {

@@ -173,7 +173,8 @@ enum SettingsBlob {
     /// Colours: `#AARRGGBB` here, a signed ARGB `Int` there (`Color.toArgb()`).
     static let colorKeys: Set<String> = [
         "subtitle_text_color", "subtitle_background_color", "subtitle_outline_color",
-        "subtitle_hdr_text_color"
+        "subtitle_hdr_text_color",
+        "ass_subtitle_text_color", "ass_subtitle_background_color", "ass_subtitle_outline_color"
     ]
 
     /// Read here as `Double`, declared upstream as an integer of the same meaning.

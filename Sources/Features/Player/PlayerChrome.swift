@@ -1428,9 +1428,22 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
         }
     }
 
+    /// Whether the selected track is ASS or SSA on mpv, the one renderer that draws them as
+    /// authored — so the panel edits the ASS style (`SubtitleStyleEditor`).
+    private var editsAssStyle: Bool {
+        guard Engine.self == MPVEngine.self,
+              let codec = engine.subtitleTracks.first(where: \.isSelected)?.codec?.lowercased()
+        else { return false }
+        return codec == "ass" || codec == "ssa"
+    }
+
+    private var style: SubtitleStyleEditor {
+        SubtitleStyleEditor(player: settings.player, ass: editsAssStyle)
+    }
+
     /// How far the line currently sits from where it would sit by default.
     private var subtitleOffsetLabel: String {
-        let offset = settings.player.subtitleVerticalOffset
+        let offset = style.verticalOffset
         guard abs(offset) >= 0.5 else {
             return L10n.text("player.offset_default", fallback: "Default position")
         }
@@ -1440,8 +1453,8 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
     /// Both renderers read the same number through `SubtitlePlacement`, so one press moves the
     /// muxed track and the addon track by the same distance.
     private func adjustSubtitleOffset(by delta: Double) {
-        let next = settings.player.subtitleVerticalOffset + delta
-        settings.player.subtitleVerticalOffset = min(
+        let next = style.verticalOffset + delta
+        style.verticalOffset = min(
             SubtitlePlacement.offsetRange.upperBound,
             max(SubtitlePlacement.offsetRange.lowerBound, next)
         )
@@ -1517,48 +1530,64 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
     }
 
     private var subtitleAppearancePanel: some View {
-        @Bindable var player = settings.player
+        let style = style
         return InPlayerPanel(
             title: L10n.text("player.subtitle_appearance"),
             subtitle: L10n.text("player.applies_immediately"),
             handlesExit: false,
             onDismiss: closePicker
         ) {
+            // Upstream's header toggle (`SubtitleStyleSidePanel`): off, a styled track keeps its
+            // own look and only its size can change; on, the whole style below applies to it.
+            if style.ass {
+                InPlayerPanelSection(title: L10n.text("player.sub_ass_section", fallback: "ASS/SSA")) {
+                    InPlayerPanelRow(
+                        title: L10n.text("player.sub_customize_ass", fallback: "Customize ASS/SSA"),
+                        subtitle: L10n.text(
+                            "player.sub_customize_ass_sub",
+                            fallback: "Apply your own style instead of the file's"
+                        ),
+                        systemImage: "paintbrush",
+                        isSelected: settings.player.subtitleCustomizeAss
+                    ) { settings.player.subtitleCustomizeAss.toggle() }
+                }
+            }
             InPlayerPanelSection(title: L10n.text("player.text_size")) {
                 ForEach([0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { scale in
                     InPlayerPanelRow(
                         title: String(format: "%.0f%%", scale * 100),
                         systemImage: "textformat.size",
-                        isSelected: abs(player.subtitleSize - scale) < 0.01,
-                        requestsInitialFocus: abs(player.subtitleSize - scale) < 0.01
-                    ) { player.subtitleSize = scale }
+                        isSelected: abs(style.size - scale) < 0.01,
+                        requestsInitialFocus: abs(style.size - scale) < 0.01
+                    ) { style.size = scale }
                 }
             }
+            if style.editsFullStyle {
             InPlayerPanelSection(title: L10n.text("player.style")) {
                 InPlayerPanelRow(
                     title: L10n.text("player.bold_text"), systemImage: "bold",
-                    isSelected: player.subtitleBold
-                ) { player.subtitleBold.toggle() }
+                    isSelected: style.bold
+                ) { style.bold.toggle() }
                 InPlayerPanelRow(
                     title: L10n.text("player.outline"), systemImage: "text.outline",
-                    isSelected: player.subtitleOutlineEnabled
-                ) { player.subtitleOutlineEnabled.toggle() }
+                    isSelected: style.outlineEnabled
+                ) { style.outlineEnabled.toggle() }
             }
             InPlayerPanelSection(title: L10n.text("player.text_color")) {
                 ForEach(SubtitleColors.text, id: \.rgb) { choice in
                     InPlayerPanelRow(
                         title: choice.title, systemImage: "circle.fill",
-                        isSelected: SubtitleColors.rgb(player.subtitleTextColor) == choice.rgb,
-                        requestsInitialFocus: SubtitleColors.rgb(player.subtitleTextColor) == choice.rgb
-                    ) { player.subtitleTextColor = SubtitleColors.color(choice.rgb, preservingAlphaFrom: player.subtitleTextColor) }
+                        isSelected: SubtitleColors.rgb(style.textColor) == choice.rgb,
+                        requestsInitialFocus: SubtitleColors.rgb(style.textColor) == choice.rgb
+                    ) { style.textColor = SubtitleColors.color(choice.rgb, preservingAlphaFrom: style.textColor) }
                 }
             }
             InPlayerPanelSection(title: L10n.text("player.text_opacity")) {
                 ForEach([50, 75, 100], id: \.self) { percent in
                     InPlayerPanelRow(
                         title: "\(percent)%", systemImage: "circle.lefthalf.filled",
-                        isSelected: SubtitleColors.alphaPercent(player.subtitleTextColor) == percent
-                    ) { player.subtitleTextColor = SubtitleColors.color(player.subtitleTextColor, alphaPercent: percent) }
+                        isSelected: SubtitleColors.alphaPercent(style.textColor) == percent
+                    ) { style.textColor = SubtitleColors.color(style.textColor, alphaPercent: percent) }
                 }
             }
             subtitleStyleSections
@@ -1579,9 +1608,10 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
                     systemImage: "arrow.down"
                 ) { adjustSubtitleOffset(by: -5) }
             }
+            }
             InPlayerPanelSection(title: nil) {
                 InPlayerPanelRow(title: L10n.text("player.reset_subtitle_style"), systemImage: "arrow.counterclockwise") {
-                    player.resetSubtitleAppearance()
+                    style.reset()
                 }
             }
         }
@@ -1624,51 +1654,51 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
     /// Upstream's subtitle style rail cards (1.2.0-beta.1): Font, Background and Drop Shadow.
     @ViewBuilder
     private var subtitleStyleSections: some View {
-        @Bindable var player = settings.player
+        let style = style
         InPlayerPanelSection(title: L10n.text("player.sub_font", fallback: "Font")) {
             ForEach(SubtitleFontOptions.ids(imported: SubtitleFontStore.shared.fonts), id: \.self) { id in
                 InPlayerPanelRow(
                     title: SubtitleFontOptions.label(for: id, imported: SubtitleFontStore.shared.fonts),
                     systemImage: "textformat",
-                    isSelected: player.subtitleFontId == id
-                ) { player.subtitleFontId = id }
+                    isSelected: style.fontId == id
+                ) { style.fontId = id }
             }
         }
         InPlayerPanelSection(title: L10n.text("player.sub_background", fallback: "Background")) {
             ForEach(SubtitleColors.background, id: \.rgb) { choice in
                 InPlayerPanelRow(
                     title: choice.title, systemImage: "rectangle.fill",
-                    isSelected: SubtitleColors.selectedBackground(player.subtitleBackgroundColor) == choice.rgb
-                ) { player.subtitleBackgroundColor = SubtitleColors.background(choice.rgb, current: player.subtitleBackgroundColor) }
+                    isSelected: SubtitleColors.selectedBackground(style.backgroundColor) == choice.rgb
+                ) { style.backgroundColor = SubtitleColors.background(choice.rgb, current: style.backgroundColor) }
             }
             stepRows(
                 label: L10n.text("player.sub_opacity", fallback: "Opacity"),
-                value: "\(SubtitleColors.alphaPercent(player.subtitleBackgroundColor))%"
+                value: "\(SubtitleColors.alphaPercent(style.backgroundColor))%"
             ) { delta in
-                let next = SubtitleColors.alphaPercent(player.subtitleBackgroundColor) + delta * 10
-                player.subtitleBackgroundColor = SubtitleColors.color(player.subtitleBackgroundColor, alphaPercent: next)
+                let next = SubtitleColors.alphaPercent(style.backgroundColor) + delta * 10
+                style.backgroundColor = SubtitleColors.color(style.backgroundColor, alphaPercent: next)
             }
             stepRows(
                 label: L10n.text("player.sub_bg_roundness", fallback: "Corner Roundness"),
-                value: "\(player.subtitleBackgroundRadius)"
-            ) { delta in player.subtitleBackgroundRadius += delta * 2 }
+                value: "\(style.backgroundRadius)"
+            ) { delta in style.backgroundRadius += delta * 2 }
         }
         InPlayerPanelSection(title: L10n.text("player.sub_shadow", fallback: "Drop Shadow")) {
             InPlayerPanelRow(
-                title: player.subtitleShadowEnabled
+                title: style.shadowEnabled
                     ? L10n.text("player.style_on", fallback: "On") : L10n.text("player.style_off", fallback: "Off"),
                 systemImage: "shadow",
-                isSelected: player.subtitleShadowEnabled
-            ) { player.subtitleShadowEnabled.toggle() }
-            if player.subtitleShadowEnabled {
+                isSelected: style.shadowEnabled
+            ) { style.shadowEnabled.toggle() }
+            if style.shadowEnabled {
                 stepRows(
                     label: L10n.text("player.sub_opacity", fallback: "Opacity"),
-                    value: "\(player.subtitleShadowOpacity)%"
-                ) { delta in player.subtitleShadowOpacity += delta * 10 }
+                    value: "\(style.shadowOpacity)%"
+                ) { delta in style.shadowOpacity += delta * 10 }
                 stepRows(
                     label: L10n.text("player.sub_size", fallback: "Size"),
-                    value: "\(player.subtitleShadowSize)"
-                ) { delta in player.subtitleShadowSize += delta }
+                    value: "\(style.shadowSize)"
+                ) { delta in style.shadowSize += delta }
             }
         }
     }

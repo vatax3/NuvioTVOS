@@ -109,9 +109,9 @@ struct SubtitleStyle: Equatable {
     /// (upstream's `fileColorBrightness`).
     var fileColorBrightness: Double = 1
     var verticalOffset: Double = 0
-    /// How far these settings reach into subtitles that carry their own styling. Only the MPV
-    /// engine can act on it: AVFoundation has no ASS renderer to override in the first place.
-    var assOverride: String = SubtitleStyleOverride.scale.mpvValue
+    /// What mpv applies when the selected track is ASS or SSA, in place of the fields above.
+    /// Only mpv reads it: the other engines have no ASS renderer to style.
+    var ass = AssSubtitleStyle()
     /// Drop the sound effects and speaker labels an SDH track carries. Both engines honour it,
     /// by different means: mpv has a native filter for its embedded tracks, and sidecar files
     /// are drawn by Nuvio, so those go through `SubtitleSDHFilter`.
@@ -132,6 +132,26 @@ struct SubtitleStyle: Equatable {
     var shadowSize: Double = Double(SubtitleStyle.shadowSizeDefault)
 
     static let `default` = SubtitleStyle()
+
+    /// Upstream's `subtitleStyle.copy(…)` for an ASS track: the ASS fields over this style, which
+    /// keeps the SDH filter and the HDR colours.
+    func applyingASS() -> SubtitleStyle {
+        var style = self
+        style.sizeScale = ass.sizeScale
+        style.verticalOffset = ass.verticalOffset
+        style.bold = ass.bold
+        style.textColor = ass.textColor
+        style.backgroundColor = ass.backgroundColor
+        style.outlineEnabled = ass.outlineEnabled
+        style.outlineColor = ass.outlineColor
+        style.outlineWidth = ass.outlineWidth
+        style.fontId = ass.fontId
+        style.backgroundRadius = ass.backgroundRadius
+        style.shadowEnabled = ass.shadowEnabled
+        style.shadowOpacity = ass.shadowOpacity
+        style.shadowSize = ass.shadowSize
+        return style
+    }
 
     static let backgroundRadiusMax = 24
     static let outlineWidthRange = 1...5
@@ -670,6 +690,43 @@ enum SubtitlePlacement {
     /// The same distance, in the units `sub-margin-y` takes.
     static func mpvMarginY(offset: Double, obstructions: Obstructions = .init()) -> Double {
         inset(offset: offset, obstructions: obstructions) * mpvUnitsPerPoint
+    }
+}
+
+/// Upstream's separate ASS/SSA subtitle style (1.2.0-beta.4, 233dd1f3b and 8ce69c2a1).
+///
+/// A styled track keeps its own fonts, colours and sign placement unless the viewer asks
+/// otherwise: its size alone is applied when it differs from 100%, and everything when
+/// "Customize ASS/SSA" is on. Defaults are the general ones except the size, 100% rather than the
+/// text tracks' own, so a stock install draws a styled track as its author did.
+struct AssSubtitleStyle: Equatable {
+    var customize = false
+    var sizeScale: Double = 1.0
+    var verticalOffset: Double = 0
+    var bold = false
+    var textColor: Color = .white
+    var backgroundColor: Color = .clear
+    var outlineEnabled = true
+    var outlineColor: Color = .black
+    var outlineWidth = Double(SubtitleStyle.outlineWidthDefault)
+    var fontId = SubtitleFonts.defaultId
+    var backgroundRadius: Double = 0
+    var shadowEnabled = false
+    var shadowOpacity = Double(SubtitleStyle.shadowOpacityDefault)
+    var shadowSize = Double(SubtitleStyle.shadowSizeDefault)
+
+    static let sizeRange: ClosedRange<Double> = 0.5...2.0
+
+    /// `applyAssSubtitleOverride`'s `sub-ass-override`.
+    func mpvOverride(isAss: Bool) -> String {
+        if !isAss { return "no" }
+        if customize { return "force" }
+        return abs(sizeScale - 1) > 0.001 ? "scale" : "no"
+    }
+
+    /// `sub-ass-style-overrides` Bold, only while the style is forced.
+    func mpvBoldOverride(isAss: Bool) -> Bool? {
+        mpvOverride(isAss: isAss) == "force" ? bold : nil
     }
 }
 

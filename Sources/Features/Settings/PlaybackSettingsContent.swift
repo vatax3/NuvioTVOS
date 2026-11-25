@@ -423,12 +423,6 @@ struct PlaybackSettingsContent: View {
                     trailing: { Image(systemName: "chevron.right").foregroundStyle(.secondary) },
                     action: { router.push(.subtitleAppearance) }
                 )
-                SettingsOptionRow(
-                    title: L10n.text("settings.playback.apply_styled", fallback: "Apply to styled subtitles"),
-                    subtitle: player.subtitleStyleOverride.summary,
-                    systemImage: "textformat",
-                    selection: $player.subtitleStyleOverride
-                )
                 if player.subtitleOutlineEnabled {
                     SettingsStepperRow(
                         title: L10n.text("settings.playback.outline_width", fallback: "Outline width"),

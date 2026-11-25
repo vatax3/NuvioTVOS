@@ -282,42 +282,6 @@ enum AudioOutputChannels: String, SettingsOption {
 
 // MARK: - Subtitles
 
-/// How far the viewer's subtitle style reaches into subtitles that carry their own.
-///
-/// SRT and WebVTT have no styling of their own, so every appearance setting applies. ASS/SSA —
-/// which is what most anime and a good share of remuxes ship — carries a full script: fonts,
-/// colours, positions, sign placement. mpv honours that script by default, which is why the
-/// appearance settings looked broken on some files and fine on others.
-enum SubtitleStyleOverride: String, SettingsOption {
-    case respect = "NO"
-    case scale = "SCALE"
-    case force = "FORCE"
-
-    var displayName: String {
-        switch self {
-        case .respect: return L10n.text("option.ass_respect", fallback: "Keep the file's own style")
-        case .scale: return L10n.text("option.ass_scale", fallback: "Apply size and position only")
-        case .force: return L10n.text("option.ass_force", fallback: "Apply my style to everything")
-        }
-    }
-
-    var summary: String {
-        switch self {
-        case .respect: return L10n.text("option.ass_respect_sub", fallback: "ASS/SSA subtitles keep their fonts, colours and sign placement")
-        case .scale: return L10n.text("option.ass_scale_sub", fallback: "Resize and reposition styled subtitles, leave their colours alone")
-        case .force: return L10n.text("option.ass_force_sub", fallback: "Override styled subtitles too — signs and karaoke lose their placement")
-        }
-    }
-
-    var mpvValue: String {
-        switch self {
-        case .respect: return "no"
-        case .scale: return "scale"
-        case .force: return "force"
-        }
-    }
-}
-
 
 enum SubtitleOrganizationMode: String, SettingsOption {
     case byLanguage = "BY_LANGUAGE"

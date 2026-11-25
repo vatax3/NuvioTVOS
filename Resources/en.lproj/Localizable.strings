@@ -514,7 +514,6 @@
 "settings.playback.group_picker" = "Group the picker";
 "settings.playback.group_picker_sub" = "How addon tracks are arranged in the player's subtitle menu";
 "settings.playback.appearance" = "Appearance";
-"settings.playback.apply_styled" = "Apply to styled subtitles";
 "settings.playback.hex_hint" = "Hex, e.g. #FFFFFFFF";
 "settings.playback.outline_width" = "Outline width";
 "settings.playback.vertical_offset_sub" = "Lift subtitles clear of burned-in text";
@@ -1238,12 +1237,6 @@
 "option.ch_stereo_sub" = "Always downmix — the layout every television accepts";
 "option.ch_51_sub" = "Send 5.1 to the receiver";
 "option.ch_71_sub" = "Send 7.1 to the receiver";
-"option.ass_respect" = "Keep the file's own style";
-"option.ass_scale" = "Apply size and position only";
-"option.ass_force" = "Apply my style to everything";
-"option.ass_respect_sub" = "ASS/SSA subtitles keep their fonts, colours and sign placement";
-"option.ass_scale_sub" = "Resize and reposition styled subtitles, leave their colours alone";
-"option.ass_force_sub" = "Override styled subtitles too — signs and karaoke lose their placement";
 "option.group_language" = "Group by language";
 "option.group_addon" = "Group by addon";
 "option.group_flat" = "Flat list";
@@ -1478,3 +1471,6 @@
 "web.subtitle_font_added" = "Added to your TV";
 "web.subtitle_font_error" = "Could not import this font. Choose a valid .ttf or .otf file under 10 MB.";
 "web.subtitle_font_connection_error" = "Connection error";
+"player.sub_ass_section" = "ASS/SSA";
+"player.sub_customize_ass" = "Customize ASS/SSA";
+"player.sub_customize_ass_sub" = "Apply your own style instead of the file's";

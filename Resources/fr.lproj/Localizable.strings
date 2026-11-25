@@ -514,7 +514,6 @@
 "settings.playback.group_picker" = "Grouper le sélecteur";
 "settings.playback.group_picker_sub" = "La façon dont les pistes d’extensions sont classées dans le menu du lecteur";
 "settings.playback.appearance" = "Apparence";
-"settings.playback.apply_styled" = "Appliquer aux sous-titres stylés";
 "settings.playback.hex_hint" = "Hexadécimal, p. ex. #FFFFFFFF";
 "settings.playback.outline_width" = "Épaisseur du contour";
 "settings.playback.vertical_offset_sub" = "Remonter les sous-titres au-dessus du texte incrusté";
@@ -1238,12 +1237,6 @@
 "option.ch_stereo_sub" = "Toujours replier — la configuration que tous les téléviseurs acceptent";
 "option.ch_51_sub" = "Envoyer du 5.1 à l’ampli";
 "option.ch_71_sub" = "Envoyer du 7.1 à l’ampli";
-"option.ass_respect" = "Garder le style du fichier";
-"option.ass_scale" = "Appliquer seulement la taille et la position";
-"option.ass_force" = "Appliquer mon style à tout";
-"option.ass_respect_sub" = "Les sous-titres ASS/SSA gardent leurs polices, couleurs et placements";
-"option.ass_scale_sub" = "Redimensionner et repositionner les sous-titres stylés, sans toucher aux couleurs";
-"option.ass_force_sub" = "Écraser aussi les sous-titres stylés — les pancartes et karaokés perdent leur placement";
 "option.group_language" = "Grouper par langue";
 "option.group_addon" = "Grouper par extension";
 "option.group_flat" = "Liste simple";
@@ -1478,3 +1471,6 @@
 "web.subtitle_font_added" = "Ajoutée à votre TV";
 "web.subtitle_font_error" = "Impossible d’importer cette police. Choisissez un fichier .ttf ou .otf valide de moins de 10 Mo.";
 "web.subtitle_font_connection_error" = "Erreur de connexion";
+"player.sub_ass_section" = "ASS/SSA";
+"player.sub_customize_ass" = "Personnaliser ASS/SSA";
+"player.sub_customize_ass_sub" = "Appliquer votre propre style au lieu de celui du fichier";

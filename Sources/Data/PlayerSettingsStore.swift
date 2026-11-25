@@ -9,6 +9,40 @@ final class PlayerSettingsStore: PreferenceStore {
     init(defaults: UserDefaults = .standard) {
         super.init(namespace: "player", defaults: defaults)
         migrateAutoPlaySource()
+        migrateStyledSubtitleOverride()
+    }
+
+    /// `subtitle_style_override` (ours: keep, scale, force) gave way to upstream's separate ASS/SSA
+    /// style in 1.0.69. What the viewer chose is carried over: scaling copies the text size, and
+    /// forcing copies the whole text style with "Customize ASS/SSA" on. Left at its default, a
+    /// styled track keeps its own look, as upstream's does — the old default's size never reached
+    /// one anyway, since mpv's `scale` mode reads `sub-scale` and the size was a font size.
+    private func migrateStyledSubtitleOverride() {
+        guard let raw = storedValue("subtitle_style_override") as? String else { return }
+        migrating {
+            switch raw {
+            case "SCALE":
+                assSubtitleSize = subtitleSize
+            case "FORCE":
+                subtitleCustomizeAss = true
+                assSubtitleSize = subtitleSize
+                assSubtitleVerticalOffset = subtitleVerticalOffset
+                assSubtitleBold = subtitleBold
+                assSubtitleTextColor = subtitleTextColor
+                assSubtitleBackgroundColor = subtitleBackgroundColor
+                assSubtitleOutlineEnabled = subtitleOutlineEnabled
+                assSubtitleOutlineColor = subtitleOutlineColor
+                assSubtitleOutlineWidth = subtitleOutlineWidth
+                assSubtitleFontId = subtitleFontId
+                assSubtitleBackgroundRadius = subtitleBackgroundRadius
+                assSubtitleShadowEnabled = subtitleShadowEnabled
+                assSubtitleShadowOpacity = subtitleShadowOpacity
+                assSubtitleShadowSize = subtitleShadowSize
+            default:
+                break
+            }
+            remove("subtitle_style_override")
+        }
     }
 
     /// The source setting's old values were this app's own. `ANY` is upstream's `ALL_SOURCES`;
@@ -220,14 +254,6 @@ final class PlayerSettingsStore: PreferenceStore {
         set { setString("subtitle_secondary_language", newValue) }
     }
 
-    /// Defaults to scaling rather than to mpv's own "respect the script" behaviour: a viewer
-    /// who has set a text size expects it to take effect, and size is the setting they are
-    /// most often reaching for. Colours are left to the script, so signs still read correctly.
-    var subtitleStyleOverride: SubtitleStyleOverride {
-        get { option("subtitle_style_override", default: .scale) }
-        set { setOption("subtitle_style_override", newValue) }
-    }
-
     var subtitleShowOnlyPreferredLanguages: Bool {
         get { bool("subtitle_show_only_preferred_languages", default: false) }
         set { setBool("subtitle_show_only_preferred_languages", newValue) }
@@ -364,6 +390,113 @@ final class PlayerSettingsStore: PreferenceStore {
         set {
             setInt("subtitle_shadow_size", min(SubtitleStyle.shadowSizeRange.upperBound,
                 max(SubtitleStyle.shadowSizeRange.lowerBound, newValue)))
+        }
+    }
+
+    // MARK: ASS/SSA style (upstream 1.2.0-beta.4)
+
+    // A second set of the appearance settings, applied by mpv to ASS and SSA tracks. Each falls
+    // back to the general default, not to the viewer's own text style, except the size: 100%.
+    // Clamped as upstream's setters are, since a synced value may come from either app.
+
+    var subtitleCustomizeAss: Bool {
+        get { bool("subtitle_customize_ass", default: false) }
+        set { setBool("subtitle_customize_ass", newValue) }
+    }
+
+    /// A scale, like `subtitleSize`; the blob carries it as their percentage.
+    var assSubtitleSize: Double {
+        get { Self.assScale(double("ass_subtitle_size", default: 1.0)) }
+        set {
+            setDouble("ass_subtitle_size", min(AssSubtitleStyle.sizeRange.upperBound, max(AssSubtitleStyle.sizeRange.lowerBound, newValue)))
+        }
+    }
+
+    nonisolated static func assScale(_ stored: Double) -> Double {
+        let scale = stored > 3 ? stored / 100 : stored
+        return min(AssSubtitleStyle.sizeRange.upperBound, max(AssSubtitleStyle.sizeRange.lowerBound, scale))
+    }
+
+    var assSubtitleVerticalOffset: Double {
+        get { clampedOffset(double("ass_subtitle_vertical_offset", default: 0)) }
+        set { setDouble("ass_subtitle_vertical_offset", clampedOffset(newValue)) }
+    }
+
+    private func clampedOffset(_ offset: Double) -> Double {
+        min(SubtitlePlacement.offsetRange.upperBound, max(SubtitlePlacement.offsetRange.lowerBound, offset))
+    }
+
+    var assSubtitleBold: Bool {
+        get { bool("ass_subtitle_bold", default: false) }
+        set { setBool("ass_subtitle_bold", newValue) }
+    }
+
+    var assSubtitleTextColor: String {
+        get { string("ass_subtitle_text_color", default: "#FFFFFFFF") }
+        set { setString("ass_subtitle_text_color", newValue) }
+    }
+
+    var assSubtitleBackgroundColor: String {
+        get { string("ass_subtitle_background_color", default: "#00000000") }
+        set { setString("ass_subtitle_background_color", newValue) }
+    }
+
+    var assSubtitleOutlineEnabled: Bool {
+        get { bool("ass_subtitle_outline_enabled", default: true) }
+        set { setBool("ass_subtitle_outline_enabled", newValue) }
+    }
+
+    var assSubtitleOutlineColor: String {
+        get { string("ass_subtitle_outline_color", default: "#FF000000") }
+        set { setString("ass_subtitle_outline_color", newValue) }
+    }
+
+    var assSubtitleOutlineWidth: Int {
+        get { SubtitleStyle.clampedOutlineWidth(int("ass_subtitle_outline_width", default: SubtitleStyle.outlineWidthDefault)) }
+        set { setInt("ass_subtitle_outline_width", SubtitleStyle.clampedOutlineWidth(newValue)) }
+    }
+
+    var assSubtitleFontId: String {
+        get { string("ass_subtitle_font_id", default: SubtitleFonts.defaultId) }
+        set { setString("ass_subtitle_font_id", newValue) }
+    }
+
+    var assSubtitleBackgroundRadius: Int {
+        get { min(SubtitleStyle.backgroundRadiusMax, max(0, int("ass_subtitle_background_radius", default: 0))) }
+        set { setInt("ass_subtitle_background_radius", min(SubtitleStyle.backgroundRadiusMax, max(0, newValue))) }
+    }
+
+    var assSubtitleShadowEnabled: Bool {
+        get { bool("ass_subtitle_shadow_enabled", default: false) }
+        set { setBool("ass_subtitle_shadow_enabled", newValue) }
+    }
+
+    var assSubtitleShadowOpacity: Int {
+        get { min(100, max(0, int("ass_subtitle_shadow_opacity", default: SubtitleStyle.shadowOpacityDefault))) }
+        set { setInt("ass_subtitle_shadow_opacity", min(100, max(0, newValue))) }
+    }
+
+    var assSubtitleShadowSize: Int {
+        get {
+            min(SubtitleStyle.shadowSizeRange.upperBound, max(SubtitleStyle.shadowSizeRange.lowerBound,
+                int("ass_subtitle_shadow_size", default: SubtitleStyle.shadowSizeDefault)))
+        }
+        set {
+            setInt("ass_subtitle_shadow_size", min(SubtitleStyle.shadowSizeRange.upperBound,
+                max(SubtitleStyle.shadowSizeRange.lowerBound, newValue)))
+        }
+    }
+
+    /// Upstream's `resetAssSubtitleAppearance`: every ASS key back to its default, the switch too.
+    func resetAssSubtitleAppearance() {
+        for key in [
+            "subtitle_customize_ass", "ass_subtitle_size", "ass_subtitle_vertical_offset", "ass_subtitle_bold",
+            "ass_subtitle_text_color", "ass_subtitle_background_color", "ass_subtitle_outline_enabled",
+            "ass_subtitle_outline_color", "ass_subtitle_outline_width", "ass_subtitle_font_id",
+            "ass_subtitle_background_radius", "ass_subtitle_shadow_enabled", "ass_subtitle_shadow_opacity",
+            "ass_subtitle_shadow_size",
+        ] {
+            remove(key)
         }
     }
 
@@ -661,5 +794,77 @@ final class PlayerSettingsStore: PreferenceStore {
         return shouldAdvanceToNextEpisode(
             position: position + nextEpisodePrefetchLead, duration: duration
         )
+    }
+}
+
+/// The style the in-player appearance panel edits: the text style, or upstream's ASS/SSA style
+/// while an ASS track plays on mpv (`SubtitleStyleSidePanel`, 1.2.0-beta.4: edits go to the
+/// `ass_` keys whenever the ASS style is the one in effect).
+@MainActor
+struct SubtitleStyleEditor {
+    let player: PlayerSettingsStore
+    let ass: Bool
+
+    /// Upstream shows only size and delay for an ASS track until "Customize ASS/SSA" is on: the
+    /// rest would have no effect while the file's own style is kept.
+    var editsFullStyle: Bool { !ass || player.subtitleCustomizeAss }
+
+    var size: Double {
+        get { ass ? player.assSubtitleSize : player.subtitleSize }
+        nonmutating set { if ass { player.assSubtitleSize = newValue } else { player.subtitleSize = newValue } }
+    }
+
+    var verticalOffset: Double {
+        get { ass ? player.assSubtitleVerticalOffset : player.subtitleVerticalOffset }
+        nonmutating set { if ass { player.assSubtitleVerticalOffset = newValue } else { player.subtitleVerticalOffset = newValue } }
+    }
+
+    var bold: Bool {
+        get { ass ? player.assSubtitleBold : player.subtitleBold }
+        nonmutating set { if ass { player.assSubtitleBold = newValue } else { player.subtitleBold = newValue } }
+    }
+
+    var textColor: String {
+        get { ass ? player.assSubtitleTextColor : player.subtitleTextColor }
+        nonmutating set { if ass { player.assSubtitleTextColor = newValue } else { player.subtitleTextColor = newValue } }
+    }
+
+    var backgroundColor: String {
+        get { ass ? player.assSubtitleBackgroundColor : player.subtitleBackgroundColor }
+        nonmutating set { if ass { player.assSubtitleBackgroundColor = newValue } else { player.subtitleBackgroundColor = newValue } }
+    }
+
+    var outlineEnabled: Bool {
+        get { ass ? player.assSubtitleOutlineEnabled : player.subtitleOutlineEnabled }
+        nonmutating set { if ass { player.assSubtitleOutlineEnabled = newValue } else { player.subtitleOutlineEnabled = newValue } }
+    }
+
+    var fontId: String {
+        get { ass ? player.assSubtitleFontId : player.subtitleFontId }
+        nonmutating set { if ass { player.assSubtitleFontId = newValue } else { player.subtitleFontId = newValue } }
+    }
+
+    var backgroundRadius: Int {
+        get { ass ? player.assSubtitleBackgroundRadius : player.subtitleBackgroundRadius }
+        nonmutating set { if ass { player.assSubtitleBackgroundRadius = newValue } else { player.subtitleBackgroundRadius = newValue } }
+    }
+
+    var shadowEnabled: Bool {
+        get { ass ? player.assSubtitleShadowEnabled : player.subtitleShadowEnabled }
+        nonmutating set { if ass { player.assSubtitleShadowEnabled = newValue } else { player.subtitleShadowEnabled = newValue } }
+    }
+
+    var shadowOpacity: Int {
+        get { ass ? player.assSubtitleShadowOpacity : player.subtitleShadowOpacity }
+        nonmutating set { if ass { player.assSubtitleShadowOpacity = newValue } else { player.subtitleShadowOpacity = newValue } }
+    }
+
+    var shadowSize: Int {
+        get { ass ? player.assSubtitleShadowSize : player.subtitleShadowSize }
+        nonmutating set { if ass { player.assSubtitleShadowSize = newValue } else { player.subtitleShadowSize = newValue } }
+    }
+
+    func reset() {
+        if ass { player.resetAssSubtitleAppearance() } else { player.resetSubtitleAppearance() }
     }
 }
