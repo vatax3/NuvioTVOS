@@ -189,9 +189,16 @@ enum SettingsBlob {
     static let unitConversions: [String: (toUpstream: (Double) -> Int, fromUpstream: (Double) -> Double)] = {
         let size = (UpstreamSubtitleUnits.sizePercent(fromScale:), UpstreamSubtitleUnits.scale(fromSizePercent:))
         let offset = (UpstreamSubtitleUnits.upstreamOffset(fromPoints:), UpstreamSubtitleUnits.offsetPoints(fromUpstreamOffset:))
+        // Card depth: a 0–1 fraction here, 0–100 there (`CardDepthStyle`).
+        let percent = (
+            { (fraction: Double) in min(100, max(0, Int((fraction * 100).rounded()))) },
+            { (percent: Double) in min(100, max(0, percent)) / 100 }
+        )
         return [
             "subtitle_size": size, "ass_subtitle_size": size,
             "subtitle_vertical_offset": offset, "ass_subtitle_vertical_offset": offset,
+            "card_depth_edge_strength": percent, "card_depth_edge_coverage": percent,
+            "card_depth_sheen_strength": percent,
         ]
     }()
 

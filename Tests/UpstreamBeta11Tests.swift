@@ -93,6 +93,16 @@ final class SettingsBlobContractTests: XCTestCase {
         }
     }
 
+    func testCardDepthIsCarriedAsAPercentage() throws {
+        let blob = SettingsBlob.export(["layout": ["card_depth_edge_strength": NSNumber(value: 0.5)]])
+        let features = try XCTUnwrap(object(blob["features"]))
+        XCTAssertEqual(object(features["layout_settings"])?["card_depth_edge_strength"], .object(["type": .string("int"), "value": .int(50)]))
+        let json = #"{"version":1,"features":{"layout_settings":{"card_depth_sheen_strength":{"type":"int","value":10}}}}"#
+        let changes = SettingsBlob.changes(from: try decodeBlob(json), local: [:])
+        XCTAssertEqual(changes["layout"]?.set["card_depth_sheen_strength"], .double(0.1))
+        XCTAssertEqual(LayoutSettingsStore.depthFraction(28), 0.28)
+    }
+
     /// A percentage that reached the store before the conversion reads as that percentage.
     func testAStoredPercentageIsReadAsAScale() {
         XCTAssertEqual(PlayerSettingsStore.subtitleScale(100), 1.0)

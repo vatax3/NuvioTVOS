@@ -236,18 +236,24 @@ final class LayoutSettingsStore: PreferenceStore {
         set { setBool("card_depth_trailers_enabled", newValue) }
     }
 
+    /// The three depth sliders are 0–1 here and 0–100 in the Android app, which writes the same
+    /// keys; the blob converts them since 1.0.69, and a percentage stored before that is read as one.
+    nonisolated static func depthFraction(_ stored: Double) -> Double {
+        min(1, max(0, stored > 1 ? stored / 100 : stored))
+    }
+
     var cardDepthEdgeStrength: Double {
-        get { double("card_depth_edge_strength", default: 0.5) }
+        get { Self.depthFraction(double("card_depth_edge_strength", default: 0.5)) }
         set { setDouble("card_depth_edge_strength", newValue) }
     }
 
     var cardDepthEdgeCoverage: Double {
-        get { double("card_depth_edge_coverage", default: 0.35) }
+        get { Self.depthFraction(double("card_depth_edge_coverage", default: 0.35)) }
         set { setDouble("card_depth_edge_coverage", newValue) }
     }
 
     var cardDepthSheenStrength: Double {
-        get { double("card_depth_sheen_strength", default: 0.4) }
+        get { Self.depthFraction(double("card_depth_sheen_strength", default: 0.4)) }
         set { setDouble("card_depth_sheen_strength", newValue) }
     }
 
