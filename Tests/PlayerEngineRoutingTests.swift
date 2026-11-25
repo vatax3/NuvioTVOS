@@ -155,4 +155,25 @@ final class PlayerEngineRoutingTests: XCTestCase {
     func testEveryEngineIsReachableFromTheOrder() {
         XCTAssertEqual(Set(PlayerEngineRouting.preferenceOrder), Set(InternalPlayerEngine.allCases))
     }
+
+    // MARK: Disc images (1.0.69)
+
+    func testADiscImageGoesToTheOneEngineThatOpensIt() {
+        var disc = context(setting: .mpv)
+        disc.isDiscImage = true
+        XCTAssertEqual(PlayerEngineRouting.engine(for: disc), .aether)
+        disc.sessionOverride = .mpv
+        XCTAssertEqual(PlayerEngineRouting.engine(for: disc), .mpv)
+    }
+
+    func testADiscImageIsKnownByItsPathOrFilename() {
+        XCTAssertTrue(PlayerEngineRouting.isDiscImage(url: "https://cdn.example/Movie.ISO?token=1", filename: nil))
+        XCTAssertTrue(PlayerEngineRouting.isDiscImage(url: "https://debrid.example/dl/abc", filename: "Movie.iso"))
+        XCTAssertFalse(PlayerEngineRouting.isDiscImage(url: "https://cdn.example/Movie.mkv", filename: nil))
+    }
+
+    func testDiscTitlesGiveTheirLengthInWholeMinutes() {
+        XCTAssertEqual(PlayerDiscTitle(id: 0, name: "Title 1", durationSeconds: 7_230, chapterCount: 24, isFeature: true).minutes, 121)
+        XCTAssertEqual(PlayerDiscTitle(id: 3, name: "Title 4", durationSeconds: 290, chapterCount: 1, isFeature: false).minutes, 5)
+    }
 }

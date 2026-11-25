@@ -1474,3 +1474,6 @@
 "player.sub_ass_section" = "ASS/SSA";
 "player.sub_customize_ass" = "Personnaliser ASS/SSA";
 "player.sub_customize_ass_sub" = "Appliquer votre propre style au lieu de celui du fichier";
+"player.disc_titles" = "Titres du disque";
+"player.disc_title_feature" = "Film · %@ min";
+"player.disc_title_extra" = "Bonus · %@ min";

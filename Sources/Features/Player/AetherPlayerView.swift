@@ -77,12 +77,25 @@ struct AetherPlayerView: View {
                 onChromeChange: onChromeChange,
                 onPlaybackTime: onPlaybackTime,
                 onPlaybackState: onPlaybackState,
+                // A disc's extra is not the item: its progress is not saved, and its end or its
+                // failure returns to the feature rather than finishing, retrying or switching
+                // engine — upstream's `PlayerRuntimeControllerDiscTitles`.
                 onPlaybackFailure: { message in
+                    if adapter.returnToDiscFeature() { return }
                     onPlaybackFailure(message, adapter.failureInvitesAnotherEngine)
                 },
-                onProgress: onProgress,
-                onFinished: onFinished,
-                onPlaybackError: onPlaybackError,
+                onProgress: { position, duration, completed in
+                    guard !adapter.isPlayingDiscExtra else { return }
+                    onProgress(position, duration, completed)
+                },
+                onFinished: {
+                    if adapter.returnToDiscFeature() { return }
+                    onFinished()
+                },
+                onPlaybackError: { message in
+                    if adapter.returnToDiscFeature() { return }
+                    onPlaybackError(message)
+                },
                 holdsPlaybackError: holdsPlaybackError,
                 engine: adapter
             ) { context in

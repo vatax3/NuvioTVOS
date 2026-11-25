@@ -39,6 +39,16 @@ enum PlayerEngineRouting {
         /// debrid link usually carries no extension, so this is a guess and a refusal is the only
         /// reliable signal — which is what `fallback` is for.
         var isPlayableByAVFoundation: Bool = true
+        /// A Blu-ray or DVD image. Only AetherEngine opens one over HTTP — it reads the disc's
+        /// playlists and titles — so it goes there even when the viewer's default is another.
+        var isDiscImage: Bool = false
+    }
+
+    /// `.iso` in the path or the addon's filename, as `MPVEngineSupport.requiresMPV` reads them.
+    static func isDiscImage(url: String, filename: String?) -> Bool {
+        func isISO(_ value: String) -> Bool { value.lowercased().hasSuffix(".iso") }
+        if let filename, isISO(filename) { return true }
+        return URLComponents(string: url).map { isISO($0.path) } ?? false
     }
 
     /// The order a source is offered to engines when nothing else decides.
@@ -63,6 +73,11 @@ enum PlayerEngineRouting {
         // Every engine refused it. Mount the viewer's own choice so the error names the engine
         // they picked rather than one they never asked for.
         guard !candidates.isEmpty else { return context.setting }
+
+        // A disc image has one engine that can open it.
+        if context.isDiscImage, candidates.contains(.aether) {
+            return .aether
+        }
 
         // Their setting, when it can take this source.
         if candidates.contains(context.setting),

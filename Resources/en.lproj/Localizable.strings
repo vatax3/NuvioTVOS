@@ -1474,3 +1474,6 @@
 "player.sub_ass_section" = "ASS/SSA";
 "player.sub_customize_ass" = "Customize ASS/SSA";
 "player.sub_customize_ass_sub" = "Apply your own style instead of the file's";
+"player.disc_titles" = "Disc titles";
+"player.disc_title_feature" = "Feature · %@ min";
+"player.disc_title_extra" = "Extra · %@ min";

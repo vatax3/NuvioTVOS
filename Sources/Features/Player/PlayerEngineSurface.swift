@@ -149,6 +149,14 @@ protocol PlayerEngineSurface: AnyObject, Observable {
     func activateAudioSession()
     func destroy()
 
+    // MARK: Disc titles
+
+    /// The titles of a Blu-ray or DVD image, longest first; empty for anything else.
+    var discTitles: [PlayerDiscTitle] { get }
+    var currentDiscTitleID: Int? { get }
+    /// Plays another title from its start, or the feature from where it was left.
+    func selectDiscTitle(id: Int)
+
     // MARK: Now Playing
 
     /// The system Now Playing session the engine owns, if any. AetherEngine owns one on its native
@@ -217,12 +225,36 @@ enum PlayerAspectMode: String, CaseIterable, Identifiable {
 }
 
 extension PlayerEngineSurface {
+    var discTitles: [PlayerDiscTitle] { [] }
+    var currentDiscTitleID: Int? { nil }
+    func selectDiscTitle(id: Int) {}
+
     var nowPlayingSession: MPNowPlayingSession? { nil }
     func stageNowPlayingIdentity(_ info: [String: Any]) {}
 
     /// Most engines seek exactly already — AetherEngine hands AVPlayer a zero tolerance either
     /// side — so this is only overridden where the distinction exists.
     func seek(toExactly seconds: Double) { seek(to: seconds) }
+}
+
+/// One title of a disc image: upstream's `DiscTitle`. The feature is the title the disc opened
+/// on, its longest; the others are extras, which never count as the item's progress.
+struct PlayerDiscTitle: Identifiable, Hashable {
+    let id: Int
+    let name: String
+    let durationSeconds: Double
+    let chapterCount: Int
+    let isFeature: Bool
+
+    /// `player_disc_title_feature` / `_extra`: the kind and the length in whole minutes.
+    var minutes: Int { Int((durationSeconds / 60).rounded()) }
+
+    var summary: String {
+        let minutes = String(minutes)
+        return isFeature
+            ? L10n.format("player.disc_title_feature", fallback: "Feature · %@ min", minutes)
+            : L10n.format("player.disc_title_extra", fallback: "Extra · %@ min", minutes)
+    }
 }
 
 /// A selectable track the source carries, for the transport menus.

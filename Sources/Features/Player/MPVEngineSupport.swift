@@ -19,7 +19,7 @@ enum MPVEngineSupport {
     /// Containers AVFoundation cannot demux. Extension-based because a debrid link exposes the
     /// filename and nothing has been fetched yet at this point.
     private static let unsupportedExtensions: Set<String> = [
-        "mkv", "avi", "flv", "wmv", "ts", "m2ts", "mts", "vob", "ogm", "rmvb", "divx", "webm"
+        "mkv", "avi", "flv", "wmv", "ts", "m2ts", "mts", "vob", "ogm", "rmvb", "divx", "webm", "iso"
     ]
 
     /// A debrid provider hands back links like `/download/<token>` with the container nowhere in

@@ -44,6 +44,12 @@ final class AetherEngineAdapter {
     /// moment a list arrives: the two are published independently and in either order.
     @ObservationIgnored private var activeAudioTrackID: Int64?
     @ObservationIgnored private var activeSubtitleTrackID: Int64?
+    /// What the session was opened with, so a disc title can be reopened at a position.
+    @ObservationIgnored private var loadedURL: URL?
+    @ObservationIgnored private var loadedOptions = LoadOptions()
+    /// The title the disc opened on, and where it was left for an extra.
+    @ObservationIgnored private var featureTitleID: Int?
+    @ObservationIgnored private var featurePosition: Double = 0
 
     // MARK: Mirrored state
 
@@ -60,6 +66,8 @@ final class AetherEngineAdapter {
     private(set) var audioTracks: [PlayerTrack] = []
     private(set) var subtitleTracks: [PlayerTrack] = []
     private(set) var chapters: [PlayerChapter] = []
+    private(set) var discTitles: [PlayerDiscTitle] = []
+    private(set) var currentDiscTitleID: Int?
     private(set) var playbackSpeed: Double = 1
     private(set) var audioDelay: Double = 0
     private(set) var subtitleDelay: Double = 0
@@ -140,6 +148,8 @@ final class AetherEngineAdapter {
         // it on a genuine final teardown only, never on a reload or a track switch.
         engine.deactivatesAudioSessionOnStop = true
 
+        loadedURL = url
+        loadedOptions = options
         loadTask = Task { [weak self] in
             guard let self else { return }
             do {
@@ -233,14 +243,32 @@ final class AetherEngineAdapter {
                 subtitleTracks = subtitleTracks.marking(selected: activeSubtitleTrackID)
             }
             .store(in: &sinks)
-        // `mediaChapters` is the container's own list; `discChapters` belongs to a disc title and
-        // is not a thing this app ever opens.
+        // `mediaChapters` is the container's own list. `discChapters` belongs to a disc title, on a
+        // title-relative axis seeked through `selectChapter(id:)`; a disc image plays here since
+        // 1.0.69, but its chapters are not listed yet.
         engine.$mediaChapters
             .receive(on: RunLoop.main)
             .sink { [weak self] published in
                 self?.chapters = PlayerChapters.normalize(
                     published.map { PlayerChapter(start: $0.startSeconds, title: $0.name) }
                 )
+            }
+            .store(in: &sinks)
+        // Upstream's disc titles (`PlayerRuntimeControllerDiscTitles`, 1.2.0-beta.4): offered when a
+        // disc has more than one, the title it opened on being the feature.
+        engine.$discTitles
+            .combineLatest(engine.$selectedDiscTitle)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] titles, selected in
+                guard let self else { return }
+                if featureTitleID == nil, let selected { featureTitleID = selected.id }
+                currentDiscTitleID = selected?.id
+                discTitles = titles.count < 2 ? [] : titles.map {
+                    PlayerDiscTitle(
+                        id: $0.id, name: $0.name, durationSeconds: $0.durationSeconds,
+                        chapterCount: $0.chapterCount, isFeature: $0.id == self.featureTitleID
+                    )
+                }
             }
             .store(in: &sinks)
         engine.$subtitleCues
@@ -483,6 +511,44 @@ extension AetherEngineAdapter: PlayerEngineSurface {
     /// Deliberately nothing. The engine declares the category at init and never activates it on the
     /// native path, because AVKit activates per playback and that is what lets tvOS negotiate the
     /// HDMI route — which on an Atmos passthrough session is the whole point of being here.
+    /// Another title than the feature: an extra, which is not the item's progress or its end.
+    var isPlayingDiscExtra: Bool {
+        guard let featureTitleID, let currentDiscTitleID else { return false }
+        return currentDiscTitleID != featureTitleID
+    }
+
+    /// Upstream's `selectDiscTitle`: an extra from its start, the feature from where it was left.
+    /// Reopened through `load` rather than `selectTitle(id:)`, which always starts at zero.
+    func selectDiscTitle(id: Int) {
+        guard id != currentDiscTitleID, let url = loadedURL, discTitles.contains(where: { $0.id == id }) else { return }
+        if !isPlayingDiscExtra { featurePosition = position }
+        let start = id == featureTitleID && featurePosition > 1 ? featurePosition : nil
+        loadTask?.cancel()
+        let options = loadedOptions
+        loadTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await engine.load(url: url, startPosition: start, options: options, discTitleID: id)
+            } catch is CancellationError {
+                return
+            } catch {
+                errorMessage = error.localizedDescription
+                failureKind = engine.errorInfo?.kind
+            }
+        }
+    }
+
+    /// An extra that ends or fails gives way to the feature, where it was left (upstream's
+    /// `returnToFeatureAfterExtraEnded` / `…Failure`). True when it did.
+    @discardableResult
+    func returnToDiscFeature() -> Bool {
+        guard isPlayingDiscExtra, let featureTitleID else { return false }
+        errorMessage = nil
+        failureKind = nil
+        selectDiscTitle(id: featureTitleID)
+        return true
+    }
+
     func activateAudioSession() {}
 
     func destroy() {

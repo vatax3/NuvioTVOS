@@ -135,7 +135,8 @@ struct PlayerView: View {
             // the viewer left the engine there — an unplayable file is worse than a slower decode.
             isPlayableByAVFoundation: !MPVEngineSupport.requiresMPV(
                 url: request.streamURL, filename: request.filename ?? request.streamName
-            )
+            ),
+            isDiscImage: PlayerEngineRouting.isDiscImage(url: request.streamURL, filename: request.filename)
         )
     }
 

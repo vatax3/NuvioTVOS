@@ -171,7 +171,7 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
     }
 
     private enum TrackPicker: String, Identifiable {
-        case audio, subtitles, subtitleAppearance, subtitleSync, speed, streamInfo, sources, episodes, chapters
+        case audio, subtitles, subtitleAppearance, subtitleSync, speed, streamInfo, sources, episodes, chapters, discTitles
         var id: String { rawValue }
     }
 
@@ -895,6 +895,13 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
                 picker = .chapters
             }
         }
+        // Upstream's disc titles: only for a disc image with more than one, which the engine's
+        // list already decides.
+        if !engine.discTitles.isEmpty {
+            controlButton("opticaldisc", label: L10n.text("player.disc_titles", fallback: "Disc titles"), focus: .control("discTitles")) {
+                picker = .discTitles
+            }
+        }
         if onChooseEpisode != nil, request.contentType == "series" {
             controlButton("list.bullet", label: L10n.text("player.episodes"), focus: .control("episodes")) { picker = .episodes }
         }
@@ -1241,6 +1248,8 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
             subtitleOverlay
         case .chapters:
             chaptersOverlay
+        case .discTitles:
+            discTitlesOverlay
         }
     }
 
@@ -1279,6 +1288,26 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
     }
 
     /// The chapter list, opening on the chapter playing so the viewer starts where they are.
+    private var discTitlesOverlay: some View {
+        PlayerRailOverlay(title: L10n.text("player.disc_titles", fallback: "Disc titles"), onDismiss: closePicker) {
+            PlayerRailColumn(width: dp(520)) {
+                ForEach(engine.discTitles) { title in
+                    let isCurrent = title.id == engine.currentDiscTitleID
+                    PlayerRailCard(
+                        title: title.name,
+                        subtitle: title.summary,
+                        metadata: nil,
+                        isSelected: isCurrent,
+                        requestsInitialFocus: isCurrent
+                    ) {
+                        engine.selectDiscTitle(id: title.id)
+                        closePicker()
+                    }
+                }
+            }
+        }
+    }
+
     private var chaptersOverlay: some View {
         let current = PlayerChapters.index(in: shownChapters, at: engine.position)
         return PlayerRailOverlay(title: L10n.text("player.chapters"), onDismiss: closePicker) {
