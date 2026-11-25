@@ -184,6 +184,17 @@ enum SettingsBlob {
         "next_episode_threshold_percent_v2", "next_episode_threshold_minutes_before_end_v2"
     ]
 
+    /// Same meaning, other units: read here as `Double` in ours, carried as an `Int` in theirs.
+    /// See `UpstreamSubtitleUnits`. The `ass_` keys share the regular style's units.
+    static let unitConversions: [String: (toUpstream: (Double) -> Int, fromUpstream: (Double) -> Double)] = {
+        let size = (UpstreamSubtitleUnits.sizePercent(fromScale:), UpstreamSubtitleUnits.scale(fromSizePercent:))
+        let offset = (UpstreamSubtitleUnits.upstreamOffset(fromPoints:), UpstreamSubtitleUnits.offsetPoints(fromUpstreamOffset:))
+        return [
+            "subtitle_size": size, "ass_subtitle_size": size,
+            "subtitle_vertical_offset": offset, "ass_subtitle_vertical_offset": offset,
+        ]
+    }()
+
     /// JSON objects stored here as `Data`, carried as a JSON string.
     static let localJSONKeys: Set<String> = ["stream_badge_rules", "stream_preferences"]
 
@@ -234,6 +245,9 @@ enum SettingsBlob {
             guard isBoolean(value), let bool = value as? Bool else { return nil }
             return entry(.boolean, .bool(bool))
         case .int, .long:
+            if let conversion = unitConversions[key] {
+                return floating(value).map { entry(type, .int(conversion.toUpstream($0))) }
+            }
             if colorKeys.contains(key), let string = value as? String {
                 return argb(fromHex: string).map { entry(type, .int($0)) }
             }
@@ -386,6 +400,7 @@ enum SettingsBlob {
             return string == "true" ? .bool(true) : string == "false" ? .bool(false) : nil
         case (.int, .number(let number)), (.long, .number(let number)):
             guard number.rounded() == number else { return nil }
+            if let conversion = unitConversions[localKey] { return .double(conversion.fromUpstream(number)) }
             if colorKeys.contains(localKey) { return .string(hex(fromARGB: Int(number))) }
             if localDoubleKeys.contains(localKey) { return .double(number) }
             return .int(Int(number))

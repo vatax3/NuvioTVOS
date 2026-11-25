@@ -56,12 +56,48 @@ final class SettingsBlobContractTests: XCTestCase {
         XCTAssertNil(SettingsBlob.integer(NSNumber(value: 2.0)))
     }
 
-    func testAKeyWithAnUnconvertibleTypeIsSkippedBothWays() throws {
-        // Upstream declares `subtitle_size` as an Int percentage; ours is a Double scale. Sending
-        // it would make Android's typed read throw.
-        let blob = SettingsBlob.export(["player": ["subtitle_size": NSNumber(value: 1.25)]])
+    /// `subtitle_size` is a scale here and a percentage there; `subtitle_vertical_offset` is dp here
+    /// and −20…50 there. Before 1.0.69 the size went out as `1` (1%) when whole and not at all
+    /// otherwise, and came in as a hundredfold scale. See `UpstreamSubtitleUnits`.
+    func testSubtitleSizeAndOffsetAreConvertedToTheirUnits() throws {
+        let blob = SettingsBlob.export(["player": [
+            "subtitle_size": NSNumber(value: 1.25),
+            "ass_subtitle_size": NSNumber(value: 1.0),
+            "subtitle_vertical_offset": NSNumber(value: 0.0),
+        ]])
         let features = try XCTUnwrap(object(blob["features"]))
-        XCTAssertNil(object(features["player_settings"])?["subtitle_size"])
+        let player = try XCTUnwrap(object(features["player_settings"]))
+        XCTAssertEqual(player["subtitle_size"], .object(["type": .string("int"), "value": .int(125)]))
+        XCTAssertEqual(player["ass_subtitle_size"], .object(["type": .string("int"), "value": .int(100)]))
+        XCTAssertEqual(player["subtitle_vertical_offset"], .object(["type": .string("int"), "value": .int(-8)]))
+
+        let json = """
+        {"version":1,"features":{"player_settings":{
+          "subtitle_size":{"type":"int","value":150},
+          "subtitle_vertical_offset":{"type":"int","value":5}
+        }}}
+        """
+        let changes = try XCTUnwrap(SettingsBlob.changes(from: try decodeBlob(json), local: [:])["player"])
+        XCTAssertEqual(changes.set["subtitle_size"], .double(1.5))
+        guard case .double(let offset)? = changes.set["subtitle_vertical_offset"] else { return XCTFail("offset") }
+        XCTAssertEqual(offset, 40.5, accuracy: 0.5)
+    }
+
+    /// Their default offset and ours land on each other's, and the range ends meet.
+    func testTheOffsetConversionRoundTrips() {
+        for offset in -20...50 {
+            XCTAssertEqual(
+                UpstreamSubtitleUnits.upstreamOffset(fromPoints: UpstreamSubtitleUnits.offsetPoints(fromUpstreamOffset: Double(offset))),
+                offset
+            )
+        }
+    }
+
+    /// A percentage that reached the store before the conversion reads as that percentage.
+    func testAStoredPercentageIsReadAsAScale() {
+        XCTAssertEqual(PlayerSettingsStore.subtitleScale(100), 1.0)
+        XCTAssertEqual(PlayerSettingsStore.subtitleScale(1.25), 1.25)
+        XCTAssertEqual(PlayerSettingsStore.subtitleScale(0.1), 0.5)
     }
 
     func testImportFromAnAndroidBlob() throws {

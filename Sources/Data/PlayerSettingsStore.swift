@@ -245,8 +245,11 @@ final class PlayerSettingsStore: PreferenceStore {
         set { setBool("subtitle_strip_sdh", newValue) }
     }
 
+    /// A scale, 0.5–3. The settings blob carries upstream's percentage under the same key; before
+    /// it was converted (1.0.69), an Android app's 100 landed here as is, so anything above the
+    /// range is read as that percentage.
     var subtitleSize: Double {
-        get { double("subtitle_size", default: 1.0) }
+        get { Self.subtitleScale(double("subtitle_size", default: 1.0)) }
         set { setDouble("subtitle_size", newValue) }
     }
 
@@ -316,6 +319,11 @@ final class PlayerSettingsStore: PreferenceStore {
             return SubtitleStyle.clampedOutlineWidth(stored.map { Int($0.rounded()) } ?? SubtitleStyle.outlineWidthDefault)
         }
         set { setInt("subtitle_outline_width", SubtitleStyle.clampedOutlineWidth(newValue)) }
+    }
+
+    nonisolated static func subtitleScale(_ stored: Double) -> Double {
+        let scale = stored > 3 ? stored / 100 : stored
+        return min(3, max(0.5, scale))
     }
 
     var subtitleVerticalOffset: Double {

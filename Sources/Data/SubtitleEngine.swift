@@ -672,3 +672,50 @@ enum SubtitlePlacement {
         inset(offset: offset, obstructions: obstructions) * mpvUnitsPerPoint
     }
 }
+
+/// The two subtitle settings both apps write under one key with different units, converted at
+/// the settings blob so each app reads its own.
+///
+/// `subtitle_size` is a scale here (1.0) and a percentage there (100, clamped 50–200), so an
+/// unconverted 100 from the Android app became a hundredfold scale here, and our 1.0 reached it as
+/// 1%. `subtitle_vertical_offset` is a distance in dp here (−100…300, 0 at mpv's own margin) and
+/// an abstract −20…50 there that their mpv surface turns into `sub-pos` and `sub-margin-y`
+/// (`NuvioMpvSurfaceView.applyAssSubtitleOverride`): `n = (o + 20) / 70`,
+/// `sub-pos = 103.4 − 31n`, `sub-margin-y = 60n` in a 720-high space. The conversion puts the line
+/// at the same height of the picture on both, measured through mpv on each side.
+enum UpstreamSubtitleUnits {
+    static let sizePercentRange = 50...200
+    static let offsetRange = -20...50
+
+    static func sizePercent(fromScale scale: Double) -> Int {
+        min(sizePercentRange.upperBound, max(sizePercentRange.lowerBound, Int((scale * 100).rounded())))
+    }
+
+    static func scale(fromSizePercent percent: Double) -> Double {
+        min(Double(sizePercentRange.upperBound), max(Double(sizePercentRange.lowerBound), percent)) / 100
+    }
+
+    /// Their offset, as a fraction of the picture's height from the bottom edge.
+    private static func heightFraction(upstreamOffset offset: Double) -> Double {
+        let span = Double(offsetRange.upperBound - offsetRange.lowerBound)
+        let n = (min(Double(offsetRange.upperBound), max(Double(offsetRange.lowerBound), offset)) - Double(offsetRange.lowerBound)) / span
+        let subPos = 103.4 - n * (103.4 - 72.4)
+        return (100 - subPos) / 100 + (n * 60) / 720
+    }
+
+    /// The dp offset that puts our line at the same height: ours sits `baseInset + offset` dp up a
+    /// 540 dp picture.
+    static func offsetPoints(fromUpstreamOffset offset: Double) -> Double {
+        let points = heightFraction(upstreamOffset: offset) * 540 - SubtitlePlacement.baseInset
+        return min(SubtitlePlacement.offsetRange.upperBound, max(SubtitlePlacement.offsetRange.lowerBound, points))
+    }
+
+    static func upstreamOffset(fromPoints points: Double) -> Int {
+        let low = heightFraction(upstreamOffset: Double(offsetRange.lowerBound))
+        let high = heightFraction(upstreamOffset: Double(offsetRange.upperBound))
+        let fraction = (points + SubtitlePlacement.baseInset) / 540
+        let n = (fraction - low) / (high - low)
+        let offset = Double(offsetRange.lowerBound) + n * Double(offsetRange.upperBound - offsetRange.lowerBound)
+        return min(offsetRange.upperBound, max(offsetRange.lowerBound, Int(offset.rounded())))
+    }
+}
