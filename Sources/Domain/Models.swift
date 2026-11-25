@@ -585,6 +585,10 @@ struct Stream: Codable, Hashable, Identifiable, Sendable {
     var infoHash: String?
     var fileIdx: Int?
     var externalUrl: String?
+    /// A Usenet release (`nzbUrl`, upstream 1.2.0-beta.4). Upstream plays it through its built-in
+    /// Usenet engine, which is declined here; the field is read so such a stream is never taken
+    /// for something else — its `externalUrl` opened, or its hash resolved as a torrent.
+    var nzbUrl: String? = nil
     var behaviorHints: StreamBehaviorHints?
     var addonName: String
     var addonLogo: String?
@@ -601,8 +605,12 @@ struct Stream: Codable, Hashable, Identifiable, Sendable {
 
     var id: String { stableKey }
 
+    /// `isUsenet`: an NZB and no direct link.
+    var isUsenet: Bool { nzbUrl?.nilIfBlank != nil && url?.nilIfBlank == nil }
+
     func streamURL() -> String? {
-        [url, externalUrl]
+        if isUsenet { return nil }
+        return [url, externalUrl]
             .compactMap { $0 }
             .first { !$0.isMagnetLink && !$0.isTorrentScheme }
     }
@@ -619,7 +627,7 @@ struct Stream: Codable, Hashable, Identifiable, Sendable {
     }
 
     var isTorrent: Bool {
-        (streamURL()?.isEmpty ?? true) &&
+        !isUsenet && (streamURL()?.isEmpty ?? true) &&
         (!(infoHash?.isEmpty ?? true) || torrentMagnetURI() != nil || hasTorrentURL)
     }
 
@@ -638,7 +646,7 @@ struct Stream: Codable, Hashable, Identifiable, Sendable {
     var isYouTube: Bool { ytId != nil }
 
     var isExternal: Bool {
-        externalUrl != nil && url == nil && !(externalUrl?.isMagnetLink ?? false)
+        !isUsenet && externalUrl != nil && url == nil && !(externalUrl?.isMagnetLink ?? false)
     }
 
     var displayName: String { name ?? title ?? description ?? "Unknown Stream" }
@@ -647,7 +655,7 @@ struct Stream: Codable, Hashable, Identifiable, Sendable {
     var stableKey: String {
         [
             addonName,
-            url ?? infoHash ?? ytId ?? externalUrl ?? "",
+            url ?? nzbUrl ?? infoHash ?? ytId ?? externalUrl ?? "",
             fileIdx.map(String.init) ?? "",
             name ?? "", title ?? "", description ?? "", quality ?? "",
             (sources ?? []).joined(separator: "|"),

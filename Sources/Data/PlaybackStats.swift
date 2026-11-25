@@ -105,6 +105,35 @@ enum PlaybackStats {
 
     // MARK: - Rows
 
+    /// Upstream's `PlayerStreamType` (f57709996): what kind of source is playing, first in the
+    /// overlay. Only the kinds this app can play are kept — it has no torrent engine, so no P2P,
+    /// and no media servers, so no Server; a debrid link is a direct link here, as there.
+    enum StreamType: String {
+        case cloud = "Cloud"
+        case local = "Local"
+        case direct = "Direct"
+
+        init(contentType: String?, url: String) {
+            if contentType?.caseInsensitiveCompare("cloud") == .orderedSame {
+                self = .cloud
+            } else if url.hasPrefix("file:") || url.hasPrefix("/") {
+                self = .local
+            } else {
+                self = .direct
+            }
+        }
+
+        /// `streamTypeLabel`: a direct link names its addon.
+        func label(addonName: String?) -> String {
+            guard self == .direct, let addonName = addonName?.nilIfBlank else { return rawValue }
+            return "\(rawValue) · \(addonName)"
+        }
+    }
+
+    static func typeReading(contentType: String?, url: String, addonName: String?) -> Reading {
+        Reading(label: "type", value: StreamType(contentType: contentType, url: url).label(addonName: addonName))
+    }
+
     /// Assembles the overlay's rows in upstream's order, dropping any the platform could not
     /// answer for. The order is deliberate: the two a viewer can act on come first.
     static func readings(

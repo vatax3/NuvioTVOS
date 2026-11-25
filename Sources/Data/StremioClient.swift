@@ -369,6 +369,7 @@ struct StreamDTO: Decodable {
     var infoHash: String?
     var fileIdx: FlexibleInt?
     var externalUrl: String?
+    var nzbUrl: String?
     var sources: [String]?
     var behaviorHints: StreamBehaviorHintsDTO?
 }
@@ -853,6 +854,7 @@ enum StremioMapper {
             infoHash: dto.infoHash?.nilIfBlank,
             fileIdx: dto.fileIdx?.value,
             externalUrl: dto.externalUrl?.nilIfBlank,
+            nzbUrl: dto.nzbUrl?.nilIfBlank,
             behaviorHints: hints,
             addonName: addonName,
             addonLogo: addonLogo,

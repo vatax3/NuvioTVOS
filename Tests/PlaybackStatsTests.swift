@@ -130,4 +130,21 @@ final class PlaybackStatsTests: XCTestCase {
         )
         XCTAssertFalse(rows.contains { $0.label == "buffer" })
     }
+
+    // MARK: Stream type (upstream PlayerStreamTypeTest)
+
+    func testCloudPlaybackIsNamedBeforeTheLink() {
+        XCTAssertEqual(PlaybackStats.StreamType(contentType: "cloud", url: "https://cdn.example/file.mkv"), .cloud)
+    }
+
+    func testFilesOnTheDeviceAreLocalAndOtherLinksDirect() {
+        XCTAssertEqual(PlaybackStats.StreamType(contentType: "movie", url: "file:///var/Movie.mkv"), .local)
+        XCTAssertEqual(PlaybackStats.StreamType(contentType: "series", url: "https://cdn.example/Show.S01E01.mkv"), .direct)
+    }
+
+    func testADirectLinkNamesItsAddon() {
+        XCTAssertEqual(PlaybackStats.StreamType.direct.label(addonName: "Torrentio"), "Direct · Torrentio")
+        XCTAssertEqual(PlaybackStats.StreamType.direct.label(addonName: nil), "Direct")
+        XCTAssertEqual(PlaybackStats.StreamType.cloud.label(addonName: "TorBox"), "Cloud")
+    }
 }

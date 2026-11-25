@@ -1878,7 +1878,13 @@ struct PlayerChrome<Engine: PlayerEngineSurface, Surface: View>: View {
             }
 
             if showsStats && !statsSampler.readings.isEmpty {
-                PlaybackStatsOverlay(readings: statsSampler.readings)
+                PlaybackStatsOverlay(readings: [
+                    PlaybackStats.typeReading(
+                        contentType: request.contentType,
+                        url: request.streamURL,
+                        addonName: request.sourceAddonName
+                    )
+                ] + statsSampler.readings)
                     .padding(NuvioTheme.spacing.xl)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .transition(.opacity)

@@ -87,3 +87,25 @@ final class SourceFallbackTests: XCTestCase {
         XCTAssertTrue(PlaybackStartLedger().reportStartsPlayback(loading: false, session: "mpv|0"))
     }
 }
+
+/// Upstream's `Stream.isUsenet` rules (53dffdd1a): an NZB stream is never opened as something else.
+final class UsenetStreamTests: XCTestCase {
+    func testAnNZBStreamNeverOpensItsExternalLinkOrResolvesAsATorrent() {
+        var stream = Nuvio.Stream(title: "x", addonName: "Indexer")
+        stream.nzbUrl = "https://indexer.example/get?id=1"
+        stream.externalUrl = "https://indexer.example/details/1"
+        stream.infoHash = "abc"
+        XCTAssertTrue(stream.isUsenet)
+        XCTAssertNil(stream.streamURL())
+        XCTAssertFalse(stream.isExternal)
+        XCTAssertFalse(stream.isTorrent)
+    }
+
+    func testADirectLinkBesideAnNZBStillPlays() {
+        var stream = Nuvio.Stream(title: "x", addonName: "Indexer")
+        stream.nzbUrl = "https://indexer.example/get?id=1"
+        stream.url = "https://cdn.example/file.mkv"
+        XCTAssertFalse(stream.isUsenet)
+        XCTAssertEqual(stream.streamURL(), "https://cdn.example/file.mkv")
+    }
+}

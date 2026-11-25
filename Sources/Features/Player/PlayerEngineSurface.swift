@@ -264,9 +264,11 @@ struct PlayerTrack: Identifiable, Hashable {
         switch codec.lowercased() {
         case "subrip": return "SRT"
         case "webvtt": return "VTT"
+        // The styled formats under upstream's names (`subtitleFormatBadge`, 4db6cbabd).
         case "ass", "ssa": return "ASS"
-        case "hdmv_pgs_subtitle": return "PGS"
-        case "dvd_subtitle": return "VobSub"
+        case "pgs", "hdmv_pgs_subtitle", "pgssub": return "PGS"
+        case "vobsub", "dvd_subtitle", "dvdsub": return "VobSub"
+        case "dvb", "dvb_subtitle", "dvbsub": return "DVB"
         case "mov_text": return "TX3G"
         default: return codec.uppercased()
         }
