@@ -1,4 +1,5 @@
 import Foundation
+import TVServices
 
 /// The small, privacy-safe bridge between the app and the separate Top Shelf extension.
 /// Extensions do not share the app's process or its normal container, so only this minimal
@@ -21,9 +22,17 @@ enum TopShelfSnapshotPublisher {
         var playURL: String
     }
 
-    static func publish(progress: [String: WatchProgress], previews: [String: MetaPreview]) {
+    /// - Parameter threshold: the watched threshold, so the shelf lists what Continue Watching
+    ///   lists. A fixed 0.9 left titles between 90% and the viewer's threshold off the shelf.
+    static func publish(progress: [String: WatchProgress], previews: [String: MetaPreview], threshold: Double) {
+        save(snapshot(progress: progress, previews: previews, threshold: threshold))
+    }
+
+    /// - Parameter threshold: the watched threshold, so the shelf lists what Continue Watching
+    ///   lists. A fixed 0.9 left titles between 90% and the viewer's threshold off the shelf.
+    static func snapshot(progress: [String: WatchProgress], previews: [String: MetaPreview], threshold: Double) -> Snapshot {
         let ordered = progress.values
-            .filter { $0.positionSeconds > 0 && $0.fraction < 0.9 }
+            .filter { $0.isInProgress(threshold: threshold) }
             .sorted { $0.updatedAt > $1.updatedAt }
 
         var seen = Set<String>()
@@ -33,12 +42,30 @@ enum TopShelfSnapshotPublisher {
             seen.insert(previewKey)
             return entry(preview: preview, progress: progress)
         }
-        save(Snapshot(entries: Array(entries.prefix(12))))
+        return Snapshot(entries: Array(entries.prefix(12)))
     }
 
     static func save(_ snapshot: Snapshot) {
-        guard let data = try? JSONEncoder().encode(snapshot) else { return }
+        guard let data = try? JSONEncoder().encode(snapshot),
+              defaults.data(forKey: defaultsKey) != data
+        else { return }
         defaults.set(data, forKey: defaultsKey)
+        announceChange()
+    }
+
+    /// tvOS reads the extension when it decides to, which can be long after the row changed; the
+    /// Android launcher channel had the same gap until upstream refreshed it on each change
+    /// (02a9afc85). Debounced, because one finished episode saves several times.
+    @MainActor private static var pendingAnnouncement: Task<Void, Never>?
+
+    private static func announceChange() {
+        Task { @MainActor in
+            pendingAnnouncement?.cancel()
+            pendingAnnouncement = Task {
+                guard (try? await Task.sleep(for: .seconds(2))) != nil else { return }
+                TVTopShelfContentProvider.topShelfContentDidChange()
+            }
+        }
     }
 
     /// Empties the row on the tvOS home screen. This lives in the app-group container rather
@@ -47,6 +74,7 @@ enum TopShelfSnapshotPublisher {
     /// without opening Nuvio at all.
     static func clear() {
         defaults.removeObject(forKey: defaultsKey)
+        announceChange()
     }
 
     static var defaults: UserDefaults {

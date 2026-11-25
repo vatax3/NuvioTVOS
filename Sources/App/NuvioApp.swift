@@ -87,6 +87,7 @@ private struct ProfileScopedRoot: View {
             // observes: without this the tables swap and the screen keeps its old strings.
             .id(settings.app.language)
             .task { L10n.use(settings.app.language) }
+            .task(id: settings.watchedThreshold) { library.topShelfThreshold = settings.watchedThreshold }
             .environment(settings)
             .environment(addons)
             .environment(library)

@@ -821,7 +821,13 @@ final class LibraryStore {
         refreshTopShelf()
     }
 
+    /// The watched threshold, kept current by the profile root: the shelf lists what Continue
+    /// Watching lists.
+    @ObservationIgnored var topShelfThreshold = 0.95 {
+        didSet { if topShelfThreshold != oldValue { refreshTopShelf() } }
+    }
+
     private func refreshTopShelf() {
-        TopShelfSnapshotPublisher.publish(progress: progress, previews: previewCache)
+        TopShelfSnapshotPublisher.publish(progress: progress, previews: previewCache, threshold: topShelfThreshold)
     }
 }
