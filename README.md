@@ -129,7 +129,8 @@ metadata) and the marquee-on-focus card titles.
   then applies the required/excluded/preferred matrix, per-bucket caps and ranked sorting.
 - **Tracking** — three accounts, any of which can be the source for your library and your watch
   progress: Trakt (device-code OAuth, scrobbling, progress and collection sources, comments),
-  Simkl (PIN auth, library lists, remote resume points, start/pause/stop scrobbling) and MDBList
+  Simkl (PIN auth, library lists, remote resume points, start/pause/stop scrobbling with a watched
+  threshold of your own, or the end credits when IntroDB knows them) and MDBList
   (device-code OAuth, watchlist and static lists, resume points, watched marks and scrobbling).
 - **Metadata** — TMDB enrichment (artwork, logos, cast, certifications, recommendations, networks,
   studios), MDBList aggregated ratings — from a pasted API key, or from a connected account when
@@ -140,7 +141,8 @@ metadata) and the marquee-on-focus card titles.
   addon's own poster for any title the pattern cannot address.
 - **Subtitles** — external SubRip/WebVTT tracks from every `subtitles` addon, language-ordered and
   auto-selected, drawn with the configured font (including fonts imported from a phone), size,
-  weight, colours, outline, rounded background, drop shadow and offset. The audio
+  weight, colours, outline, rounded background, drop shadow and offset. ASS/SSA tracks keep the
+  file's own styling unless resized, or given a style of their own with *Customize ASS/SSA*. The audio
   and subtitle picked for a title are remembered and restored on its next episode, under the
   Android app's keys, so the choice follows the profile between the two apps.
 - **Plugins** — local JS scrapers in JavaScriptCore, matching the Android runtime's `getStreams`
@@ -179,6 +181,8 @@ app worse:
    passthrough on tvOS at all, because no Apple audio output takes a compressed stream, and bare
    AVFoundation has no Matroska demuxer. mpv stays as the fallback for what Aether will not open
    and for authored ASS styling, which only libass renders properly; AVFoundation is the floor.
+   A Blu-ray or DVD image (`.iso`) always goes to AetherEngine, the one engine that reads a disc
+   over HTTP, with the disc's other titles offered in the player.
 
    All three mount the same chrome — `PlayerChrome`, generic over the engine — so Nuvio's
    transport is written once: a focusable, accelerating scrub bar, the Android control row, and
